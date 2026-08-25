@@ -1,8 +1,6 @@
 import { Schema as S } from 'effect'
-import { type Update } from 'foldkit'
 import type { Document, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
 
 // ---------------------------------------------------------------------------
 // Model
@@ -10,20 +8,8 @@ import { evo } from 'foldkit/struct'
 
 export const Model = S.Struct({
   message: S.String,
-  renderedAt: S.String,
-  renderedOn: S.Literals(['Server', 'Client']),
 })
 export type Model = typeof Model.Type
-
-// ---------------------------------------------------------------------------
-// Flags — server builds them, client reuses them (hydration).
-// ---------------------------------------------------------------------------
-
-export const Flags = S.Struct({
-  renderedAt: S.String,
-  renderedOn: S.Literals(['Server', 'Client']),
-})
-export type Flags = typeof Flags.Type
 
 // ---------------------------------------------------------------------------
 // Message
@@ -36,26 +22,19 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 // ---------------------------------------------------------------------------
+// Init — SPA: no Flags, no URL routing for hello world
+// ---------------------------------------------------------------------------
+
+export const init = (): readonly [Model, ReadonlyArray<never>] => [{ message: 'Hello World' }, []]
+
+// ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
 
-export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
+export const update = (model: Model, message: Message): readonly [Model, ReadonlyArray<never>] =>
   Message.match(message, {
-    ClickedHello: () => [evo(model, { message: () => 'Hello World — clicked!' }), []],
+    ClickedHello: () => [{ ...model, message: 'Hello World — clicked!' }, []],
   })
-
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
-
-export const init = (flags: Flags): readonly [Model, ReadonlyArray<never>] => [
-  {
-    message: 'Hello World',
-    renderedAt: flags.renderedAt,
-    renderedOn: flags.renderedOn,
-  },
-  [],
-]
 
 // ---------------------------------------------------------------------------
 // View
@@ -77,10 +56,6 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           h.p(
             [h.Class('mt-4 text-lg leading-7 text-stone-600')],
             ['Photography by elianiva — curated works. Coming soon.'],
-          ),
-          h.p(
-            [h.Class('mt-2 text-sm text-stone-500')],
-            [`Rendered on the ${model.renderedOn} at ${model.renderedAt}`],
           ),
           h.button(
             [

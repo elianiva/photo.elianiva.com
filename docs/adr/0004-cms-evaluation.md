@@ -3,6 +3,7 @@
 Requirement: UI that manages both image bytes and metadata (caption, location, takenAt, collection) together, scriptable bulk upload, free tier, auto-resizing.
 
 **Evaluated (Aug 2026 pricing):**
+
 - **Cloudflare R2 + Images**: R2 10GB/1M writes/10M reads/0 egress free; Images 5k unique transforms/mo free, $0.50/1k after, AVIF/WebP auto, S3-scriptable. Best cost at scale, but no CMS UI — needs a head on top.
 - **Cloudinary Free**: 25 credits/mo (25k transforms OR 25GB store OR 25GB BW), URL transforms `f_auto,q_auto`, Admin API, multi-CDN. Best single-number free tier with dashboard, but credit math couples storage/bandwidth/transforms.
 - **Sanity Free**: 5GB assets / 1GB BW / 500k API req / 2 datasets free (Studio embeddable, GROQ, URL transforms `?w=800&fm=webp`). Single place (assets + docs), scriptable `client.assets.upload()`. 5GB fills fast with RAWs — writes block at cap.
