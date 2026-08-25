@@ -1,21 +1,25 @@
 # photo.elianiva.com
 
-A curated photography showcase — the author's selected works, grouped into collections. Image delivery is CDN-backed (R2 + Images or equivalent), metadata and files are managed together in a single CMS.
+A curated photography showcase — the author's selected works. Image delivery is CDN-backed (R2 + Images), metadata and files are managed together in a single custom admin on `photo.elianiva.com/admin` (Cloudflare Access OTP-gated).
 
 ## Language
 
 **Photo**:
-A curated work — an image file plus its metadata (caption, location, takenAt, camera/lens, EXIF). The unit the site showcases.
+A curated work — a single image file (stored once in R2) plus its metadata. The unit the site showcases. Photos live in a flat list (no hierarchy); grouping is via Tags. Essential queryable fields are real columns (`title`, `takenAt`, dimensions, `r2Key`); the rest lives in a JSON `metadata` blob for cheap extensibility.
 _Avoid_: Image (use only for raw bytes/technical context), picture, shot
 
-**Collection**:
-A curated group of Photos (e.g., "Kyoto 2024"). The primary grouping.
-_Avoid_: Album, Gallery, Series, Set
+**Tag**:
+A label for grouping/filtering Photos (e.g., `kyoto`, `film`, `portrait`). Free-form, many-to-many with Photo. Has `slug` (URL-safe, unique) and `label` (display). Managed from day one; no controlled vocabulary.
+_Avoid_: Collection (deferred), Category, Album
 
 **Image**:
 Raw file bytes / technical artifact. Not a domain term — use Photo for the showcased work.
 _Avoid_: Photo (when you mean the file alone)
 
-**Cover Photo**:
-The representative Photo of a Collection, used for the collection thumbnail/grid.
+**Collection** _(deferred)_:
+Previously: a curated group of Photos (e.g., "Kyoto 2024"). Replaced by flat list + Tags for v1. Kept as a deferred term; reintroduce only if you need ordered, titled groupings with a cover.
+_Avoid_: Album, Gallery, Series, Set
+
+**Cover Photo** _(deferred)_:
+Previously: the representative Photo of a Collection. Deferred with Collection.
 _Avoid_: Hero image, featured image

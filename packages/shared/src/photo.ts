@@ -1,70 +1,69 @@
 import { Schema as S } from 'effect'
 
 // ---------------------------------------------------------------------------
-// Photo — curated work (see CONTEXT.md). Mock shape for scaffold; fields
-// will be refined when the CMS (Sanity/Directus/R2+Images) is wired.
+// Photo — curated work (see CONTEXT.md). Flat list, tags, JSON metadata.
 // ---------------------------------------------------------------------------
 
 export const PhotoId = S.String.pipe(S.brand('PhotoId'))
 export type PhotoId = typeof PhotoId.Type
 
-export const CollectionId = S.String.pipe(S.brand('CollectionId'))
-export type CollectionId = typeof CollectionId.Type
+export const TagId = S.String.pipe(S.brand('TagId'))
+export type TagId = typeof TagId.Type
 
-export const Photo = S.Struct({
+export const Tag = S.Struct({
+  id: TagId,
+  slug: S.String,
+  label: S.String,
+})
+export type Tag = typeof Tag.Type
+
+export const PhotoMetadata = S.Struct({
+  caption: S.optional(S.String),
+  location: S.optional(S.String),
+  camera: S.optional(S.String),
+  lens: S.optional(S.String),
+})
+export type PhotoMetadata = typeof PhotoMetadata.Type
+
+export const PhotoWithTags = S.Struct({
   id: PhotoId,
   slug: S.String,
   title: S.String,
-  caption: S.optional(S.String),
-  collectionId: CollectionId,
-  // CDN URL for the image — when R2+Images lands this becomes a cf-transform URL.
-  imageUrl: S.String,
+  r2Key: S.String,
+  width: S.Number,
+  height: S.Number,
   takenAt: S.optional(S.String),
-  location: S.optional(S.String),
+  metadata: S.optional(PhotoMetadata),
+  tags: S.optional(S.Array(Tag)),
 })
-export type Photo = typeof Photo.Type
+export type PhotoWithTags = typeof PhotoWithTags.Type
 
-export const Collection = S.Struct({
-  id: CollectionId,
+// D1 row shapes — stored representation (metadata as JSON string, takenAt nullable)
+export const DbPhotoRow = S.Struct({
+  id: PhotoId,
   slug: S.String,
   title: S.String,
-  description: S.optional(S.String),
-  coverPhotoId: S.optional(PhotoId),
+  r2Key: S.String,
+  width: S.Number,
+  height: S.Number,
+  takenAt: S.NullOr(S.String),
+  metadata: S.String,
 })
-export type Collection = typeof Collection.Type
+export type DbPhotoRow = typeof DbPhotoRow.Type
 
-const decodeCollectionId = S.decodeSync(CollectionId)
-const decodePhotoId = S.decodeSync(PhotoId)
+export const DbTagRow = S.Struct({
+  id: TagId,
+  slug: S.String,
+  label: S.String,
+})
+export type DbTagRow = typeof DbTagRow.Type
 
-// Mock data — replaced by CMS fetch in the next iteration.
-export const mockCollections: ReadonlyArray<Collection> = [
-  {
-    id: decodeCollectionId('col-1'),
-    slug: 'kyoto-2024',
-    title: 'Kyoto 2024',
-    description: 'Winter light in Kyoto.',
-  },
-  {
-    id: decodeCollectionId('col-2'),
-    slug: 'bali-2023',
-    title: 'Bali 2023',
-    description: 'Coast and jungle.',
-  },
-]
+export const D1AllResultPhoto = S.Struct({
+  results: S.optional(S.Array(DbPhotoRow)),
+})
+export type D1AllResultPhoto = typeof D1AllResultPhoto.Type
 
-export const mockPhotos: ReadonlyArray<Photo> = [
-  {
-    id: decodePhotoId('photo-1'),
-    slug: 'kyoto-garden',
-    title: 'Kyoto Garden',
-    collectionId: decodeCollectionId('col-1'),
-    imageUrl: 'https://picsum.photos/seed/kyoto1/800/600',
-  },
-  {
-    id: decodePhotoId('photo-2'),
-    slug: 'bali-sunset',
-    title: 'Bali Sunset',
-    collectionId: decodeCollectionId('col-2'),
-    imageUrl: 'https://picsum.photos/seed/bali1/800/600',
-  },
-]
+export const D1AllResultTag = S.Struct({
+  results: S.optional(S.Array(DbTagRow)),
+})
+export type D1AllResultTag = typeof D1AllResultTag.Type
