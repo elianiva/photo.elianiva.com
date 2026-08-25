@@ -1,0 +1,32 @@
+{
+  "name": "photo-elianiva-com",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo build",
+    "check": "vp check",
+    "dev": "turbo dev",
+    "fmt": "vp fmt",
+    "lint": "vp lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "infra:deploy": "alchemy deploy --stage prod --yes"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.111",
+    "alchemy": "2.0.0-beta.74",
+    "effect": "4.0.0-rc.111"
+  },
+  "devDependencies": {
+    "@foldkit/oxlint-plugin": "^0.7.0",
+    "oxlint": "^1.79.0",
+    "turbo": "^2.10.11",
+    "typescript": "^7.0.2",
+    "vite-plus": "^0.2.9"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.22.0"
+}
