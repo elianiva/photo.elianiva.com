@@ -50,6 +50,21 @@ const jsonResponse = (data: unknown, init?: ResponseInit): Response =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
+/** Base83 alphabet used by blurhash strings. */
+const BLURHASH_ALPHABET =
+  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~'
+
+/** Accept well-formed blurhash strings only (size flag + components + pixels). */
+const parseBlurhash = (raw: FormDataEntryValue | null): string | undefined => {
+  if (typeof raw !== 'string') return undefined
+  const hash = raw.trim()
+  if (hash.length < 6 || hash.length > 64) return undefined
+  for (const char of hash) {
+    if (!BLURHASH_ALPHABET.includes(char)) return undefined
+  }
+  return hash
+}
+
 const parseMetadataObject = (raw: FormDataEntryValue | null): Record<string, unknown> => {
   if (typeof raw !== 'string' || raw === '') return {}
   try {
@@ -127,6 +142,7 @@ const handleUpload = (env: WorkerEnvWithAssets, request: Request): Promise<Respo
             ? takenAtRaw.trim()
             : meta.takenAt,
         metadata: JSON.stringify(mergedMetadata),
+        blurhash: parseBlurhash(form.get('blurhash')),
         contentType: file.type || 'image/jpeg',
         bytes,
         tagIds,

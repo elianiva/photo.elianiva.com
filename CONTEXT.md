@@ -20,6 +20,10 @@ _Avoid_: Collection (deferred), Category, Album
 Raw file bytes / technical artifact. Not a domain term — use Photo for the showcased work.
 _Avoid_: Photo (when you mean the file alone)
 
+**Blurhash**:
+A tiny string encoding a Photo's average color layout, encoded client-side at upload (only the browser can decode pixels) and stored on the Photo. The public gallery decodes it into a placeholder tile — no image bytes are fetched until the visitor opens the lightbox, which shows the original HD file on plain white.
+_Avoid_: Placeholder image, thumbnail (the gallery no longer loads thumbnails)
+
 **Collection** _(deferred)_:
 Previously: a curated group of Photos (e.g., "Kyoto 2024"). Replaced by flat list + Tags for v1. Kept as a deferred term; reintroduce only if you need ordered, titled groupings with a cover.
 _Avoid_: Album, Gallery, Series, Set

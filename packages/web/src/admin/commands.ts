@@ -8,6 +8,7 @@ import * as Command from 'foldkit/command'
 import type { PhotoWithTags, Tag } from '@photo/shared'
 
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
+import { encodeBlurhash } from '@/lib/blurhash'
 
 import { DraftFields, Message, fileStore } from './model'
 
@@ -21,15 +22,13 @@ interface PhotoPage {
 const failWith = (error: RpcFailure) => Message.FailedRpc({ message: error.message })
 
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
-  args: { q: S.String, tagSlug: S.String },
+  args: { tagSlug: S.String },
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ q, tagSlug }) =>
+  execute: ({ tagSlug }) =>
     Effect.map(
       rpcPublic<PhotoPage>(
         'ListPhotos',
-        q === '' && tagSlug === ''
-          ? { limit: 60 }
-          : { q: q || undefined, tagSlug: tagSlug || undefined, limit: 60 },
+        tagSlug === '' ? { limit: 60 } : { tagSlug, limit: 60 },
       ),
       (page) =>
         Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
@@ -37,12 +36,11 @@ export const FetchPhotosCmd = Command.define('FetchPhotos', {
 })
 
 export const FetchMoreCmd = Command.define('FetchMore', {
-  args: { q: S.String, tagSlug: S.String, cursor: S.String },
+  args: { tagSlug: S.String, cursor: S.String },
   messages: [Message.SucceededFetchMore, Message.FailedRpc],
-  execute: ({ q, tagSlug, cursor }) =>
+  execute: ({ tagSlug, cursor }) =>
     Effect.map(
       rpcPublic<PhotoPage>('ListPhotos', {
-        q: q || undefined,
         tagSlug: tagSlug || undefined,
         limit: 60,
         cursor,
@@ -50,16 +48,6 @@ export const FetchMoreCmd = Command.define('FetchMore', {
       (page) =>
         Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const SearchDebounceCmd = Command.define('SearchDebounce', {
-  args: { value: S.String },
-  messages: [Message.DebouncedSearch],
-  execute: ({ value }) =>
-    Effect.gen(function* () {
-      yield* Effect.sleep('300 millis')
-      return Message.DebouncedSearch({ value })
-    }),
 })
 
 export const FetchTagsCmd = Command.define('FetchTags', {
@@ -144,10 +132,14 @@ export const UploadItemCmd = Command.define('UploadItem', {
       if (file === undefined) {
         return Message.FailedUploadItem({ itemId, message: 'uploaded bytes are gone' })
       }
+      // Placeholder hash is computed here because only the browser can decode
+      // pixels — the Worker never sees a decodable image.
+      const blurhash = yield* Effect.promise(() => encodeBlurhash(file))
       const form = new FormData()
       form.set('file', file)
       form.set('title', file.name.replace(/\.[^/.]+$/, ''))
       form.set('tagIds', JSON.stringify([...tagIds]))
+      if (blurhash !== undefined) form.set('blurhash', blurhash)
       if (takenAt !== '') form.set('takenAt', takenAt)
       const response = yield* Effect.tryPromise({
         try: (signal) =>

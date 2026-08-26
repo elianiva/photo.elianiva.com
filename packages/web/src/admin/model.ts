@@ -91,8 +91,10 @@ export const Model = S.Struct({
   loadingMore: S.Boolean,
 
   // filter bar
-  search: S.String,
   activeTagSlug: S.optional(S.String),
+
+  // lightbox: photo currently shown full-size; null while browsing the grid
+  selectedId: S.NullOr(S.String),
 
   // edit sheet
   editSheet: Sheet.Model,
@@ -139,10 +141,14 @@ export const Message = defineMessageUnion({
   },
 
   // filter bar
-  SetSearch: { value: S.String },
-  DebouncedSearch: { value: S.String },
-  SubmitSearch: {},
   FilterByTag: { slug: S.String },
+  RetryFetch: {},
+
+  // lightbox
+  ClickedPhoto: { id: S.String },
+  CloseLightbox: {},
+  NextPhoto: {},
+  PrevPhoto: {},
 
   // edit sheet
   OpenEdit: { photo: PhotoWithTags },

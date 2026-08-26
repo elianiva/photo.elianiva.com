@@ -5,16 +5,20 @@
  * Row breaks come from the DP layout in `layout.ts`; each figure flexes in
  * proportion to its aspect ratio so landscape Photos take the wider share of
  * a row while portrait Photos keep their ratio — at any container width.
+ *
+ * Tiles render only the client-decoded blurhash placeholder — no image bytes
+ * are fetched while browsing. Clicking a figure opens the lightbox with the
+ * original HD file (see `lightbox` in view.ts).
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
 import { PhotoWithTags } from '@photo/shared'
 
-import { gallerySizes, srcSet, thumbUrl } from '@/lib/image'
+import { placeholderDataUrl } from '@/lib/blurhash'
 
 import { Message } from '../model'
 import type { Model } from '../model'
-import { breakRows, lastRowSlack, toAspects } from './layout'
+import { breakRows, lastRowSlack, toAspects } from '@/lib/layout'
 import type { Child } from './shared'
 
 // ---------------------------------------------------------------------------
@@ -44,31 +48,30 @@ export const yearSpan = (photos: ReadonlyArray<PhotoWithTags>): string => {
 // photo figure
 // ---------------------------------------------------------------------------
 
-const photoFigure = (
-  photo: PhotoWithTags,
-  index: number,
-  aspect: number,
-  h: HtmlBuilder<Message>,
-): Child =>
-  h.figure(
+const photoFigure = (photo: PhotoWithTags, aspect: number, h: HtmlBuilder<Message>): Child => {
+  const placeholder =
+    photo.blurhash !== undefined && photo.blurhash !== null
+      ? placeholderDataUrl(photo.blurhash)
+      : null
+  return h.figure(
+    [h.Key(photo.id), h.Style({ flex: `${aspect} 1 0%` }), h.Class('min-w-0 mb-16 lg:mb-24')],
     [
-      h.Key(photo.id),
-      h.Style({ flex: `${aspect} 1 0%` }),
-      h.Class('min-w-0 mb-16 lg:mb-24'),
-    ],
-    [
-      h.img([
-        h.Class('w-full h-auto bg-neutral-100'),
-        h.Src(thumbUrl(photo)),
-        h.Attribute('srcset', srcSet(photo)),
-        h.Attribute('sizes', gallerySizes(aspect)),
-        h.Alt(photo.title),
-        // First images gate the LCP — everything below the fold lazy-loads.
-        h.Attribute('loading', index < 2 ? 'eager' : 'lazy'),
-        ...(index === 0 ? [h.Attribute('fetchpriority', 'high')] : []),
-        h.Attribute('width', String(photo.width)),
-        h.Attribute('height', String(photo.height)),
-      ]),
+      // Aspect-ratio box reserves layout space; the decoded blurhash paints
+      // it until the lightbox loads the original. Photos uploaded before
+      // blurhash existed fall back to the plain neutral background.
+      h.div(
+        [
+          h.Class('w-full cursor-pointer bg-neutral-100 bg-cover bg-center'),
+          h.Style({
+            aspectRatio: String(aspect),
+            ...(placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {}),
+          }),
+          h.OnClick(Message.ClickedPhoto({ id: photo.id })),
+          h.Attribute('role', 'button'),
+          h.AriaLabel(`View ${photo.title}`),
+        ],
+        [],
+      ),
       h.figcaption(
         [h.Class('mt-3 lg:mt-4 flex items-baseline justify-between gap-6')],
         [
@@ -84,49 +87,64 @@ const photoFigure = (
       ),
     ],
   )
+}
 
 // ---------------------------------------------------------------------------
 // states
 // ---------------------------------------------------------------------------
 
 const loadingState = (h: HtmlBuilder<Message>): Child =>
-  h.p([h.Class('py-32 text-center font-serif italic font-light text-xl text-neutral-300')], [
-    'Loading…',
-  ])
+  h.p(
+    [h.Class('py-32 text-center font-serif italic font-light text-xl text-neutral-300')],
+    ['Loading…'],
+  )
 
 const errorState = (model: Model, h: HtmlBuilder<Message>): Child =>
-  h.div([h.Class('py-32 text-center')], [
-    h.p([h.Class('font-serif italic font-light text-xl text-neutral-400')], ['Something went wrong.']),
-    h.p([h.Class('mt-2 text-xs text-neutral-400')], [model.error ?? 'Failed to load photographs']),
-    h.button(
-      [
-        h.OnClick(Message.FetchPhotos()),
-        h.Class(
-          'mt-6 text-[10px] uppercase tracking-[0.3em] text-neutral-500 border-b border-neutral-300 pb-1 hover:text-neutral-900 hover:border-neutral-900 transition-colors',
-        ),
-      ],
-      ['Retry'],
-    ),
-  ])
+  h.div(
+    [h.Class('py-32 text-center')],
+    [
+      h.p(
+        [h.Class('font-serif italic font-light text-xl text-neutral-400')],
+        ['Something went wrong.'],
+      ),
+      h.p(
+        [h.Class('mt-2 text-xs text-neutral-400')],
+        [model.error ?? 'Failed to load photographs'],
+      ),
+      h.button(
+        [
+          h.OnClick(Message.FetchPhotos()),
+          h.Class(
+            'mt-6 text-[10px] uppercase tracking-[0.3em] text-neutral-500 border-b border-neutral-300 pb-1 hover:text-neutral-900 hover:border-neutral-900 transition-colors',
+          ),
+        ],
+        ['Retry'],
+      ),
+    ],
+  )
 
 const emptyState = (h: HtmlBuilder<Message>): Child =>
-  h.p([h.Class('py-32 text-center font-serif italic font-light text-xl text-neutral-300')], [
-    'Nothing here yet.',
-  ])
+  h.p(
+    [h.Class('py-32 text-center font-serif italic font-light text-xl text-neutral-300')],
+    ['Nothing here yet.'],
+  )
 
 const loadMoreButton = (model: Model, h: HtmlBuilder<Message>): Child =>
-  h.div([h.Class('flex justify-center py-24')], [
-    h.button(
-      [
-        h.OnClick(Message.LoadMore()),
-        ...(model.loadingMore ? [h.Disabled(true)] : []),
-        h.Class(
-          'text-[10px] uppercase tracking-[0.35em] text-neutral-500 border-b border-neutral-200 pb-2 hover:text-neutral-900 hover:border-neutral-900 transition-colors disabled:text-neutral-300 disabled:border-neutral-100',
-        ),
-      ],
-      [model.loadingMore ? 'Loading' : 'Load more'],
-    ),
-  ])
+  h.div(
+    [h.Class('flex justify-center py-24')],
+    [
+      h.button(
+        [
+          h.OnClick(Message.LoadMore()),
+          ...(model.loadingMore ? [h.Disabled(true)] : []),
+          h.Class(
+            'text-[10px] uppercase tracking-[0.35em] text-neutral-500 border-b border-neutral-200 pb-2 hover:text-neutral-900 hover:border-neutral-900 transition-colors disabled:text-neutral-300 disabled:border-neutral-100',
+          ),
+        ],
+        [model.loadingMore ? 'Loading' : 'Load more'],
+      ),
+    ],
+  )
 
 // ---------------------------------------------------------------------------
 // grid
@@ -145,7 +163,7 @@ export const grid = (model: Model, h: HtmlBuilder<Message>): Child => {
     const children = row.map((photoIndex) => {
       const photo = model.photos[photoIndex]
       if (photo === undefined) return undefined
-      return photoFigure(photo, photoIndex, aspects[photoIndex] ?? 1, h)
+      return photoFigure(photo, aspects[photoIndex] ?? 1, h)
     })
     // The final row keeps its target height instead of stretching: a spacer
     // absorbs the slack, leaving the row left-aligned in whitespace.

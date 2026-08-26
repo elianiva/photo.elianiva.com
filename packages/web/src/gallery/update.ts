@@ -16,7 +16,14 @@ type UpdateReturn = readonly [Model, ReadonlyArray<Command.Command<Message>>]
 // ---------------------------------------------------------------------------
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => [
-  { status: 'loading', photos: [], nextCursor: null, loadingMore: false, error: undefined },
+  {
+    status: 'loading',
+    photos: [],
+    nextCursor: null,
+    loadingMore: false,
+    error: undefined,
+    selectedId: null,
+  },
   [FetchPhotosCmd()],
 ]
 
@@ -55,4 +62,6 @@ export const update = (model: Model, message: Message): UpdateReturn =>
       { ...model, status: 'error', error: message, loadingMore: false },
       [],
     ],
+    ClickedPhoto: ({ id }) => [{ ...model, selectedId: id }, []],
+    CloseLightbox: () => [{ ...model, selectedId: null }, []],
   })

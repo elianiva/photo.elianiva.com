@@ -44,6 +44,8 @@ export interface CreatePhotoInput {
   readonly height: number
   readonly takenAt?: string | undefined
   readonly metadata: string
+  /** Client-encoded placeholder hash; null for legacy uploads. */
+  readonly blurhash?: string | undefined
   readonly contentType?: string | undefined
   readonly bytes: ArrayBuffer
   readonly tagIds: ReadonlyArray<string>
@@ -137,6 +139,7 @@ const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTa
   height: row.height,
   takenAt: row.takenAt ?? undefined,
   metadata: parseMetadataObject(row.metadata),
+  blurhash: row.blurhash ?? null,
   tags: [...tags],
 })
 
@@ -204,7 +207,7 @@ const selectPhotoRows = (
       binds.push(cursor.takenAt ?? '', cursor.takenAt ?? '', cursor.id)
     }
 
-    const sql = `SELECT id, slug, title, r2Key, width, height, takenAt, metadata FROM photos${
+    const sql = `SELECT id, slug, title, r2Key, width, height, takenAt, metadata, blurhash FROM photos${
       where.length ? ` WHERE ${where.join(' AND ')}` : ''
     } ORDER BY COALESCE(takenAt,'') DESC, id DESC LIMIT ?`
     const raw = yield* Effect.tryPromise({
@@ -227,7 +230,7 @@ const getRow = (db: (typeof Gateway.Service)['db'], id: string) =>
       try: () =>
         db
           .prepare(
-            `SELECT id, slug, title, r2Key, width, height, takenAt, metadata FROM photos WHERE id = ?`,
+            `SELECT id, slug, title, r2Key, width, height, takenAt, metadata, blurhash FROM photos WHERE id = ?`,
           )
           .bind(id)
           .first<DbPhotoRow>(),
@@ -329,7 +332,7 @@ export const PhotoServiceLive = Layer.effect(
           try: () =>
             db
               .prepare(
-                `INSERT INTO photos (id, slug, title, r2Key, width, height, takenAt, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO photos (id, slug, title, r2Key, width, height, takenAt, metadata, blurhash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               )
               .bind(
                 id,
@@ -340,6 +343,7 @@ export const PhotoServiceLive = Layer.effect(
                 input.height,
                 input.takenAt ?? null,
                 input.metadata,
+                input.blurhash ?? null,
               )
               .run(),
           catch: (cause) =>

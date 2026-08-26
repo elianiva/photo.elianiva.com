@@ -34,6 +34,9 @@ export const PhotoWithTags = S.Struct({
   height: S.Number,
   takenAt: S.optional(S.String),
   metadata: S.optional(PhotoMetadata),
+  /** Client-decoded placeholder source. Absent for Photos uploaded before
+   *  blurhash existed — views fall back to a plain background. */
+  blurhash: S.optional(S.NullOr(S.String)),
   tags: S.optional(S.Array(Tag)),
 })
 export type PhotoWithTags = typeof PhotoWithTags.Type
@@ -48,6 +51,7 @@ export const DbPhotoRow = S.Struct({
   height: S.Number,
   takenAt: S.NullOr(S.String),
   metadata: S.String,
+  blurhash: S.NullOr(S.String),
 })
 export type DbPhotoRow = typeof DbPhotoRow.Type
 

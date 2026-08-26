@@ -20,7 +20,6 @@ import {
   FetchPhotosCmd,
   FetchTagsCmd,
   SaveEditsCmd,
-  SearchDebounceCmd,
   UploadItemCmd,
 } from './commands'
 import {
@@ -55,7 +54,7 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
     tags: [],
     nextCursor: null,
     loadingMore: false,
-    search: '',
+    selectedId: null,
     editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
     draft: emptyDraft(),
     draftTagIds: [],
@@ -71,7 +70,7 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
     confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
     toast: AdminToast.init({ id: 'admin-toasts' }),
   },
-  [FetchPhotosCmd({ q: '', tagSlug: '' }), FetchTagsCmd()],
+  [FetchPhotosCmd({ tagSlug: '' }), FetchTagsCmd()],
 ]
 
 // ---------------------------------------------------------------------------
@@ -95,7 +94,7 @@ const runNextOrFinish = (model: Model): UpdateReturn => {
   }
   const failedCount = model.queue.filter((item) => item.status === 'failed').length
   const doneModel = evo(model, { uploading: () => false })
-  const refresh = FetchPhotosCmd({ q: model.search, tagSlug: model.activeTagSlug ?? '' })
+  const refresh = FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })
   return failedCount === 0
     ? showToast(
         doneModel,
@@ -132,6 +131,27 @@ const markItem = (
   })
 
 // ---------------------------------------------------------------------------
+// lightbox selection helpers
+// ---------------------------------------------------------------------------
+
+/** Drop the lightbox selection when its photo is no longer in the list
+ *  (deleted, or filtered out by the active tag). */
+const retainSelection = (model: Model): Model =>
+  model.selectedId !== null && !model.photos.some((photo) => photo.id === model.selectedId)
+    ? evo(model, { selectedId: () => null })
+    : model
+
+/** Move the lightbox selection by `delta` positions within the loaded list,
+ *  wrapping at the ends. No-op when nothing is selected. */
+const stepSelection = (model: Model, delta: 1 | -1): Model => {
+  const index = model.photos.findIndex((photo) => photo.id === model.selectedId)
+  if (index === -1 || model.photos.length === 0) return model
+  const nextIndex = (index + delta + model.photos.length) % model.photos.length
+  const next = model.photos[nextIndex]
+  return next === undefined ? model : evo(model, { selectedId: () => next.id })
+}
+
+// ---------------------------------------------------------------------------
 // update
 // ---------------------------------------------------------------------------
 
@@ -144,13 +164,15 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     // ----- data ---------------------------------------------------------------
     SucceededFetchPhotos: ({ photos, nextCursor }) => [
-      evo(model, {
+      retainSelection(
+        evo(model, {
         photos: () => [...photos],
         nextCursor: () => nextCursor ?? null,
         loadingMore: () => false,
         status: () => 'ready',
         error: () => undefined,
       }),
+      ),
       [],
     ],
     SucceededFetchMore: ({ photos, nextCursor }) => [
@@ -177,7 +199,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         evo(model, { loadingMore: () => true }),
         [
           FetchMoreCmd({
-            q: model.search,
             tagSlug: model.activeTagSlug ?? '',
             cursor: model.nextCursor,
           }),
@@ -186,22 +207,20 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
 
     // ----- filter bar -----------------------------------------------------------
-    SetSearch: ({ value }) => [evo(model, { search: () => value }), [SearchDebounceCmd({ value })]],
-    DebouncedSearch: ({ value }) => {
-      if (value !== model.search) return [model, []]
-      return [model, [FetchPhotosCmd({ q: value, tagSlug: model.activeTagSlug ?? '' })]]
-    },
-    SubmitSearch: () => [
-      model,
-      [FetchPhotosCmd({ q: model.search, tagSlug: model.activeTagSlug ?? '' })],
-    ],
+    RetryFetch: () => [model, [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })]],
     FilterByTag: ({ slug }) => {
       const current = model.activeTagSlug ?? ''
       const next = current === slug ? undefined : slug
       // `activeTagSlug` is optional; assign via spread (see `withOptional`).
       const nextModel = withOptional(model, { activeTagSlug: next })
-      return [nextModel, [FetchPhotosCmd({ q: nextModel.search, tagSlug: next ?? '' })]]
+      return [retainSelection(nextModel), [FetchPhotosCmd({ tagSlug: next ?? '' })]]
     },
+
+    // ----- lightbox ---------------------------------------------------------------
+    ClickedPhoto: ({ id }) => [evo(model, { selectedId: () => id }), []],
+    CloseLightbox: () => [evo(model, { selectedId: () => null }), []],
+    NextPhoto: () => [stepSelection(model, 1), []],
+    PrevPhoto: () => [stepSelection(model, -1), []],
 
     // ----- edit sheet -----------------------------------------------------------
     OpenEdit: ({ photo }) => {
@@ -266,14 +285,16 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
     SavedEdits: ({ photos }) => {
       const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
-      const saved = evo(model, {
+      const saved = retainSelection(
+        evo(model, {
         photos: () => [...photos],
         nextCursor: () => null,
         loadingMore: () => false,
         editSheet: () => closedSheet,
         editingId: () => undefined,
         saving: () => false,
-      })
+      }),
+      )
       return showToast(
         saved,
         'Saved',
@@ -415,7 +436,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // Deleting from the edit sheet must also dismiss it (and drop the edit
       // state) — otherwise it lingers over a photo that no longer exists.
       const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
-      const refreshed = evo(model, {
+      const refreshed = retainSelection(
+        evo(model, {
         photos: () => [...photos],
         nextCursor: () => null,
         loadingMore: () => false,
@@ -423,7 +445,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         draft: () => emptyDraft(),
         draftTagIds: () => [],
         ...(model.editingId !== undefined ? { editingId: () => undefined } : {}),
-      })
+      }),
+      )
       return showToast(
         refreshed,
         'Deleted',
@@ -434,12 +457,14 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
     DeletedTag: ({ tags, photos }) =>
       showToast(
-        evo(model, {
+        retainSelection(
+          evo(model, {
           tags: () => tags ?? [],
           photos: () => [...photos],
           nextCursor: () => null,
           loadingMore: () => false,
         }),
+        ),
         'Tag deleted',
         'Success',
       ),

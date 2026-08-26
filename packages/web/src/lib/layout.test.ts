@@ -60,6 +60,11 @@ describe('breakRows', () => {
   })
 
   it('clamps degenerate dimensions via toAspects', () => {
-    expect(toAspects([{ width: 0, height: 0 }, { width: 10000, height: 10 }])).toEqual([1, 2.5])
+    expect(
+      toAspects([
+        { width: 0, height: 0 },
+        { width: 10000, height: 10 },
+      ]),
+    ).toEqual([1, 2.5])
   })
 })

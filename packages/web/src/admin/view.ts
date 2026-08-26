@@ -1,127 +1,127 @@
 /**
- * Admin view root: header (search + tag filter + Upload), tag filter pills,
- * and composition of the region views in `views/` (masonry grid, edit Sheet,
- * upload Dialog, confirm AlertDialog, toast stack).
+ * Admin view root: header (brand + Upload), tag filter bar (chips with
+ * counts + result line), and composition of the region views in `views/`
+ * (justified day-grouped grid, lightbox, edit Sheet, upload Dialog, confirm
+ * AlertDialog, toast stack). Header and content share one max-width
+ * container so their edges align.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
+import type { Tag } from '@photo/shared'
 
 import * as Button from '@/components/ui/button'
-import * as Input from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 import { Message as M } from './model'
 import type { Model, Msg } from './model'
 import { editSheet } from './views/edit-sheet'
 import { grid } from './views/grid'
+import { lightbox } from './views/lightbox'
 import { confirmDialog, toastStack } from './views/overlays'
 import type { Child } from './views/shared'
 import { uploadDialog } from './views/upload-dialog'
 
 // ---------------------------------------------------------------------------
-// header: search + tag filter pills + upload button
+// header: brand + upload button (search lives nowhere — tags are the filter)
 // ---------------------------------------------------------------------------
 
 const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.header(
-    [
-      h.Class(
-        'sticky top-0 z-20 border-b border-stone-200 bg-white/85 backdrop-blur px-6 py-3 flex flex-wrap items-center gap-x-6 gap-y-3',
-      ),
-    ],
+    [h.Class('sticky top-0 z-20 border-b border-stone-200 bg-white/85 backdrop-blur')],
     [
       h.div(
-        [h.Class('flex items-center gap-4 mr-auto')],
         [
-          h.a(
-            [h.Href('/'), h.Class('text-sm font-semibold tracking-tight hover:text-stone-600')],
-            ['photo.elianiva.com'],
+          h.Class(
+            'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3',
           ),
-          h.span([h.Class('text-xs uppercase tracking-widest text-stone-400')], ['Admin']),
         ],
-      ),
-      h.form(
-        [h.OnSubmit(M.SubmitSearch()), h.Class('flex items-center gap-2')],
         [
           h.div(
-            [h.Class('w-56')],
+            [h.Class('mr-auto flex items-center gap-4')],
             [
-              Input.input(
-                {
-                  id: 'admin-search',
-                  label: '',
-                  value: model.search,
-                  placeholder: 'Search title…',
-                  onInput: (value) => M.SetSearch({ value }),
-                  wrapperClass: '!w-full',
-                },
-                h,
+              h.a(
+                [h.Href('/'), h.Class('text-sm font-semibold tracking-tight hover:text-stone-600')],
+                ['photo.elianiva.com'],
               ),
+              h.span([h.Class('text-xs uppercase tracking-widest text-stone-400')], ['Admin']),
             ],
           ),
-          Button.button({ onClick: M.SubmitSearch(), variant: 'outline', size: 'sm' }, 'Search', h),
+          Button.button({ onClick: M.OpenUpload(), size: 'sm' }, 'Upload photos', h),
         ],
       ),
-      Button.button({ onClick: M.OpenUpload(), size: 'sm' }, 'Upload photos', h),
     ],
   )
+
+// ---------------------------------------------------------------------------
+// filter bar: tag chips with counts + result line. No "All photos" pill —
+// an empty chip selection *is* all photos; the count line states it.
+// ---------------------------------------------------------------------------
+
+const tagChip = (model: Model, tag: Tag, h: HtmlBuilder<Msg>): Child => {
+  const isActive = model.activeTagSlug === tag.slug
+  // Counts describe the loaded result set, so they only mean something
+  // unfiltered — a filtered list would repeat the same count on every chip.
+  const count =
+    model.activeTagSlug === undefined
+      ? model.photos.filter((photo) => (photo.tags ?? []).some((entry) => entry.id === tag.id))
+          .length
+      : undefined
+  return h.span(
+    [
+      h.Key(`chip-${tag.slug}`),
+      h.Class('inline-flex items-center overflow-hidden rounded-full border border-stone-200'),
+    ],
+    [
+      h.button(
+        [
+          h.OnClick(M.FilterByTag({ slug: tag.slug })),
+          h.Class(
+            cn(
+              'py-1 text-xs font-medium transition-colors',
+              isActive
+                ? 'bg-stone-900 text-white pl-3 pr-1'
+                : 'bg-white text-stone-700 hover:bg-stone-100 pl-3 pr-2.5',
+            ),
+          ),
+        ],
+        [
+          tag.label,
+          ...(count !== undefined
+            ? [h.span([h.Class('ml-1.5 text-stone-400')], [String(count)])]
+            : []),
+        ],
+      ),
+      ...(isActive
+        ? [
+            h.button(
+              [
+                h.OnClick(M.FilterByTag({ slug: tag.slug })),
+                h.AriaLabel(`Clear filter ${tag.label}`),
+                h.Class('pr-2 pl-0.5 text-xs text-stone-400 hover:text-white'),
+              ],
+              ['×'],
+            ),
+          ]
+        : []),
+    ],
+  )
+}
 
 const filterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const active = model.activeTagSlug ?? ''
-  const pill = (
-    label: string,
-    slug: string | undefined,
-    isActive: boolean,
-    onDelete?: Msg,
-  ): Child =>
-    h.span(
+  const activeLabel = model.tags.find((tag) => tag.slug === model.activeTagSlug)?.label
+  return h.div([h.Class('mt-6')], [
+    h.div(
+      [h.Class('flex flex-wrap items-center gap-2')],
+      model.tags.map((tag) => tagChip(model, tag, h)),
+    ),
+    h.p(
+      [h.Class('mt-3 text-xs text-stone-500')],
       [
-        h.Key(`pill-${slug ?? 'all'}`),
-        h.Class('inline-flex items-center overflow-hidden rounded-full border'),
+        `${String(model.photos.length)} photo${model.photos.length === 1 ? '' : 's'}`,
+        ...(activeLabel !== undefined ? [` · filtered by “${activeLabel}”`] : []),
       ],
-      [
-        h.button(
-          [
-            h.OnClick(M.FilterByTag(slug === undefined ? { slug: '' } : { slug })),
-            h.Class(
-              cn(
-                'pl-3 pr-2 py-1 text-xs font-medium transition-colors',
-                isActive ? 'bg-stone-900 text-white' : 'bg-white text-stone-700 hover:bg-stone-100',
-                onDelete !== undefined && 'pr-1',
-              ),
-            ),
-          ],
-          [label],
-        ),
-        ...(onDelete !== undefined
-          ? [
-              h.button(
-                [
-                  h.OnClick(onDelete),
-                  h.AriaLabel(`Delete tag ${label}`),
-                  h.Class('pr-2.5 text-xs text-stone-400 hover:text-red-600'),
-                ],
-                ['×'],
-              ),
-            ]
-          : []),
-      ],
-    )
-
-  return h.div(
-    [h.Class('flex flex-wrap items-center gap-2 mt-6')],
-    [
-      pill('All photos', undefined, active === ''),
-      ...model.tags.map((tag) =>
-        pill(
-          tag.label,
-          tag.slug,
-          active === tag.slug,
-          M.RequestDeleteTag({ id: tag.id, label: tag.label }),
-        ),
-      ),
-    ],
-  )
+    ),
+  ])
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +146,7 @@ export const view = (model: Model, h: HtmlBuilder<Msg>): Document => ({
       uploadDialog(model, h),
       confirmDialog(model, h),
       toastStack(model, h),
+      ...(model.selectedId !== null ? [lightbox(model, h)] : []),
     ],
   ),
 })

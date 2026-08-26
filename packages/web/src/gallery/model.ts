@@ -17,6 +17,8 @@ export const Model = S.Struct({
   loadingMore: S.Boolean,
   status: S.String,
   error: S.optional(S.String),
+  /** Photo shown in the lightbox; null while browsing the grid. */
+  selectedId: S.NullOr(S.String),
 })
 export type Model = typeof Model.Type
 
@@ -38,5 +40,9 @@ export const Message = defineMessageUnion({
   FailedFetchPhotos: {
     message: S.String,
   },
+  ClickedPhoto: {
+    id: S.String,
+  },
+  CloseLightbox: {},
 })
 export type Message = typeof Message.Type
