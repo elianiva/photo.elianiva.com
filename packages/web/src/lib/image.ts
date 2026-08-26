@@ -13,12 +13,13 @@ export const thumbUrl = (photo: PhotoWithTags): string =>
 export const srcSet = (photo: PhotoWithTags): string =>
   import.meta.env.DEV
     ? rawImageUrl(photo.r2Key)
-    : [400, 800, 1200].map((width) => `${transformedUrl(photo.r2Key, width)} ${String(width)}w`).join(', ')
+    : [400, 800, 1200]
+        .map((width) => `${transformedUrl(photo.r2Key, width)} ${String(width)}w`)
+        .join(', ')
 
 /** Sizes attribute for masonry/grid cards. */
 export const cardSizes =
   '(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'
 
 /** Public gallery hero sizes: full-width cards. */
-export const gallerySizes =
-  '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'
+export const gallerySizes = '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'

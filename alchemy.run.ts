@@ -102,7 +102,9 @@ export default Alchemy.Stack(
 // Keep structural bindings the Worker actually uses (PHOTOS.get/put/delete, DB.prepare/batch).
 export type WebsiteEnv = {
   readonly PHOTOS: {
-    get(key: string): Promise<{ httpMetadata?: { contentType?: string }; body: ReadableStream | null } | null>
+    get(
+      key: string,
+    ): Promise<{ httpMetadata?: { contentType?: string }; body: ReadableStream | null } | null>
     put(
       key: string,
       value: ArrayBuffer | ReadableStream | string,

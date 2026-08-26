@@ -55,7 +55,14 @@ export const update = (model: Model, message: Message) =>
   Message.match<readonly [Model, ReadonlyArray<Command.Command<Message>>]>(message, {
     FetchPhotos: () => [{ ...model, status: 'loading' }, [FetchPhotosCmd()]],
     SucceededFetchPhotos: ({ photos, nextCursor }) => [
-      { ...model, status: 'ready', photos, nextCursor: nextCursor ?? null, loadingMore: false, error: undefined },
+      {
+        ...model,
+        status: 'ready',
+        photos,
+        nextCursor: nextCursor ?? null,
+        loadingMore: false,
+        error: undefined,
+      },
       [],
     ],
     SucceededFetchMore: ({ photos, nextCursor }) => [
@@ -105,7 +112,9 @@ const FetchMoreCmd = (cursor: string) =>
     execute: Effect.map(rpcPublic<PhotoPage>('ListPhotos', { limit: 60, cursor }), (page) =>
       Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(
-      Effect.catch((error) => Effect.succeed(Message.FailedFetchPhotos({ message: error.message }))),
+      Effect.catch((error) =>
+        Effect.succeed(Message.FailedFetchPhotos({ message: error.message })),
+      ),
     ),
   })()
 
@@ -167,81 +176,86 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
                     [h.Class('mt-8 text-sm text-stone-500')],
                     ['No photos yet — add some in /admin.'],
                   )
-                : h.div([], [
-                    h.div(
-                      [h.Class('mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3')],
-                      model.photos.map((photo) =>
-                        h.div(
-                          [
-                            h.Class('overflow-hidden rounded-xl border border-stone-200 bg-white'),
-                            h.Key(photo.id),
-                          ],
-                          [
-                            h.img([
-                              h.Class('h-56 w-full object-cover bg-stone-100'),
-                              h.Src(thumbUrl(photo)),
-                              h.Attribute('srcset', srcSet(photo)),
-                              h.Attribute('sizes', gallerySizes),
-                              h.Alt(photo.title),
-                              h.Attribute('loading', 'lazy'),
-                              h.Attribute('width', String(photo.width)),
-                              h.Attribute('height', String(photo.height)),
-                            ]),
-                            h.div(
-                              [h.Class('p-3')],
-                              [
-                                h.h3([h.Class('text-sm font-semibold truncate')], [photo.title]),
-                                h.p(
-                                  [h.Class('mt-1 text-xs text-stone-500')],
-                                  [
-                                    [photo.takenAt ?? '', `${photo.width}×${photo.height}`]
-                                      .filter(Boolean)
-                                      .join(' · '),
-                                  ],
-                                ),
-                                ...((photo.tags ?? []).length
-                                  ? [
-                                      h.div(
-                                        [h.Class('mt-2 flex flex-wrap gap-1')],
-                                        (photo.tags ?? []).map((tag) =>
-                                          h.span(
-                                            [
-                                              h.Class(
-                                                'rounded-full bg-stone-100 px-2 py-0.5 text-[10px] text-stone-600',
-                                              ),
-                                              h.Key(tag.id),
-                                            ],
-                                            [tag.label],
+                : h.div(
+                    [],
+                    [
+                      h.div(
+                        [h.Class('mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3')],
+                        model.photos.map((photo) =>
+                          h.div(
+                            [
+                              h.Class(
+                                'overflow-hidden rounded-xl border border-stone-200 bg-white',
+                              ),
+                              h.Key(photo.id),
+                            ],
+                            [
+                              h.img([
+                                h.Class('h-56 w-full object-cover bg-stone-100'),
+                                h.Src(thumbUrl(photo)),
+                                h.Attribute('srcset', srcSet(photo)),
+                                h.Attribute('sizes', gallerySizes),
+                                h.Alt(photo.title),
+                                h.Attribute('loading', 'lazy'),
+                                h.Attribute('width', String(photo.width)),
+                                h.Attribute('height', String(photo.height)),
+                              ]),
+                              h.div(
+                                [h.Class('p-3')],
+                                [
+                                  h.h3([h.Class('text-sm font-semibold truncate')], [photo.title]),
+                                  h.p(
+                                    [h.Class('mt-1 text-xs text-stone-500')],
+                                    [
+                                      [photo.takenAt ?? '', `${photo.width}×${photo.height}`]
+                                        .filter(Boolean)
+                                        .join(' · '),
+                                    ],
+                                  ),
+                                  ...((photo.tags ?? []).length
+                                    ? [
+                                        h.div(
+                                          [h.Class('mt-2 flex flex-wrap gap-1')],
+                                          (photo.tags ?? []).map((tag) =>
+                                            h.span(
+                                              [
+                                                h.Class(
+                                                  'rounded-full bg-stone-100 px-2 py-0.5 text-[10px] text-stone-600',
+                                                ),
+                                                h.Key(tag.id),
+                                              ],
+                                              [tag.label],
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ]
-                                  : []),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    ...(model.nextCursor !== null
-                      ? [
-                          h.div(
-                            [h.Class('mt-8 flex justify-center')],
-                            [
-                              Button.button(
-                                {
-                                  onClick: Message.LoadMore(),
-                                  variant: 'outline',
-                                  isDisabled: model.loadingMore,
-                                },
-                                model.loadingMore ? 'Loading…' : 'Load more',
-                                h,
+                                      ]
+                                    : []),
+                                ],
                               ),
                             ],
                           ),
-                        ]
-                      : []),
-                  ]),
+                        ),
+                      ),
+                      ...(model.nextCursor !== null
+                        ? [
+                            h.div(
+                              [h.Class('mt-8 flex justify-center')],
+                              [
+                                Button.button(
+                                  {
+                                    onClick: Message.LoadMore(),
+                                    variant: 'outline',
+                                    isDisabled: model.loadingMore,
+                                  },
+                                  model.loadingMore ? 'Loading…' : 'Load more',
+                                  h,
+                                ),
+                              ],
+                            ),
+                          ]
+                        : []),
+                    ],
+                  ),
         ],
       ),
     ],

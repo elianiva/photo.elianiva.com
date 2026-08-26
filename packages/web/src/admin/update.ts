@@ -1,483 +1,54 @@
 /**
- * Admin app core: commands (the RPC seam, ADR 0006), init, and update.
+ * Admin update core: message → (model, commands) transition plus init.
  * Uploaded bytes live in `fileStore` keyed by queue-item id so the Model
- * stays serializable.
+ * stays serializable. RPC commands live in `commands.ts`; child submodel
+ * folds in `children.ts`; shared helpers in `helpers.ts`.
  */
 
-import { Effect, Option as Opt, Schema as S } from 'effect'
-import * as Command from 'foldkit/command'
-import { evo } from 'foldkit/struct'
-import * as Update from 'foldkit/update'
 import { Multi } from '@foldkit/ui/combobox'
-import type { PhotoWithTags, Tag } from '@photo/shared'
+import { evo } from 'foldkit/struct'
 
-import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Sheet from '@/components/ui/sheet'
 
 import {
-  AdminToast,
-  DraftFields,
-  Message,
-  TagMultiCombo,
-  UPLOAD_LIMITS,
-  emptyDraft,
-  fileStore,
-} from './model'
+  CreateTagCmd,
+  DeletePhotoCmd,
+  DeleteTagCmd,
+  FetchMoreCmd,
+  FetchPhotosCmd,
+  FetchTagsCmd,
+  SaveEditsCmd,
+  SearchDebounceCmd,
+  UploadItemCmd,
+} from './commands'
+import {
+  foldConfirm,
+  foldDraftCombo,
+  foldFileDrop,
+  foldSheet,
+  foldToast,
+  foldUploadCombo,
+  foldUploadDialog,
+} from './children'
+import {
+  byLabel,
+  liftChildCommands,
+  showToast,
+  toggleIn,
+  toQueueItem,
+  withOptional,
+  type UpdateReturn,
+} from './helpers'
+import { AdminToast, emptyDraft, fileStore, Message } from './model'
 import type { Message as Msg, Model } from './model'
-
-type Commands = ReadonlyArray<Command.Command<Msg>>
-type UpdateReturn = readonly [Model, Commands]
-
-interface PhotoPage {
-  readonly items: ReadonlyArray<PhotoWithTags>
-  readonly nextCursor: string | null
-}
-
-// ---------------------------------------------------------------------------
-// child folds
-// ---------------------------------------------------------------------------
-
-/** A user-driven close (Esc, backdrop, close button) surfaces as the child's
- *  `Closed` out-message; reset the edit state around it. */
-const foldSheet = Update.foldChild({
-  update: Sheet.update,
-  read: (model: Model) => Opt.some(model.editSheet),
-  write: (model: Model, nextSheet: typeof model.editSheet) =>
-    evo(model, { editSheet: () => nextSheet }),
-  toParentMessage: (message: typeof Sheet.Message.Type) => Message.GotEditSheetMessage({ message }),
-  foldOutMessage: (out): Update.Step<Model, Msg> =>
-    out._tag === 'Closed'
-      ? (writtenModel) => [
-          // editingId is optional and may be absent from normalized state;
-          // spread instead of evo, which cannot add missing keys.
-          evo(writtenModel, {
-            draft: () => emptyDraft(),
-            draftTagIds: () => [],
-            ...(writtenModel.editingId !== undefined ? { editingId: () => undefined } : {}),
-          }),
-          [],
-        ]
-      : (writtenModel) => [writtenModel, []],
-})
-
-/** Closing the upload dialog (Cancel button sends the child's requested-close
- *  message; Esc/backdrop emit `Closed`) drops queue items that are not stuck. */
-const releaseFinishedItems = (dialogModel: Model): Model => {
-  for (const item of dialogModel.queue) {
-    if (item.status !== 'failed') fileStore.delete(item.id)
-  }
-  return evo(dialogModel, {
-    queue: () => dialogModel.queue.filter((item) => item.status === 'failed'),
-    uploadTagIds: () => [],
-    uploadTakenAt: () => '',
-    uploading: () => false,
-  })
-}
-const foldUploadDialog = Update.foldChild({
-  update: Dialog.update,
-  read: (model: Model) => Opt.some(model.uploadDialog),
-  write: (model: Model, nextDialog: typeof model.uploadDialog) =>
-    evo(model, { uploadDialog: () => nextDialog }),
-  toParentMessage: (message: typeof Dialog.Message.Type) =>
-    Message.GotUploadDialogMessage({ message }),
-  foldOutMessage: (out): Update.Step<Model, Msg> =>
-    out._tag === 'Closed'
-      ? (writtenModel) => [releaseFinishedItems(writtenModel), []]
-      : (writtenModel) => [writtenModel, []],
-})
-
-/** Dismissing the confirm dialog without confirming forgets what was pending. */
-const foldConfirm = Update.foldChild({
-  update: Dialog.update,
-  read: (model: Model) => Opt.some(model.confirmDialog),
-  write: (model: Model, nextDialog: typeof model.confirmDialog) =>
-    evo(model, { confirmDialog: () => nextDialog }),
-  toParentMessage: (message: typeof Dialog.Message.Type) => Message.GotConfirmMessage({ message }),
-  foldOutMessage: (out): Update.Step<Model, Msg> =>
-    out._tag === 'Closed'
-      ? (writtenModel) => [evo(writtenModel, { pendingConfirm: () => undefined }), []]
-      : (writtenModel) => [writtenModel, []],
-})
-
-/** Dropped files surface through the child's out-channel: each file's bytes
- *  land in `fileStore` and a queue item rides back to the parent. */
-const foldFileDrop = Update.foldChild({
-  update: FileDrop.update,
-  read: (model: Model) => Opt.some(model.fileDrop),
-  write: (model: Model, nextDrop: typeof model.fileDrop) =>
-    evo(model, { fileDrop: () => nextDrop }),
-  toParentMessage: (message: typeof FileDrop.Message.Type) =>
-    Message.GotFileDropMessage({ message }),
-  foldOutMessage: (out: typeof FileDrop.OutMessage.Type): Update.Step<Model, Msg> => {
-    if (out._tag !== 'ReceivedFiles') {
-      // RejectedNonFiles: a drop without files carries nothing to do
-      return (droppedModel) => [droppedModel, []]
-    }
-    // Enforce per-file size and global queue cap
-    const validated: Array<{ file: File; id: string }> = []
-    const oversized: Array<string> = []
-    for (const file of out.files) {
-      if (file.size > UPLOAD_LIMITS.maxFileSize) {
-        oversized.push(file.name)
-        continue
-      }
-      const id = `${file.name}:${file.size}`
-      fileStore.set(id, file)
-      validated.push({ file, id })
-    }
-    return (droppedModel) => {
-      const existing = new Set(droppedModel.queue.map((item) => item.id))
-      const allIds = validated.map((entry) => entry.id)
-      const freshIds = allIds.filter((key) => !existing.has(key))
-
-      const oversizedItems = oversized.map((name) => ({
-        id: `${name}:oversized`,
-        name,
-        size: 0,
-        status: 'failed' as const,
-        error: `file too large (max ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB)`,
-      }))
-
-      const availableSlots = Math.max(0, UPLOAD_LIMITS.maxFiles - droppedModel.queue.length)
-      const withinCap = freshIds.slice(0, availableSlots)
-      const overflowCount = freshIds.length - withinCap.length
-
-      const fresh = withinCap.map(toQueueItem).concat(oversizedItems)
-
-      let nextModel: Model = { ...droppedModel, queue: [...droppedModel.queue, ...fresh] }
-
-      let mutableCommands: Array<Command.Command<Msg>> = []
-      if (oversized.length > 0) {
-        const [tModel, tCmds] = showToast(
-          nextModel,
-          `${String(oversized.length)} file(s) too large`,
-          'Error',
-          `Max ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB per file.`,
-        )
-        nextModel = tModel
-        mutableCommands = [...mutableCommands, ...tCmds]
-      }
-      if (overflowCount > 0) {
-        const [tModel, tCmds] = showToast(
-          nextModel,
-          `Only ${String(UPLOAD_LIMITS.maxFiles)} files allowed`,
-          'Error',
-          `${String(overflowCount)} file(s) skipped — remove some to add more.`,
-        )
-        nextModel = tModel
-        mutableCommands = [...mutableCommands, ...tCmds]
-      }
-      return [nextModel, mutableCommands]
-    }
-  },
-})
-
-/** Toast dismissal/expiry is fully owned by the toast submodel. */
-const foldToast = Update.foldChild({
-  update: AdminToast.update,
-  read: (model: Model) => Opt.some(model.toast),
-  write: (model: Model, nextToast: typeof model.toast) => evo(model, { toast: () => nextToast }),
-  toParentMessage: (message: typeof AdminToast.Message.Type) =>
-    Message.GotToastMessage({ message }),
-  foldOutMessage: (): Update.Step<Model, Msg> => (writtenModel) => [writtenModel, []],
-})
-
-// ---------------------------------------------------------------------------
-// tag combobox folds
-//
-// Combos emit `Selected({ value })` through their out-channel: the value is
-// either a Tag id (toggle membership) or a `create:<label>` pseudo-item
-// rendered by the filtered-items view (inline create). Internal combo
-// messages (typing, open/close, highlight) bubble up wrapped and are folded
-// straight back down.
-// ---------------------------------------------------------------------------
-
-/** The combobox bundle's model shape, named here because @foldkit/ui does
- *  not export a standalone model TYPE for the multi-select bundle. */
-type TagComboModel = S.Schema.Type<typeof Multi.Model>
-
-interface ComboFold {
-  (model: Model, message: never): UpdateReturn
-}
-
-const makeComboFold = (
-  which: 'draft' | 'upload',
-  read: (model: Model) => Opt.Option<TagComboModel>,
-  write: (model: Model, nextCombo: TagComboModel) => Model,
-): ComboFold =>
-  Update.foldChild({
-    update: TagMultiCombo.update,
-    read,
-    write,
-    toParentMessage: (message) =>
-      which === 'draft'
-        ? Message.GotDraftComboMessage({ message })
-        : Message.GotUploadComboMessage({ message }),
-    foldOutMessage: (out): Update.Step<Model, Msg> => {
-      if (out._tag !== 'Selected') {
-        return (comboModel) => [comboModel, []]
-      }
-      const value = out.value
-      if (value.startsWith('create:')) {
-        const label = value.slice('create:'.length)
-        return (comboModel) => [comboModel, [CreateTagCmd({ source: which, label })]]
-      }
-      if (which === 'draft') {
-        return (comboModel) => [
-          evo(comboModel, { draftTagIds: () => toggleIn(comboModel.draftTagIds, value) }),
-          [],
-        ]
-      }
-      return (comboModel) => [
-        evo(comboModel, { uploadTagIds: () => toggleIn(comboModel.uploadTagIds, value) }),
-        [],
-      ]
-    },
-  })
-
-const foldDraftCombo = makeComboFold(
-  'draft',
-  (model) => Opt.some(model.draftCombo),
-  (model, nextCombo) => evo(model, { draftCombo: () => nextCombo }),
-)
-
-const foldUploadCombo = makeComboFold(
-  'upload',
-  (model) => Opt.some(model.uploadCombo),
-  (model, nextCombo) => evo(model, { uploadCombo: () => nextCombo }),
-)
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for external callers; internal path now inlines the store
-function enqueueFile(file: File): string {
-  const id = `${file.name}:${file.size}`
-  fileStore.set(id, file)
-  return id
-}
-
-/** Narrow on purpose: widening this to the whole Message union would leak
- *  every variant into each command's success channel. */
-const failWith = (error: RpcFailure) => Message.FailedRpc({ message: error.message })
-
-/** Re-keys child (dialog/sheet) commands so they dispatch back into the
- *  matching Got*Message fold instead of leaking the child's vocabulary. */
-const liftChildCommands = <M>(
-  commands: ReadonlyArray<Command.Command<M>>,
-  wrap: (message: M) => Msg,
-): Commands => commands.map((command) => Command.mapMessage(command, wrap))
-
-/** `evo` can only transform keys already present on the source — the stored
- *  state omits absent optional keys entirely, so assigning one through evo
- *  alone is a silent no-op. Use this for writes to optional fields. */
-const withOptional = (model: Model, fields: Partial<Model>): Model => ({
-  ...model,
-  ...fields,
-})
-
-const showToast = (
-  model: Model,
-  title: string,
-  variant: 'Success' | 'Error',
-  detail?: string,
-  extraCommands: Commands = [],
-): UpdateReturn => {
-  const [nextToast, toastCommands] = AdminToast.show(model.toast, {
-    payload: detail === undefined ? { title } : { title, detail },
-    variant,
-  })
-  return [
-    evo(model, { toast: () => nextToast }),
-    [
-      ...extraCommands,
-      ...toastCommands.map((command) =>
-        Command.mapMessage(command, (message: typeof AdminToast.Message.Type) =>
-          Message.GotToastMessage({ message }),
-        ),
-      ),
-    ],
-  ]
-}
-
-function toggleIn(ids: ReadonlyArray<string>, id: string): Array<string> {
-  return ids.includes(id) ? ids.filter((candidate) => candidate !== id) : [...ids, id]
-}
-
-function toQueueItem(key: string): Model['queue'][number] {
-  const splitAt = key.lastIndexOf(':')
-  const name = key.slice(0, splitAt)
-  const size = Number(key.slice(splitAt + 1))
-  return { id: key, name, size: Number.isFinite(size) ? size : 0, status: 'pending' }
-}
-
-const byLabel = (a: { readonly label: string }, b: { readonly label: string }): number =>
-  a.label.localeCompare(b.label)
-
-// ---------------------------------------------------------------------------
-// commands — the RPC seam (ADR 0006)
-// ---------------------------------------------------------------------------
-
-export const FetchPhotosCmd = Command.define('FetchPhotos', {
-  args: { q: S.String, tagSlug: S.String },
-  messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ q, tagSlug }) =>
-    Effect.map(
-      rpcPublic<PhotoPage>(
-        'ListPhotos',
-        q === '' && tagSlug === ''
-          ? { limit: 60 }
-          : { q: q || undefined, tagSlug: tagSlug || undefined, limit: 60 },
-      ),
-      (page) => Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const FetchMoreCmd = Command.define('FetchMore', {
-  args: { q: S.String, tagSlug: S.String, cursor: S.String },
-  messages: [Message.SucceededFetchMore, Message.FailedRpc],
-  execute: ({ q, tagSlug, cursor }) =>
-    Effect.map(
-      rpcPublic<PhotoPage>('ListPhotos', {
-        q: q || undefined,
-        tagSlug: tagSlug || undefined,
-        limit: 60,
-        cursor,
-      }),
-      (page) => Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const SearchDebounceCmd = Command.define('SearchDebounce', {
-  args: { value: S.String },
-  messages: [Message.DebouncedSearch],
-  execute: ({ value }) =>
-    Effect.gen(function* () {
-      yield* Effect.sleep('300 millis')
-      return Message.DebouncedSearch({ value })
-    }),
-})
-
-export const FetchTagsCmd = Command.define('FetchTags', {
-  messages: [Message.SucceededFetchTags, Message.FailedRpc],
-  execute: Effect.map(rpcPublic<ReadonlyArray<Tag>>('ListTags', {}), (tags) =>
-    Message.SucceededFetchTags({ tags: [...tags] }),
-  ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const SaveEditsCmd = Command.define('SaveEdits', {
-  args: { id: S.String, draft: DraftFields, tagIds: S.Array(S.String) },
-  messages: [Message.SavedEdits, Message.FailedRpc],
-  execute: ({ id, draft, tagIds }) =>
-    Effect.gen(function* () {
-      const metadata: Record<string, string> = {}
-      for (const field of ['caption', 'location', 'camera', 'lens'] as const) {
-        if (draft[field] !== '') metadata[field] = draft[field]
-      }
-      yield* rpcAdmin('UpdatePhoto', {
-        id,
-        title: draft.title,
-        slug: draft.slug,
-        ...(draft.takenAt !== '' && { takenAt: draft.takenAt }),
-        ...(Object.keys(metadata).length > 0 && { metadata }),
-        tagIds: [...tagIds],
-      })
-      // refetch first page so ordering (takenAt DESC) stays truthful
-      const page = yield* rpcPublic<PhotoPage>('ListPhotos', { limit: 60 })
-      return Message.SavedEdits({ photos: [...page.items] })
-    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const DeletePhotoCmd = Command.define('DeletePhoto', {
-  args: { id: S.String },
-  messages: [Message.DeletedPhoto, Message.FailedRpc],
-  execute: ({ id }) =>
-    Effect.map(
-      Effect.andThen(
-        rpcAdmin('DeletePhoto', { id }),
-        rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }),
-      ),
-      (page) => Message.DeletedPhoto({ id, photos: [...page.items] }),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const DeleteTagCmd = Command.define('DeleteTag', {
-  args: { id: S.String },
-  messages: [Message.DeletedTag, Message.FailedRpc],
-  execute: ({ id }) =>
-    Effect.map(
-      Effect.andThen(
-        rpcAdmin('DeleteTag', { id }),
-        // Refetch both sides: cards would otherwise keep showing the deleted
-        // tag until the next full reload.
-        Effect.all({
-          tags: rpcPublic<ReadonlyArray<Tag>>('ListTags', {}),
-          page: rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }),
-        }),
-      ),
-      ({ tags, page }) => Message.DeletedTag({ tags: [...tags], photos: [...page.items] }),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const CreateTagCmd = Command.define('CreateTag', {
-  args: { source: S.Literals(['draft', 'upload']), label: S.String },
-  messages: [Message.SucceededCreateTag, Message.FailedRpc],
-  execute: ({ source, label }) =>
-    Effect.map(rpcAdmin<Tag>('CreateTag', { slug: label, label }), (tag) =>
-      Message.SucceededCreateTag({ source, tag }),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-/** One queue item per command run; `update` chains the next pending item.
- *  Batch-wide tag/takenAt choices ride along as args so the execute closure
- *  needs no access to the Model. */
-export const UploadItemCmd = Command.define('UploadItem', {
-  args: { itemId: S.String, tagIds: S.Array(S.String), takenAt: S.String },
-  messages: [Message.SucceededUploadItem, Message.FailedUploadItem],
-  execute: ({ itemId, tagIds, takenAt }) =>
-    Effect.gen(function* () {
-      const file = fileStore.get(itemId)
-      if (file === undefined) {
-        return Message.FailedUploadItem({ itemId, message: 'uploaded bytes are gone' })
-      }
-      const form = new FormData()
-      form.set('file', file)
-      form.set('title', file.name.replace(/\.[^/.]+$/, ''))
-      form.set('tagIds', JSON.stringify([...tagIds]))
-      if (takenAt !== '') form.set('takenAt', takenAt)
-      const response = yield* Effect.tryPromise({
-        try: (signal) =>
-          fetch('/api/upload', { method: 'POST', body: form, credentials: 'same-origin', signal }),
-        catch: () => new Error('upload request failed'),
-      })
-      if (!response.ok) {
-        const body = yield* Effect.promise(() => response.text())
-        let message = `upload failed (${String(response.status)})`
-        try {
-          const parsed: { message?: unknown } = JSON.parse(body)
-          if (typeof parsed.message === 'string') message = parsed.message
-        } catch (parseError) {
-          // non-JSON error body — the status-based message stands
-          void parseError
-        }
-        return Message.FailedUploadItem({ itemId, message })
-      }
-      return Message.SucceededUploadItem({ itemId })
-    }).pipe(
-      Effect.catch(() =>
-        Effect.succeed(Message.FailedUploadItem({ itemId, message: 'upload failed' })),
-      ),
-    ),
-})
 
 // ---------------------------------------------------------------------------
 // init
 // ---------------------------------------------------------------------------
 
-export const init = (): readonly [Model, Commands] => [
+export const init = (): readonly [Model, UpdateReturn[1]] => [
   {
     status: 'loading',
     photos: [],
@@ -564,7 +135,7 @@ const markItem = (
 // update
 // ---------------------------------------------------------------------------
 
-function step(current: Model, message: Msg, prior: Commands = []): UpdateReturn {
+function step(current: Model, message: Msg, prior: UpdateReturn[1] = []): UpdateReturn {
   const [nextModel, commands] = transition(current, message)
   return [nextModel, [...prior, ...commands]]
 }
@@ -604,15 +175,18 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       if (model.nextCursor === null || model.loadingMore) return [model, []]
       return [
         evo(model, { loadingMore: () => true }),
-        [FetchMoreCmd({ q: model.search, tagSlug: model.activeTagSlug ?? '', cursor: model.nextCursor })],
+        [
+          FetchMoreCmd({
+            q: model.search,
+            tagSlug: model.activeTagSlug ?? '',
+            cursor: model.nextCursor,
+          }),
+        ],
       ]
     },
 
     // ----- filter bar -----------------------------------------------------------
-    SetSearch: ({ value }) => [
-      evo(model, { search: () => value }),
-      [SearchDebounceCmd({ value })],
-    ],
+    SetSearch: ({ value }) => [evo(model, { search: () => value }), [SearchDebounceCmd({ value })]],
     DebouncedSearch: ({ value }) => {
       if (value !== model.search) return [model, []]
       return [model, [FetchPhotosCmd({ q: value, tagSlug: model.activeTagSlug ?? '' })]]
@@ -778,7 +352,9 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       ]
     },
     RetryAllFailed: () => {
-      const failedIds = model.queue.filter((item) => item.status === 'failed').map((item) => item.id)
+      const failedIds = model.queue
+        .filter((item) => item.status === 'failed')
+        .map((item) => item.id)
       if (failedIds.length === 0) return [model, []]
       const retried = evo(model, {
         queue: () =>

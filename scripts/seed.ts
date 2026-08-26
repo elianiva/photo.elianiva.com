@@ -41,7 +41,9 @@ if (!apply) {
   out('-- Run with --apply to POST against http://127.0.0.1:13370/api/upload (requires pnpm dev)\n')
   for (const tag of tags) {
     const id = `tag_${tag.slug}`
-    out(`INSERT OR IGNORE INTO tags (id, slug, label) VALUES ('${id}', '${tag.slug}', '${tag.label}');`)
+    out(
+      `INSERT OR IGNORE INTO tags (id, slug, label) VALUES ('${id}', '${tag.slug}', '${tag.label}');`,
+    )
   }
   for (const photo of placeholders) {
     const id = `photo_${photo.slug}`
@@ -54,8 +56,12 @@ if (!apply) {
   out('\n-- Link first 4 photos to Kyoto + Film as example')
   for (let index = 0; index < 4; index += 1) {
     const photo = placeholders[index]!
-    out(`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES ('photo_${photo.slug}', 'tag_kyoto');`)
-    out(`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES ('photo_${photo.slug}', 'tag_film');`)
+    out(
+      `INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES ('photo_${photo.slug}', 'tag_kyoto');`,
+    )
+    out(
+      `INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES ('photo_${photo.slug}', 'tag_film');`,
+    )
   }
   process.exit(0)
 }
