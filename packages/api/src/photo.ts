@@ -19,6 +19,13 @@ import { Gateway } from './gateway'
 export interface PhotoListFilter {
   readonly tagSlug?: string | undefined
   readonly q?: string | undefined
+  readonly limit?: number | undefined
+  readonly cursor?: string | undefined
+}
+
+export interface PhotoListPage {
+  readonly items: ReadonlyArray<PhotoWithTags>
+  readonly nextCursor: string | null
 }
 
 export interface PhotoUpdatePatch {
@@ -43,10 +50,8 @@ export interface CreatePhotoInput {
 }
 
 export interface PhotoServiceContract {
-  /** Photos newest-first, optionally filtered by tag or free text. */
-  readonly list: (
-    filter: PhotoListFilter,
-  ) => Effect.Effect<ReadonlyArray<PhotoWithTags>, StorageError>
+  /** Photos newest-first, optionally filtered by tag or free text. Keyset paginated. */
+  readonly list: (filter: PhotoListFilter) => Effect.Effect<PhotoListPage, StorageError>
   readonly get: (id: string) => Effect.Effect<PhotoWithTags, StorageError | PhotoNotFound>
   /** Store bytes in R2 + insert row + link tags. Used by the multipart upload endpoint. */
   readonly create: (
@@ -85,27 +90,42 @@ const parseMetadataObject = (raw: string | null): Record<string, unknown> | unde
   }
 }
 
+interface TagRowWithPhotoId extends Tag {
+  readonly photoId: string
+}
+
 const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<string>) =>
   Effect.gen(function* () {
-    const map = new Map<string, ReadonlyArray<Tag>>()
-    for (const id of ids) {
+    const map = new Map<string, Array<Tag>>()
+    for (const id of ids) map.set(id, [])
+    if (ids.length === 0) return new Map<string, ReadonlyArray<Tag>>()
+
+    // Chunk IN lists to stay well under D1's ~100 bind limit
+    const chunkSize = 80
+    for (let offset = 0; offset < ids.length; offset += chunkSize) {
+      const chunk = ids.slice(offset, offset + chunkSize)
+      const placeholders = chunk.map(() => '?').join(', ')
       const raw = yield* Effect.tryPromise({
         try: () =>
           db
             .prepare(
-              `SELECT t.id, t.slug, t.label FROM tags t JOIN photo_tags pt ON pt.tagId = t.id WHERE pt.photoId = ? ORDER BY t.label`,
+              `SELECT t.id, t.slug, t.label, pt.photoId as photoId FROM tags t JOIN photo_tags pt ON pt.tagId = t.id WHERE pt.photoId IN (${placeholders}) ORDER BY t.label`,
             )
-            .bind(id)
-            .all<Tag>(),
+            .bind(...chunk)
+            .all<TagRowWithPhotoId>(),
         catch: (cause) =>
           new StorageError({
-            message: `Failed to load tags for ${id}`,
+            message: `Failed to load tags for batch`,
             cause: describeCause(cause),
           }),
       })
-      map.set(id, raw.results ?? [])
+      for (const row of raw.results ?? []) {
+        const list = map.get(row.photoId)
+        if (list) list.push({ id: row.id, slug: row.slug, label: row.label })
+      }
     }
-    return map
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- Array<Tag> is assignable to ReadonlyArray<Tag> for the return view
+    return map as Map<string, ReadonlyArray<Tag>>
   })
 
 const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTags => ({
@@ -120,10 +140,45 @@ const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTa
   tags: [...tags],
 })
 
+interface ParsedCursor {
+  readonly takenAt: string | null
+  readonly id: string
+}
+
+export const decodeCursor = (raw: string): ParsedCursor | null => {
+  try {
+    const json = atob(raw)
+    const parsed: unknown = JSON.parse(json)
+    if (typeof parsed !== 'object' || parsed === null) return null
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- narrowing unknown JSON to record for cursor decode
+    const record = parsed as Record<string, unknown>
+    const idRaw = record['id']
+    if (typeof idRaw !== 'string' || !('takenAt' in record)) return null
+    const takenAtRaw = record['takenAt']
+    const takenAt =
+      takenAtRaw === null || takenAtRaw === undefined
+        ? null
+        : typeof takenAtRaw === 'string'
+          ? takenAtRaw
+          : null
+    return { takenAt, id: idRaw }
+  } catch {
+    return null
+  }
+}
+
+export const encodeCursor = (row: DbPhotoRow): string =>
+  btoa(JSON.stringify({ takenAt: row.takenAt, id: row.id }))
+
+export const clampLimit = (input: number | undefined): number => {
+  if (input === undefined || !Number.isFinite(input)) return 60
+  return Math.min(Math.max(Math.floor(input), 1), 100)
+}
+
 const selectPhotoRows = (
   db: (typeof Gateway.Service)['db'],
   filter: PhotoListFilter,
-): Effect.Effect<ReadonlyArray<DbPhotoRow>, StorageError> =>
+): Effect.Effect<{ rows: ReadonlyArray<DbPhotoRow>; nextCursor: string | null }, StorageError> =>
   Effect.gen(function* () {
     const where: Array<string> = []
     const binds: Array<string> = []
@@ -138,19 +193,32 @@ const selectPhotoRows = (
       )
       binds.push(filter.tagSlug.trim())
     }
+    const limit = clampLimit(filter.limit)
+    const cursor = filter.cursor !== undefined ? decodeCursor(filter.cursor) : null
+    if (cursor !== null) {
+      // Keyset: (COALESCE(takenAt,''), id) < (cursorTakenAt, cursorId) in DESC order
+      // For DESC, next page is where the ordering key is strictly less.
+      where.push(
+        `(COALESCE(takenAt,'') < COALESCE(?, '') OR (COALESCE(takenAt,'') = COALESCE(?, '') AND id < ?))`,
+      )
+      binds.push(cursor.takenAt ?? '', cursor.takenAt ?? '', cursor.id)
+    }
+
     const sql = `SELECT id, slug, title, r2Key, width, height, takenAt, metadata FROM photos${
       where.length ? ` WHERE ${where.join(' AND ')}` : ''
-    } ORDER BY takenAt DESC, rowid DESC`
+    } ORDER BY COALESCE(takenAt,'') DESC, id DESC LIMIT ?`
     const raw = yield* Effect.tryPromise({
       try: () =>
         db
           .prepare(sql)
-          .bind(...binds)
+          .bind(...binds, String(limit))
           .all<DbPhotoRow>(),
       catch: (cause) =>
         new StorageError({ message: 'Failed to list photos', cause: describeCause(cause) }),
     })
-    return raw.results ?? []
+    const rows = raw.results ?? []
+    const nextCursor = rows.length === limit ? encodeCursor(rows[rows.length - 1]!) : null
+    return { rows, nextCursor }
   })
 
 const getRow = (db: (typeof Gateway.Service)['db'], id: string) =>
@@ -221,12 +289,13 @@ export const PhotoServiceLive = Layer.effect(
 
     const list: PhotoServiceContract['list'] = (filter) =>
       Effect.gen(function* () {
-        const rows = yield* selectPhotoRows(db, filter)
+        const { rows, nextCursor } = yield* selectPhotoRows(db, filter)
         const tagMap = yield* tagsForPhotos(
           db,
           rows.map((row) => row.id),
         )
-        return rows.map((row) => toPhotoWithTags(row, tagMap.get(row.id) ?? []))
+        const items = rows.map((row) => toPhotoWithTags(row, tagMap.get(row.id) ?? []))
+        return { items, nextCursor }
       })
 
     const get: PhotoServiceContract['get'] = (id) =>

@@ -13,4 +13,15 @@ export default defineConfig({
   optimizeDeps: {
     entries: ['src/entry.ts'],
   },
+  build: {
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('foldkit')) return 'foldkit'
+          if (id.includes('node_modules/effect')) return 'effect'
+        },
+      },
+    },
+  },
 })

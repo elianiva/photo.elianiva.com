@@ -17,7 +17,12 @@ export const PublicRpcHandlersLive = PhotoPublicRpcs.toLayer({
         return yield* new InvalidInput({ message: 'tagSlug takes one tag' })
       }
       return yield* PhotoService.use((service) =>
-        service.list({ tagSlug: payload.tagSlug, q: payload.q }),
+        service.list({
+          tagSlug: payload.tagSlug,
+          q: payload.q,
+          limit: payload.limit,
+          cursor: payload.cursor,
+        }),
       )
     }),
   GetPhoto: (payload) => PhotoService.use((service) => service.get(payload.id)),

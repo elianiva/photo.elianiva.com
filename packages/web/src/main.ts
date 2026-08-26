@@ -4,6 +4,8 @@ import type { Document, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { PhotoWithTags } from '@photo/shared'
 
+import * as Button from '@/components/ui/button'
+import { gallerySizes, srcSet, thumbUrl } from '@/lib/image'
 import { rpcPublic } from '@/lib/rpc'
 
 // ---------------------------------------------------------------------------
@@ -12,10 +14,17 @@ import { rpcPublic } from '@/lib/rpc'
 
 export const Model = S.Struct({
   photos: S.Array(PhotoWithTags),
+  nextCursor: S.NullOr(S.String),
+  loadingMore: S.Boolean,
   status: S.String,
   error: S.optional(S.String),
 })
 export type Model = typeof Model.Type
+
+interface PhotoPage {
+  readonly items: ReadonlyArray<PhotoWithTags>
+  readonly nextCursor: string | null
+}
 
 // ---------------------------------------------------------------------------
 // Message
@@ -25,7 +34,13 @@ export const Message = defineMessageUnion({
   FetchPhotos: {},
   SucceededFetchPhotos: {
     photos: S.Array(PhotoWithTags),
+    nextCursor: S.NullOr(S.String),
   },
+  SucceededFetchMore: {
+    photos: S.Array(PhotoWithTags),
+    nextCursor: S.NullOr(S.String),
+  },
+  LoadMore: {},
   FailedFetchPhotos: {
     message: S.String,
   },
@@ -39,11 +54,27 @@ export type Message = typeof Message.Type
 export const update = (model: Model, message: Message) =>
   Message.match<readonly [Model, ReadonlyArray<Command.Command<Message>>]>(message, {
     FetchPhotos: () => [{ ...model, status: 'loading' }, [FetchPhotosCmd()]],
-    SucceededFetchPhotos: ({ photos }) => [
-      { ...model, status: 'ready', photos, error: undefined },
+    SucceededFetchPhotos: ({ photos, nextCursor }) => [
+      { ...model, status: 'ready', photos, nextCursor: nextCursor ?? null, loadingMore: false, error: undefined },
       [],
     ],
-    FailedFetchPhotos: ({ message }) => [{ ...model, status: 'error', error: message }, []],
+    SucceededFetchMore: ({ photos, nextCursor }) => [
+      {
+        ...model,
+        photos: [...model.photos, ...photos],
+        nextCursor: nextCursor ?? null,
+        loadingMore: false,
+      },
+      [],
+    ],
+    LoadMore: () => {
+      if (model.nextCursor === null || model.loadingMore) return [model, []]
+      return [{ ...model, loadingMore: true }, [FetchMoreCmd(model.nextCursor)]]
+    },
+    FailedFetchPhotos: ({ message }) => [
+      { ...model, status: 'error', error: message, loadingMore: false },
+      [],
+    ],
   })
 
 // ---------------------------------------------------------------------------
@@ -51,22 +82,32 @@ export const update = (model: Model, message: Message) =>
 // ---------------------------------------------------------------------------
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => [
-  { status: 'loading', photos: [], error: undefined },
+  { status: 'loading', photos: [], nextCursor: null, loadingMore: false, error: undefined },
   [FetchPhotosCmd()],
 ]
 
 // ---------------------------------------------------------------------------
-// Command — photos come through the Effect RPC channel (ADR 0006)
+// Commands — photos come through the Effect RPC channel (ADR 0006)
 // ---------------------------------------------------------------------------
 
 const FetchPhotosCmd = Command.define('FetchPhotos', {
   messages: [Message.SucceededFetchPhotos, Message.FailedFetchPhotos],
-  execute: Effect.map(rpcPublic<ReadonlyArray<PhotoWithTags>>('ListPhotos', {}), (photos) =>
-    Message.SucceededFetchPhotos({ photos: [...photos] }),
+  execute: Effect.map(rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }), (page) =>
+    Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
   ).pipe(
     Effect.catch((error) => Effect.succeed(Message.FailedFetchPhotos({ message: error.message }))),
   ),
 })
+
+const FetchMoreCmd = (cursor: string) =>
+  Command.define('FetchMore', {
+    messages: [Message.SucceededFetchMore, Message.FailedFetchPhotos],
+    execute: Effect.map(rpcPublic<PhotoPage>('ListPhotos', { limit: 60, cursor }), (page) =>
+      Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
+    ).pipe(
+      Effect.catch((error) => Effect.succeed(Message.FailedFetchPhotos({ message: error.message }))),
+    ),
+  })()
 
 // ---------------------------------------------------------------------------
 // View
@@ -126,57 +167,81 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
                     [h.Class('mt-8 text-sm text-stone-500')],
                     ['No photos yet — add some in /admin.'],
                   )
-                : h.div(
-                    [h.Class('mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3')],
-                    model.photos.map((photo) =>
-                      h.div(
-                        [
-                          h.Class('overflow-hidden rounded-xl border border-stone-200 bg-white'),
-                          h.Key(photo.id),
-                        ],
-                        [
-                          h.img([
-                            h.Class('h-56 w-full object-cover bg-stone-100'),
-                            h.Src(`/api/image/${encodeURIComponent(photo.r2Key)}`),
-                            h.Alt(photo.title),
-                            h.Attribute('loading', 'lazy'),
-                          ]),
-                          h.div(
-                            [h.Class('p-3')],
-                            [
-                              h.h3([h.Class('text-sm font-semibold truncate')], [photo.title]),
-                              h.p(
-                                [h.Class('mt-1 text-xs text-stone-500')],
-                                [
-                                  [photo.takenAt ?? '', `${photo.width}×${photo.height}`]
-                                    .filter(Boolean)
-                                    .join(' · '),
-                                ],
-                              ),
-                              ...((photo.tags ?? []).length
-                                ? [
-                                    h.div(
-                                      [h.Class('mt-2 flex flex-wrap gap-1')],
-                                      (photo.tags ?? []).map((tag) =>
-                                        h.span(
-                                          [
-                                            h.Class(
-                                              'rounded-full bg-stone-100 px-2 py-0.5 text-[10px] text-stone-600',
-                                            ),
-                                            h.Key(tag.id),
-                                          ],
-                                          [tag.label],
+                : h.div([], [
+                    h.div(
+                      [h.Class('mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3')],
+                      model.photos.map((photo) =>
+                        h.div(
+                          [
+                            h.Class('overflow-hidden rounded-xl border border-stone-200 bg-white'),
+                            h.Key(photo.id),
+                          ],
+                          [
+                            h.img([
+                              h.Class('h-56 w-full object-cover bg-stone-100'),
+                              h.Src(thumbUrl(photo)),
+                              h.Attribute('srcset', srcSet(photo)),
+                              h.Attribute('sizes', gallerySizes),
+                              h.Alt(photo.title),
+                              h.Attribute('loading', 'lazy'),
+                              h.Attribute('width', String(photo.width)),
+                              h.Attribute('height', String(photo.height)),
+                            ]),
+                            h.div(
+                              [h.Class('p-3')],
+                              [
+                                h.h3([h.Class('text-sm font-semibold truncate')], [photo.title]),
+                                h.p(
+                                  [h.Class('mt-1 text-xs text-stone-500')],
+                                  [
+                                    [photo.takenAt ?? '', `${photo.width}×${photo.height}`]
+                                      .filter(Boolean)
+                                      .join(' · '),
+                                  ],
+                                ),
+                                ...((photo.tags ?? []).length
+                                  ? [
+                                      h.div(
+                                        [h.Class('mt-2 flex flex-wrap gap-1')],
+                                        (photo.tags ?? []).map((tag) =>
+                                          h.span(
+                                            [
+                                              h.Class(
+                                                'rounded-full bg-stone-100 px-2 py-0.5 text-[10px] text-stone-600',
+                                              ),
+                                              h.Key(tag.id),
+                                            ],
+                                            [tag.label],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ]
-                                : []),
-                            ],
-                          ),
-                        ],
+                                    ]
+                                  : []),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                    ...(model.nextCursor !== null
+                      ? [
+                          h.div(
+                            [h.Class('mt-8 flex justify-center')],
+                            [
+                              Button.button(
+                                {
+                                  onClick: Message.LoadMore(),
+                                  variant: 'outline',
+                                  isDisabled: model.loadingMore,
+                                },
+                                model.loadingMore ? 'Loading…' : 'Load more',
+                                h,
+                              ),
+                            ],
+                          ),
+                        ]
+                      : []),
+                  ]),
         ],
       ),
     ],

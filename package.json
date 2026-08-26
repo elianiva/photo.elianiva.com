@@ -10,6 +10,7 @@
     "dev:stack": "alchemy dev --stage dev",
     "fmt": "vp fmt",
     "lint": "vp lint",
+    "db:seed": "tsx scripts/seed.ts",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "infra:deploy": "alchemy deploy --stage prod --yes"

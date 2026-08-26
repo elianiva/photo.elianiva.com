@@ -17,9 +17,11 @@ import * as FileDrop from '@/components/ui/file-drop'
 import * as Input from '@/components/ui/input'
 import * as Badge from '@/components/ui/badge'
 import * as Sheet from '@/components/ui/sheet'
+import * as Spinner from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
+import { cardSizes, srcSet, thumbUrl } from '@/lib/image'
 
-import { AdminToast, Message as M, TagMultiCombo } from './model'
+import { AdminToast, Message as M, TagMultiCombo, UPLOAD_LIMITS } from './model'
 import type { Model, Msg, QueueItem } from './model'
 
 type Child = Html | string
@@ -28,11 +30,6 @@ type Child = Html | string
 // helpers
 // ---------------------------------------------------------------------------
 
-/** Cloudflare Image Resizing in prod; direct proxy in dev (no cf radical). */
-const thumbUrl = (photo: PhotoWithTags): string => {
-  const raw = `/api/image/${encodeURIComponent(photo.r2Key)}`
-  return import.meta.env.DEV ? raw : `/cdn-cgi/image/width=400,format=auto${raw}`
-}
 
 const formatBytes = (size: number): string =>
   size >= 1024 * 1024
@@ -242,6 +239,8 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child =>
           'w-full rounded-xl bg-stone-100 ring-stone-200 group-hover:ring-2 transition-shadow',
         ),
         h.Src(thumbUrl(photo)),
+        h.Attribute('srcset', srcSet(photo)),
+        h.Attribute('sizes', cardSizes),
         h.Alt(photo.title),
         h.Attribute('width', String(photo.width)),
         h.Attribute('height', String(photo.height)),
@@ -301,10 +300,30 @@ const grid = (model: Model, h: HtmlBuilder<Msg>): Child => {
       ],
     )
   }
-  return h.div(
-    [h.Class('mt-6 columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4')],
-    model.photos.map((photo) => photoCard(photo, h)),
-  )
+  return h.div([], [
+    h.div(
+      [h.Class('mt-6 columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4')],
+      model.photos.map((photo) => photoCard(photo, h)),
+    ),
+    ...(model.nextCursor !== null
+      ? [
+          h.div(
+            [h.Class('mt-8 flex justify-center')],
+            [
+              Button.button(
+                {
+                  onClick: M.LoadMore(),
+                  variant: 'outline',
+                  isDisabled: model.loadingMore,
+                },
+                model.loadingMore ? 'Loading…' : 'Load more',
+                h,
+              ),
+            ],
+          ),
+        ]
+      : []),
+  ])
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +388,8 @@ const editSheetContent = (
           ? h.img([
               h.Class('w-full rounded-lg bg-stone-100 max-h-72 object-contain'),
               h.Src(thumbUrl(editing)),
+              h.Attribute('srcset', srcSet(editing)),
+              h.Attribute('sizes', cardSizes),
               h.Alt(editing.title),
             ])
           : '',
@@ -435,16 +456,22 @@ const editSheet = (model: Model, h: HtmlBuilder<Msg>): Child =>
 // ---------------------------------------------------------------------------
 
 const statusBadge = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
+  if (item.status === 'uploading') {
+    return h.span([h.Class('inline-flex items-center gap-1.5')], [
+      Spinner.spinner({}, h),
+      Badge.badge({ variant: 'default' }, ['Uploading…'], h),
+    ])
+  }
   const map: Record<
-    QueueItem['status'],
+    Exclude<QueueItem['status'], 'uploading'>,
     { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
   > = {
     pending: { label: 'Queued', variant: 'secondary' },
-    uploading: { label: 'Uploading…', variant: 'default' },
     done: { label: 'Done', variant: 'outline' },
     failed: { label: 'Failed', variant: 'destructive' },
   }
-  const config = map[item.status]
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- narrowing from QueueStatus union
+  const config = map[item.status as Exclude<QueueItem['status'], 'uploading'>]
   return Badge.badge({ variant: config.variant }, [config.label], h)
 }
 
@@ -502,6 +529,7 @@ const uploadDialogContent = (
   h: HtmlBuilder<Msg>,
 ): ReadonlyArray<Child> => {
   const pendingCount = model.queue.filter((item) => item.status === 'pending').length
+  const failedCount = model.queue.filter((item) => item.status === 'failed').length
   return [
     h.div(
       [h.Class('p-4 flex flex-col gap-4')],
@@ -566,19 +594,40 @@ const uploadDialogContent = (
                   embedCombo(model, 'upload', h),
                 ],
               ),
-              h.div(
-                [h.Class('flex items-center justify-between gap-2')],
+              h.p(
+                [h.Class('text-xs text-stone-500')],
                 [
-                  Button.button(
-                    {
-                      onClick: M.ClearFinishedItems(),
-                      variant: 'ghost',
-                      size: 'sm',
-                      isDisabled: !model.queue.some((item) => item.status === 'done'),
-                    },
-                    'Clear finished',
-                    h,
-                  ),
+                  `${String(model.queue.length)}/${String(UPLOAD_LIMITS.maxFiles)} files · max ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB each`,
+                ],
+              ),
+              h.div(
+                [h.Class('flex items-center justify-between gap-2 flex-wrap')],
+                [
+                  h.div([h.Class('flex items-center gap-2')], [
+                    Button.button(
+                      {
+                        onClick: M.ClearFinishedItems(),
+                        variant: 'ghost',
+                        size: 'sm',
+                        isDisabled: !model.queue.some((item) => item.status === 'done'),
+                      },
+                      'Clear finished',
+                      h,
+                    ),
+                    ...(failedCount > 0
+                      ? [
+                          Button.button(
+                            {
+                              onClick: M.RetryAllFailed(),
+                              variant: 'outline',
+                              size: 'sm',
+                            },
+                            `Retry all (${String(failedCount)})`,
+                            h,
+                          ),
+                        ]
+                      : []),
+                  ]),
                   Button.button(
                     {
                       onClick: M.StartUploads(),

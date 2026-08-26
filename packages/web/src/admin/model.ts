@@ -77,11 +77,18 @@ export const PendingConfirm = S.Union([
 ])
 export type PendingConfirm = typeof PendingConfirm.Type
 
+export const UPLOAD_LIMITS = {
+  maxFiles: 50,
+  maxFileSize: 20 * 1024 * 1024,
+} as const
+
 export const Model = S.Struct({
   status: S.Literals(['loading', 'ready', 'error']),
   error: S.optional(S.String),
   photos: S.Array(PhotoWithTags),
   tags: S.Array(Tag),
+  nextCursor: S.NullOr(S.String),
+  loadingMore: S.Boolean,
 
   // filter bar
   search: S.String,
@@ -119,12 +126,21 @@ export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   // data
-  SucceededFetchPhotos: { photos: S.Array(PhotoWithTags) },
+  SucceededFetchPhotos: {
+    photos: S.Array(PhotoWithTags),
+    nextCursor: S.NullOr(S.String),
+  },
   SucceededFetchTags: { tags: S.Array(Tag) },
   FailedRpc: { message: S.String },
+  LoadMore: {},
+  SucceededFetchMore: {
+    photos: S.Array(PhotoWithTags),
+    nextCursor: S.NullOr(S.String),
+  },
 
   // filter bar
   SetSearch: { value: S.String },
+  DebouncedSearch: { value: S.String },
   SubmitSearch: {},
   FilterByTag: { slug: S.String },
 
@@ -151,6 +167,7 @@ export const Message = defineMessageUnion({
   FilesReceived: { keys: S.Array(S.String) },
   RemoveQueueItem: { id: S.String },
   RetryUpload: { id: S.String },
+  RetryAllFailed: {},
   SetUploadTakenAt: { value: S.String },
   StartUploads: {},
   RunUpload: { itemId: S.String },

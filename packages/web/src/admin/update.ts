@@ -16,11 +16,24 @@ import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Sheet from '@/components/ui/sheet'
 
-import { AdminToast, DraftFields, Message, TagMultiCombo, emptyDraft, fileStore } from './model'
+import {
+  AdminToast,
+  DraftFields,
+  Message,
+  TagMultiCombo,
+  UPLOAD_LIMITS,
+  emptyDraft,
+  fileStore,
+} from './model'
 import type { Message as Msg, Model } from './model'
 
 type Commands = ReadonlyArray<Command.Command<Msg>>
 type UpdateReturn = readonly [Model, Commands]
+
+interface PhotoPage {
+  readonly items: ReadonlyArray<PhotoWithTags>
+  readonly nextCursor: string | null
+}
 
 // ---------------------------------------------------------------------------
 // child folds
@@ -102,11 +115,61 @@ const foldFileDrop = Update.foldChild({
       // RejectedNonFiles: a drop without files carries nothing to do
       return (droppedModel) => [droppedModel, []]
     }
-    const keys = out.files.map(enqueueFile)
+    // Enforce per-file size and global queue cap
+    const validated: Array<{ file: File; id: string }> = []
+    const oversized: Array<string> = []
+    for (const file of out.files) {
+      if (file.size > UPLOAD_LIMITS.maxFileSize) {
+        oversized.push(file.name)
+        continue
+      }
+      const id = `${file.name}:${file.size}`
+      fileStore.set(id, file)
+      validated.push({ file, id })
+    }
     return (droppedModel) => {
       const existing = new Set(droppedModel.queue.map((item) => item.id))
-      const fresh = keys.filter((key) => !existing.has(key)).map(toQueueItem)
-      return [evo(droppedModel, { queue: () => [...droppedModel.queue, ...fresh] }), []]
+      const allIds = validated.map((entry) => entry.id)
+      const freshIds = allIds.filter((key) => !existing.has(key))
+
+      const oversizedItems = oversized.map((name) => ({
+        id: `${name}:oversized`,
+        name,
+        size: 0,
+        status: 'failed' as const,
+        error: `file too large (max ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB)`,
+      }))
+
+      const availableSlots = Math.max(0, UPLOAD_LIMITS.maxFiles - droppedModel.queue.length)
+      const withinCap = freshIds.slice(0, availableSlots)
+      const overflowCount = freshIds.length - withinCap.length
+
+      const fresh = withinCap.map(toQueueItem).concat(oversizedItems)
+
+      let nextModel: Model = { ...droppedModel, queue: [...droppedModel.queue, ...fresh] }
+
+      let mutableCommands: Array<Command.Command<Msg>> = []
+      if (oversized.length > 0) {
+        const [tModel, tCmds] = showToast(
+          nextModel,
+          `${String(oversized.length)} file(s) too large`,
+          'Error',
+          `Max ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB per file.`,
+        )
+        nextModel = tModel
+        mutableCommands = [...mutableCommands, ...tCmds]
+      }
+      if (overflowCount > 0) {
+        const [tModel, tCmds] = showToast(
+          nextModel,
+          `Only ${String(UPLOAD_LIMITS.maxFiles)} files allowed`,
+          'Error',
+          `${String(overflowCount)} file(s) skipped — remove some to add more.`,
+        )
+        nextModel = tModel
+        mutableCommands = [...mutableCommands, ...tCmds]
+      }
+      return [nextModel, mutableCommands]
     }
   },
 })
@@ -190,6 +253,7 @@ const foldUploadCombo = makeComboFold(
 // helpers
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for external callers; internal path now inlines the store
 function enqueueFile(file: File): string {
   const id = `${file.name}:${file.size}`
   fileStore.set(id, file)
@@ -262,12 +326,39 @@ export const FetchPhotosCmd = Command.define('FetchPhotos', {
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
   execute: ({ q, tagSlug }) =>
     Effect.map(
-      rpcPublic<ReadonlyArray<PhotoWithTags>>(
+      rpcPublic<PhotoPage>(
         'ListPhotos',
-        q === '' && tagSlug === '' ? {} : { q: q || undefined, tagSlug: tagSlug || undefined },
+        q === '' && tagSlug === ''
+          ? { limit: 60 }
+          : { q: q || undefined, tagSlug: tagSlug || undefined, limit: 60 },
       ),
-      (photos) => Message.SucceededFetchPhotos({ photos }),
+      (page) => Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+export const FetchMoreCmd = Command.define('FetchMore', {
+  args: { q: S.String, tagSlug: S.String, cursor: S.String },
+  messages: [Message.SucceededFetchMore, Message.FailedRpc],
+  execute: ({ q, tagSlug, cursor }) =>
+    Effect.map(
+      rpcPublic<PhotoPage>('ListPhotos', {
+        q: q || undefined,
+        tagSlug: tagSlug || undefined,
+        limit: 60,
+        cursor,
+      }),
+      (page) => Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
+    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+export const SearchDebounceCmd = Command.define('SearchDebounce', {
+  args: { value: S.String },
+  messages: [Message.DebouncedSearch],
+  execute: ({ value }) =>
+    Effect.gen(function* () {
+      yield* Effect.sleep('300 millis')
+      return Message.DebouncedSearch({ value })
+    }),
 })
 
 export const FetchTagsCmd = Command.define('FetchTags', {
@@ -294,9 +385,9 @@ export const SaveEditsCmd = Command.define('SaveEdits', {
         ...(Object.keys(metadata).length > 0 && { metadata }),
         tagIds: [...tagIds],
       })
-      // refetch instead of splicing so ordering (takenAt DESC) stays truthful
-      const photos = yield* rpcPublic<ReadonlyArray<PhotoWithTags>>('ListPhotos', {})
-      return Message.SavedEdits({ photos })
+      // refetch first page so ordering (takenAt DESC) stays truthful
+      const page = yield* rpcPublic<PhotoPage>('ListPhotos', { limit: 60 })
+      return Message.SavedEdits({ photos: [...page.items] })
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
@@ -307,9 +398,9 @@ export const DeletePhotoCmd = Command.define('DeletePhoto', {
     Effect.map(
       Effect.andThen(
         rpcAdmin('DeletePhoto', { id }),
-        rpcPublic<ReadonlyArray<PhotoWithTags>>('ListPhotos', {}),
+        rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }),
       ),
-      (photos) => Message.DeletedPhoto({ id, photos }),
+      (page) => Message.DeletedPhoto({ id, photos: [...page.items] }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
@@ -324,10 +415,10 @@ export const DeleteTagCmd = Command.define('DeleteTag', {
         // tag until the next full reload.
         Effect.all({
           tags: rpcPublic<ReadonlyArray<Tag>>('ListTags', {}),
-          photos: rpcPublic<ReadonlyArray<PhotoWithTags>>('ListPhotos', {}),
+          page: rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }),
         }),
       ),
-      ({ tags, photos }) => Message.DeletedTag({ tags: [...tags], photos }),
+      ({ tags, page }) => Message.DeletedTag({ tags: [...tags], photos: [...page.items] }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
@@ -391,6 +482,8 @@ export const init = (): readonly [Model, Commands] => [
     status: 'loading',
     photos: [],
     tags: [],
+    nextCursor: null,
+    loadingMore: false,
     search: '',
     editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
     draft: emptyDraft(),
@@ -479,20 +572,51 @@ function step(current: Model, message: Msg, prior: Commands = []): UpdateReturn 
 const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     // ----- data ---------------------------------------------------------------
-    SucceededFetchPhotos: ({ photos }) => [
-      evo(model, { photos: () => [...photos], status: () => 'ready', error: () => undefined }),
+    SucceededFetchPhotos: ({ photos, nextCursor }) => [
+      evo(model, {
+        photos: () => [...photos],
+        nextCursor: () => nextCursor ?? null,
+        loadingMore: () => false,
+        status: () => 'ready',
+        error: () => undefined,
+      }),
+      [],
+    ],
+    SucceededFetchMore: ({ photos, nextCursor }) => [
+      evo(model, {
+        photos: () => [...model.photos, ...photos],
+        nextCursor: () => nextCursor ?? null,
+        loadingMore: () => false,
+      }),
       [],
     ],
     SucceededFetchTags: ({ tags }) => [evo(model, { tags: () => tags ?? [] }), []],
     FailedRpc: ({ message: failure }) => {
       // `error` is optional and may be absent from normalized state; assign
       // via spread (see `withOptional`) instead of evo.
-      const errored = withOptional(model, { status: 'error', error: failure })
+      const errored = withOptional(evo(model, { loadingMore: () => false }), {
+        status: 'error',
+        error: failure,
+      })
       return showToast(errored, 'Something went wrong', 'Error', failure)
+    },
+    LoadMore: () => {
+      if (model.nextCursor === null || model.loadingMore) return [model, []]
+      return [
+        evo(model, { loadingMore: () => true }),
+        [FetchMoreCmd({ q: model.search, tagSlug: model.activeTagSlug ?? '', cursor: model.nextCursor })],
+      ]
     },
 
     // ----- filter bar -----------------------------------------------------------
-    SetSearch: ({ value }) => [evo(model, { search: () => value }), []],
+    SetSearch: ({ value }) => [
+      evo(model, { search: () => value }),
+      [SearchDebounceCmd({ value })],
+    ],
+    DebouncedSearch: ({ value }) => {
+      if (value !== model.search) return [model, []]
+      return [model, [FetchPhotosCmd({ q: value, tagSlug: model.activeTagSlug ?? '' })]]
+    },
     SubmitSearch: () => [
       model,
       [FetchPhotosCmd({ q: model.search, tagSlug: model.activeTagSlug ?? '' })],
@@ -570,6 +694,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
       const saved = evo(model, {
         photos: () => [...photos],
+        nextCursor: () => null,
+        loadingMore: () => false,
         editSheet: () => closedSheet,
         editingId: () => undefined,
         saving: () => false,
@@ -651,6 +777,32 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         ],
       ]
     },
+    RetryAllFailed: () => {
+      const failedIds = model.queue.filter((item) => item.status === 'failed').map((item) => item.id)
+      if (failedIds.length === 0) return [model, []]
+      const retried = evo(model, {
+        queue: () =>
+          model.queue.map((item) =>
+            item.status === 'failed'
+              ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- clearing optional error
+                ({ ...item, status: 'pending' as const, error: undefined } as typeof item)
+              : item,
+          ),
+      })
+      if (model.uploading) return [retried, []]
+      const first = failedIds[0]
+      if (first === undefined) return [retried, []]
+      return [
+        evo(retried, { uploading: () => true }),
+        [
+          UploadItemCmd({
+            itemId: first,
+            tagIds: [...retried.uploadTagIds],
+            takenAt: retried.uploadTakenAt,
+          }),
+        ],
+      ]
+    },
     RunUpload: () => [model, []],
     SucceededUploadItem: ({ itemId }) => runNextOrFinish(markItem(model, itemId, 'done')),
     FailedUploadItem: ({ itemId, message }) =>
@@ -689,6 +841,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
       const refreshed = evo(model, {
         photos: () => [...photos],
+        nextCursor: () => null,
+        loadingMore: () => false,
         editSheet: () => closedSheet,
         draft: () => emptyDraft(),
         draftTagIds: () => [],
@@ -704,7 +858,12 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
     DeletedTag: ({ tags, photos }) =>
       showToast(
-        evo(model, { tags: () => tags ?? [], photos: () => [...photos] }),
+        evo(model, {
+          tags: () => tags ?? [],
+          photos: () => [...photos],
+          nextCursor: () => null,
+          loadingMore: () => false,
+        }),
         'Tag deleted',
         'Success',
       ),

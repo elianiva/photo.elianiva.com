@@ -48,8 +48,13 @@ export class ListPhotos extends Rpc.make('ListPhotos', {
   payload: {
     tagSlug: S.optional(S.String),
     q: S.optional(S.String),
+    limit: S.optional(S.Number),
+    cursor: S.optional(S.String),
   },
-  success: S.Array(PhotoWithTags),
+  success: S.Struct({
+    items: S.Array(PhotoWithTags),
+    nextCursor: S.NullOr(S.String),
+  }),
   error: S.Union([InvalidInput, StorageError]),
 }) {}
 

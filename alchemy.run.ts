@@ -4,10 +4,20 @@ import * as Effect from 'effect/Effect'
 
 /**
  * ADR 0007: the account's Access team domain (https://<team>.cloudflareaccess.com).
- * Set before deploying to a gated stage; empty ⇒ the Worker skips in-worker
- * JWT verification (local dev), relying on the edge gate alone.
+ * Prod reads from env so the in-Worker JWT check is enforced; dev stays ''
+ * and skips verification (edge gate alone). Set ACCESS_TEAM_DOMAIN in CI
+ * secrets for prod deploys — deploy fails if missing on prod.
  */
-const ACCESS_TEAM_DOMAIN = ''
+// eslint-disable-next-line efx/no-process-env -- infra entry reads deploy-time env; runtime config lives in Worker bindings
+const ACCESS_TEAM_DOMAIN = (() => {
+  const value = globalThis.process?.env?.ACCESS_TEAM_DOMAIN ?? ''
+  const stage = globalThis.process?.env?.ALCHEMY_STAGE ?? ''
+  if (value !== '') return value
+  if (stage === 'prod') {
+    throw new Error('ACCESS_TEAM_DOMAIN is required for prod — set it in CI secrets')
+  }
+  return ''
+})()
 
 const PhotoBucket = Cloudflare.R2.Bucket('photo-originals', {
   name: 'photo-elianiva-originals',
