@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "foldcn",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles.css",
+    "baseColor": "stone",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "@/components",
+    "utils": "@/lib/utils",
+    "ui": "@/components/ui",
+    "lib": "@/lib"
+  },
+  "iconLibrary": "lucide",
+  "registries": {
+    "@foldcn": "https://foldcn.elianiva.com/r/{name}.json"
+  }
+}

@@ -1,1 +1,5 @@
-export * from './hello'
+export * from './gateway'
+export * from './photo'
+export * from './tag'
+export * from './rpc'
+export * from './image-meta'

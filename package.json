@@ -6,7 +6,8 @@
   "scripts": {
     "build": "turbo build",
     "check": "vp check",
-    "dev": "turbo dev",
+    "dev": "portless",
+    "dev:stack": "alchemy dev --stage dev",
     "fmt": "vp fmt",
     "lint": "vp lint",
     "typecheck": "turbo typecheck",

@@ -4,6 +4,10 @@ A curated photography showcase — the author's selected works. Image delivery i
 
 ## Language
 
+**Admin**:
+The single-user management surface at `/admin` — browse, upload, edit, and delete Photos and Tags. Not a multi-user CMS; there is exactly one operator (the owner), gated by Cloudflare Access.
+_Avoid_: Dashboard, CMS, Studio, Backend
+
 **Photo**:
 A curated work — a single image file (stored once in R2) plus its metadata. The unit the site showcases. Photos live in a flat list (no hierarchy); grouping is via Tags. Essential queryable fields are real columns (`title`, `takenAt`, dimensions, `r2Key`); the rest lives in a JSON `metadata` blob for cheap extensibility.
 _Avoid_: Image (use only for raw bytes/technical context), picture, shot

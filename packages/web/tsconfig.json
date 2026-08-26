@@ -10,7 +10,9 @@
     "skipLibCheck": true,
     "types": ["vite/client"],
     "paths": {
-      "@photo/shared": ["../shared/src/index.ts"]
+      "@photo/shared": ["../shared/src/index.ts"],
+      "@photo/api": ["../api/src/index.ts"],
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*"]

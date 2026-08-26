@@ -1,5 +1,13 @@
 # Plan — photo.elianiva.com: simple admin instead of Sanity
 
+> **Status (2026-08): DONE, with evolutions.** The single-user admin shipped as a
+> Foldkit SPA over Effect RPC over HTTP (see `docs/adr/0006-effect-rpc-over-http.md`
+> and `docs/adr/0007-split-rpc-authz-edge-plus-jwt.md`) instead of REST endpoints,
+> and Tags replaced Collections as the grouping model. Uploads go through
+> `/api/upload` (multipart → R2 + D1); everything else rides the two RPC groups
+> (`/api/rpc` public, `/api/admin/rpc` Access-gated). The phases below are kept
+> for context; details that changed are marked by the ADRs.
+>
 > Scaffold is live at https://photo.elianiva.com (Alchemy `photo` Website.Vite, SSR with cache headers). This plan is for the next iteration: replace mock Photo/Collection with a self-hosted admin that manages files + metadata in one place.
 
 ## 0) Decision
