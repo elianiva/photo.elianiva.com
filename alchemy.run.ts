@@ -1,4 +1,5 @@
 import * as Alchemy from 'alchemy'
+import { Stage } from 'alchemy'
 import * as Cloudflare from 'alchemy/Cloudflare'
 import * as Config from 'effect/Config'
 import * as Effect from 'effect/Effect'
@@ -26,8 +27,16 @@ export default Alchemy.Stack(
     // --- Env-driven only, no fallback (per ADR 0007) ---
     // Set via Alchemy secrets / CF secrets, not process.env.
     // See README for `alchemy secret set` commands.
+    //
+    // Local dev (`alchemy dev --stage dev`) creates no Access applications
+    // and runs unauthenticated by design (ADR 0007): ACCESS_TEAM_DOMAIN
+    // defaults to '' there and access.ts skips JWT verification when empty.
+    // Non-dev stages still require both values explicitly.
+    const isLocalDev = (yield* Stage) === 'dev'
     const allowedEmailsRaw = yield* Config.string('ACCESS_ALLOWED_EMAILS')
-    const teamDomain = yield* Config.string('ACCESS_TEAM_DOMAIN')
+    const teamDomain = isLocalDev
+      ? yield* Config.string('ACCESS_TEAM_DOMAIN').pipe(Config.withDefault(''))
+      : yield* Config.string('ACCESS_TEAM_DOMAIN')
 
     const allowedEmails = allowedEmailsRaw
       .split(',')
@@ -80,13 +89,20 @@ export default Alchemy.Stack(
       },
     }) {}
 
-    // Ensure Access resources are created before the site
-    yield* OtpIdp
-    yield* AdminApp
-    yield* AdminApiApp
-    yield* UploadApp
-    yield* PhotoBucket
-    yield* PhotoDb
+    // Edge gating is a production concern — skip Access resources entirely
+    // on local dev so the stack boots without touching Cloudflare Access.
+    if (!isLocalDev) {
+      // Ensure Access resources are created before the site
+      yield* OtpIdp
+      yield* AdminApp
+      yield* AdminApiApp
+      yield* UploadApp
+    }
+    // Data resources always converge the real cloud, even during `alchemy
+    // dev` — Alchemy.remote() opts them out of local emulation so local dev
+    // reads/writes the same photos as production.
+    yield* PhotoBucket.pipe(Alchemy.remote())
+    yield* PhotoDb.pipe(Alchemy.remote())
 
     const website = yield* Website
 

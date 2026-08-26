@@ -93,7 +93,7 @@ const uploadDialogContent = (
   const failedCount = model.queue.filter((item) => item.status === 'failed').length
   return [
     h.div(
-      [h.Class('p-4 flex flex-col gap-4')],
+      [h.Class('flex flex-col gap-4')],
       [
         h.div(
           [h.Class('flex items-start justify-between gap-2')],

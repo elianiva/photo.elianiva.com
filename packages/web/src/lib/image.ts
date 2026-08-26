@@ -21,5 +21,10 @@ export const srcSet = (photo: PhotoWithTags): string =>
 export const cardSizes =
   '(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'
 
-/** Public gallery hero sizes: full-width cards. */
-export const gallerySizes = '(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw'
+/** Sizes for the justified-row gallery, per orientation: landscape Photos
+ *  flex wider (up to a near-full-width hero row), portrait Photos stay
+ *  narrow columns. */
+export const gallerySizes = (aspect: number): string =>
+  aspect > 1
+    ? '(min-width: 1024px) 62vw, (min-width: 640px) 80vw, calc(100vw - 3rem)'
+    : '(min-width: 1024px) 28vw, (min-width: 640px) 42vw, calc(100vw - 3rem)'
