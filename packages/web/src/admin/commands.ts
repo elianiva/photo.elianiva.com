@@ -10,7 +10,8 @@ import type { PhotoWithTags, Tag } from '@photo/shared'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { encodeBlurhash } from '@/lib/blurhash'
 
-import { DraftFields, Message, abortStore, fileStore } from './model'
+import { DraftFields, GridCols, Message, abortStore, fileStore } from './model'
+import type { GridCols as GridColsType } from './model'
 
 interface PhotoPage {
   readonly items: ReadonlyArray<PhotoWithTags>
@@ -20,6 +21,32 @@ interface PhotoPage {
 /** Narrow on purpose: widening this to the whole Message union would leak
  *  every variant into each command's success channel. */
 const failWith = (error: RpcFailure) => Message.FailedRpc({ message: error.message })
+
+// ---------------------------------------------------------------------------
+// grid density persistence
+// ---------------------------------------------------------------------------
+
+export const COLS_STORAGE_KEY = 'photo-admin:cols'
+const COL_CHOICES = [2, 3, 4, 5, 6] as const
+const DEFAULT_COLS = 4
+
+/** Restore the persisted column count; falls back to the default when
+ *  nothing (or something invalid) is stored. */
+export const readStoredCols = (): GridColsType => {
+  if (typeof window === 'undefined') return DEFAULT_COLS
+  const saved = window.localStorage.getItem(COLS_STORAGE_KEY)
+  return COL_CHOICES.find((cols) => String(cols) === saved) ?? DEFAULT_COLS
+}
+
+export const PersistColsCmd = Command.define('PersistCols', {
+  args: { cols: GridCols },
+  messages: [Message.CompletedPersistCols],
+  execute: ({ cols }) =>
+    Effect.try(() => localStorage.setItem(COLS_STORAGE_KEY, String(cols))).pipe(
+      Effect.map(() => Message.CompletedPersistCols()),
+      Effect.catch(() => Effect.succeed(Message.CompletedPersistCols())),
+    ),
+})
 
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
   args: { tagSlug: S.String },

@@ -1,9 +1,9 @@
 /**
- * Admin photo grid: photos grouped under sticky day headers, justified rows
- * within each day (DP row breaking via `@/lib/layout`, shared with the
- * public gallery), and cards that show the client-decoded blurhash
- * placeholder until the thumbnail loads. Hovering a card reveals its tags
- * plus Edit / Delete actions. Clicking opens the lightbox (original file).
+ * Admin photo grid: a fixed square-tile CSS grid whose column count the
+ * operator picks in the header (2–6, persisted to localStorage — same
+ * pattern as `len`). Tiles show the client-decoded blurhash placeholder
+ * until the thumbnail loads; hovering reveals tags plus Edit / Delete
+ * actions, clicking opens the lightbox (original file).
  *
  * The overlay is a sibling of the click target — not a child — so clicks on
  * its buttons can never bubble into opening the lightbox.
@@ -16,46 +16,28 @@ import * as Badge from '@/components/ui/badge'
 import * as Button from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
 import { placeholderDataUrl } from '@/lib/blurhash'
-import { cardSizes, srcSet, thumbUrl } from '@/lib/image'
-import { breakRows, lastRowSlack, toAspects } from '@/lib/layout'
+import { srcSet, thumbUrl } from '@/lib/image'
 
 import { Message as M } from '../model'
-import type { Model, Msg } from '../model'
-import { formatTakenAt, type Child } from './shared'
+import type { GridCols, Model, Msg } from '../model'
+import type { Child } from './shared'
 
 // ---------------------------------------------------------------------------
-// day grouping
+// tile sizing hints
 // ---------------------------------------------------------------------------
 
-interface DayGroup {
-  readonly label: string
-  readonly photos: PhotoWithTags[]
-}
-
-/** Photos arrive sorted takenAt DESC, so equal day labels are always
- *  consecutive — single pass, order of first occurrence preserved. */
-const groupByDay = (photos: readonly PhotoWithTags[]): readonly DayGroup[] => {
-  const groups: DayGroup[] = []
-  for (const photo of photos) {
-    const label = formatTakenAt(photo.takenAt) || 'Undated'
-    const last = groups[groups.length - 1]
-    if (last !== undefined && last.label === label) {
-      last.photos.push(photo)
-    } else {
-      groups.push({ label, photos: [photo] })
-    }
-  }
-  return groups
-}
+/** The grid lives in the max-w-6xl (72rem) container with px-6 gutters;
+ *  tiles split it into `cols` equal columns separated by gap-3. */
+const tileSizes = (cols: GridCols): string =>
+  cols === 2
+    ? '(min-width: 1152px) calc((72rem - 3rem) / 2), calc((100vw - 3rem) / 2)'
+    : `(min-width: 1152px) calc((72rem - 3rem) / ${String(cols)}), calc((100vw - 4.5rem) / ${String(cols)})`
 
 // ---------------------------------------------------------------------------
-// photo card
+// photo tile
 // ---------------------------------------------------------------------------
 
-const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
-  // Same defensive clamp as the layout engine — keeps the aspect-ratio box
-  // sane when stored dimensions are missing or absurd.
-  const aspect = Math.min(Math.max(photo.width / Math.max(photo.height, 1), 0.5), 2.5)
+const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Child => {
   const placeholder =
     photo.blurhash !== undefined && photo.blurhash !== null
       ? placeholderDataUrl(photo.blurhash)
@@ -67,10 +49,9 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
       h.div(
         [
           h.Class(
-            'w-full cursor-pointer overflow-hidden rounded-xl bg-stone-100 bg-cover bg-center',
+            'aspect-square w-full cursor-pointer overflow-hidden rounded-xl bg-stone-100 bg-cover bg-center',
           ),
           h.Style({
-            aspectRatio: String(aspect),
             // The decoded blurhash paints the box until thumbnail bytes
             // arrive; photos uploaded before blurhash existed fall back to
             // the plain neutral background.
@@ -85,7 +66,7 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
             h.Class('h-full w-full object-cover'),
             h.Src(thumbUrl(photo)),
             h.Attribute('srcset', srcSet(photo)),
-            h.Attribute('sizes', cardSizes),
+            h.Attribute('sizes', sizes),
             h.Alt(''),
             h.Attribute('loading', 'lazy'),
             h.Attribute('decoding', 'async'),
@@ -133,48 +114,6 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
       ),
     ],
   )
-}
-
-// ---------------------------------------------------------------------------
-// day section: sticky header + justified rows
-// ---------------------------------------------------------------------------
-
-const daySection = (group: DayGroup, h: HtmlBuilder<Msg>): Child => {
-  const aspects = toAspects(group.photos)
-  const rows = breakRows(aspects)
-  const rowNodes = rows.map((row, rowIndex) => {
-    const isLast = rowIndex === rows.length - 1
-    const children = row
-      .map((photoIndex) => {
-        const photo = group.photos[photoIndex]
-        return photo === undefined ? undefined : photoCard(photo, h)
-      })
-      .filter((child): child is Exclude<typeof child, undefined> => child !== undefined)
-    // The final row keeps its target height instead of stretching: a spacer
-    // absorbs the slack, leaving the row left-aligned in whitespace.
-    const slack = isLast ? lastRowSlack(aspects, rows) : 0
-    if (slack > 0) {
-      children.push(h.div([h.Style({ flex: `${slack} 1 0%` }), h.Class('hidden sm:block')], []))
-    }
-    return h.div(
-      [
-        h.Key(`row-${group.label}-${String(row[0] ?? 0)}`),
-        h.Class('mb-3 flex items-start gap-3'),
-      ],
-      children,
-    )
-  })
-  return h.section([h.Key(`day-${group.label}`), h.Class('mt-8')], [
-    h.h2(
-      [
-        h.Class(
-          'sticky top-14 z-10 -mx-2 bg-stone-50/90 px-2 py-2 text-xs font-medium uppercase tracking-widest text-stone-400 backdrop-blur-sm',
-        ),
-      ],
-      [`${group.label} · ${String(group.photos.length)}`],
-    ),
-    ...rowNodes,
-  ])
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +195,13 @@ export const grid = (model: Model, h: HtmlBuilder<Msg>): Child => {
   return h.div(
     [],
     [
-      ...groupByDay(model.photos).map((group) => daySection(group, h)),
+      h.div(
+        [
+          h.Class('mt-2 grid gap-2 sm:gap-3'),
+          h.Style({ gridTemplateColumns: `repeat(${String(model.cols)}, minmax(0, 1fr))` }),
+        ],
+        model.photos.map((photo) => photoTile(photo, tileSizes(model.cols), h)),
+      ),
       ...(model.nextCursor !== null
         ? [
             h.div(

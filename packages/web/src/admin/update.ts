@@ -19,8 +19,10 @@ import {
   FetchMoreCmd,
   FetchPhotosCmd,
   FetchTagsCmd,
+  PersistColsCmd,
   SaveEditsCmd,
   UploadItemCmd,
+  readStoredCols,
 } from './commands'
 import {
   foldConfirm,
@@ -56,6 +58,7 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
     tags: [],
     nextCursor: null,
     loadingMore: false,
+    cols: readStoredCols(),
     selectedId: null,
     editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
     draft: emptyDraft(),
@@ -238,14 +241,17 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
 
     // ----- filter bar -----------------------------------------------------------
-    RetryFetch: () => [model, [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })]],
-    FilterByTag: ({ slug }) => {
+    RetryFetch: () => [model, [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })]],    FilterByTag: ({ slug }) => {
       const current = model.activeTagSlug ?? ''
       const next = current === slug ? undefined : slug
       // `activeTagSlug` is optional; assign via spread (see `withOptional`).
       const nextModel = withOptional(model, { activeTagSlug: next })
       return [retainSelection(nextModel), [FetchPhotosCmd({ tagSlug: next ?? '' })]]
     },
+
+    // ----- grid density ------------------------------------------------------------
+    SelectedCols: ({ cols }) => [evo(model, { cols: () => cols }), [PersistColsCmd({ cols })]],
+    CompletedPersistCols: () => [model, []],
 
     // ----- lightbox ---------------------------------------------------------------
     ClickedPhoto: ({ id }) => [evo(model, { selectedId: () => id }), []],

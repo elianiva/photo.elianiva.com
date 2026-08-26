@@ -82,6 +82,10 @@ export const UPLOAD_LIMITS = {
   maxFileSize: 20 * 1024 * 1024,
 } as const
 
+/** Column counts offered by the admin grid toggle (see `views/grid.ts`). */
+export const GridCols = S.Literals([2, 3, 4, 5, 6])
+export type GridCols = typeof GridCols.Type
+
 /** In-flight upload abort handles, keyed by queue-item id — the Model stays
  *  serializable. Registered by `UploadItemCmd`; aborted by `CancelUploads`. */
 export const abortStore = new Map<string, AbortController>()
@@ -101,6 +105,9 @@ export const Model = S.Struct({
 
   // filter bar
   activeTagSlug: S.optional(S.String),
+
+  // grid density: number of square-tile columns (persisted to localStorage)
+  cols: GridCols,
 
   // lightbox: photo currently shown full-size; null while browsing the grid
   selectedId: S.NullOr(S.String),
@@ -154,6 +161,10 @@ export const Message = defineMessageUnion({
   // filter bar
   FilterByTag: { slug: S.String },
   RetryFetch: {},
+
+  // grid density
+  SelectedCols: { cols: GridCols },
+  CompletedPersistCols: {},
 
   // lightbox
   ClickedPhoto: { id: S.String },

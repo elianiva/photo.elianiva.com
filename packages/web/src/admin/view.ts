@@ -23,7 +23,34 @@ import type { Child } from './views/shared'
 import { uploadDialog } from './views/upload-dialog'
 
 // ---------------------------------------------------------------------------
-// header: brand + upload button (search lives nowhere — tags are the filter)
+// grid density toggle: square-tile column count (2–6), persisted on change
+// ---------------------------------------------------------------------------
+
+const COL_CHOICES = [2, 3, 4, 5, 6] as const
+
+const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
+  h.div(
+    [h.Class('flex items-center gap-1 rounded-full bg-stone-100 p-1 ring-1 ring-stone-200')],
+    COL_CHOICES.map((cols) =>
+      h.button(
+        [
+          h.OnClick(M.SelectedCols({ cols })),
+          h.Attribute('aria-label', `${String(cols)} columns`),
+          h.AriaPressed(String(cols === model.cols)),
+          h.Class(
+            cols === model.cols
+              ? 'rounded-full bg-white px-2.5 py-1 text-xs font-medium text-stone-900 shadow-sm ring-1 ring-stone-200'
+              : 'rounded-full px-2.5 py-1 text-xs font-medium text-stone-600 hover:text-stone-900',
+          ),
+        ],
+        [String(cols)],
+      ),
+    ),
+  )
+
+// ---------------------------------------------------------------------------
+// header: brand + grid density toggle + upload button (search lives nowhere —
+// tags are the filter)
 // ---------------------------------------------------------------------------
 
 const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
@@ -47,6 +74,7 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
               h.span([h.Class('text-xs uppercase tracking-widest text-stone-400')], ['Admin']),
             ],
           ),
+          colsToggle(model, h),
           ...(model.uploading
             ? [
                 // A batch keeps running after the dialog closes — surface it
