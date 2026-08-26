@@ -26,8 +26,7 @@ export const foldSheet = Update.foldChild({
   read: (model: Model) => Opt.some(model.editSheet),
   write: (model: Model, nextSheet: typeof model.editSheet) =>
     evo(model, { editSheet: () => nextSheet }),
-  toParentMessage: (message: typeof Sheet.Message.Type) =>
-    Message.GotEditSheetMessage({ message }),
+  toParentMessage: (message: typeof Sheet.Message.Type) => Message.GotEditSheetMessage({ message }),
   foldOutMessage: (out): Update.Step<Model, Msg> =>
     out._tag === 'Closed'
       ? (writtenModel) => [

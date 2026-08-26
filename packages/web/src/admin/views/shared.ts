@@ -80,11 +80,7 @@ const comboViewInputs = (
   }
 }
 
-export const embedCombo = (
-  model: Model,
-  which: 'draft' | 'upload',
-  h: HtmlBuilder<Msg>,
-): Child =>
+export const embedCombo = (model: Model, which: 'draft' | 'upload', h: HtmlBuilder<Msg>): Child =>
   h.submodel({
     slotId: `${which}-tag-combo`,
     model: which === 'draft' ? model.draftCombo : model.uploadCombo,
