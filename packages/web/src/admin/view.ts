@@ -10,6 +10,7 @@ import type { Document, HtmlBuilder } from 'foldkit/html'
 import type { Tag } from '@photo/shared'
 
 import * as Button from '@/components/ui/button'
+import * as Spinner from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
 import { Message as M } from './model'
@@ -46,6 +47,27 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
               h.span([h.Class('text-xs uppercase tracking-widest text-stone-400')], ['Admin']),
             ],
           ),
+          ...(model.uploading
+            ? [
+                // A batch keeps running after the dialog closes — surface it
+                // here so the header is the place to get back to it.
+                Button.button(
+                  {
+                    onClick: M.OpenUpload(),
+                    variant: 'outline',
+                    size: 'sm',
+                  },
+                  h.span(
+                    [h.Class('inline-flex items-center gap-1.5')],
+                    [
+                      Spinner.spinner({ className: 'size-3' }, h),
+                      `Uploading ${String(model.queue.filter((item) => item.status === 'done').length)}/${String(model.batchTotal)}`,
+                    ],
+                  ),
+                  h,
+                ),
+              ]
+            : []),
           Button.button({ onClick: M.OpenUpload(), size: 'sm' }, 'Upload photos', h),
         ],
       ),

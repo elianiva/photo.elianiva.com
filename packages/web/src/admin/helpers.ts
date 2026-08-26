@@ -6,7 +6,7 @@
 import * as Command from 'foldkit/command'
 import { evo } from 'foldkit/struct'
 
-import { AdminToast, Message } from './model'
+import { AdminToast, Message, fileStore, previewStore } from './model'
 import type { Message as Msg, Model } from './model'
 
 export type Commands = ReadonlyArray<Command.Command<Msg>>
@@ -64,3 +64,17 @@ export function toQueueItem(key: string): Model['queue'][number] {
 
 export const byLabel = (a: { readonly label: string }, b: { readonly label: string }): number =>
   a.label.localeCompare(b.label)
+
+export const photoCountLabel = (count: number): string =>
+  `${String(count)} photo${count === 1 ? '' : 's'}`
+
+/** Drop a queue item's upload bytes and its object-URL preview. Idempotent;
+ *  only ever reached client-side (both stores are populated on drop). */
+export const disposeItemAssets = (id: string): void => {
+  fileStore.delete(id)
+  const preview = previewStore.get(id)
+  if (preview !== undefined) {
+    URL.revokeObjectURL(preview)
+    previewStore.delete(id)
+  }
+}

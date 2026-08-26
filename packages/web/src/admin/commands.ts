@@ -10,7 +10,7 @@ import type { PhotoWithTags, Tag } from '@photo/shared'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { encodeBlurhash } from '@/lib/blurhash'
 
-import { DraftFields, Message, fileStore } from './model'
+import { DraftFields, Message, abortStore, fileStore } from './model'
 
 interface PhotoPage {
   readonly items: ReadonlyArray<PhotoWithTags>
@@ -122,7 +122,8 @@ export const CreateTagCmd = Command.define('CreateTag', {
 
 /** One queue item per command run; `update` chains the next pending item.
  *  Batch-wide tag/takenAt choices ride along as args so the execute closure
- *  needs no access to the Model. */
+ *  needs no access to the Model. The request rides an AbortController stored
+ *  in `abortStore` so `CancelUploads` can kill the in-flight fetch. */
 export const UploadItemCmd = Command.define('UploadItem', {
   args: { itemId: S.String, tagIds: S.Array(S.String), takenAt: S.String },
   messages: [Message.SucceededUploadItem, Message.FailedUploadItem],
@@ -135,15 +136,25 @@ export const UploadItemCmd = Command.define('UploadItem', {
       // Placeholder hash is computed here because only the browser can decode
       // pixels — the Worker never sees a decodable image.
       const blurhash = yield* Effect.promise(() => encodeBlurhash(file))
+      const controller = new AbortController()
+      abortStore.set(itemId, controller)
       const form = new FormData()
       form.set('file', file)
       form.set('title', file.name.replace(/\.[^/.]+$/, ''))
       form.set('tagIds', JSON.stringify([...tagIds]))
       if (blurhash !== undefined) form.set('blurhash', blurhash)
       if (takenAt !== '') form.set('takenAt', takenAt)
+      // The foldkit-provided signal is superseded by the cancellable
+      // controller — `CancelUploads` must be able to reach this request
+      // without tearing down the whole command runner.
       const response = yield* Effect.tryPromise({
-        try: (signal) =>
-          fetch('/api/upload', { method: 'POST', body: form, credentials: 'same-origin', signal }),
+        try: () =>
+          fetch('/api/upload', {
+            method: 'POST',
+            body: form,
+            credentials: 'same-origin',
+            signal: controller.signal,
+          }),
         catch: () => new Error('upload request failed'),
       })
       if (!response.ok) {
@@ -163,5 +174,7 @@ export const UploadItemCmd = Command.define('UploadItem', {
       Effect.catch(() =>
         Effect.succeed(Message.FailedUploadItem({ itemId, message: 'upload failed' })),
       ),
+      // Unregister on every exit path (success, failure, abort).
+      Effect.ensuring(Effect.sync(() => abortStore.delete(itemId))),
     ),
 })

@@ -15,8 +15,16 @@ import * as FileDrop from '@/components/ui/file-drop'
 import * as Sheet from '@/components/ui/sheet'
 
 import { CreateTagCmd } from './commands'
-import { showToast, toQueueItem, toggleIn, type UpdateReturn } from './helpers'
-import { AdminToast, Message, TagMultiCombo, UPLOAD_LIMITS, emptyDraft, fileStore } from './model'
+import { disposeItemAssets, showToast, toQueueItem, toggleIn, type UpdateReturn } from './helpers'
+import {
+  AdminToast,
+  Message,
+  TagMultiCombo,
+  UPLOAD_LIMITS,
+  emptyDraft,
+  fileStore,
+  previewStore,
+} from './model'
 import type { Message as Msg, Model } from './model'
 
 /** A user-driven close (Esc, backdrop, close button) surfaces as the child's
@@ -44,9 +52,9 @@ export const foldSheet = Update.foldChild({
 
 /** Closing the upload dialog (Cancel button sends the child's requested-close
  *  message; Esc/backdrop emit `Closed`) drops queue items that are not stuck. */
-const releaseFinishedItems = (dialogModel: Model): Model => {
+export const releaseFinishedItems = (dialogModel: Model): Model => {
   for (const item of dialogModel.queue) {
-    if (item.status !== 'failed') fileStore.delete(item.id)
+    if (item.status !== 'failed') disposeItemAssets(item.id)
   }
   return evo(dialogModel, {
     queue: () => dialogModel.queue.filter((item) => item.status === 'failed'),
@@ -65,7 +73,13 @@ export const foldUploadDialog = Update.foldChild({
     Message.GotUploadDialogMessage({ message }),
   foldOutMessage: (out): Update.Step<Model, Msg> =>
     out._tag === 'Closed'
-      ? (writtenModel) => [releaseFinishedItems(writtenModel), []]
+      ? (writtenModel) => [
+          // A close mid-batch keeps the queue: uploads keep chaining in the
+          // background, and runNextOrFinish releases everything once the
+          // last item settles (so reopening mid-batch still shows progress).
+          writtenModel.uploading ? writtenModel : releaseFinishedItems(writtenModel),
+          [],
+        ]
       : (writtenModel) => [writtenModel, []],
 })
 
@@ -96,15 +110,21 @@ export const foldFileDrop = Update.foldChild({
       // RejectedNonFiles: a drop without files carries nothing to do
       return (droppedModel) => [droppedModel, []]
     }
-    // Enforce per-file size and global queue cap
+    // Enforce per-file size and global queue cap. Oversized files keep the
+    // regular `${name}:${size}` key (real size included) so same-named files
+    // can't collide and re-drops dedupe against the existing queue.
     const validated: Array<{ file: File; id: string }> = []
-    const oversized: Array<string> = []
+    const oversized: Array<{ name: string; size: number }> = []
     for (const file of out.files) {
+      const id = `${file.name}:${file.size}`
+      // Preview every dropped file — oversized rows included, so the
+      // operator can see *which* file was refused. Client-side only (a drop
+      // can't happen in the worker), so URL.createObjectURL always exists.
+      if (!previewStore.has(id)) previewStore.set(id, URL.createObjectURL(file))
       if (file.size > UPLOAD_LIMITS.maxFileSize) {
-        oversized.push(file.name)
+        oversized.push({ name: file.name, size: file.size })
         continue
       }
-      const id = `${file.name}:${file.size}`
       fileStore.set(id, file)
       validated.push({ file, id })
     }
@@ -113,13 +133,17 @@ export const foldFileDrop = Update.foldChild({
       const allIds = validated.map((entry) => entry.id)
       const freshIds = allIds.filter((key) => !existing.has(key))
 
-      const oversizedItems = oversized.map((name) => ({
-        id: `${name}:oversized`,
-        name,
-        size: 0,
-        status: 'failed' as const,
-        error: `file too large (max ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB)`,
-      }))
+      const seen = new Set([...existing, ...allIds])
+      const maxMb = String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))
+      const oversizedItems = oversized
+        .filter(({ name, size }) => !seen.has(`${name}:${String(size)}`))
+        .map(({ name, size }) => ({
+          id: `${name}:${String(size)}`,
+          name,
+          size,
+          status: 'failed' as const,
+          error: `file too large (max ${maxMb} MB)`,
+        }))
 
       const availableSlots = Math.max(0, UPLOAD_LIMITS.maxFiles - droppedModel.queue.length)
       const withinCap = freshIds.slice(0, availableSlots)
@@ -130,6 +154,19 @@ export const foldFileDrop = Update.foldChild({
       let nextModel: Model = { ...droppedModel, queue: [...droppedModel.queue, ...fresh] }
 
       let mutableCommands: Array<Command.Command<Msg>> = []
+      // Re-dropped files already in the queue are skipped silently by the
+      // dedupe above — say so instead of looking like nothing happened.
+      const duplicateCount = allIds.length - freshIds.length
+      if (duplicateCount > 0) {
+        const [tModel, tCmds] = showToast(
+          nextModel,
+          `${String(duplicateCount)} duplicate${duplicateCount === 1 ? '' : 's'} skipped`,
+          'Error',
+          'Already in the upload queue.',
+        )
+        nextModel = tModel
+        mutableCommands = [...mutableCommands, ...tCmds]
+      }
       if (oversized.length > 0) {
         const [tModel, tCmds] = showToast(
           nextModel,

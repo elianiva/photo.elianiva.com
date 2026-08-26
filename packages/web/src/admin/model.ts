@@ -82,6 +82,15 @@ export const UPLOAD_LIMITS = {
   maxFileSize: 20 * 1024 * 1024,
 } as const
 
+/** In-flight upload abort handles, keyed by queue-item id — the Model stays
+ *  serializable. Registered by `UploadItemCmd`; aborted by `CancelUploads`. */
+export const abortStore = new Map<string, AbortController>()
+
+/** Object-URL previews keyed by queue-item id (`${name}:${size}`), so rows
+ *  can show what they are instead of a filename. Populated client-side when
+ *  files are dropped; disposed alongside their bytes via `disposeItemAssets`. */
+export const previewStore = new Map<string, string>()
+
 export const Model = S.Struct({
   status: S.Literals(['loading', 'ready', 'error']),
   error: S.optional(S.String),
@@ -108,6 +117,8 @@ export const Model = S.Struct({
   uploadDialog: Dialog.Model,
   fileDrop: FileDrop.Model,
   queue: S.Array(QueueItem),
+  /** Files targeted by the current run — snapshot, see `batchTotalField`. */
+  batchTotal: S.Number,
   uploadTagIds: S.Array(S.String),
   uploadCombo: Multi.Model,
   uploadTakenAt: S.String,
@@ -156,7 +167,6 @@ export const Message = defineMessageUnion({
     field: S.Literals(['title', 'slug', 'takenAt', 'caption', 'location', 'camera', 'lens']),
     value: S.String,
   },
-  ToggleDraftTag: { tagId: S.String },
   SaveEdits: {},
   SavedEdits: { photos: S.Array(PhotoWithTags) },
   GotEditSheetMessage: { message: Sheet.Message },
@@ -170,18 +180,18 @@ export const Message = defineMessageUnion({
   OpenUpload: {},
   GotUploadDialogMessage: { message: Dialog.Message },
   GotFileDropMessage: { message: FileDrop.Message },
-  FilesReceived: { keys: S.Array(S.String) },
   RemoveQueueItem: { id: S.String },
   RetryUpload: { id: S.String },
   RetryAllFailed: {},
   SetUploadTakenAt: { value: S.String },
   StartUploads: {},
-  RunUpload: { itemId: S.String },
+  /** Stops the run: aborts the in-flight request, halts the chain, leaves
+   *  not-yet-uploaded items queued as `pending`. */
+  CancelUploads: {},
   SucceededUploadItem: { itemId: S.String },
   FailedUploadItem: { itemId: S.String, message: S.String },
   ClearFinishedItems: {},
   GotUploadComboMessage: { message: S.Unknown },
-  ToggleUploadTag: { tagId: S.String },
 
   // destructive confirmation
   RequestDeletePhoto: { id: S.String, label: S.String },

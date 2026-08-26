@@ -30,17 +30,19 @@ import {
   foldToast,
   foldUploadCombo,
   foldUploadDialog,
+  releaseFinishedItems,
 } from './children'
 import {
   byLabel,
+  disposeItemAssets,
   liftChildCommands,
+  photoCountLabel,
   showToast,
   toggleIn,
-  toQueueItem,
   withOptional,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, emptyDraft, fileStore, Message } from './model'
+import { AdminToast, emptyDraft, abortStore, Message } from './model'
 import type { Message as Msg, Model } from './model'
 
 // ---------------------------------------------------------------------------
@@ -63,6 +65,7 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
     uploadDialog: Dialog.init({ id: 'admin-upload-dialog' }),
     fileDrop: FileDrop.init({ id: 'admin-file-drop' }),
     queue: [],
+    batchTotal: 0,
     uploadTagIds: [],
     uploadCombo: Multi.init({ id: 'admin-upload-combo' }),
     uploadTakenAt: '',
@@ -77,35 +80,63 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
 // upload chaining
 // ---------------------------------------------------------------------------
 
-/** Kick the next pending item, or finalize the batch when none remain. */
+/** Flip one item back to `pending`, clearing any error text. Used by retry
+ *  and by the cancel path (a late failure after Stop is not an error). */
+const restorePending = (model: Model, itemId: string): Model =>
+  evo(model, {
+    queue: () =>
+      model.queue.map((item) =>
+        item.id === itemId
+          ? // `error` is optional; spread-clear it (evo cannot add keys).
+            { ...item, status: 'pending' as const, error: undefined }
+          : item,
+      ),
+  })
+
+/** The one way a run advances: mark the item `uploading` and issue its
+ *  command. Every chain-start site goes through here so exactly one row is
+ *  ever in-flight — CancelUploads finds it, and the row badge reflects it. */
+const startItem = (model: Model, itemId: string): UpdateReturn => [
+  evo(model, {
+    queue: () =>
+      model.queue.map((item) =>
+        item.id === itemId ? evo(item, { status: () => 'uploading' }) : item,
+      ),
+  }),
+  [
+    UploadItemCmd({
+      itemId,
+      tagIds: [...model.uploadTagIds],
+      takenAt: model.uploadTakenAt,
+    }),
+  ],
+]
+
+/** Snapshot the finished batch's counts BEFORE any queue cleanup, so the
+ *  toast stays truthful no matter what gets released afterwards. A clean
+ *  batch clears itself; a partial one keeps its rows for retry. */
 const runNextOrFinish = (model: Model): UpdateReturn => {
   const pending = model.queue.find((item) => item.status === 'pending')
-  if (pending !== undefined) {
-    return [
-      model,
-      [
-        UploadItemCmd({
-          itemId: pending.id,
-          tagIds: [...model.uploadTagIds],
-          takenAt: model.uploadTakenAt,
-        }),
-      ],
-    ]
-  }
+  if (pending !== undefined) return startItem(model, pending.id)
+  const uploadedCount = model.queue.filter((item) => item.status === 'done').length
   const failedCount = model.queue.filter((item) => item.status === 'failed').length
-  const doneModel = evo(model, { uploading: () => false })
+  const settled = evo(model, { uploading: () => false })
+  // The dialog was closed mid-batch: the queue stayed alive so uploads could
+  // chain; now that the last item settled, drop everything not stuck.
+  const finished =
+    failedCount === 0 || !settled.uploadDialog.isOpen ? releaseFinishedItems(settled) : settled
   const refresh = FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })
   return failedCount === 0
     ? showToast(
-        doneModel,
-        `Uploaded ${String(model.queue.length)} photo(s)`,
+        finished,
+        `Uploaded ${photoCountLabel(uploadedCount)}`,
         'Success',
         undefined,
         [refresh],
       )
     : showToast(
-        doneModel,
-        `${String(model.queue.length - failedCount)} uploaded, ${String(failedCount)} failed`,
+        finished,
+        `${String(uploadedCount)} uploaded, ${String(failedCount)} failed`,
         'Error',
         'Retry failed items from the upload dialog.',
         [refresh],
@@ -272,10 +303,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }),
       [],
     ],
-    ToggleDraftTag: ({ tagId }) => [
-      evo(model, { draftTagIds: () => toggleIn(model.draftTagIds, tagId) }),
-      [],
-    ],
     SaveEdits: () => {
       if (model.editingId === undefined) return [model, []]
       return [
@@ -320,57 +347,44 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         liftChildCommands(dialogCommands, (message) => Message.GotUploadDialogMessage({ message })),
       ]
     },
-    FilesReceived: ({ keys }) => {
-      const existing = new Set(model.queue.map((item) => item.id))
-      const fresh = keys.filter((key) => !existing.has(key)).map(toQueueItem)
-      return [evo(model, { queue: () => [...model.queue, ...fresh] }), []]
+    ClearFinishedItems: () => {
+      // Only 'done' rows go — pending/uploading items must survive (their
+      // bytes would leak in fileStore otherwise), failures stay for retry.
+      for (const item of model.queue) {
+        if (item.status === 'done') disposeItemAssets(item.id)
+      }
+      return [evo(model, { queue: () => model.queue.filter((item) => item.status !== 'done') }), []]
     },
     RemoveQueueItem: ({ id }) => {
-      fileStore.delete(id)
+      disposeItemAssets(id)
       return [evo(model, { queue: () => model.queue.filter((item) => item.id !== id) }), []]
     },
-    ClearFinishedItems: () => [
-      evo(model, { queue: () => model.queue.filter((item) => item.status === 'failed') }),
-      [],
-    ],
     SetUploadTakenAt: ({ value }) => [evo(model, { uploadTakenAt: () => value }), []],
     StartUploads: () => {
       const pending = model.queue.find((item) => item.status === 'pending')
       if (pending === undefined) return [model, []]
-      return [
-        evo(model, { uploading: () => true }),
-        [
-          UploadItemCmd({
-            itemId: pending.id,
-            tagIds: [...model.uploadTagIds],
-            takenAt: model.uploadTakenAt,
-          }),
-        ],
-      ]
+      return startItem(
+        evo(model, { uploading: () => true, batchTotal: () => model.queue.length }),
+        pending.id,
+      )
+    },
+    CancelUploads: () => {
+      // Abort the in-flight request; its FailedUploadItem arrives later and,
+      // seeing `uploading` already false, quietly re-queues the item instead
+      // of recording a failure or chaining on. Pending rows stay queued.
+      const inFlight = model.queue.find((item) => item.status === 'uploading')
+      if (inFlight !== undefined) abortStore.get(inFlight.id)?.abort()
+      return [evo(model, { uploading: () => false }), []]
     },
     RetryUpload: ({ id }) => {
-      const retried = evo(model, {
-        queue: () =>
-          model.queue.map((item) =>
-            item.id === id
-              ? // `error` is optional; spread-clear it (evo cannot add keys).
-                { ...item, status: 'pending' as const, error: undefined }
-              : item,
-          ),
-      })
+      const retried = restorePending(model, id)
       // A batch already in flight picks the item up on its next chain step;
-      // an idle batch starts a fresh chain here.
+      // an idle batch starts a fresh run here.
       if (model.uploading) return [retried, []]
-      return [
-        evo(retried, { uploading: () => true }),
-        [
-          UploadItemCmd({
-            itemId: id,
-            tagIds: [...retried.uploadTagIds],
-            takenAt: retried.uploadTakenAt,
-          }),
-        ],
-      ]
+      return startItem(
+        evo(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
+        id,
+      )
     },
     RetryAllFailed: () => {
       const failedIds = model.queue
@@ -389,25 +403,24 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       if (model.uploading) return [retried, []]
       const first = failedIds[0]
       if (first === undefined) return [retried, []]
-      return [
-        evo(retried, { uploading: () => true }),
-        [
-          UploadItemCmd({
-            itemId: first,
-            tagIds: [...retried.uploadTagIds],
-            takenAt: retried.uploadTakenAt,
-          }),
-        ],
-      ]
+      return startItem(
+        evo(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
+        first,
+      )
     },
-    RunUpload: () => [model, []],
-    SucceededUploadItem: ({ itemId }) => runNextOrFinish(markItem(model, itemId, 'done')),
-    FailedUploadItem: ({ itemId, message }) =>
-      runNextOrFinish(markItem(model, itemId, 'failed', message)),
-    ToggleUploadTag: ({ tagId }) => [
-      evo(model, { uploadTagIds: () => toggleIn(model.uploadTagIds, tagId) }),
-      [],
-    ],
+    SucceededUploadItem: ({ itemId }) => {
+      const marked = markItem(model, itemId, 'done')
+      // A settle racing a just-issued Stop: record it, but don't revive the
+      // stopped run by chaining on.
+      if (!model.uploading) return [marked, []]
+      return runNextOrFinish(marked)
+    },
+    FailedUploadItem: ({ itemId, message }) => {
+      // Post-Stop arrival (the aborted fetch's error): not a failure — put
+      // the item back in line and leave the run stopped.
+      if (!model.uploading) return [restorePending(model, itemId), []]
+      return runNextOrFinish(markItem(model, itemId, 'failed', message))
+    },
 
     // ----- destructive confirmation ---------------------------------------------------
     RequestDeletePhoto: ({ id, label }) => openConfirm(model, { kind: 'photo', id, label }),
