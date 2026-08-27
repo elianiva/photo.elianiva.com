@@ -1,0 +1,30 @@
+@photo/shared:test:    Start at  08:09:16
+@photo/shared:test:    Duration  366ms (transform 30ms, setup 0ms, import 220ms, tests 4ms, environment 0ms)
+@photo/shared:test: 
+@photo/api:test: cache hit, replaying logs 4a631379c99b3d1a
+@photo/api:test: $ vitest run --passWithNoTests
+@photo/api:test: 
+@photo/api:test:  RUN  v4.1.11 /Users/elianiva/Development/personal/apps/photo.elianiva.com/packages/api
+@photo/api:test: 
+@photo/api:test: 
+@photo/api:test:  Test Files  1 passed (1)
+@photo/api:test:       Tests  6 passed (6)
+@photo/api:test:    Start at  08:09:16
+@photo/api:test:    Duration  531ms (transform 90ms, setup 0ms, import 397ms, tests 3ms, environment 0ms)
+@photo/api:test: 
+@photo/web:test: cache hit, replaying logs b12889d32eb83cdf
+@photo/web:test: $ vitest run --passWithNoTests
+@photo/web:test: 
+@photo/web:test:  RUN  v4.1.11 /Users/elianiva/Development/personal/apps/photo.elianiva.com/packages/web
+@photo/web:test: 
+@photo/web:test: 
+@photo/web:test:  Test Files  1 passed (1)
+@photo/web:test:       Tests  7 passed (7)
+@photo/web:test:    Start at  08:09:16
+@photo/web:test:    Duration  223ms (transform 37ms, setup 0ms, import 53ms, tests 4ms, environment 0ms)
+@photo/web:test: 
+
+ Tasks:    5 successful, 5 total
+Cached:    5 cached, 5 total
+  Time:    10ms >>> FULL TURBO
+

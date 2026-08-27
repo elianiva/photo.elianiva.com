@@ -1,0 +1,20 @@
+@photo/web:build: vite v8.2.2 building client environment for production...
+@photo/web:build: transforming...
+@photo/web:build: ✓ 2303 modules transformed.
+@photo/web:build: rendering chunks...
+@photo/web:build: computing gzip size...
+@photo/web:build: dist/index.html                    0.99 kB │ gzip:  0.50 kB
+@photo/web:build: dist/assets/index-Dt0_2ehA.css    68.56 kB │ gzip: 12.31 kB
+@photo/web:build: dist/assets/index-DDGz4b0E.js      2.64 kB │ gzip:  1.24 kB
+@photo/web:build: dist/assets/image-D6hQHrhX.js      7.24 kB │ gzip:  3.14 kB
+@photo/web:build: dist/assets/main-B7GwqVqj.js       9.52 kB │ gzip:  3.23 kB
+@photo/web:build: dist/assets/entry-iKkOuadw.js    112.25 kB │ gzip: 30.01 kB
+@photo/web:build: dist/assets/foldkit-B8MP97AE.js  207.62 kB │ gzip: 65.76 kB
+@photo/web:build: dist/assets/effect-B76bOA1G.js   211.95 kB │ gzip: 70.19 kB
+@photo/web:build: 
+@photo/web:build: ✓ built in 483ms
+
+ Tasks:    3 successful, 3 total
+Cached:    3 cached, 3 total
+  Time:    11ms >>> FULL TURBO
+

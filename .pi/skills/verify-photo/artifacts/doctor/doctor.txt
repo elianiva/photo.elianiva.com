@@ -1,0 +1,5 @@
+doctor: base=http://127.0.0.1:13370
+fail: GET / missing Foldkit root (is pnpm dev running on 13370?)
+fail: POST /api/rpc ListPhotos did not return items
+fail: POST /api/rpc ListTags unreachable
+doctor: fail
