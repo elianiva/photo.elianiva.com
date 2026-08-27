@@ -46,6 +46,7 @@ import {
 } from './helpers'
 import { AdminToast, emptyDraft, abortStore, Message } from './model'
 import type { Message as Msg, Model } from './model'
+import * as TagManager from './tag-manager'
 
 // ---------------------------------------------------------------------------
 // init
@@ -65,6 +66,9 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
     draftTagIds: [],
     draftCombo: Multi.init({ id: 'admin-draft-combo' }),
     saving: false,
+    // filter bar (chips + inline create)
+    tagManager: TagManager.init({ id: 'admin-tag-manager' }),
+
     uploadDialog: Dialog.init({ id: 'admin-upload-dialog' }),
     fileDrop: FileDrop.init({ id: 'admin-file-drop' }),
     queue: [],
@@ -194,6 +198,17 @@ function step(current: Model, message: Msg, prior: UpdateReturn[1] = []): Update
   return [nextModel, [...prior, ...commands]]
 }
 
+/** Apply (or toggle off) the tag filter: refetch the first page through the
+ *  slug and drop a lightbox selection the filtered list can no longer back.
+ *  Shared by FilterByTag and the TagManager bar's ToggledFilter intent. */
+const applyTagFilter = (model: Model, slug: string): UpdateReturn => {
+  const current = model.activeTagSlug ?? ''
+  const next = current === slug ? undefined : slug
+  // `activeTagSlug` is optional; assign via spread (see `withOptional`).
+  const nextModel = withOptional(model, { activeTagSlug: next })
+  return [retainSelection(nextModel), [FetchPhotosCmd({ tagSlug: next ?? '' })]]
+}
+
 const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     // ----- data ---------------------------------------------------------------
@@ -241,13 +256,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
 
     // ----- filter bar -----------------------------------------------------------
-    RetryFetch: () => [model, [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })]],    FilterByTag: ({ slug }) => {
-      const current = model.activeTagSlug ?? ''
-      const next = current === slug ? undefined : slug
-      // `activeTagSlug` is optional; assign via spread (see `withOptional`).
-      const nextModel = withOptional(model, { activeTagSlug: next })
-      return [retainSelection(nextModel), [FetchPhotosCmd({ tagSlug: next ?? '' })]]
-    },
+    RetryFetch: () => [model, [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })]],
+    FilterByTag: ({ slug }) => applyTagFilter(model, slug),
 
     // ----- grid density ------------------------------------------------------------
     SelectedCols: ({ cols }) => [evo(model, { cols: () => cols }), [PersistColsCmd({ cols })]],
@@ -340,10 +350,22 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     CreateTagRequested: ({ source, label }) => [model, [CreateTagCmd({ source, label })]],
     SucceededCreateTag: ({ source, tag }) => {
       const withTag = evo(model, { tags: () => [...model.tags, tag].sort(byLabel) })
-      return source === 'draft'
-        ? [evo(withTag, { draftTagIds: () => toggleIn(withTag.draftTagIds, tag.id) }), []]
-        : [evo(withTag, { uploadTagIds: () => toggleIn(withTag.uploadTagIds, tag.id) }), []]
+      if (source === 'draft') {
+        return [evo(withTag, { draftTagIds: () => toggleIn(withTag.draftTagIds, tag.id) }), []]
+      }
+      if (source === 'upload') {
+        return [evo(withTag, { uploadTagIds: () => toggleIn(withTag.uploadTagIds, tag.id) }), []]
+      }
+      return showToast(withTag, `Created tag “${tag.label}”`, 'Success')
     },
+    RemoveDraftTag: ({ id }) => [
+      evo(model, { draftTagIds: () => toggleIn(model.draftTagIds, id) }),
+      [],
+    ],
+    RemoveUploadTag: ({ id }) => [
+      evo(model, { uploadTagIds: () => toggleIn(model.uploadTagIds, id) }),
+      [],
+    ],
 
     // ----- upload dialog ------------------------------------------------------------
     OpenUpload: () => {
@@ -442,7 +464,16 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const command =
         pending.kind === 'photo'
           ? DeletePhotoCmd({ id: pending.id })
-          : DeleteTagCmd({ id: pending.id })
+          : DeleteTagCmd({
+              id: pending.id,
+              // If the dying tag IS the active filter, fetch unfiltered;
+              // otherwise keep filtering by whatever is still applied.
+              activeTagSlug:
+                model.activeTagSlug !== undefined &&
+                model.tags.find((tag) => tag.id === pending.id)?.slug === model.activeTagSlug
+                  ? undefined
+                  : model.activeTagSlug,
+            })
       return [
         cleared,
         [
@@ -474,19 +505,26 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         liftChildCommands(closeCommands, (message) => Message.GotEditSheetMessage({ message })),
       )
     },
-    DeletedTag: ({ tags, photos }) =>
-      showToast(
-        retainSelection(
-          evo(model, {
+    DeletedTag: ({ tags, photos }) => {
+      // If the deleted tag was the active filter, drop the filter — the
+      // refetch already came back unfiltered (ConfirmPending cleared the
+      // slug it passed to DeleteTagCmd).
+      const filterSurvives =
+        model.activeTagSlug === undefined || tags.some((tag) => tag.slug === model.activeTagSlug)
+      const settled = retainSelection(
+        evo(model, {
           tags: () => tags ?? [],
           photos: () => [...photos],
           nextCursor: () => null,
           loadingMore: () => false,
         }),
-        ),
+      )
+      return showToast(
+        filterSurvives ? settled : withOptional(settled, { activeTagSlug: undefined }),
         'Tag deleted',
         'Success',
-      ),
+      )
+    },
 
     // ----- child message folds ----------------------------------------------------------
     GotEditSheetMessage: ({ message }) => foldSheet(model, message),
@@ -494,6 +532,24 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     GotConfirmMessage: ({ message }) => foldConfirm(model, message),
     GotFileDropMessage: ({ message }) => foldFileDrop(model, message),
     GotToastMessage: ({ message }) => foldToast(model, message),
+
+    // Tag manager bar: keep the child's input state in sync, then act on
+    // its intents — filter toggle and delete mirror existing handlers;
+    // create reuses CreateTagCmd via CreateTagRequested.
+    GotTagManagerMessage: ({ message }) => {
+      const [nextManager] = TagManager.update(model.tagManager, message)
+      const synced = evo(model, { tagManager: () => nextManager })
+      return TagManager.Message.match<UpdateReturn>(message, {
+        SetInput: () => [synced, []],
+        SubmitCreate: () => {
+          const label = model.tagManager.inputValue.trim()
+          if (label === '') return [model, []]
+          return transition(synced, Message.CreateTagRequested({ source: 'manager', label }))
+        },
+        ToggledFilter: ({ slug }) => applyTagFilter(synced, slug),
+        RequestedDelete: ({ id, label }) => openConfirm(synced, { kind: 'tag', id, label }),
+      })
+    },
 
     // SAFETY: the carrier is S.Unknown because the multi-combobox child
     // message schema is not part of @foldkit/ui's public surface; these

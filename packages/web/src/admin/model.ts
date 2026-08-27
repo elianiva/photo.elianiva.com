@@ -14,6 +14,8 @@ import * as Sheet from '@/components/ui/sheet'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Toast from '@/components/ui/toast'
 
+import * as TagManager from './tag-manager'
+
 // ---------------------------------------------------------------------------
 // Submodel bundles
 // ---------------------------------------------------------------------------
@@ -106,6 +108,9 @@ export const Model = S.Struct({
   // filter bar
   activeTagSlug: S.optional(S.String),
 
+  // tag manager bar (chips + inline create)
+  tagManager: TagManager.Model,
+
   // grid density: number of square-tile columns (persisted to localStorage)
   cols: GridCols,
 
@@ -183,9 +188,20 @@ export const Message = defineMessageUnion({
   GotEditSheetMessage: { message: Sheet.Message },
   GotDraftComboMessage: { message: S.Unknown },
 
-  // create tag inline (from either combo)
-  CreateTagRequested: { source: S.Literals(['draft', 'upload']), label: S.String },
-  SucceededCreateTag: { source: S.Literals(['draft', 'upload']), tag: Tag },
+  // create tag inline (from either combo or the tag manager bar)
+  CreateTagRequested: {
+    source: S.Literals(['draft', 'upload', 'manager']),
+    label: S.String,
+  },
+
+  // remove a picked tag from the edit-sheet / upload-dialog chip row
+  RemoveDraftTag: { id: S.String },
+  RemoveUploadTag: { id: S.String },
+
+  SucceededCreateTag: {
+    source: S.Literals(['draft', 'upload', 'manager']),
+    tag: Tag,
+  },
 
   // upload dialog
   OpenUpload: {},
@@ -211,6 +227,9 @@ export const Message = defineMessageUnion({
   DeletedPhoto: { id: S.String, photos: S.Array(PhotoWithTags) },
   DeletedTag: { tags: S.Array(Tag), photos: S.Array(PhotoWithTags) },
   GotConfirmMessage: { message: Dialog.Message },
+
+  // tag manager bar
+  GotTagManagerMessage: { message: TagManager.Message },
 
   // toasts
   GotToastMessage: { message: AdminToast.Message },

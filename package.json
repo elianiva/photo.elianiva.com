@@ -23,6 +23,7 @@
   "devDependencies": {
     "@foldkit/oxlint-plugin": "^0.7.0",
     "oxlint": "^1.79.0",
+    "portless": "^0.15.6",
     "turbo": "^2.10.11",
     "typescript": "^7.0.2",
     "vite-plus": "^0.2.9"
@@ -30,5 +31,5 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@11.22.0"
+  "packageManager": "pnpm@11.24.0"
 }

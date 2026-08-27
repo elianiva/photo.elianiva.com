@@ -121,17 +121,21 @@ export const DeletePhotoCmd = Command.define('DeletePhoto', {
 })
 
 export const DeleteTagCmd = Command.define('DeleteTag', {
-  args: { id: S.String },
+  args: { id: S.String, activeTagSlug: S.optional(S.String) },
   messages: [Message.DeletedTag, Message.FailedRpc],
-  execute: ({ id }) =>
+  execute: ({ id, activeTagSlug }) =>
     Effect.map(
       Effect.andThen(
         rpcAdmin('DeleteTag', { id }),
         // Refetch both sides: cards would otherwise keep showing the deleted
-        // tag until the next full reload.
+        // tag until the next full reload. The surviving filter slug rides
+        // along so a filtered view stays filtered after the delete.
         Effect.all({
           tags: rpcPublic<ReadonlyArray<Tag>>('ListTags', {}),
-          page: rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }),
+          page: rpcPublic<PhotoPage>(
+            'ListPhotos',
+            activeTagSlug === undefined ? { limit: 60 } : { tagSlug: activeTagSlug, limit: 60 },
+          ),
         }),
       ),
       ({ tags, page }) => Message.DeletedTag({ tags: [...tags], photos: [...page.items] }),
@@ -139,7 +143,7 @@ export const DeleteTagCmd = Command.define('DeleteTag', {
 })
 
 export const CreateTagCmd = Command.define('CreateTag', {
-  args: { source: S.Literals(['draft', 'upload']), label: S.String },
+  args: { source: S.Literals(['draft', 'upload', 'manager']), label: S.String },
   messages: [Message.SucceededCreateTag, Message.FailedRpc],
   execute: ({ source, label }) =>
     Effect.map(rpcAdmin<Tag>('CreateTag', { slug: label, label }), (tag) =>

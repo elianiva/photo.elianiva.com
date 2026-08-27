@@ -11,7 +11,6 @@ import type { Tag } from '@photo/shared'
 
 import * as Button from '@/components/ui/button'
 import * as Spinner from '@/components/ui/spinner'
-import { cn } from '@/lib/utils'
 
 import { Message as M } from './model'
 import type { Model, Msg } from './model'
@@ -19,6 +18,7 @@ import { editSheet } from './views/edit-sheet'
 import { grid } from './views/grid'
 import { lightbox } from './views/lightbox'
 import { confirmDialog, toastStack } from './views/overlays'
+import * as TagManager from './tag-manager'
 import type { Child } from './views/shared'
 import { uploadDialog } from './views/upload-dialog'
 
@@ -103,75 +103,35 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
   )
 
 // ---------------------------------------------------------------------------
-// filter bar: tag chips with counts + result line. No "All photos" pill —
-// an empty chip selection *is* all photos; the count line states it.
+// filter bar: TagManager submodel (chips with counts + inline create +
+// result line). No "All photos" pill — an empty chip selection *is* all
+// photos; the count line states it.
 // ---------------------------------------------------------------------------
-
-const tagChip = (model: Model, tag: Tag, h: HtmlBuilder<Msg>): Child => {
-  const isActive = model.activeTagSlug === tag.slug
-  // Counts describe the loaded result set, so they only mean something
-  // unfiltered — a filtered list would repeat the same count on every chip.
-  const count =
-    model.activeTagSlug === undefined
-      ? model.photos.filter((photo) => (photo.tags ?? []).some((entry) => entry.id === tag.id))
-          .length
-      : undefined
-  return h.span(
-    [
-      h.Key(`chip-${tag.slug}`),
-      h.Class('inline-flex items-center overflow-hidden rounded-full border border-stone-200'),
-    ],
-    [
-      h.button(
-        [
-          h.OnClick(M.FilterByTag({ slug: tag.slug })),
-          h.Class(
-            cn(
-              'py-1 text-xs font-medium transition-colors',
-              isActive
-                ? 'bg-stone-900 text-white pl-3 pr-1'
-                : 'bg-white text-stone-700 hover:bg-stone-100 pl-3 pr-2.5',
-            ),
-          ),
-        ],
-        [
-          tag.label,
-          ...(count !== undefined
-            ? [h.span([h.Class('ml-1.5 text-stone-400')], [String(count)])]
-            : []),
-        ],
-      ),
-      ...(isActive
-        ? [
-            h.button(
-              [
-                h.OnClick(M.FilterByTag({ slug: tag.slug })),
-                h.AriaLabel(`Clear filter ${tag.label}`),
-                h.Class('pr-2 pl-0.5 text-xs text-stone-400 hover:text-white'),
-              ],
-              ['×'],
-            ),
-          ]
-        : []),
-    ],
-  )
-}
 
 const filterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const activeLabel = model.tags.find((tag) => tag.slug === model.activeTagSlug)?.label
-  return h.div([h.Class('mt-6')], [
-    h.div(
-      [h.Class('flex flex-wrap items-center gap-2')],
-      model.tags.map((tag) => tagChip(model, tag, h)),
-    ),
-    h.p(
-      [h.Class('mt-3 text-xs text-stone-500')],
-      [
-        `${String(model.photos.length)} photo${model.photos.length === 1 ? '' : 's'}`,
-        ...(activeLabel !== undefined ? [` · filtered by “${activeLabel}”`] : []),
-      ],
-    ),
-  ])
+  return h.submodel({
+    slotId: 'admin-tag-manager',
+    model: model.tagManager,
+    view: TagManager.view,
+    viewInputs: {
+      tags: model.tags,
+      // Counts describe the loaded result set, so they only mean something
+      // unfiltered — a filtered list would repeat the same count on every chip.
+      ...(model.activeTagSlug === undefined
+        ? {
+            countFor: (tag: Tag): number =>
+              model.photos.filter((photo) =>
+                (photo.tags ?? []).some((entry) => entry.id === tag.id),
+              ).length,
+          }
+        : { activeSlug: model.activeTagSlug }),
+      resultText: `${String(model.photos.length)} photo${model.photos.length === 1 ? '' : 's'}${
+        activeLabel !== undefined ? ` · filtered by “${activeLabel}”` : ''
+      }`,
+    },
+    toParentMessage: (message) => M.GotTagManagerMessage({ message }),
+  })
 }
 
 // ---------------------------------------------------------------------------
