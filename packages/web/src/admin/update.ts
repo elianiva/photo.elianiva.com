@@ -134,13 +134,9 @@ const runNextOrFinish = (model: Model): UpdateReturn => {
     failedCount === 0 || !settled.uploadDialog.isOpen ? releaseFinishedItems(settled) : settled
   const refresh = FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })
   return failedCount === 0
-    ? showToast(
-        finished,
-        `Uploaded ${photoCountLabel(uploadedCount)}`,
-        'Success',
-        undefined,
-        [refresh],
-      )
+    ? showToast(finished, `Uploaded ${photoCountLabel(uploadedCount)}`, 'Success', undefined, [
+        refresh,
+      ])
     : showToast(
         finished,
         `${String(uploadedCount)} uploaded, ${String(failedCount)} failed`,
@@ -215,12 +211,12 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     SucceededFetchPhotos: ({ photos, nextCursor }) => [
       retainSelection(
         evo(model, {
-        photos: () => [...photos],
-        nextCursor: () => nextCursor ?? null,
-        loadingMore: () => false,
-        status: () => 'ready',
-        error: () => undefined,
-      }),
+          photos: () => [...photos],
+          nextCursor: () => nextCursor ?? null,
+          loadingMore: () => false,
+          status: () => 'ready',
+          error: () => undefined,
+        }),
       ),
       [],
     ],
@@ -330,13 +326,13 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
       const saved = retainSelection(
         evo(model, {
-        photos: () => [...photos],
-        nextCursor: () => null,
-        loadingMore: () => false,
-        editSheet: () => closedSheet,
-        editingId: () => undefined,
-        saving: () => false,
-      }),
+          photos: () => [...photos],
+          nextCursor: () => null,
+          loadingMore: () => false,
+          editSheet: () => closedSheet,
+          editingId: () => undefined,
+          saving: () => false,
+        }),
       )
       return showToast(
         saved,
@@ -488,14 +484,14 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
       const refreshed = retainSelection(
         evo(model, {
-        photos: () => [...photos],
-        nextCursor: () => null,
-        loadingMore: () => false,
-        editSheet: () => closedSheet,
-        draft: () => emptyDraft(),
-        draftTagIds: () => [],
-        ...(model.editingId !== undefined ? { editingId: () => undefined } : {}),
-      }),
+          photos: () => [...photos],
+          nextCursor: () => null,
+          loadingMore: () => false,
+          editSheet: () => closedSheet,
+          draft: () => emptyDraft(),
+          draftTagIds: () => [],
+          ...(model.editingId !== undefined ? { editingId: () => undefined } : {}),
+        }),
       )
       return showToast(
         refreshed,

@@ -31,9 +31,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.Class(
         'fixed inset-0 z-50 flex items-center justify-center bg-stone-950/95 bg-cover bg-center p-6 sm:p-10 lg:p-16',
       ),
-      h.Style(
-        placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {},
-      ),
+      h.Style(placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {}),
       h.OnClick(M.CloseLightbox()),
       h.Attribute('role', 'dialog'),
       h.AriaLabel(photo.title),

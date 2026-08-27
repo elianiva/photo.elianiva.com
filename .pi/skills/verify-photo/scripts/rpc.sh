@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="${BASE:-http://127.0.0.1:13370}"
+# Resolve BASE via portless; override with BASE env var.
+PORTLESS_URL="$(portless get photo 2>/dev/null || echo https://photo.localhost)"
+BASE="${BASE:-$PORTLESS_URL}"
 TAG="${1:-ListPhotos}"
 PAYLOAD="${2:-{}}"
 
@@ -27,6 +29,6 @@ print(json.dumps(envelope))
 " "$TAG" "$PAYLOAD" > /tmp/verify-photo-rpc-$$.json
 
 echo "-> $URL _tag=$TAG payload=$PAYLOAD" >&2
-curl -s -X POST "$URL" -H 'content-type: application/json' --data-binary @/tmp/verify-photo-rpc-$$.json
+curl -k -s -X POST "$URL" -H 'content-type: application/json' --data-binary @/tmp/verify-photo-rpc-$$.json
 rm -f /tmp/verify-photo-rpc-$$.json
 echo >&2

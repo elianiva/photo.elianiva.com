@@ -32,10 +32,10 @@ const statusBadge = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
     return Badge.badge(
       { variant: 'default' },
       [
-        h.span([h.Class('inline-flex items-center gap-1.5')], [
-          Spinner.spinner({ className: 'size-3' }, h),
-          'Uploading…',
-        ]),
+        h.span(
+          [h.Class('inline-flex items-center gap-1.5')],
+          [Spinner.spinner({ className: 'size-3' }, h), 'Uploading…'],
+        ),
       ],
       h,
     )
@@ -202,13 +202,14 @@ const uploadDialogContent = (
                   h.span([h.Class('text-sm font-medium')], ['Queue']),
                   h.span(
                     [h.Class('text-xs tabular-nums text-stone-500')],
-                    [
-                      `${String(model.queue.length)}/${String(UPLOAD_LIMITS.maxFiles)} files`,
-                    ],
+                    [`${String(model.queue.length)}/${String(UPLOAD_LIMITS.maxFiles)} files`],
                   ),
                 ],
               ),
-              h.ul([h.Class('flex flex-col gap-2')], [...model.queue.map((item) => queueRow(item, h))]),
+              h.ul(
+                [h.Class('flex flex-col gap-2')],
+                [...model.queue.map((item) => queueRow(item, h))],
+              ),
               Input.input(
                 {
                   id: 'upload-taken-at',
@@ -235,33 +236,36 @@ const uploadDialogContent = (
                       [h.Role('status'), h.AriaLive('polite'), h.Class('sr-only')],
                       [`Uploaded ${String(doneCount)} of ${String(model.batchTotal)}`],
                     ),
-                    h.div([h.Class('flex items-center gap-3')], [
-                      h.div(
-                        [
-                          h.Class('h-1.5 flex-1 overflow-hidden rounded-full bg-stone-200'),
-                          h.Role('progressbar'),
-                          h.AriaLabel('Upload progress'),
-                          h.AriaValuemin(0),
-                          h.AriaValuemax(100),
-                          h.AriaValuenow(progressPercent),
-                        ],
-                        [
-                          h.div(
-                            [
-                              h.Class(
-                                'h-full rounded-full bg-primary transition-all duration-300',
-                              ),
-                              h.Style({ width: `${String(progressPercent)}%` }),
-                            ],
-                            [],
-                          ),
-                        ],
-                      ),
-                      h.span(
-                        [h.Class('shrink-0 text-xs tabular-nums text-stone-500')],
-                        [`${String(doneCount)}/${String(model.batchTotal)}`],
-                      ),
-                    ]),
+                    h.div(
+                      [h.Class('flex items-center gap-3')],
+                      [
+                        h.div(
+                          [
+                            h.Class('h-1.5 flex-1 overflow-hidden rounded-full bg-stone-200'),
+                            h.Role('progressbar'),
+                            h.AriaLabel('Upload progress'),
+                            h.AriaValuemin(0),
+                            h.AriaValuemax(100),
+                            h.AriaValuenow(progressPercent),
+                          ],
+                          [
+                            h.div(
+                              [
+                                h.Class(
+                                  'h-full rounded-full bg-primary transition-all duration-300',
+                                ),
+                                h.Style({ width: `${String(progressPercent)}%` }),
+                              ],
+                              [],
+                            ),
+                          ],
+                        ),
+                        h.span(
+                          [h.Class('shrink-0 text-xs tabular-nums text-stone-500')],
+                          [`${String(doneCount)}/${String(model.batchTotal)}`],
+                        ),
+                      ],
+                    ),
                   ]
                 : []),
               h.div(

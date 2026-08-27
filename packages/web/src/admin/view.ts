@@ -58,11 +58,7 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
     [h.Class('sticky top-0 z-20 border-b border-stone-200 bg-white/85 backdrop-blur')],
     [
       h.div(
-        [
-          h.Class(
-            'mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3',
-          ),
-        ],
+        [h.Class('mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3')],
         [
           h.div(
             [h.Class('mr-auto flex items-center gap-4')],

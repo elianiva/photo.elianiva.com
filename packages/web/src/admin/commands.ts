@@ -53,10 +53,7 @@ export const FetchPhotosCmd = Command.define('FetchPhotos', {
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
   execute: ({ tagSlug }) =>
     Effect.map(
-      rpcPublic<PhotoPage>(
-        'ListPhotos',
-        tagSlug === '' ? { limit: 60 } : { tagSlug, limit: 60 },
-      ),
+      rpcPublic<PhotoPage>('ListPhotos', tagSlug === '' ? { limit: 60 } : { tagSlug, limit: 60 }),
       (page) =>
         Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),

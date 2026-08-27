@@ -4,10 +4,10 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Baseline preconditions
 
-- Launch `http://127.0.0.1:13370` via `pnpm dev` with a single instance (port 13370, `ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated).
+- Launch `https://photo.localhost` via `pnpm dev` (portless `photo`, backing port 13370) with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated). Resolve URL with `portless get photo`.
 - D1 `photo-elianiva` and R2 `photo-elianiva-originals` are remote and shared even in dev — never truncate tables. Seed data uses prefix `verify-`.
-- Put `agent-browser` and `curl` on PATH. `jq` recommended for JSON proof.
-- Run `.pi/skills/verify-photo/scripts/doctor.sh` and require GET / with Foldkit root and POST /api/rpc ListPhotos with items.
+- Put `agent-browser` and `portless` on PATH (`curl` optional for image header checks).
+- Run `.pi/skills/verify-photo/scripts/doctor.sh` and require GET / on the portless URL with the Foldkit app shell.
 - Never drive an instance that was not started by this verification run. One instance at a time.
 
 ## Driving conventions
@@ -15,17 +15,15 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Start every recipe from the baseline state unless its preconditions say otherwise.
 - Prefer ARIA roles and accessible names over CSS selectors or DOM position. See actual labels in `packages/web/src/admin/view.ts` and `packages/web/src/gallery/view.ts`.
 - Treat every command as literal. Keep quoted names and flags unchanged.
-- Run browser actions through `npx agent-browser` (snapshot, click by role+name, fill, press, screenshot).
-- Run RPC actions through `.pi/skills/verify-photo/scripts/rpc.sh <Tag> '<json>'` or plain `curl -X POST http://127.0.0.1:13370/api/rpc`.
-- Restore seeded verify- data after a mutation. Do not remove proof artifacts during cleanup.
+- Run every user action through `npx agent-browser` (snapshot, click by role+name, fill, press, screenshot). No RPC or curl needed for e2e.
+- Restore seeded verify- data after a mutation via the admin UI delete affordance. Do not remove proof artifacts during cleanup.
 
 ## Proof and skip reporting
 
 - Capture the user action and the resulting state, not only the final screen.
-- UI proof includes an ARIA snapshot and a screenshot with the app identity (`photo.elianiva.com` header) visible.
-- RPC proof includes request JSON, response JSON, and status.
-- Mutation proof includes a read-only second view of the stored value (ListPhotos/GetPhoto after the write).
-- Image proof includes status + headers (`content-type`, `cache-control: public, max-age=31536000, immutable`) + non-empty body check.
+- UI proof includes an ARIA snapshot and a screenshot with the app identity (`Elianiva` / `photo.elianiva.com` header) visible.
+- Mutation proof includes a second UI view of the stored value (re-open the sheet, reload the grid, or open the lightbox) — a toast alone is insufficient.
+- Image proof is the lightbox `<img>` loading from `/api/image/<r2Key>` (visible pixels, alt text, no broken image).
 - Record the feature ID and entry point used with every artifact.
 - Report an unreachable path with the attempted command and the unmet precondition.
 - Do not report a skipped entry point as verified through a different path.

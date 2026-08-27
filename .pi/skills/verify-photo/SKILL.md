@@ -1,35 +1,36 @@
 ---
 name: verify-photo
-description: Drive photo.elianiva.com the way a visitor and the owner do — public gallery and /admin over Effect RPC, multipart upload, and R2 proxy. Use for verifying UI, RPC, or image delivery changes in this repo.
+description: Drive photo.elianiva.com the way a visitor and the owner do — public gallery and /admin over portless, end-to-end in the browser. Use for verifying UI or image delivery changes in this repo.
 ---
 
 # Verify photo.elianiva.com
 
-Scripted way to launch this repo, drive it as a visitor and as the single admin, and capture proof. No mocks of the gallery or the RPC contract. External boundaries already isolated in prod: Cloudflare Access on `/admin*` and `/api/admin*` plus in-worker JWT verification (ADR 0007). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
+Scripted way to launch this repo, drive it as a visitor and as the single admin in the browser, and capture proof. No mocks — the real gallery, upload, and edit flows against the shared remote D1/R2. External boundaries already isolated in prod: Cloudflare Access on `/admin*` and `/api/admin*` plus in-worker JWT verification (ADR 0007). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
 
 ## Launch
 
-Primary verification instance is the local Vite dev server on `http://127.0.0.1:13370`. Data always hits the shared remote D1/R2 (Alchemy `remote()`), so only one instance at a time.
+Primary verification instance is the local Vite dev server at `https://photo.localhost` via [portless](https://github.com/vite-plus/portless) (`pnpm dev` → `portless` → `alchemy dev --stage dev`, backing port `13370` mapped to `photo.localhost`). Data always hits the shared remote D1/R2 (Alchemy `remote()`), so only one instance at a time.
 
 ```bash
 pnpm install
-# Terminal A — dev server (vite + Foldkit SSR shell + Worker bindings)
+# Terminal A — dev server (vite + Foldkit SSR shell + Worker bindings) via portless
 pnpm dev
-# Wait for ready — vite prints ready and port answers
-curl -sSf http://127.0.0.1:13370/ | head -n 5
-curl -sSf http://127.0.0.1:13370/api/rpc -X POST -H 'content-type: application/json' \
-  -d '{"_tag":"ListPhotos","limit":1}' | head -c 200
+# Wait for ready — portless prints the URL and the proxy answers
+portless get photo                    # -> https://photo.localhost
+curl -k -sSf https://photo.localhost/ | head -n 5
+# raw backing port 13370 still listens but verification drives the portless URL
 ```
 
-Ready when both succeed:
-- `GET /` returns 200 with `<!doctype html>` containing `<div id="root">`
-- `POST /api/rpc` with `ListPhotos` returns 200 JSON with `items` array (even if empty)
+Ready when:
 
-Teardown is killing the single `pnpm dev` process you started. Never `pkill -f vite` by name breadth — kill the PID you recorded.
+- `GET /` on `https://photo.localhost` returns 200 with `<!doctype html>` containing the Foldkit app shell (`data-foldkit-app`)
+
+Teardown is killing the single `pnpm dev` (portless) process you started. Never `pkill -f vite` by name breadth — kill the PID you recorded.
 
 ```bash
 kill $DEV_PID
-# or if launched via portless helper: jobs -p | xargs kill
+# portless cleans its route on exit; verify with:
+portless list
 ```
 
 Build-only verification (no server needed):
@@ -43,11 +44,13 @@ pnpm build
 All three run via turbo (`build` depends on `^build`). `pnpm build` emits `packages/web/dist/` with client chunks `foldkit` and `effect` split via `manualChunks`.
 
 Ports and env:
-- Fixed port `13370` (`packages/web` vite `strictPort: true`, `portless.json` `appPort`). No second instance on same port.
+
+- Portless URL `https://photo.localhost` (`portless.json` `name: photo`, backing `appPort: 13370`, Alchemy `dev: { port: 13370, strictPort: true }`). Access the app only via the portless URL; the raw `127.0.0.1:13370` is an internal fallback. No second instance on same backing port.
+- Resolve the URL with `portless get photo` (`https://photo.localhost`). Override with `BASE=https://photo.localhost` for scripts.
 - Local dev needs no `ACCESS_TEAM_DOMAIN` and no `ACCESS_ALLOWED_EMAILS` — blank means unauthenticated. Non-dev stages fail closed without both secrets.
 - No `.env` required for local verification. R2 `photo-elianiva-originals` and D1 `photo-elianiva` are remote by default.
 
-If port 13370 is already bound or D1 unreachable, stop. Fix the base before writing the skill patch.
+If `portless doctor` fails, `https://photo.localhost` is unreachable, or D1 unreachable, stop. Fix the base before writing the skill patch.
 
 ## Doctor
 
@@ -55,27 +58,26 @@ One read-only check. Run before first drive, after any failed drive, and on ever
 
 ```bash
 .pi/skills/verify-photo/scripts/doctor.sh
-# or manually:
-curl -sSf http://127.0.0.1:13370/ | grep -q 'id="root"'
-curl -sSf -X POST http://127.0.0.1:13370/api/rpc \
-  -H 'content-type: application/json' \
-  -d '{"_tag":"ListPhotos","limit":1}' | grep -q '"items"'
+# or manually (portless URL; -k trusts the local CA if not yet trusted):
+BASE=$(portless get photo 2>/dev/null || echo https://photo.localhost)
+curl -k -sSf "$BASE/" | grep -q 'data-foldkit-app'
 # typecheck sanity (no server needed)
 pnpm typecheck --filter @photo/shared --filter @photo/api --filter @photo/web 2>&1 | tail -n 5
 ```
 
 Doctor passes when:
-- `GET /` is 200 and contains the Foldkit root
-- `POST /api/rpc` ListPhotos returns 200 with `items` + `nextCursor` shape
+
+- `GET /` on the portless URL is 200 and contains the Foldkit app shell
 - `pnpm typecheck` is green on the changed scope (full turbo typecheck for release gates)
 
-Doctor failure caused by skill drift (wrong port, renamed RPC tag) is drift. Fix the skill and retry once before calling the run blocked. A healthy process with a wedged UI state still needs a reset: hard-reload the page or restart the dev server, do not continue driving the stale state.
+Doctor failure caused by skill drift (wrong URL) is drift. Fix the skill and retry once before calling the run blocked. A healthy process with a wedged UI state still needs a reset: hard-reload the page or restart the dev server, do not continue driving the stale state.
 
 ## Drive
 
-Harness: `agent-browser` for every UI path, `curl` for RPC and binary probes. Prefer stable handles over coordinates.
+Harness: `agent-browser` for every user path. No RPC probes — verify what the user sees. Prefer stable ARIA roles/names over coordinates.
 
 UI handles that actually exist in this repo:
+
 - Gallery photos by title text or `photoWithTags.id` derived `aria-label`
 - Admin header: link `photo.elianiva.com`, button `Upload photos`, toggle buttons with `aria-label "2 columns"` through `"6 columns"` and `aria-pressed`
 - Tag filter: `TagManager` chips labeled by `tag.label`, token `activeSlug` selects one tag
@@ -86,49 +88,25 @@ UI handles that actually exist in this repo:
 Generic recipes:
 
 **Visitor gallery (public):**
+
 ```bash
-npx agent-browser open http://127.0.0.1:13370/
-npx agent-browser snapshot --aria
+BASE=$(portless get photo 2>/dev/null || echo https://photo.localhost)
+npx agent-browser open "$BASE/"
+npx agent-browser snapshot
 npx agent-browser click --role link --name "<photo title>"
 npx agent-browser press --key "Escape"
 ```
 
 **Admin surface (local dev, unauthenticated):**
+
 ```bash
-npx agent-browser open http://127.0.0.1:13370/admin
+BASE=$(portless get photo 2>/dev/null || echo https://photo.localhost)
+npx agent-browser open "$BASE/admin"
 npx agent-browser click --role button --name "Upload photos"
 # tag chip toggle is via TagManager submodel — click chip by label
 npx agent-browser click --role button --name "Kyoto"
-```
-
-**RPC (public reads, no auth on 13370):**
-```bash
-# ListPhotos — limit + cursor are Effect Schema validated (clampLimit 1..100, default 60)
-curl -s -X POST http://127.0.0.1:13370/api/rpc \
-  -H 'content-type: application/json' \
-  -d '{"_tag":"ListPhotos","limit":60}' | jq .
-curl -s -X POST http://127.0.0.1:13370/api/rpc \
-  -H 'content-type: application/json' \
-  -d '{"_tag":"ListPhotos","tagSlug":"kyoto","limit":60}' | jq .
-# GetPhoto
-curl -s -X POST http://127.0.0.1:13370/api/rpc \
-  -H 'content-type: application/json' \
-  -d '{"_tag":"GetPhoto","id":"<photoId>"}' | jq .
-
-# Admin RPC (locally open, prod gated by Cf-Access-Jwt-Assertion)
-curl -s -X POST http://127.0.0.1:13370/api/admin/rpc \
-  -H 'content-type: application/json' \
-  -d '{"_tag":"CreateTag","slug":"verify-tag","label":"Verify Tag"}' | jq .
-
-# Multipart upload — bytes do not ride in RPC (ADR 0006)
-curl -s -X POST http://127.0.0.1:13370/api/upload \
-  -F 'file=@/tmp/sample.jpg;type=image/jpeg' \
-  -F 'title=Verify Photo' \
-  -F 'tagIds=[]' \
-  -F 'blurhash=LKO2?U%2Tw=w]~RBVZRi};kq' | jq .
-
-# R2 original proxy
-curl -sSf -I http://127.0.0.1:13370/api/image/originals%2Fverify.jpg
+# upload: pick files via FileDrop, set tags via combo, then Start uploads
+npx agent-browser click --role button --name "Start uploads"
 ```
 
 Every feature file in `features/` pairs each user action with one literal command and the observable result. Treat quoted names and flags as literal.
@@ -138,14 +116,15 @@ Every feature file in `features/` pairs each user action with one literal comman
 Capture the action and the resulting state, not just the final screen. Verify side effects alongside what is visible. Mocks only where prod already isolates (Access).
 
 Locations (proof survives cleanup):
-- ` .pi/skills/verify-photo/artifacts/<feature-id>/ ` — ARIA snapshots (`*.aria.txt`), screenshots (`*.png`), RPC JSON (`*.json`), curl transcripts
+
+- `.pi/skills/verify-photo/artifacts/<feature-id>/` — ARIA snapshots (`*.aria.txt`), screenshots (`*.png`), curl transcripts where needed
 - Each artifact names the feature ID and entry point used
 
 Standards:
-- UI proof: ARIA snapshot plus screenshot with app identity visible (`photo.elianiva.com` header). `npx agent-browser snapshot --aria --path .pi/skills/verify-photo/artifacts/<id>/page.aria.txt` and `npx agent-browser screenshot --path .pi/skills/verify-photo/artifacts/<id>/page.png`
-- RPC proof: request body plus response body plus status. Save both.
-- Mutation proof: drive the write, then read back via a second view (`ListPhotos` or `GetPhoto` after `UpdatePhoto`/`CreateTag`/upload). Status message alone is insufficient.
-- Image proof: fetch `/api/image/<r2Key>` and assert `content-type` and `cache-control: public, max-age=31536000, immutable` plus body non-empty.
+
+- UI proof: ARIA snapshot plus screenshot with app identity visible (`photo.elianiva.com` / `Elianiva` header). `npx agent-browser snapshot > .pi/skills/verify-photo/artifacts/<id>/page.aria.txt` and `npx agent-browser screenshot .pi/skills/verify-photo/artifacts/<id>/page.png`
+- Mutation proof: drive the write in the UI, then read back via a second UI view (re-open the sheet, reload the grid, or open the lightbox) — a toast alone is insufficient.
+- Image proof: open the photo's lightbox and assert the `<img src>` points at `/api/image/<r2Key>` and loads (alt text / network 200); headers `cache-control: public, max-age=31536000, immutable` are exercised implicitly via the proxy.
 - Never assert a skipped entry point as verified through a different path. Report unreachable with the attempted command and the missing precondition.
 
 ## Cleanup
@@ -153,16 +132,12 @@ Standards:
 Kill only what you started. Keep proof.
 
 ```bash
-# kill the dev server you launched
+# kill the dev server you launched (portless route auto-cleans)
 kill $DEV_PID
-# remove only verification-owned data (prefix verify- / verify_tag_)
-# via admin RPC or direct D1 — never truncate tables
-curl -s -X POST http://127.0.0.1:13370/api/admin/rpc \
-  -H 'content-type: application/json' \
-  -d '{"_tag":"DeletePhoto","id":"<verify-photo-id>"}' | jq .
-curl -s -X POST http://127.0.0.1:13370/api/admin/rpc \
-  -H 'content-type: application/json' \
-  -d '{"_tag":"DeleteTag","id":"<verify-tag-id>"}' | jq .
+portless list  # verify route gone
+# remove only verification-owned data (prefix verify-)
+# via the admin UI delete affordance, or direct DB if the UI is unavailable — never truncate tables
+# e.g. open $BASE/admin, click Delete on the verify photo/tag and confirm
 # remove temp files but retain artifacts/
 rm -f /tmp/verify-sample.jpg
 ```
@@ -173,9 +148,8 @@ Helpers clean residue after every failed iteration too. Do not remove `artifacts
 
 Every helper is executable and its invocation is shown in this body.
 
-- `scripts/doctor.sh` — ` .pi/skills/verify-photo/scripts/doctor.sh ` — read-only health check (port, RPC shape, typecheck hint)
-- `scripts/rpc.sh` — ` .pi/skills/verify-photo/scripts/rpc.sh ListPhotos '{"limit":60}' ` — curl wrapper for JSON RPC (public vs admin group inferred from tag)
-- `scripts/rpc.mjs` — ` node .pi/skills/verify-photo/scripts/rpc.mjs ListPhotos '{"limit":1}' ` — Effect-typed RPC caller alternative that reuses `FetchHttpClient` (useful when envelope shape drifts)
-- `scripts/capture.sh` — ` .pi/skills/verify-photo/scripts/capture.sh gallery-browse ` — ARIA + screenshot capture via agent-browser into `artifacts/<id>/`
+- `scripts/doctor.sh` — `.pi/skills/verify-photo/scripts/doctor.sh` — read-only health check (portless URL + Foldkit shell + typecheck hint)
+- `scripts/capture.sh` — `BASE=$(portless get photo) .pi/skills/verify-photo/scripts/capture.sh gallery-browse` — ARIA + screenshot capture via agent-browser into `artifacts/<id>/`
+- `scripts/rpc.sh` — optional low-level RPC helper (not required for e2e; defaults to `portless get photo` if you need it)
 
 See `features/README.md` for the indexed feature map. Keep it honest — a proof that drives one convenient entry point is incomplete when the map lists others.

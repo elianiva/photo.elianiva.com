@@ -8,6 +8,18 @@ import { defineMessageUnion } from 'foldkit/message'
 import { PhotoWithTags } from '@photo/shared'
 
 // ---------------------------------------------------------------------------
+// Flags — SSR payload (ADR 0002). The server fetches the first page ahead
+// of render so the gallery paints with blurhash placeholders, no loading
+// spinner. Hydration decodes the same value, so the client starts `ready`.
+// ---------------------------------------------------------------------------
+
+export const Flags = S.Struct({
+  photos: S.Array(PhotoWithTags),
+  nextCursor: S.NullOr(S.String),
+})
+export type Flags = typeof Flags.Type
+
+// ---------------------------------------------------------------------------
 // Model
 // ---------------------------------------------------------------------------
 

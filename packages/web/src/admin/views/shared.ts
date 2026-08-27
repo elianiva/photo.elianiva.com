@@ -94,7 +94,10 @@ const comboViewInputs = (
       isCreate(item) ? `Create “${item.slice(CREATE_PREFIX.length)}”` : labelOf(tags, item),
     itemToConfig: (item, { isSelected }) =>
       isCreate(item)
-        ? { className: 'data-active:bg-stone-100 data-selected:bg-transparent', content: createRow(item.slice(CREATE_PREFIX.length)) }
+        ? {
+            className: 'data-active:bg-stone-100 data-selected:bg-transparent',
+            content: createRow(item.slice(CREATE_PREFIX.length)),
+          }
         : { content: tagRow(labelOf(tags, item), isSelected) },
   })
 }
@@ -127,31 +130,34 @@ export const embedCombo = (model: Model, which: 'draft' | 'upload', h: HtmlBuild
   const selectedIds = which === 'draft' ? model.draftTagIds : model.uploadTagIds
   const onRemove = (id: string): Msg =>
     which === 'draft' ? M.RemoveDraftTag({ id }) : M.RemoveUploadTag({ id })
-  return h.div([h.Class('flex flex-col gap-2')], [
-    h.submodel({
-      slotId: `${which}-tag-combo`,
-      model: which === 'draft' ? model.draftCombo : model.uploadCombo,
-      view: TagMultiCombo.view,
-      viewInputs: comboViewInputs(
-        which === 'draft' ? model.draftCombo : model.uploadCombo,
-        model.tags,
-        selectedIds,
-      ),
-      toParentMessage: (message) =>
-        which === 'draft'
-          ? M.GotDraftComboMessage({ message })
-          : M.GotUploadComboMessage({ message }),
-    }),
-    // Picked tags as removable chips — the multi-select input itself rests
-    // empty by design, so without these the selection is invisible until the
-    // listbox is opened.
-    ...(selectedIds.length > 0
-      ? [
-          h.div(
-            [h.Class('flex flex-wrap gap-1.5'), h.Role('list'), h.AriaLabel('Selected tags')],
-            selectedIds.map((id) => pickedChip(labelOf(model.tags, id), onRemove(id), h)),
-          ),
-        ]
-      : []),
-  ])
+  return h.div(
+    [h.Class('flex flex-col gap-2')],
+    [
+      h.submodel({
+        slotId: `${which}-tag-combo`,
+        model: which === 'draft' ? model.draftCombo : model.uploadCombo,
+        view: TagMultiCombo.view,
+        viewInputs: comboViewInputs(
+          which === 'draft' ? model.draftCombo : model.uploadCombo,
+          model.tags,
+          selectedIds,
+        ),
+        toParentMessage: (message) =>
+          which === 'draft'
+            ? M.GotDraftComboMessage({ message })
+            : M.GotUploadComboMessage({ message }),
+      }),
+      // Picked tags as removable chips — the multi-select input itself rests
+      // empty by design, so without these the selection is invisible until the
+      // listbox is opened.
+      ...(selectedIds.length > 0
+        ? [
+            h.div(
+              [h.Class('flex flex-wrap gap-1.5'), h.Role('list'), h.AriaLabel('Selected tags')],
+              selectedIds.map((id) => pickedChip(labelOf(model.tags, id), onRemove(id), h)),
+            ),
+          ]
+        : []),
+    ],
+  )
 }

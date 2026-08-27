@@ -51,10 +51,7 @@ export const init = (config: { id: string }): Model => ({ id: config.id, inputVa
 
 /** Intents ride to the parent via GotTagManagerMessage — the child itself
  *  only manages input text, so it never issues commands. */
-export const update = (
-  model: Model,
-  message: Message,
-): readonly [Model, ReadonlyArray<never>] =>
+export const update = (model: Model, message: Message): readonly [Model, ReadonlyArray<never>] =>
   Message.match<readonly [Model, ReadonlyArray<never>]>(message, {
     SetInput: ({ value }) => [evo(model, { inputValue: () => value }), []],
     SubmitCreate: () => [{ ...model, inputValue: '' }, []],
@@ -122,79 +119,97 @@ const deleteButton = (tag: Tag, h: HtmlBuilder<Message>): Html =>
     [icon(h, Trash2, 'size-3')],
   )
 
-export const view = defineView<Model, Message, ViewInputs>(
-  (model, inputs, h): Html =>
-    h.section([h.DataAttribute('slot', 'tag-manager'), h.Class('mt-8')], [
-      h.div([h.Class('flex items-center justify-between gap-4')], [
-        h.div([h.Class('flex items-baseline gap-2')], [
-          h.h2(
-            [h.Class('text-xs font-medium uppercase tracking-widest text-stone-400')],
-            ['Tags'],
-          ),
-          h.span([h.Class('text-xs tabular-nums text-stone-400')], [
-            String(inputs.tags.length),
-          ]),
-        ]),
-        // Inline create: typing filters nothing, Enter or the + button submits.
-        h.form(
-          [h.OnSubmit(Message.SubmitCreate()), h.Class('relative')],
-          [
-            h.input([
-              h.Value(model.inputValue),
-              h.OnInput((value) => Message.SetInput({ value })),
-              h.Placeholder('New tag…'),
-              h.AriaLabel('New tag name'),
-              h.Class(
-                'h-8 w-44 rounded-full border border-stone-200 bg-white pr-8 pl-3.5 text-xs shadow-xs placeholder:text-stone-400 focus:border-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-200',
+export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): Html =>
+  h.section(
+    [h.DataAttribute('slot', 'tag-manager'), h.Class('mt-8')],
+    [
+      h.div(
+        [h.Class('flex items-center justify-between gap-4')],
+        [
+          h.div(
+            [h.Class('flex items-baseline gap-2')],
+            [
+              h.h2(
+                [h.Class('text-xs font-medium uppercase tracking-widest text-stone-400')],
+                ['Tags'],
               ),
-            ]),
-            h.button(
-              [
-                h.Type('submit'),
-                h.AriaLabel('Create tag'),
-                h.Title(`Create tag${model.inputValue.trim() === '' ? '' : ` “${model.inputValue.trim()}”`}`),
+              h.span(
+                [h.Class('text-xs tabular-nums text-stone-400')],
+                [String(inputs.tags.length)],
+              ),
+            ],
+          ),
+          // Inline create: typing filters nothing, Enter or the + button submits.
+          h.form(
+            [h.OnSubmit(Message.SubmitCreate()), h.Class('relative')],
+            [
+              h.input([
+                h.Value(model.inputValue),
+                h.OnInput((value) => Message.SetInput({ value })),
+                h.Placeholder('New tag…'),
+                h.AriaLabel('New tag name'),
                 h.Class(
-                  cn(
-                    'absolute top-1/2 right-1 -translate-y-1/2 rounded-full p-1 text-stone-400 transition-colors hover:text-stone-900 focus-visible:outline-none',
-                    model.inputValue.trim() === '' && 'opacity-40',
-                  ),
+                  'h-8 w-44 rounded-full border border-stone-200 bg-white pr-8 pl-3.5 text-xs shadow-xs placeholder:text-stone-400 focus:border-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-200',
                 ),
-              ],
-              [icon(h, Plus, 'size-3.5')],
-            ),
-          ],
-        ),
-      ]),
+              ]),
+              h.button(
+                [
+                  h.Type('submit'),
+                  h.AriaLabel('Create tag'),
+                  h.Title(
+                    `Create tag${model.inputValue.trim() === '' ? '' : ` “${model.inputValue.trim()}”`}`,
+                  ),
+                  h.Class(
+                    cn(
+                      'absolute top-1/2 right-1 -translate-y-1/2 rounded-full p-1 text-stone-400 transition-colors hover:text-stone-900 focus-visible:outline-none',
+                      model.inputValue.trim() === '' && 'opacity-40',
+                    ),
+                  ),
+                ],
+                [icon(h, Plus, 'size-3.5')],
+              ),
+            ],
+          ),
+        ],
+      ),
       ...(inputs.tags.length === 0
         ? [
-            h.p([h.Class('mt-3 text-sm text-stone-500')], [
-              'No tags yet — type a name above to create the first one.',
-            ]),
+            h.p(
+              [h.Class('mt-3 text-sm text-stone-500')],
+              ['No tags yet — type a name above to create the first one.'],
+            ),
           ]
         : [
-            h.div([h.Class('mt-3 flex flex-wrap gap-1.5')], [
-              ...inputs.tags.map((tag) => {
-                const isActive = inputs.activeSlug === tag.slug
-                return h.span([h.Key(`chip-${tag.slug}`), h.Class(chipClass(isActive))], [
-                  h.button(
+            h.div(
+              [h.Class('mt-3 flex flex-wrap gap-1.5')],
+              [
+                ...inputs.tags.map((tag) => {
+                  const isActive = inputs.activeSlug === tag.slug
+                  return h.span(
+                    [h.Key(`chip-${tag.slug}`), h.Class(chipClass(isActive))],
                     [
-                      h.OnClick(Message.ToggledFilter({ slug: tag.slug })),
-                      h.Title(
-                        isActive ? `Clear filter ${tag.label}` : `Filter by ${tag.label}`,
+                      h.button(
+                        [
+                          h.OnClick(Message.ToggledFilter({ slug: tag.slug })),
+                          h.Title(
+                            isActive ? `Clear filter ${tag.label}` : `Filter by ${tag.label}`,
+                          ),
+                          h.AriaPressed(String(isActive)),
+                          h.Class('flex min-w-0 items-center gap-1.5 py-1 pl-3'),
+                        ],
+                        [
+                          h.span([h.Class('truncate text-xs font-medium')], [tag.label]),
+                          countBadge(inputs.countFor?.(tag), isActive, h),
+                        ],
                       ),
-                      h.AriaPressed(String(isActive)),
-                      h.Class('flex min-w-0 items-center gap-1.5 py-1 pl-3'),
+                      deleteButton(tag, h),
                     ],
-                    [
-                      h.span([h.Class('truncate text-xs font-medium')], [tag.label]),
-                      countBadge(inputs.countFor?.(tag), isActive, h),
-                    ],
-                  ),
-                  deleteButton(tag, h),
-                ])
-              }),
-            ]),
+                  )
+                }),
+              ],
+            ),
           ]),
       h.p([h.Class('mt-3 text-xs text-stone-500')], [inputs.resultText]),
-    ]),
+    ],
+  ),
 )

@@ -6,7 +6,7 @@
 import { Command, Runtime } from 'foldkit'
 
 import { FetchMoreCmd, FetchPhotosCmd } from './commands'
-import { Message } from './model'
+import { Flags, Message } from './model'
 import type { Model } from './model'
 
 type UpdateReturn = readonly [Model, ReadonlyArray<Command.Command<Message>>]
@@ -15,17 +15,32 @@ type UpdateReturn = readonly [Model, ReadonlyArray<Command.Command<Message>>]
 // init
 // ---------------------------------------------------------------------------
 
-export const init: Runtime.ApplicationInit<Model, Message> = () => [
-  {
-    status: 'loading',
-    photos: [],
-    nextCursor: null,
-    loadingMore: false,
-    error: undefined,
-    selectedId: null,
-  },
-  [FetchPhotosCmd()],
-]
+export const init: Runtime.ApplicationInit<Model, Message, Flags> = (flags) => {
+  if (flags !== undefined) {
+    return [
+      {
+        status: 'ready',
+        photos: [...flags.photos],
+        nextCursor: flags.nextCursor ?? null,
+        loadingMore: false,
+        error: undefined,
+        selectedId: null,
+      },
+      [],
+    ]
+  }
+  return [
+    {
+      status: 'loading',
+      photos: [],
+      nextCursor: null,
+      loadingMore: false,
+      error: undefined,
+      selectedId: null,
+    },
+    [FetchPhotosCmd()],
+  ]
+}
 
 // ---------------------------------------------------------------------------
 // update

@@ -76,10 +76,13 @@ export default Alchemy.Stack(
       sessionDuration: '24h',
     })
 
-    class Website extends Cloudflare.Website.Foldkit<Website>()('photo', {
+    class Website extends Cloudflare.Website.Vite<Website>()('photo', {
       rootDir: 'packages/web',
-      domain: 'photo.elianiva.com',
       main: 'src/worker.ts',
+      viteEnvironments: { entry: 'worker' },
+      assets: { notFoundHandling: 'single-page-application' },
+      domain: 'photo.elianiva.com',
+      compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
       dev: { port: 13370, strictPort: true },
       env: {
         PHOTOS: PhotoBucket,
