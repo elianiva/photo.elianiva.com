@@ -8,11 +8,12 @@
  * message.
  */
 
-import { Data, Effect, Layer, ManagedRuntime, Scope } from 'effect'
+import { Cause, Data, Effect, Layer, ManagedRuntime, Option, Scope } from 'effect'
 import { FetchHttpClient } from 'effect/unstable/http'
 import { RpcSerialization } from 'effect/unstable/rpc'
 import { layerProtocolHttp, make as makeRpcClient } from 'effect/unstable/rpc/RpcClient'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
+import { apiOrigin } from './api'
 
 export class RpcFailure extends Data.TaggedError('RpcFailure')<{
   readonly message: string
@@ -21,21 +22,42 @@ export class RpcFailure extends Data.TaggedError('RpcFailure')<{
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
+const unwrapCause = (error: unknown): unknown => {
+  if (!isRecord(error)) return error
+  // Effect Causes are tagged "Fail"/"Die"/"Interrupt" etc. – unwrap the typed failure
+  if (error['_tag'] === 'Fail' && 'error' in error) return unwrapCause(error['error'])
+  if (Array.isArray(error['failures'])) {
+    const failures = error['failures'] as ReadonlyArray<unknown>
+    if (failures.length === 1) return unwrapCause(failures[0])
+  }
+  return error
+}
+
 /** Best-effort readable message from any RPC failure: typed errors arrive as
  *  their decoded instances (with a `message`/`_tag` field), transport problems
  *  arrive as RpcClientError with a nested reason. */
 const failureMessage = (error: unknown): string => {
-  if (isRecord(error)) {
-    if (typeof error['message'] === 'string' && error['message'] !== '') return error['message']
+  const unwrapped = unwrapCause(error)
+  if (isRecord(unwrapped)) {
+    if (typeof unwrapped['message'] === 'string' && unwrapped['message'] !== '') {
+      const causeMsg =
+        typeof unwrapped['cause'] === 'object' && unwrapped['cause'] !== null
+          ? failureMessage(unwrapped['cause'])
+          : ''
+      if (causeMsg !== '' && causeMsg !== unwrapped['message']) {
+        return `${unwrapped['message']}: ${causeMsg}`
+      }
+      return unwrapped['message']
+    }
     const detail =
-      typeof error['reason'] === 'object' && error['reason'] !== null
-        ? failureMessage(error['reason'])
+      typeof unwrapped['reason'] === 'object' && unwrapped['reason'] !== null
+        ? failureMessage(unwrapped['reason'])
         : ''
-    if (typeof error['_tag'] === 'string') {
-      return `${error['_tag']}${detail === '' ? '' : `: ${detail}`}`
+    if (typeof unwrapped['_tag'] === 'string') {
+      return `${unwrapped['_tag']}${detail === '' ? '' : `: ${detail}`}`
     }
   }
-  return String(error)
+  return String(unwrapped)
 }
 
 /** A client method keyed by an RPC tag; payloads/successes are schema-typed
@@ -86,7 +108,11 @@ const rpcCaller = (group: unknown, url: string) => {
         const method = client[tag]
         if (method === undefined) throw new Error(`Unknown RPC: ${tag}`)
         const outcome = await runtime.runPromiseExit(method(payload))
-        if (outcome._tag === 'Failure') throw outcome.cause
+        if (outcome._tag === 'Failure') {
+          const failure = Cause.findErrorOption(outcome.cause)
+          if (Option.isSome(failure)) throw failure.value
+          throw Cause.squash(outcome.cause)
+        }
         // SAFETY: successes are schema-decoded by the server boundary; A is
         // chosen by the typed wrappers above, so this is a trusted seam.
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -96,9 +122,9 @@ const rpcCaller = (group: unknown, url: string) => {
     })
 }
 
-/** Calls on the public group (`/api/rpc`) — list/get photos, list tags. */
-export const rpcPublic = rpcCaller(PhotoPublicRpcs, '/api/rpc')
+/** Calls on the public group (`/rpc`) — list/get photos, list tags. */
+export const rpcPublic = rpcCaller(PhotoPublicRpcs, `${apiOrigin()}/rpc`)
 
-/** Calls on the admin group (`/api/admin/rpc`) — update/delete photos,
+/** Calls on the admin group (`/admin/rpc`) — update/delete photos,
  *  create/delete tags. Edge-gated + JWT-verified server-side (ADR 0007). */
-export const rpcAdmin = rpcCaller(PhotoAdminRpcs, '/api/admin/rpc')
+export const rpcAdmin = rpcCaller(PhotoAdminRpcs, `${apiOrigin()}/admin/rpc`)

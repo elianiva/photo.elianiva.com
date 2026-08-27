@@ -7,6 +7,7 @@ import { Effect, Schema as S } from 'effect'
 import * as Command from 'foldkit/command'
 import type { PhotoWithTags, Tag } from '@photo/shared'
 
+import { apiUrl } from '@/lib/api'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { encodeBlurhash } from '@/lib/blurhash'
 
@@ -177,10 +178,10 @@ export const UploadItemCmd = Command.define('UploadItem', {
       // without tearing down the whole command runner.
       const response = yield* Effect.tryPromise({
         try: () =>
-          fetch('/api/upload', {
+          fetch(apiUrl('/upload'), {
             method: 'POST',
             body: form,
-            credentials: 'same-origin',
+            credentials: 'include',
             signal: controller.signal,
           }),
         catch: () => new Error('upload request failed'),

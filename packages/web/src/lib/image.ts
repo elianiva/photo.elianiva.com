@@ -1,9 +1,10 @@
 import type { PhotoWithTags } from '@photo/shared'
+import { apiOrigin } from './api'
 
-const rawImageUrl = (r2Key: string): string => `/api/image/${encodeURIComponent(r2Key)}`
+const rawImageUrl = (r2Key: string): string => `${apiOrigin()}/image/${encodeURIComponent(r2Key)}`
 
 const transformedUrl = (r2Key: string, width: number): string =>
-  `/cdn-cgi/image/width=${String(width)},format=auto${rawImageUrl(r2Key)}`
+  `${apiOrigin()}/cdn-cgi/image/width=${String(width)},format=auto/image/${encodeURIComponent(r2Key)}`
 
 /** Original HD file — served straight from R2 (the lightbox target). */
 export const originalUrl = (photo: PhotoWithTags): string => rawImageUrl(photo.r2Key)

@@ -1,8 +1,8 @@
 /**
  * RPC handler layers: wire the shared RPC groups (the contract) to the
  * domain services (the implementation). The Worker composes these into its
- * HTTP router — public reads on `/api/rpc`, admin writes on
- * `/api/admin/rpc` (ADR 0006/0007).
+ * HTTP router — public reads on `/rpc`, admin writes on
+ * `/admin/rpc` (ADR 0006/0007).
  */
 
 import { Effect } from 'effect'

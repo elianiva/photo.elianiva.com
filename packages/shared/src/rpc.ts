@@ -75,7 +75,7 @@ export class ListTags extends Rpc.make('ListTags', {
 export const PhotoPublicRpcs = RpcGroup.make(ListPhotos, GetPhoto, ListTags)
 
 // ---------------------------------------------------------------------------
-// Admin writes — edge-gated (Access on /api/admin*) + JWT-verified in-worker
+// Admin writes — edge-gated (Access on photo-api /admin/*) + JWT-verified in-worker
 // (ADR 0007).
 // ---------------------------------------------------------------------------
 

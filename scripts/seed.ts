@@ -4,7 +4,7 @@
 /**
  * Seed a fresh D1 with 8 tags + 12 placeholder photos.
  * - Dry-run (default): prints SQL to stdout.
- * - --apply: tries POST /api/upload against local dev server (pnpm dev on 13370).
+ * - --apply: tries POST /upload against local API (photo-api.localhost).
  *
  * Usage:
  *   pnpm db:seed              # dry-run, prints SQL
@@ -38,7 +38,7 @@ const out = (line: string): void => {
 
 if (!apply) {
   out('-- Seed SQL (dry-run) --')
-  out('-- Run with --apply to POST against http://127.0.0.1:13370/api/upload (requires pnpm dev)\n')
+  out('-- Run with --apply to POST against https://photo-api.localhost/upload (requires pnpm dev)\n')
   for (const tag of tags) {
     const id = `tag_${tag.slug}`
     out(
@@ -79,7 +79,7 @@ for (const photo of placeholders) {
   form.set('takenAt', photo.takenAt)
   form.set('tagIds', JSON.stringify(indexOfKyoto(photo) ? ['tag_kyoto', 'tag_film'] : []))
 
-  const response = await fetch('http://127.0.0.1:13370/api/upload', {
+  const response = await fetch('https://photo-api.localhost/upload', {
     method: 'POST',
     body: form,
   })

@@ -64,14 +64,14 @@ export default Alchemy.Stack(
 
     const AdminApiApp = Cloudflare.Access.Application('photo-admin-api', {
       type: 'self_hosted',
-      domain: 'photo.elianiva.com/api/admin',
+      domain: 'photo-api.elianiva.com/admin/rpc',
       policies: AccessPolicies,
       sessionDuration: '24h',
     })
 
     const UploadApp = Cloudflare.Access.Application('photo-admin-upload', {
       type: 'self_hosted',
-      domain: 'photo.elianiva.com/api/upload',
+      domain: 'photo-api.elianiva.com/upload',
       policies: AccessPolicies,
       sessionDuration: '24h',
     })
@@ -92,6 +92,18 @@ export default Alchemy.Stack(
       },
     }) {}
 
+    const ApiWorker = Cloudflare.Worker('photo-api', {
+      main: 'packages/web/src/api-worker.ts',
+      compatibility: { date: '2025-09-01', flags: ['nodejs_compat'] },
+      domain: 'photo-api.elianiva.com',
+      env: {
+        PHOTOS: PhotoBucket,
+        DB: PhotoDb,
+        ACCESS_TEAM_DOMAIN: teamDomain,
+      },
+      dev: { port: 13371, strictPort: true },
+    })
+
     // Edge gating is a production concern — skip Access resources entirely
     // on local dev so the stack boots without touching Cloudflare Access.
     if (!isLocalDev) {
@@ -108,9 +120,11 @@ export default Alchemy.Stack(
     yield* PhotoDb.pipe(Alchemy.remote())
 
     const website = yield* Website
+    const api = yield* ApiWorker
 
     return {
       url: website.url,
+      apiUrl: api.url,
       bucketName: (yield* PhotoBucket).bucketName,
       databaseName: (yield* PhotoDb).databaseName,
     }
