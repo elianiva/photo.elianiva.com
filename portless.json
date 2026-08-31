@@ -1,5 +1,5 @@
 {
   "name": "photo",
-  "script": "dev:stack",
-  "appPort": 13370
+  "script": "dev",
+  "appPort": 5173
 }

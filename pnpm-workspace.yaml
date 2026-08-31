@@ -2,6 +2,7 @@ packages:
   - packages/*
 
 allowBuilds:
+  agent-browser: true
   esbuild: true
   msgpackr-extract: true
   sharp: true

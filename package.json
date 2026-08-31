@@ -6,8 +6,8 @@
   "scripts": {
     "build": "turbo build",
     "check": "vp check",
-    "dev": "portless",
-    "dev:stack": "alchemy dev --stage dev",
+    "dev": "alchemy dev --stage dev",
+    "dev:local": "portless",
     "fmt": "vp fmt",
     "lint": "vp lint",
     "db:seed": "tsx scripts/seed.ts",
@@ -21,7 +21,9 @@
     "effect": "4.0.0-rc.111"
   },
   "devDependencies": {
+    "@effect/platform-bun": "4.0.0-rc.111",
     "@foldkit/oxlint-plugin": "^0.7.0",
+    "agent-browser": "^0.35.1",
     "oxlint": "^1.79.0",
     "portless": "^0.15.6",
     "turbo": "^2.10.11",

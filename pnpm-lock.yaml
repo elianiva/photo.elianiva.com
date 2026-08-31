@@ -13,14 +13,20 @@ importers:
         version: 4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1)
       alchemy:
         specifier: 2.0.0-beta.74
-        version: 2.0.0-beta.74(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.11(@types/node@26.3.0)(@vitest/browser-preview@4.1.10)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0)))(ws@8.21.3)
+        version: 2.0.0-beta.74(@effect/platform-bun@4.0.0-rc.111(effect@4.0.0-rc.111))(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.11(@types/node@26.3.0)(@vitest/browser-preview@4.1.10)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0)))(ws@8.21.3)
       effect:
         specifier: 4.0.0-rc.111
         version: 4.0.0-rc.111
     devDependencies:
+      '@effect/platform-bun':
+        specifier: 4.0.0-rc.111
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)
       '@foldkit/oxlint-plugin':
         specifier: ^0.7.0
         version: 0.7.0(effect@4.0.0-rc.111)
+      agent-browser:
+        specifier: ^0.35.1
+        version: 0.35.1
       oxlint:
         specifier: ^1.79.0
         version: 1.80.0(oxlint-tsgolint@7.0.2001)(vite-plus@0.2.9(@types/node@26.3.0)(jiti@2.7.0)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0))
@@ -348,6 +354,11 @@ packages:
     resolution: {integrity: sha512-6lIFwZAXiQCJ9u5QMIyY72qTdYbWmGAt7+HbONFEvmihwvecFuRo1i1QYkx5j9EN8c54KeO7CcEBq7HXpvwIhQ==}
     peerDependencies:
       effect: '>=4.0.0-rc.110 || >=4.0.0'
+
+  '@effect/platform-bun@4.0.0-rc.111':
+    resolution: {integrity: sha512-z6MF1ztw8oSvh4nlvI90wraB63ib5K67JPaSYtz5K9IIAgjXgXYC0hjbcqF+PlC9ytlQmu8tWzk2+yGePWWe5A==}
+    peerDependencies:
+      effect: ^4.0.0-rc.111
 
   '@effect/platform-node-shared@4.0.0-rc.112':
     resolution: {integrity: sha512-ttjz0xKamFN7vL8pNDYVwddJLjZvqKePc05djlz2VcdaKbLsnYbtMnL1rbOfHgEnIUSHGh7FkjaN4DM1Ov81sQ==}
@@ -2107,6 +2118,11 @@ packages:
   '@yuku-toolchain/types@0.5.43':
     resolution: {integrity: sha512-kSpvPntnXw5+lYjO71ffBEnQ5ycQ74KGIYknh0TS4xeyCuBkOqxyJumxZkMhLBBUCLjDAbx2+Icnr3Zh4ftjpQ==}
 
+  agent-browser@0.35.1:
+    resolution: {integrity: sha512-lbVEtcKvZcQQLSKhcH2G0oEGMT04MKj6CBLdM7koGRSs6DqsFO9UVKZuYTpikskJoAklnvtDjbtgCfSbW/yZjQ==}
+    engines: {node: '>=24.0.0', pnpm: '>=11.0.0'}
+    hasBin: true
+
   alchemy@2.0.0-beta.74:
     resolution: {integrity: sha512-Dpy6lZxk1SS5sZeV8vA79c0RaMLcniFCKewai1jEEamzFz0dR+yi2Ckmgi59ubMLAKvp9LNGNnhvRXfF0ETbkA==}
     hasBin: true
@@ -3283,7 +3299,7 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  '@alchemy.run/cloudflare-runtime@2.0.0-beta.74(@distilled.cloud/cloudflare@1.0.0-rc.6(effect@4.0.0-rc.111))(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(rolldown@1.1.5)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))':
+  '@alchemy.run/cloudflare-runtime@2.0.0-beta.74(@distilled.cloud/cloudflare@1.0.0-rc.6(effect@4.0.0-rc.111))(@effect/platform-bun@4.0.0-rc.111(effect@4.0.0-rc.111))(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(rolldown@1.1.5)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@alchemy.run/node-utils': 2.0.0-beta.74
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260704.1)
@@ -3297,6 +3313,7 @@ snapshots:
       workerd: 1.20260704.1
       yauzl: 3.4.0
     optionalDependencies:
+      '@effect/platform-bun': 4.0.0-rc.111(effect@4.0.0-rc.111)
       '@effect/platform-node': 4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1)
       rolldown: 1.1.5
       vite: 8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0)
@@ -3593,6 +3610,14 @@ snapshots:
     dependencies:
       '@distilled.cloud/core': 1.0.0-rc.6(effect@4.0.0-rc.111)
       effect: 4.0.0-rc.111
+
+  '@effect/platform-bun@4.0.0-rc.111(effect@4.0.0-rc.111)':
+    dependencies:
+      '@effect/platform-node-shared': 4.0.0-rc.112(effect@4.0.0-rc.111)
+      effect: 4.0.0-rc.111
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@effect/platform-node-shared@4.0.0-rc.112(effect@4.0.0-rc.111)':
     dependencies:
@@ -4838,9 +4863,11 @@ snapshots:
 
   '@yuku-toolchain/types@0.5.43': {}
 
-  alchemy@2.0.0-beta.74(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.11(@types/node@26.3.0)(@vitest/browser-preview@4.1.10)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0)))(ws@8.21.3):
+  agent-browser@0.35.1: {}
+
+  alchemy@2.0.0-beta.74(@effect/platform-bun@4.0.0-rc.111(effect@4.0.0-rc.111))(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.11(@types/node@26.3.0)(@vitest/browser-preview@4.1.10)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0)))(ws@8.21.3):
     dependencies:
-      '@alchemy.run/cloudflare-runtime': 2.0.0-beta.74(@distilled.cloud/cloudflare@1.0.0-rc.6(effect@4.0.0-rc.111))(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(rolldown@1.1.5)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))
+      '@alchemy.run/cloudflare-runtime': 2.0.0-beta.74(@distilled.cloud/cloudflare@1.0.0-rc.6(effect@4.0.0-rc.111))(@effect/platform-bun@4.0.0-rc.111(effect@4.0.0-rc.111))(@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1))(@types/node@26.3.0)(effect@4.0.0-rc.111)(rolldown@1.1.5)(typescript@7.0.2)(vite@8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0))
       '@alchemy.run/floci': 2.0.0-beta.74(effect@4.0.0-rc.111)
       '@alchemy.run/node-utils': 2.0.0-beta.74
       '@aws-sdk/credential-providers': 3.1117.0
@@ -4879,6 +4906,7 @@ snapshots:
       undici: 7.29.0
       yaml: 2.9.0
     optionalDependencies:
+      '@effect/platform-bun': 4.0.0-rc.111(effect@4.0.0-rc.111)
       '@effect/platform-node': 4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1)
       vite: 8.2.2(@types/node@26.3.0)(jiti@2.7.0)(yaml@2.9.0)
       ws: 8.21.3

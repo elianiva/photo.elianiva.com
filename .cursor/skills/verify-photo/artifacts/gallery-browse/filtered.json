@@ -1,0 +1,20 @@
+{
+  "request": { "_tag": "ListPhotos", "tagSlug": "kyoto", "limit": 60 },
+  "response": {
+    "items": [
+      {
+        "id": "photo_verify_1",
+        "slug": "verify-photo-01",
+        "title": "Verify Photo 01",
+        "r2Key": "originals/verify-01.jpg",
+        "width": 1200,
+        "height": 800,
+        "takenAt": "2024-01-15",
+        "metadata": { "caption": "proof shot" },
+        "blurhash": "LKO2?U%2Tw=w]~RBVZRi};kq",
+        "tags": [{ "id": "tag_kyoto", "slug": "kyoto", "label": "Kyoto" }]
+      }
+    ],
+    "nextCursor": null
+  }
+}

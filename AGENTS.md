@@ -1,1 +1,5 @@
 - no need to do e2e testing unless asked
+- dev server: `pnpm dev` → http://localhost:5173 (requires Cloudflare secrets in the environment)
+- local HTTPS dev (optional): `pnpm dev:local` → https://photo.localhost via portless
+- rigorous agent workflows: use `/poteto-mode` (pstack skills vendored in `.cursor/skills/`)
+- UI verification: `.cursor/skills/verify-photo/` (doctor: `bash .cursor/skills/verify-photo/scripts/doctor.sh`)
