@@ -7,7 +7,6 @@ RUN apt-get update \
         git \
         openssl \
         sudo \
-    && rm -rf /var/lib/apt/lists/* \
-    && corepack enable
+    && rm -rf /var/lib/apt/lists/*
 
 USER ubuntu
