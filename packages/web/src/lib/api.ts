@@ -1,8 +1,11 @@
+const prodApiOrigin = 'https://photo-api.elianiva.com'
+const localApiOrigin = 'https://photo-api.localhost'
+
 export const apiOrigin = (): string => {
   if (typeof window !== 'undefined' && window.location.hostname.endsWith('localhost')) {
-    return 'https://photo-api.localhost'
+    return localApiOrigin
   }
-  return 'https://photo-api.elianiva.com'
+  return prodApiOrigin
 }
 
 export const apiUrl = (path: string): string => `${apiOrigin()}${path}`
