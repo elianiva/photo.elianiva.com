@@ -2,7 +2,14 @@ import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
   fmt: {
-    ignorePatterns: ['.turbo/**', 'dist/**', '**/*.d.ts', 'node_modules/**', '.wrangler/**'],
+    ignorePatterns: [
+      '.cursor/**',
+      '.turbo/**',
+      'dist/**',
+      '**/*.d.ts',
+      'node_modules/**',
+      '.wrangler/**',
+    ],
     semi: false,
     singleQuote: true,
     trailingComma: 'all',
