@@ -6,15 +6,17 @@
  * proportion to its aspect ratio so landscape Photos take the wider share of
  * a row while portrait Photos keep their ratio — at any container width.
  *
- * Tiles render only the client-decoded blurhash placeholder — no image bytes
- * are fetched while browsing. Clicking a figure opens the lightbox with the
- * original HD file (see `lightbox` in view.ts).
+ * Tiles paint the client-decoded blurhash immediately, then lazy-load a
+ * resized thumbnail on top so the placeholder resolves to real pixels.
+ * Clicking a figure opens the lightbox with the original HD file (see
+ * `lightbox` in view.ts).
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
 import { PhotoWithTags } from '@photo/shared'
 
 import { placeholderDataUrl } from '@/lib/blurhash'
+import { galleryTileSizes, srcSet, thumbUrl } from '@/lib/image'
 
 import { Message } from '../model'
 import type { Model } from '../model'
@@ -56,12 +58,12 @@ const photoFigure = (photo: PhotoWithTags, aspect: number, h: HtmlBuilder<Messag
   return h.figure(
     [h.Key(photo.id), h.Style({ flex: `${aspect} 1 0%` }), h.Class('min-w-0 mb-16 lg:mb-24')],
     [
-      // Aspect-ratio box reserves layout space; the decoded blurhash paints
-      // it until the lightbox loads the original. Photos uploaded before
-      // blurhash existed fall back to the plain neutral background.
+      // Aspect-ratio box reserves layout space; blurhash paints it instantly and
+      // the lazy thumbnail resolves on top. Photos without a stored blurhash
+      // still load a thumbnail over the neutral fallback.
       h.div(
         [
-          h.Class('w-full cursor-pointer bg-neutral-100 bg-cover bg-center'),
+          h.Class('w-full cursor-pointer overflow-hidden bg-neutral-100 bg-cover bg-center'),
           h.Style({
             aspectRatio: String(aspect),
             ...(placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {}),
@@ -70,7 +72,17 @@ const photoFigure = (photo: PhotoWithTags, aspect: number, h: HtmlBuilder<Messag
           h.Attribute('role', 'button'),
           h.AriaLabel(`View ${photo.title}`),
         ],
-        [],
+        [
+          h.img([
+            h.Class('h-full w-full object-cover'),
+            h.Src(thumbUrl(photo)),
+            h.Attribute('srcset', srcSet(photo)),
+            h.Attribute('sizes', galleryTileSizes),
+            h.Alt(''),
+            h.Attribute('loading', 'lazy'),
+            h.Attribute('decoding', 'async'),
+          ]),
+        ],
       ),
       h.figcaption(
         [h.Class('mt-3 lg:mt-4 flex items-baseline justify-between gap-6')],

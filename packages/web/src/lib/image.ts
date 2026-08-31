@@ -24,3 +24,6 @@ export const srcSet = (photo: PhotoWithTags): string =>
 /** Sizes attribute for admin cards: justified rows inside a max-w-6xl
  *  container put a typical card near half the content width (≤ 552px). */
 export const cardSizes = '(min-width: 1152px) 552px, 50vw'
+
+/** Sizes attribute for public gallery tiles in justified rows. */
+export const galleryTileSizes = '(min-width: 1024px) 40vw, 85vw'

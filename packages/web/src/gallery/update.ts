@@ -17,16 +17,18 @@ type UpdateReturn = readonly [Model, ReadonlyArray<Command.Command<Message>>]
 
 export const init: Runtime.ApplicationInit<Model, Message, Flags> = (flags) => {
   if (flags !== undefined) {
+    const photos = [...flags.photos]
+    const needsFetch = photos.length === 0
     return [
       {
-        status: 'ready',
-        photos: [...flags.photos],
+        status: needsFetch ? 'loading' : 'ready',
+        photos,
         nextCursor: flags.nextCursor ?? null,
         loadingMore: false,
         error: undefined,
         selectedId: null,
       },
-      [],
+      needsFetch ? [FetchPhotosCmd()] : [],
     ]
   }
   return [
