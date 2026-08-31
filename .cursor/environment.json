@@ -4,7 +4,7 @@
   "terminals": [
     {
       "name": "dev",
-      "command": "pnpm dev",
+      "command": "export PATH=\"$HOME/.bun/bin:$PATH\" && pnpm dev",
       "description": "Alchemy dev stack at http://localhost:5173"
     }
   ],
