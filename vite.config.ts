@@ -15,7 +15,7 @@ export default defineConfig({
     trailingComma: 'all',
   },
   lint: {
-    ignorePatterns: ['.turbo/**', 'dist/**', '**/*.d.ts', 'node_modules/**', '.wrangler/**'],
+    ignorePatterns: ['.cursor/**', '.turbo/**', 'dist/**', '**/*.d.ts', 'node_modules/**', '.wrangler/**'],
     jsPlugins: [
       {
         name: 'foldkit',
