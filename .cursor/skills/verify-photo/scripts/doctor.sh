@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Default to portless URL; fallback to https://photo.localhost if portless not available.
-# Override with explicit arg or BASE env: BASE=https://photo.localhost ./doctor.sh
-PORTLESS_URL="$(portless get photo 2>/dev/null || echo https://photo.localhost)"
-BASE="${1:-${BASE:-$PORTLESS_URL}}"
+# Default to the Cloud Agent / plain dev URL. Override: BASE=http://localhost:5173 ./doctor.sh
+BASE="${1:-${BASE:-http://localhost:5173}}"
 FAIL=0
 
 say() { printf '%s\n' "$*"; }
@@ -13,12 +11,10 @@ fail() { say "fail: $*"; FAIL=1; }
 
 say "doctor: base=$BASE"
 
-# -k tolerates local CA until trusted; portless CA is trusted on this machine but -k keeps CI simple
-# Foldkit shell renders data-foldkit-app; older fallback had id="root"
-if curl -k -sSf "$BASE/" 2>/dev/null | grep -q 'data-foldkit-app\|id="root"'; then
+if curl -sSf "$BASE/" 2>/dev/null | grep -q 'data-foldkit-app\|id="root"'; then
   ok "GET / returns Foldkit app shell"
 else
-  fail "GET / missing Foldkit app shell (is pnpm dev running? try: pnpm dev && portless get photo)"
+  fail "GET / missing Foldkit app shell (is pnpm dev running? try: pnpm dev)"
 fi
 
 if [ "$FAIL" -eq 0 ]; then

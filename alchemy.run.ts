@@ -83,7 +83,7 @@ export default Alchemy.Stack(
       assets: { notFoundHandling: 'single-page-application' },
       domain: 'photo.elianiva.com',
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
-      dev: { port: 13370, strictPort: true },
+      dev: { port: 5173, strictPort: true },
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,

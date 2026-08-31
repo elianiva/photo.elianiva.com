@@ -11,7 +11,7 @@ Public gallery lets any visitor browse the flat, curated Photo list, filter by a
 
 ## How to get to it (user POV)
 
-- Open `https://photo.localhost/` (`portless get photo`) in a browser as a visitor.
+- Open `http://localhost:5173/` at http://localhost:5173 in a browser as a visitor.
 - Choose a Tag chip that names a Tag label (e.g. `Kyoto`).
 - Choose `Load more` when the gallery shows a next page exists.
 - Choose any Photo tile to open its lightbox, then dismiss it.
@@ -20,12 +20,12 @@ Public gallery lets any visitor browse the flat, curated Photo list, filter by a
 
 Preconditions:
 
-- App is healthy at `https://photo.localhost` (`portless get photo`).
+- App is healthy at `http://localhost:5173` at http://localhost:5173.
 - At least one Photo exists (upload one via admin if the gallery shows “Nothing here yet”).
 - `.cursor/skills/verify-photo/scripts/doctor.sh` passes (GET / with Foldkit app shell).
 - No filter active at start.
 
-- **Load gallery.** Open the visitor surface. Run `BASE=$(portless get photo 2>/dev/null || echo https://photo.localhost) npx agent-browser open "$BASE/"` and `npx agent-browser snapshot`. The heading and TagManager chips appear and at least one Photo tile renders with its title text.
+- **Load gallery.** Open the visitor surface. Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/"` and `npx agent-browser snapshot`. The heading and TagManager chips appear and at least one Photo tile renders with its title text.
 - **Tag filter.** Filter by a single tag via the UI. Run `npx agent-browser click --role button --name "Kyoto"` when chips are present and snapshot again — chip shows pressed/selected state and the result line reads `N photos · filtered by "Kyoto"`. Click the same chip again to clear the filter.
 - **Load more.** When the gallery shows `Load more`, page forward. Run `npx agent-browser click --role button --name "Load more"` — new tiles append, no duplicates in the snapshot, and the button disappears when no further page exists.
 - **Open lightbox.** Choose any tile by its title. Run `npx agent-browser click --role link --name "<photo title>"` or `npx agent-browser click --role button --name "<photo title>"` depending on tile markup. URL stays at `/` but `selectedId` is non-null and the lightbox overlay appears with `src` pointing at `/api/image/<r2Key>` (original) plus decoded blurhash placeholder if `blurhash !== null`.

@@ -13,7 +13,7 @@ Admin edit and delete lets the owner open any Photo in an edit Sheet, change tit
 
 ## How to get to it (user POV)
 
-- Open `https://photo.localhost/admin` (`portless get photo` + `/admin`), choose any Photo tile or its edit affordance.
+- Open `http://localhost:5173/admin` at http://localhost:5173/admin, choose any Photo tile or its edit affordance.
 - In the Sheet, edit text fields, pick or create Tags via the Multi combo, remove chips with the dismiss button, set a takenAt date string, then choose Save.
 - Choose the delete affordance on a Photo and confirm in the AlertDialog.
 - Choose a column count 2..6 in the header toggle.
@@ -22,12 +22,12 @@ Admin edit and delete lets the owner open any Photo in an edit Sheet, change tit
 
 Preconditions:
 
-- App is healthy at `https://photo.localhost/admin` (`portless get photo` + `/admin`).
+- App is healthy at `http://localhost:5173/admin` at http://localhost:5173/admin.
 - At least one Photo exists. Create one via upload or seed named `verify-edit` if needed.
 - `.cursor/skills/verify-photo/scripts/doctor.sh` passes.
 - Sheet is closed at start (editingId undefined).
 
-- **Open edit.** Choose the Photo to edit. Run `BASE=$(portless get photo 2>/dev/null || echo https://photo.localhost) npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Edit <photo title>"` or click the tile then `OpenEdit` affordance. A Sheet appears with heading `Edit photo`, fields prefilled with title/slug/takenAt/caption/location/camera/lens, draftTagIds reflecting current tags, and the draft Multi combo showing those chips.
+- **Open edit.** Choose the Photo to edit. Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Edit <photo title>"` or click the tile then `OpenEdit` affordance. A Sheet appears with heading `Edit photo`, fields prefilled with title/slug/takenAt/caption/location/camera/lens, draftTagIds reflecting current tags, and the draft Multi combo showing those chips.
 - **Edit fields.** Change one draft field. Run `npx agent-browser fill --role textbox --name "Title" --value "Verify Edit New Title"` and `npx agent-browser fill --role textbox --name "Slug" --value "verify-edit-new"` and `npx agent-browser fill --role textbox --name "Taken at" --value "2024-02-01T10:00:00.000Z"`. Each fill dispatches `SetDraftField` with the matching field enum.
 - **Metadata fields.** Update JSON metadata via the four textboxes for caption/location/camera/lens. Run `npx agent-browser fill --role textbox --name "Caption" --value "verify caption"` — on save these four non-empty strings are packaged as `metadata` object; an empty string omits the key.
 - **Tag membership.** Pick a Tag via the combo and remove a Tag via chip dismiss. Run `npx agent-browser fill --role combobox --name "Tags" --value "Kyoto"` and `npx agent-browser click --role option --name "Kyoto"` to add, then `npx agent-browser click --role button --name "Remove Kyoto"` to remove. The `create:VerifyNew` pseudo-item appears when typed text matches no existing label and dispatches `CreateTagRequested{source:"draft"}`.

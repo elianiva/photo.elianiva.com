@@ -12,7 +12,7 @@ Admin upload lets the single owner drop original image files, assign Tags and an
 
 ## How to get to it (user POV)
 
-- Open `https://photo.localhost/admin` (`portless get photo` + `/admin`) and choose `Upload photos` in the header.
+- Open `http://localhost:5173/admin` at http://localhost:5173/admin and choose `Upload photos` in the header.
 - Drop files onto the FileDrop area or use the file picker. Set Tags via the upload combo (`create:<label>` appears when typed text matches no existing label) and optionally a takenAt.
 - Choose `Start uploads` to send the queue. While uploading, the header shows `Uploading done/batchTotal` even after the dialog closes.
 
@@ -20,12 +20,12 @@ Admin upload lets the single owner drop original image files, assign Tags and an
 
 Preconditions:
 
-- App is healthy at `https://photo.localhost/admin` (`portless get photo` + `/admin`).
+- App is healthy at `http://localhost:5173/admin` at http://localhost:5173/admin.
 - No Photo with slug `verify-upload` exists.
 - `.cursor/skills/verify-photo/scripts/doctor.sh` passes.
 - A small JPEG is available at `/tmp/verify-sample.jpg` (create via `scripts/seed.ts` tiny JPEG bytes or any 10KB jpeg).
 
-- **Open dialog.** Choose the header upload action. Run `BASE=$(portless get photo 2>/dev/null || echo https://photo.localhost) npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Upload photos"`. A dialog with FileDrop appears; `Start uploads` is disabled while queue is empty.
+- **Open dialog.** Choose the header upload action. Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Upload photos"`. A dialog with FileDrop appears; `Start uploads` is disabled while queue is empty.
 - **Enqueue files.** Drop a file. Run `npx agent-browser` file-drop action or use the system picker on the FileDrop role. The queue shows one row named after the file with `pending` status and an object-URL preview (from `previewStore`). Enqueue up to 50 files, each <= 20MB — beyond that the FileDrop validation rejects and the row shows `failed`.
 - **Pick tags on upload.** Assign tags before sending. Open the upload combo, type an existing label and select it, then verify the chip row shows the label. Run `npx agent-browser fill --role combobox --name "Tags" --value "Kyoto"` and `npx agent-browser click --role option --name "Kyoto"`.
 - **Send queue.** Start the run. Run `npx agent-browser click --role button --name "Start uploads"`. First item flips to `uploading`; on success it flips to `done` and the new photo appears in the admin grid without a reload. The header shows `Uploading done/batchTotal` while the queue drains.

@@ -2,8 +2,7 @@
 set -euo pipefail
 
 ID="${1:-gallery-browse}"
-PORTLESS_URL="$(portless get photo 2>/dev/null || echo https://photo.localhost)"
-BASE="${BASE:-$PORTLESS_URL}"
+BASE="${BASE:-http://localhost:5173}"
 OUT=".cursor/skills/verify-photo/artifacts/$ID"
 
 mkdir -p "$OUT"
@@ -14,7 +13,7 @@ if command -v npx >/dev/null 2>&1 && npx agent-browser --help >/dev/null 2>&1; t
   npx agent-browser screenshot "$OUT/page.png" || echo "screenshot failed"
 else
   echo "agent-browser not available, dumping HTTP mark"
-  curl -k -sSf "$BASE/" | head -n 50 > "$OUT/page.html"
+  curl -sSf "$BASE/" | head -n 50 > "$OUT/page.html"
 fi
 
 echo "artifacts in $OUT"

@@ -4,10 +4,10 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Baseline preconditions
 
-- Launch `https://photo.localhost` via `pnpm dev` (portless `photo`, backing port 13370) with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated). Resolve URL with `portless get photo`.
+- Launch `http://localhost:5173` via `pnpm dev` at http://localhost:5173 with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated). 
 - D1 `photo-elianiva` and R2 `photo-elianiva-originals` are remote and shared even in dev — never truncate tables. Seed data uses prefix `verify-`.
-- Put `agent-browser` and `portless` on PATH (`curl` optional for image header checks).
-- Run `.cursor/skills/verify-photo/scripts/doctor.sh` and require GET / on the portless URL with the Foldkit app shell.
+- Put `agent-browser` on PATH (`curl` optional for image header checks).
+- Run `.cursor/skills/verify-photo/scripts/doctor.sh` and require GET / on http://localhost:5173 with the Foldkit app shell.
 - Never drive an instance that was not started by this verification run. One instance at a time.
 
 ## Driving conventions

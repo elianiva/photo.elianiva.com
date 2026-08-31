@@ -6,8 +6,8 @@
   "scripts": {
     "build": "turbo build",
     "check": "vp check",
-    "dev": "portless",
-    "dev:stack": "alchemy dev --stage dev",
+    "dev": "alchemy dev --stage dev",
+    "dev:local": "portless",
     "fmt": "vp fmt",
     "lint": "vp lint",
     "db:seed": "tsx scripts/seed.ts",
