@@ -1,0 +1,11 @@
+{
+  "name": "pstack",
+  "displayName": "pstack",
+  "version": "0.14.5",
+  "description": "Vendored pstack plugin skills for Cloud Agents (upstream: cursor/plugins/pstack).",
+  "homepage": "https://github.com/cursor/plugins/tree/main/pstack",
+  "repository": "https://github.com/cursor/plugins",
+  "license": "MIT",
+  "skills": "./skills/",
+  "agents": "./agents/"
+}

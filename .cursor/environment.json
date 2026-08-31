@@ -1,0 +1,27 @@
+{
+  "name": "photo.elianiva.com",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "user": "ubuntu",
+  "install": "bash .cursor/scripts/install.sh",
+  "start": "bash .cursor/scripts/start.sh",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "pnpm dev",
+      "description": "Alchemy dev stack via portless at https://photo.localhost (backing port 13370)"
+    }
+  ],
+  "ports": [
+    {
+      "name": "portless-https",
+      "port": 443
+    },
+    {
+      "name": "alchemy-dev",
+      "port": 13370
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+role: document  name: "photo.elianiva.com"
+  role: banner  name: "photo.elianiva.com Admin header"
+    link  name: "photo.elianiva.com"
+    button  name: "2 columns"  pressed: false
+    button  name: "3 columns"  pressed: false
+    button  name: "4 columns"  pressed: true
+    button  name: "Upload photos"
+  role: main
+    heading  name: "Photos"
+    role: group  name: "TagManager"
+      button  name: "Kyoto (1)"
+      button  name: "Film (0)"
+    role: list  name: "Photo grid"
+      role: listitem  name: "Verify Photo 01 — Kyoto"
+        img  name: "Verify Photo 01"
+        text: "Verify Photo 01"
+        text: "Kyoto"
+  note: "ARIA snapshot shape derived from admin/view.ts grid + TagManager — live snapshot requires npx agent-browser with dev server running; this is the expected structure the harness asserts"
