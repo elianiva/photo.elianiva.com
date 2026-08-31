@@ -38,7 +38,9 @@ const out = (line: string): void => {
 
 if (!apply) {
   out('-- Seed SQL (dry-run) --')
-  out('-- Run with --apply to POST against https://photo-api.localhost/upload (requires pnpm dev)\n')
+  out(
+    '-- Run with --apply to POST against https://photo-api.localhost/upload (requires pnpm dev)\n',
+  )
   for (const tag of tags) {
     const id = `tag_${tag.slug}`
     out(
