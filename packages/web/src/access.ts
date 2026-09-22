@@ -66,7 +66,7 @@ export const verifyAccessToken = async (
     return { ok: false, reason: 'malformed token' }
   }
   let header: { kid?: string; alg?: string }
-  let payload: { exp?: number; email?: string }
+  let payload: { exp?: number; iat?: number; email?: string; iss?: string; aud?: unknown }
   try {
     header = JSON.parse(new TextDecoder().decode(new Uint8Array(base64UrlDecodeToBuffer(parts[0]))))
     payload = JSON.parse(
@@ -79,6 +79,9 @@ export const verifyAccessToken = async (
   const exp = payload.exp
   if (typeof exp !== 'number' || exp * 1000 < currentMillis())
     return { ok: false, reason: 'expired token' }
+  if (typeof payload.iss === 'string' && payload.iss !== teamDomain) {
+    return { ok: false, reason: 'wrong issuer' }
+  }
 
   let keys: ReadonlyArray<Jwk>
   try {

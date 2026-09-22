@@ -89,6 +89,7 @@ export default Alchemy.Stack(
         DB: PhotoDb,
         IMAGES: Cloudflare.Images.Images('IMAGES'),
         ACCESS_TEAM_DOMAIN: teamDomain,
+        ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },
     }) {}
 
@@ -100,6 +101,7 @@ export default Alchemy.Stack(
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
         ACCESS_TEAM_DOMAIN: teamDomain,
+        ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },
       dev: { port: 13371, strictPort: true },
     })
@@ -160,4 +162,5 @@ export type WebsiteEnv = {
   }
   readonly IMAGES: unknown
   readonly ACCESS_TEAM_DOMAIN: string
+  readonly ACCESS_ALLOWED_EMAILS?: string
 }

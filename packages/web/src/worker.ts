@@ -11,9 +11,13 @@ type WorkerEnvWithAssets = WebsiteEnv & {
   ASSETS: { fetch: typeof fetch }
 }
 
-const gatewayLayer = (env: WorkerEnvWithAssets) =>
+const gatewayLayer = (env: WorkerEnvWithAssets) => {
+  if (env.DB === undefined || env.DB === null || env.PHOTOS === undefined || env.PHOTOS === null) {
+    throw new Error('missing D1 or R2 binding')
+  }
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  GatewayLive({ db: env.DB as never, photos: env.PHOTOS as never })
+  return GatewayLive({ db: env.DB as never, photos: env.PHOTOS as never })
+}
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- import.meta.env is Vite-injected, probe without tightening type
 const BUILD_ID =
@@ -116,9 +120,18 @@ const renderAdminSsr = async (
   }
 }
 
+const withSecurityHeaders = (response: Response): Response => {
+  const out = new Response(response.body, response)
+  out.headers.set('x-content-type-options', 'nosniff')
+  out.headers.set('referrer-policy', 'strict-origin-when-cross-origin')
+  out.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()')
+  out.headers.set('x-frame-options', 'DENY')
+  return out
+}
+
 export default {
   fetch(request: Request, env: WorkerEnvWithAssets, _ctx: unknown): Promise<Response> {
-    return main(request, env)
+    return main(request, env).then(withSecurityHeaders)
   },
 }
 

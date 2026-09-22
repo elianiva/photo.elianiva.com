@@ -61,7 +61,11 @@ export const TagServiceLive = Layer.effect(
     const remove: TagServiceContract['remove'] = (id) =>
       Effect.gen(function* () {
         yield* Effect.tryPromise({
-          try: () => db.prepare(`DELETE FROM tags WHERE id = ?`).bind(id).run(),
+          try: () =>
+            db.batch([
+              db.prepare(`DELETE FROM photo_tags WHERE tagId = ?`).bind(id),
+              db.prepare(`DELETE FROM tags WHERE id = ?`).bind(id),
+            ]),
           catch: (cause) =>
             new StorageError({
               message: `Failed to delete tag ${id}`,

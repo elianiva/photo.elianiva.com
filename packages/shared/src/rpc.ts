@@ -46,10 +46,10 @@ export const describeCause = (cause: unknown): string => {
 
 export class ListPhotos extends Rpc.make('ListPhotos', {
   payload: {
-    tagSlug: S.optional(S.String),
-    q: S.optional(S.String),
+    tagSlug: S.optional(S.String.pipe(S.check(S.isMaxLength(120)))),
+    q: S.optional(S.String.pipe(S.check(S.isMaxLength(120)))),
     limit: S.optional(S.Number),
-    cursor: S.optional(S.String),
+    cursor: S.optional(S.String.pipe(S.check(S.isMaxLength(512)))),
   },
   success: S.Struct({
     items: S.Array(PhotoWithTags),
@@ -81,12 +81,14 @@ export const PhotoPublicRpcs = RpcGroup.make(ListPhotos, GetPhoto, ListTags)
 
 export class UpdatePhoto extends Rpc.make('UpdatePhoto', {
   payload: {
-    id: S.String,
-    title: S.optional(S.String),
-    slug: S.optional(S.String),
-    takenAt: S.optional(S.String),
+    id: S.String.pipe(S.check(S.isMaxLength(128))),
+    title: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200)))),
+    slug: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200)))),
+    takenAt: S.optional(S.String.pipe(S.check(S.isMaxLength(64)))),
     metadata: S.optional(PhotoMetadata),
-    tagIds: S.optional(S.Array(S.String)),
+    tagIds: S.optional(
+      S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(S.check(S.isMaxLength(32))),
+    ),
   },
   success: PhotoWithTags,
   error: S.Union([PhotoNotFound, SlugConflict, InvalidInput, StorageError]),
@@ -99,7 +101,10 @@ export class DeletePhoto extends Rpc.make('DeletePhoto', {
 }) {}
 
 export class CreateTag extends Rpc.make('CreateTag', {
-  payload: { slug: S.String, label: S.String },
+  payload: {
+    slug: S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(120))),
+    label: S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(120))),
+  },
   success: Tag,
   error: S.Union([SlugConflict, InvalidInput, StorageError]),
 }) {}

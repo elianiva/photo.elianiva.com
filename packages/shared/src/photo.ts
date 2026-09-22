@@ -18,10 +18,10 @@ export const Tag = S.Struct({
 export type Tag = typeof Tag.Type
 
 export const PhotoMetadata = S.Struct({
-  caption: S.optional(S.String),
-  location: S.optional(S.String),
-  camera: S.optional(S.String),
-  lens: S.optional(S.String),
+  caption: S.optional(S.String.pipe(S.check(S.isMaxLength(500)))),
+  location: S.optional(S.String.pipe(S.check(S.isMaxLength(200)))),
+  camera: S.optional(S.String.pipe(S.check(S.isMaxLength(200)))),
+  lens: S.optional(S.String.pipe(S.check(S.isMaxLength(200)))),
 })
 export type PhotoMetadata = typeof PhotoMetadata.Type
 
