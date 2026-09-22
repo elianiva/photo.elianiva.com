@@ -80,7 +80,7 @@ export default Alchemy.Stack(
       rootDir: 'packages/web',
       main: 'src/worker.ts',
       viteEnvironments: { entry: 'worker' },
-      assets: { notFoundHandling: 'single-page-application' },
+      assets: { notFoundHandling: 'none' },
       domain: 'photo.elianiva.com',
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
       dev: { port: 5173, strictPort: true },

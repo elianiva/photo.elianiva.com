@@ -14,6 +14,7 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 import { PhotoWithTags } from '@photo/shared'
+import { Option } from 'effect'
 
 import { placeholderDataUrl } from '@/lib/blurhash'
 import { galleryTileSizes, srcSet, thumbUrl } from '@/lib/image'
@@ -69,6 +70,12 @@ const photoFigure = (photo: PhotoWithTags, aspect: number, h: HtmlBuilder<Messag
             ...(placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {}),
           }),
           h.OnClick(Message.ClickedPhoto({ id: photo.id })),
+          h.OnKeyDownPreventDefault((key) =>
+            key === 'Enter' || key === ' '
+              ? Option.some(Message.ClickedPhoto({ id: photo.id }))
+              : Option.none(),
+          ),
+          h.Tabindex(0),
           h.Attribute('role', 'button'),
           h.AriaLabel(`View ${photo.title}`),
         ],
