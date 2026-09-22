@@ -24,8 +24,8 @@ export interface D1PreparedStatementLike extends D1StatementResult {
 export type D1Statement = D1PreparedStatementLike
 
 export interface D1DatabaseLike {
-  prepare(query: string): D1Statement
-  batch(statements: ReadonlyArray<D1Statement>): Promise<ReadonlyArray<unknown>>
+  prepare(query: string): D1PreparedStatementLike
+  batch(statements: ReadonlyArray<D1StatementResult>): Promise<ReadonlyArray<unknown>>
 }
 
 export interface R2ObjectLike {
