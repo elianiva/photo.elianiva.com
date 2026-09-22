@@ -19,10 +19,14 @@ const gatewayLayer = (env: WorkerEnvWithAssets) => {
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- import.meta.env is Vite-injected, probe without tightening type
-const BUILD_ID =
-  ((import.meta.env as unknown as Record<string, unknown>)['FOLDKIT_BUILD_ID'] as
-    | string
-    | undefined) ?? 'development'
+const BUILD_ID = (() => {
+  const viteEnv: unknown = import.meta.env
+  if (typeof viteEnv === 'object' && viteEnv !== null && 'FOLDKIT_BUILD_ID' in viteEnv) {
+    const id: unknown = viteEnv['FOLDKIT_BUILD_ID']
+    if (typeof id === 'string' && id !== '') return id
+  }
+  return 'development'
+})()
 
 const FALLBACK_TEMPLATE =
   '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="description" content="Photography by elianiva — curated works." /><title>photo.elianiva.com — Photography</title></head><body><div id="root"></div><script type="module" src="/src/entry.ts"></script></body></html>'
@@ -52,6 +56,7 @@ const renderGallerySsr = async (
 ): Promise<Response | null> => {
   const template = await fetchTemplate(env, request)
   if (template === null) return null
+  const emptyFlags: typeof GalleryFlags.Type = { photos: [], nextCursor: null }
   const flags = await Effect.runPromise(
     Effect.gen(function* () {
       const service = yield* PhotoService
@@ -59,10 +64,7 @@ const renderGallerySsr = async (
       return { photos: [...page.items], nextCursor: page.nextCursor }
     }).pipe(
       Effect.provide(PhotoServiceLive.pipe(Layer.provide(gatewayLayer(env)))),
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- Flags nextCursor is string|null, narrow from Effect error fallback
-      Effect.catch(() =>
-        Effect.succeed({ photos: [], nextCursor: null as unknown as string | null }),
-      ),
+      Effect.catch(() => Effect.succeed(emptyFlags)),
     ),
   )
   const galleryConfig = {
@@ -91,22 +93,16 @@ const renderGallerySsr = async (
 }
 
 const escapeXml = (input: string): string =>
-  input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 const renderSitemap = async (env: WorkerEnvWithAssets): Promise<Response> => {
   let lastmod = ''
   try {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const db = env.DB as never as {
-      prepare(q: string): { all<T>(): Promise<{ results?: ReadonlyArray<T> }> }
-    }
-    const raw = await db
-      .prepare(`SELECT takenAt FROM photos ORDER BY takenAt DESC LIMIT 1`)
-      .all<{ takenAt: string | null }>()
+    const raw = await env.DB.prepare(
+      `SELECT takenAt FROM photos ORDER BY takenAt DESC LIMIT 1`,
+    ).all<{
+      takenAt: string | null
+    }>()
     const latest = raw.results?.[0]?.takenAt
     if (typeof latest === 'string' && latest !== '') lastmod = latest.slice(0, 10)
   } catch {

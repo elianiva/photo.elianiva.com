@@ -55,15 +55,14 @@ if (isAdmin) {
         readonly items: ReadonlyArray<PhotoWithTags>
         readonly nextCursor: string | null
       }
+      const emptyFlags: { photos: ReadonlyArray<PhotoWithTags>; nextCursor: string | null } = {
+        photos: [],
+        nextCursor: null,
+      }
       const flags = Effect.map(rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }), (page) => ({
         photos: [...page.items],
         nextCursor: page.nextCursor,
-      })).pipe(
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- null typed as string|null for Flags nextCursor
-        Effect.catch(() =>
-          Effect.succeed({ photos: [], nextCursor: null as unknown as string | null }),
-        ),
-      )
+      })).pipe(Effect.catch(() => Effect.succeed(emptyFlags)))
       Runtime.run(program, { flags })
     }
   })

@@ -251,7 +251,9 @@ const replaceTags = (
   Effect.gen(function* () {
     const deleteStmt = db.prepare(`DELETE FROM photo_tags WHERE photoId = ?`).bind(photoId)
     const insertStmts = tagIds.map((tagId) =>
-      db.prepare(`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (?, ?)`).bind(photoId, tagId),
+      db
+        .prepare(`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (?, ?)`)
+        .bind(photoId, tagId),
     )
     yield* Effect.tryPromise({
       try: () => db.batch([deleteStmt, ...insertStmts]),

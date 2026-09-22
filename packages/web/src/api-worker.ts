@@ -297,11 +297,7 @@ export default {
 
     if (url.pathname === '/health') {
       try {
-        if (env.DB === undefined || env.DB === null) throw new Error('missing DB binding')
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const row = await (env.DB as never as { prepare(q: string): { first<T>(): Promise<T | null> } })
-          .prepare('SELECT 1 as ok')
-          .first<{ ok: number }>()
+        const row = await env.DB.prepare('SELECT 1 as ok').first<{ ok: number }>()
         if (row === null) throw new Error('db probe failed')
         return respond(jsonResponse({ ok: true }))
       } catch {
