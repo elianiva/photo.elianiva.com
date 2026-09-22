@@ -9,6 +9,7 @@ overrides:
   '@cloudflare/unenv-preset': 2.16.1
   '@cloudflare/workers-types': 5.20260825.1
   '@oxlint/plugins': 1.73.0
+  undici: 8.10.0
 
 importers:
 
@@ -3084,12 +3085,8 @@ packages:
   undici-types@8.9.0:
     resolution: {integrity: sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg==}
 
-  undici@7.29.1:
-    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
-    engines: {node: '>=20.18.1'}
-
-  undici@8.11.0:
-    resolution: {integrity: sha512-AdzuGcAkzhbha3GgCSoUBx2P0quwym6qdFNCQz/fDGZc8w9XJ741wHUbt2kTmfPz+ZIOMkySFkiY7RXmiDDC8w==}
+  undici@8.10.0:
+    resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
     engines: {node: '>=22.19.0'}
 
   unenv@2.0.0-rc.24:
@@ -3702,7 +3699,7 @@ snapshots:
       effect: 4.0.0-rc.111
       mime: 4.1.0
       redis: 6.2.1
-      undici: 8.11.0
+      undici: 8.10.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -4980,7 +4977,7 @@ snapshots:
       picomatch: 4.0.7
       react: 19.3.0
       rolldown: 1.1.5
-      undici: 7.29.1
+      undici: 8.10.0
       yaml: 2.9.1
     optionalDependencies:
       '@effect/platform-bun': 4.0.0-rc.111(effect@4.0.0-rc.111)
@@ -5873,9 +5870,7 @@ snapshots:
 
   undici-types@8.9.0: {}
 
-  undici@7.29.1: {}
-
-  undici@8.11.0: {}
+  undici@8.10.0: {}
 
   unenv@2.0.0-rc.24:
     dependencies:
