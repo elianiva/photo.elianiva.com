@@ -13,6 +13,7 @@ import {
 } from '@photo/api'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
 import { verifyAccessToken } from './access'
+import { clientKey, createRateLimiter } from './rate-limit'
 
 type ApiEnv = WebsiteEnv
 
@@ -69,6 +70,23 @@ const sanitizeError = (error: unknown): string => {
     return 'internal error'
   }
   return 'internal error'
+}
+
+// Per-isolate fixed windows: uploads are expensive (R2 + D1), RPCs are cheap reads.
+const uploadLimiter = createRateLimiter(10, 60_000)
+const adminRpcLimiter = createRateLimiter(60, 60_000)
+const publicRpcLimiter = createRateLimiter(180, 60_000)
+
+const rateLimited = (
+  limiter: ReturnType<typeof createRateLimiter>,
+  request: Request,
+): Response | null => {
+  const result = limiter.check(clientKey(request))
+  if (result.allowed) return null
+  return jsonResponse(
+    { message: 'rate limit exceeded' },
+    { status: 429, headers: { 'retry-after': String(result.retryAfter) } },
+  )
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -292,6 +310,8 @@ export default {
     }
 
     if (url.pathname === '/upload' && request.method === 'POST') {
+      const limited = rateLimited(uploadLimiter, request)
+      if (limited !== null) return respond(limited)
       const rejection = await verifyAdminAccess(request, env)
       if (rejection !== null) return respond(rejection)
       const res = await handleUpload(env, request)
@@ -299,6 +319,8 @@ export default {
     }
 
     if (url.pathname === '/admin/rpc') {
+      const limited = rateLimited(adminRpcLimiter, request)
+      if (limited !== null) return respond(limited)
       const rejection = await verifyAdminAccess(request, env)
       if (rejection !== null) return respond(rejection)
       const res = await buildRpcHandler(env)(request)
@@ -311,6 +333,8 @@ export default {
     }
 
     if (url.pathname === '/rpc') {
+      const limited = rateLimited(publicRpcLimiter, request)
+      if (limited !== null) return respond(limited)
       const res = await buildRpcHandler(env)(request)
       return respond(res)
     }
