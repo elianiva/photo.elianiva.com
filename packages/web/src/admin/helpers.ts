@@ -4,16 +4,17 @@
  */
 
 import * as Command from 'foldkit/command'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
+import * as Update from 'foldkit/update'
 
 import { AdminToast, Message, fileStore, previewStore } from './model'
 import type { Message as Msg, Model } from './model'
 
 export type Commands = ReadonlyArray<Command.Command<Msg>>
-export type UpdateReturn = readonly [Model, Commands]
+export type UpdateReturn = Update.Return<Model, Msg>
 
-/** `evo` can only transform keys already present on the source — the stored
- *  state omits absent optional keys entirely, so assigning one through evo
+/** `modifyFields` can only transform keys already present on the source — the stored
+ *  state omits absent optional keys entirely, so assigning one through modifyFields
  *  alone is a silent no-op. Use this for writes to optional fields. */
 export const withOptional = (model: Model, fields: Partial<Model>): Model => ({
   ...model,
@@ -34,21 +35,20 @@ export const showToast = (
   detail?: string,
   extraCommands: Commands = [],
 ): UpdateReturn => {
-  const [nextToast, toastCommands] = AdminToast.show(model.toast, {
+  const toastShown = AdminToast.show(model.toast, {
     payload: detail === undefined ? { title } : { title, detail },
     variant,
   })
-  return [
-    evo(model, { toast: () => nextToast }),
-    [
-      ...extraCommands,
-      ...toastCommands.map((command) =>
-        Command.mapMessage(command, (message: typeof AdminToast.Message.Type) =>
-          Message.GotToastMessage({ message }),
-        ),
+  const commands: Commands = [
+    ...extraCommands,
+    ...(toastShown.commands ?? []).map((command) =>
+      Command.mapMessage(command, (message: typeof AdminToast.Message.Type) =>
+        Message.GotToastMessage({ message }),
       ),
-    ],
+    ),
   ]
+  const nextModel = modifyFields(model, { toast: () => toastShown.model })
+  return commands.length > 0 ? { model: nextModel, commands } : { model: nextModel }
 }
 
 export function toggleIn(ids: ReadonlyArray<string>, id: string): Array<string> {

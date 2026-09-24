@@ -33,10 +33,10 @@ export default Alchemy.Stack(
     // defaults to '' there and access.ts skips JWT verification when empty.
     // Non-dev stages still require both values explicitly.
     const isLocalDev = (yield* Stage) === 'dev'
-    const allowedEmailsRaw = yield* Config.string('ACCESS_ALLOWED_EMAILS')
+    const allowedEmailsRaw = yield* Config.String('ACCESS_ALLOWED_EMAILS')
     const teamDomain = isLocalDev
-      ? yield* Config.string('ACCESS_TEAM_DOMAIN').pipe(Config.withDefault(''))
-      : yield* Config.string('ACCESS_TEAM_DOMAIN')
+      ? yield* Config.String('ACCESS_TEAM_DOMAIN').pipe(Config.withDefault(''))
+      : yield* Config.String('ACCESS_TEAM_DOMAIN')
 
     const allowedEmails = allowedEmailsRaw
       .split(',')

@@ -12,10 +12,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "effect": "4.0.0-rc.111"
+    "effect": "4.0.0-rc.116"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   }
 }

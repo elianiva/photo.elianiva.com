@@ -4,7 +4,7 @@ import { Toast as FoldkitToast } from '@foldkit/ui'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import * as Render from 'foldkit/render'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 import { defineView } from 'foldkit/submodel'
 import * as Update from 'foldkit/update'
 
@@ -321,11 +321,7 @@ export const make = <A, I>(payloadSchema: S.Codec<A, I>) => {
   })
   type OutMessage = typeof OutMessage.Type
 
-  type UpdateReturn = readonly [
-    Model,
-    ReadonlyArray<Command.Command<Message>>,
-    Option.Option<OutMessage>,
-  ]
+  type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
 
   /** Measures the stack after paint and reports natural card heights. */
   const MeasureHeights = Command.define('MeasureToastHeights', {
@@ -343,10 +339,10 @@ export const make = <A, I>(payloadSchema: S.Codec<A, I>) => {
   const foldToast = Update.foldChild({
     update: Bound.update,
     read: (model: Model) => Option.some(model.toast),
-    write: (model, nextToast) => evo(model, { toast: () => nextToast }),
+    write: (model, nextToast) => modifyFields(model, { toast: () => nextToast }),
     toParentMessage: toGotToastMessage,
-    toParentOutMessage: (outMessage: BoundOutMessage): Option.Option<OutMessage> =>
-      Option.some(OutMessage.DismissedToast({ payload: outMessage.payload })),
+    toParentOutMessage: (outMessage: BoundOutMessage): OutMessage | undefined =>
+      OutMessage.DismissedToast({ payload: outMessage.payload }),
   })
 
   /** Merges newly measured heights. Heights of known entries are kept —
@@ -365,53 +361,61 @@ export const make = <A, I>(payloadSchema: S.Codec<A, I>) => {
         heights[id] = height
       }
     }
-    return evo(model, { heights: () => heights })
+    return modifyFields(model, { heights: () => heights })
   }
 
   /** Processes a toast message. Delegates to the bound toast update and
    *  schedules a height measurement whenever an entry is added. */
   const update = (model: Model, message: Message): UpdateReturn =>
     Message.match<UpdateReturn>(message, {
-      GotHeights: ({ heights }) => [mergeHeights(model, heights), [], Option.none()],
+      GotHeights: ({ heights }) => ({ model: mergeHeights(model, heights) }),
       GotToastMessage: ({ message: toastMessage }) => {
-        const [nextModel, commands, out] = foldToast(model, toastMessage)
-        const measure =
-          toastMessage._tag === 'Added' ? [MeasureHeights({ containerId: nextModel.toast.id })] : []
-        return [nextModel, [...commands, ...measure], out]
+        const child = foldToast(model, toastMessage)
+        const commands: ReadonlyArray<Command.Command<Message>> = [
+          ...(child.commands ?? []),
+          ...(toastMessage._tag === 'Added'
+            ? [MeasureHeights({ containerId: child.model.toast.id })]
+            : []),
+        ]
+        return {
+          model: child.model,
+          commands,
+          ...(child.outMessage === undefined ? {} : { outMessage: child.outMessage }),
+        }
       },
     })
 
   /** Adds a toast entry and schedules its height measurement. */
   const show = (model: Model, input: FoldkitToast.ShowInput<A>): UpdateReturn => {
-    const [nextToast, commands, out] = Bound.show(model.toast, input)
-    return [
-      evo(model, { toast: () => nextToast }),
-      [
-        ...Command.mapMessages(commands, toGotToastMessage),
-        MeasureHeights({ containerId: nextToast.id }),
+    const child = Bound.show(model.toast, input)
+    return {
+      model: modifyFields(model, { toast: () => child.model }),
+      commands: [
+        ...Command.mapMessages(child.commands, toGotToastMessage),
+        MeasureHeights({ containerId: child.model.id }),
       ],
-      out,
-    ]
+      ...(child.outMessage === undefined ? {} : { outMessage: child.outMessage }),
+    }
   }
 
   /** Begins dismissing a specific entry. */
   const dismiss = (model: Model, entryId: string): UpdateReturn => {
-    const [nextToast, commands, out] = Bound.dismiss(model.toast, entryId)
-    return [
-      evo(model, { toast: () => nextToast }),
-      Command.mapMessages(commands, toGotToastMessage),
-      out,
-    ]
+    const child = Bound.dismiss(model.toast, entryId)
+    return {
+      model: modifyFields(model, { toast: () => child.model }),
+      commands: Command.mapMessages(child.commands, toGotToastMessage),
+      ...(child.outMessage === undefined ? {} : { outMessage: child.outMessage }),
+    }
   }
 
   /** Begins dismissing every currently-visible entry. */
   const dismissAll = (model: Model): UpdateReturn => {
-    const [nextToast, commands, out] = Bound.dismissAll(model.toast)
-    return [
-      evo(model, { toast: () => nextToast }),
-      Command.mapMessages(commands, toGotToastMessage),
-      out,
-    ]
+    const child = Bound.dismissAll(model.toast)
+    return {
+      model: modifyFields(model, { toast: () => child.model }),
+      commands: Command.mapMessages(child.commands, toGotToastMessage),
+      ...(child.outMessage === undefined ? {} : { outMessage: child.outMessage }),
+    }
   }
 
   /** Creates an initial toast container model from a config. Starts empty

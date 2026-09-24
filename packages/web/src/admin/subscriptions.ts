@@ -18,10 +18,10 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
       modelToDependencies: (model) => ({ selectedId: model.selectedId }),
       dependenciesToStream: ({ selectedId }) =>
         Stream.when(
-          Subscription.fromEventFilterMap<KeyboardEvent, Message>({
+          Subscription.fromEventFilterMap({
             target: window,
             type: 'keydown',
-            toMessage: (event) => {
+            filterMapEvent: (event) => {
               if (event.key === 'Escape') return Option.some(Message.CloseLightbox())
               if (event.key === 'ArrowRight') return Option.some(Message.NextPhoto())
               if (event.key === 'ArrowLeft') return Option.some(Message.PrevPhoto())

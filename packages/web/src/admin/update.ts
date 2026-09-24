@@ -6,7 +6,8 @@
  */
 
 import { Multi } from '@foldkit/ui/combobox'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
+import * as Update from 'foldkit/update'
 
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
@@ -42,6 +43,7 @@ import {
   showToast,
   toggleIn,
   withOptional,
+  type Commands,
   type UpdateReturn,
 } from './helpers'
 import { AdminToast, emptyDraft, abortStore, Message } from './model'
@@ -52,8 +54,8 @@ import * as TagManager from './tag-manager'
 // init
 // ---------------------------------------------------------------------------
 
-export const init = (): readonly [Model, UpdateReturn[1]] => [
-  {
+export const init = (): Update.Return<Model, Msg> => ({
+  model: {
     status: 'loading',
     photos: [],
     tags: [],
@@ -80,8 +82,8 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
     confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
     toast: AdminToast.init({ id: 'admin-toasts' }),
   },
-  [FetchPhotosCmd({ tagSlug: '' }), FetchTagsCmd()],
-]
+  commands: [FetchPhotosCmd({ tagSlug: '' }), FetchTagsCmd()],
+})
 
 // ---------------------------------------------------------------------------
 // upload chaining
@@ -90,11 +92,11 @@ export const init = (): readonly [Model, UpdateReturn[1]] => [
 /** Flip one item back to `pending`, clearing any error text. Used by retry
  *  and by the cancel path (a late failure after Stop is not an error). */
 const restorePending = (model: Model, itemId: string): Model =>
-  evo(model, {
+  modifyFields(model, {
     queue: () =>
       model.queue.map((item) =>
         item.id === itemId
-          ? // `error` is optional; spread-clear it (evo cannot add keys).
+          ? // `error` is optional; spread-clear it (modifyFields cannot add keys).
             { ...item, status: 'pending' as const, error: undefined }
           : item,
       ),
@@ -103,21 +105,21 @@ const restorePending = (model: Model, itemId: string): Model =>
 /** The one way a run advances: mark the item `uploading` and issue its
  *  command. Every chain-start site goes through here so exactly one row is
  *  ever in-flight — CancelUploads finds it, and the row badge reflects it. */
-const startItem = (model: Model, itemId: string): UpdateReturn => [
-  evo(model, {
+const startItem = (model: Model, itemId: string): UpdateReturn => ({
+  model: modifyFields(model, {
     queue: () =>
       model.queue.map((item) =>
-        item.id === itemId ? evo(item, { status: () => 'uploading' }) : item,
+        item.id === itemId ? modifyFields(item, { status: () => 'uploading' }) : item,
       ),
   }),
-  [
+  commands: [
     UploadItemCmd({
       itemId,
       tagIds: [...model.uploadTagIds],
       takenAt: model.uploadTakenAt,
     }),
   ],
-]
+})
 
 /** Snapshot the finished batch's counts BEFORE any queue cleanup, so the
  *  toast stays truthful no matter what gets released afterwards. A clean
@@ -127,7 +129,7 @@ const runNextOrFinish = (model: Model): UpdateReturn => {
   if (pending !== undefined) return startItem(model, pending.id)
   const uploadedCount = model.queue.filter((item) => item.status === 'done').length
   const failedCount = model.queue.filter((item) => item.status === 'failed').length
-  const settled = evo(model, { uploading: () => false })
+  const settled = modifyFields(model, { uploading: () => false })
   // The dialog was closed mid-batch: the queue stayed alive so uploads could
   // chain; now that the last item settled, drop everything not stuck.
   const finished =
@@ -152,13 +154,13 @@ const markItem = (
   status: 'done' | 'failed',
   errorMessage?: string,
 ): Model =>
-  evo(model, {
+  modifyFields(model, {
     queue: () =>
       model.queue.map((item) =>
         item.id === itemId
           ? errorMessage === undefined
-            ? evo(item, { status: () => status })
-            : // `error` is optional; assign via spread — evo cannot add keys.
+            ? modifyFields(item, { status: () => status })
+            : // `error` is optional; assign via spread — modifyFields cannot add keys.
               { ...item, status, error: errorMessage }
           : item,
       ),
@@ -172,7 +174,7 @@ const markItem = (
  *  (deleted, or filtered out by the active tag). */
 const retainSelection = (model: Model): Model =>
   model.selectedId !== null && !model.photos.some((photo) => photo.id === model.selectedId)
-    ? evo(model, { selectedId: () => null })
+    ? modifyFields(model, { selectedId: () => null })
     : model
 
 /** Move the lightbox selection by `delta` positions within the loaded list,
@@ -182,16 +184,17 @@ const stepSelection = (model: Model, delta: 1 | -1): Model => {
   if (index === -1 || model.photos.length === 0) return model
   const nextIndex = (index + delta + model.photos.length) % model.photos.length
   const next = model.photos[nextIndex]
-  return next === undefined ? model : evo(model, { selectedId: () => next.id })
+  return next === undefined ? model : modifyFields(model, { selectedId: () => next.id })
 }
 
 // ---------------------------------------------------------------------------
 // update
 // ---------------------------------------------------------------------------
 
-function step(current: Model, message: Msg, prior: UpdateReturn[1] = []): UpdateReturn {
-  const [nextModel, commands] = transition(current, message)
-  return [nextModel, [...prior, ...commands]]
+function step(current: Model, message: Msg, prior: Commands = []): UpdateReturn {
+  const result = transition(current, message)
+  const commands = [...prior, ...(result.commands ?? [])]
+  return commands.length > 0 ? { model: result.model, commands } : { model: result.model }
 }
 
 /** Apply (or toggle off) the tag filter: refetch the first page through the
@@ -202,15 +205,18 @@ const applyTagFilter = (model: Model, slug: string): UpdateReturn => {
   const next = current === slug ? undefined : slug
   // `activeTagSlug` is optional; assign via spread (see `withOptional`).
   const nextModel = withOptional(model, { activeTagSlug: next })
-  return [retainSelection(nextModel), [FetchPhotosCmd({ tagSlug: next ?? '' })]]
+  return {
+    model: retainSelection(nextModel),
+    commands: [FetchPhotosCmd({ tagSlug: next ?? '' })],
+  }
 }
 
 const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     // ----- data ---------------------------------------------------------------
-    SucceededFetchPhotos: ({ photos, nextCursor }) => [
-      retainSelection(
-        evo(model, {
+    SucceededFetchPhotos: ({ photos, nextCursor }) => ({
+      model: retainSelection(
+        modifyFields(model, {
           photos: () => [...photos],
           nextCursor: () => nextCursor ?? null,
           loadingMore: () => false,
@@ -218,52 +224,56 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           error: () => undefined,
         }),
       ),
-      [],
-    ],
-    SucceededFetchMore: ({ photos, nextCursor }) => [
-      evo(model, {
+    }),
+    SucceededFetchMore: ({ photos, nextCursor }) => ({
+      model: modifyFields(model, {
         photos: () => [...model.photos, ...photos],
         nextCursor: () => nextCursor ?? null,
         loadingMore: () => false,
       }),
-      [],
-    ],
-    SucceededFetchTags: ({ tags }) => [evo(model, { tags: () => tags ?? [] }), []],
+    }),
+    SucceededFetchTags: ({ tags }) => ({ model: modifyFields(model, { tags: () => tags ?? [] }) }),
     FailedRpc: ({ message: failure }) => {
       // `error` is optional and may be absent from normalized state; assign
-      // via spread (see `withOptional`) instead of evo.
-      const errored = withOptional(evo(model, { loadingMore: () => false }), {
+      // via spread (see `withOptional`) instead of modifyFields.
+      const errored = withOptional(modifyFields(model, { loadingMore: () => false }), {
         status: 'error',
         error: failure,
       })
       return showToast(errored, 'Something went wrong', 'Error', failure)
     },
     LoadMore: () => {
-      if (model.nextCursor === null || model.loadingMore) return [model, []]
-      return [
-        evo(model, { loadingMore: () => true }),
-        [
+      if (model.nextCursor === null || model.loadingMore) return { model }
+      return {
+        model: modifyFields(model, { loadingMore: () => true }),
+        commands: [
           FetchMoreCmd({
             tagSlug: model.activeTagSlug ?? '',
             cursor: model.nextCursor,
           }),
         ],
-      ]
+      }
     },
 
     // ----- filter bar -----------------------------------------------------------
-    RetryFetch: () => [model, [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })]],
+    RetryFetch: () => ({
+      model,
+      commands: [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })],
+    }),
     FilterByTag: ({ slug }) => applyTagFilter(model, slug),
 
     // ----- grid density ------------------------------------------------------------
-    SelectedCols: ({ cols }) => [evo(model, { cols: () => cols }), [PersistColsCmd({ cols })]],
-    CompletedPersistCols: () => [model, []],
+    SelectedCols: ({ cols }) => ({
+      model: modifyFields(model, { cols: () => cols }),
+      commands: [PersistColsCmd({ cols })],
+    }),
+    CompletedPersistCols: () => ({ model }),
 
     // ----- lightbox ---------------------------------------------------------------
-    ClickedPhoto: ({ id }) => [evo(model, { selectedId: () => id }), []],
-    CloseLightbox: () => [evo(model, { selectedId: () => null }), []],
-    NextPhoto: () => [stepSelection(model, 1), []],
-    PrevPhoto: () => [stepSelection(model, -1), []],
+    ClickedPhoto: ({ id }) => ({ model: modifyFields(model, { selectedId: () => id }) }),
+    CloseLightbox: () => ({ model: modifyFields(model, { selectedId: () => null }) }),
+    NextPhoto: () => ({ model: stepSelection(model, 1) }),
+    PrevPhoto: () => ({ model: stepSelection(model, -1) }),
 
     // ----- edit sheet -----------------------------------------------------------
     OpenEdit: ({ photo }) => {
@@ -281,18 +291,20 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // entirely; Struct.evolve only transforms existing keys, so assign it
       // with a spread (see `withOptional`).
       const started = withOptional(model, { editingId: photo.id })
-      const prepared = evo(started, {
+      const prepared = modifyFields(started, {
         draft: () => draft,
         draftTagIds: () => (photo.tags ?? []).map((tag) => tag.id),
       })
-      const [nextSheet, sheetCommands] = Sheet.open(prepared.editSheet)
-      return [
-        evo(prepared, { editSheet: () => nextSheet }),
-        liftChildCommands(sheetCommands, (message) => Message.GotEditSheetMessage({ message })),
-      ]
+      const sheetOpened = Sheet.open(prepared.editSheet)
+      return {
+        model: modifyFields(prepared, { editSheet: () => sheetOpened.model }),
+        commands: liftChildCommands(sheetOpened.commands ?? [], (message) =>
+          Message.GotEditSheetMessage({ message }),
+        ),
+      }
     },
-    SetDraftField: ({ field, value }) => [
-      evo(model, {
+    SetDraftField: ({ field, value }) => ({
+      model: modifyFields(model, {
         draft: () => {
           const current = model.draft
           switch (field) {
@@ -313,23 +325,24 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           }
         },
       }),
-      [],
-    ],
+    }),
     SaveEdits: () => {
-      if (model.editingId === undefined) return [model, []]
-      return [
-        evo(model, { saving: () => true }),
-        [SaveEditsCmd({ id: model.editingId, draft: model.draft, tagIds: [...model.draftTagIds] })],
-      ]
+      if (model.editingId === undefined) return { model }
+      return {
+        model: modifyFields(model, { saving: () => true }),
+        commands: [
+          SaveEditsCmd({ id: model.editingId, draft: model.draft, tagIds: [...model.draftTagIds] }),
+        ],
+      }
     },
     SavedEdits: ({ photos }) => {
-      const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
+      const sheetClosed = Sheet.close(model.editSheet)
       const saved = retainSelection(
-        evo(model, {
+        modifyFields(model, {
           photos: () => [...photos],
           nextCursor: () => null,
           loadingMore: () => false,
-          editSheet: () => closedSheet,
+          editSheet: () => sheetClosed.model,
           editingId: () => undefined,
           saving: () => false,
         }),
@@ -339,37 +352,50 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         'Saved',
         'Success',
         undefined,
-        liftChildCommands(closeCommands, (message) => Message.GotEditSheetMessage({ message })),
+        liftChildCommands(sheetClosed.commands ?? [], (message) =>
+          Message.GotEditSheetMessage({ message }),
+        ),
       )
     },
     // ----- create tag inline ------------------------------------------------------
-    CreateTagRequested: ({ source, label }) => [model, [CreateTagCmd({ source, label })]],
+    CreateTagRequested: ({ source, label }) => ({
+      model,
+      commands: [CreateTagCmd({ source, label })],
+    }),
     SucceededCreateTag: ({ source, tag }) => {
-      const withTag = evo(model, { tags: () => [...model.tags, tag].sort(byLabel) })
+      const withTag = modifyFields(model, { tags: () => [...model.tags, tag].sort(byLabel) })
       if (source === 'draft') {
-        return [evo(withTag, { draftTagIds: () => toggleIn(withTag.draftTagIds, tag.id) }), []]
+        return {
+          model: modifyFields(withTag, {
+            draftTagIds: () => toggleIn(withTag.draftTagIds, tag.id),
+          }),
+        }
       }
       if (source === 'upload') {
-        return [evo(withTag, { uploadTagIds: () => toggleIn(withTag.uploadTagIds, tag.id) }), []]
+        return {
+          model: modifyFields(withTag, {
+            uploadTagIds: () => toggleIn(withTag.uploadTagIds, tag.id),
+          }),
+        }
       }
       return showToast(withTag, `Created tag “${tag.label}”`, 'Success')
     },
-    RemoveDraftTag: ({ id }) => [
-      evo(model, { draftTagIds: () => toggleIn(model.draftTagIds, id) }),
-      [],
-    ],
-    RemoveUploadTag: ({ id }) => [
-      evo(model, { uploadTagIds: () => toggleIn(model.uploadTagIds, id) }),
-      [],
-    ],
+    RemoveDraftTag: ({ id }) => ({
+      model: modifyFields(model, { draftTagIds: () => toggleIn(model.draftTagIds, id) }),
+    }),
+    RemoveUploadTag: ({ id }) => ({
+      model: modifyFields(model, { uploadTagIds: () => toggleIn(model.uploadTagIds, id) }),
+    }),
 
     // ----- upload dialog ------------------------------------------------------------
     OpenUpload: () => {
-      const [nextDialog, dialogCommands] = Dialog.open(model.uploadDialog)
-      return [
-        evo(model, { uploadDialog: () => nextDialog }),
-        liftChildCommands(dialogCommands, (message) => Message.GotUploadDialogMessage({ message })),
-      ]
+      const dialogOpened = Dialog.open(model.uploadDialog)
+      return {
+        model: modifyFields(model, { uploadDialog: () => dialogOpened.model }),
+        commands: liftChildCommands(dialogOpened.commands ?? [], (message) =>
+          Message.GotUploadDialogMessage({ message }),
+        ),
+      }
     },
     ClearFinishedItems: () => {
       // Only 'done' rows go — pending/uploading items must survive (their
@@ -377,18 +403,26 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       for (const item of model.queue) {
         if (item.status === 'done') disposeItemAssets(item.id)
       }
-      return [evo(model, { queue: () => model.queue.filter((item) => item.status !== 'done') }), []]
+      return {
+        model: modifyFields(model, {
+          queue: () => model.queue.filter((item) => item.status !== 'done'),
+        }),
+      }
     },
     RemoveQueueItem: ({ id }) => {
       disposeItemAssets(id)
-      return [evo(model, { queue: () => model.queue.filter((item) => item.id !== id) }), []]
+      return {
+        model: modifyFields(model, { queue: () => model.queue.filter((item) => item.id !== id) }),
+      }
     },
-    SetUploadTakenAt: ({ value }) => [evo(model, { uploadTakenAt: () => value }), []],
+    SetUploadTakenAt: ({ value }) => ({
+      model: modifyFields(model, { uploadTakenAt: () => value }),
+    }),
     StartUploads: () => {
       const pending = model.queue.find((item) => item.status === 'pending')
-      if (pending === undefined) return [model, []]
+      if (pending === undefined) return { model }
       return startItem(
-        evo(model, { uploading: () => true, batchTotal: () => model.queue.length }),
+        modifyFields(model, { uploading: () => true, batchTotal: () => model.queue.length }),
         pending.id,
       )
     },
@@ -398,15 +432,15 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // of recording a failure or chaining on. Pending rows stay queued.
       const inFlight = model.queue.find((item) => item.status === 'uploading')
       if (inFlight !== undefined) abortStore.get(inFlight.id)?.abort()
-      return [evo(model, { uploading: () => false }), []]
+      return { model: modifyFields(model, { uploading: () => false }) }
     },
     RetryUpload: ({ id }) => {
       const retried = restorePending(model, id)
       // A batch already in flight picks the item up on its next chain step;
       // an idle batch starts a fresh run here.
-      if (model.uploading) return [retried, []]
+      if (model.uploading) return { model: retried }
       return startItem(
-        evo(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
+        modifyFields(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
         id,
       )
     },
@@ -414,8 +448,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const failedIds = model.queue
         .filter((item) => item.status === 'failed')
         .map((item) => item.id)
-      if (failedIds.length === 0) return [model, []]
-      const retried = evo(model, {
+      if (failedIds.length === 0) return { model }
+      const retried = modifyFields(model, {
         queue: () =>
           model.queue.map((item) =>
             item.status === 'failed'
@@ -424,11 +458,11 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
               : item,
           ),
       })
-      if (model.uploading) return [retried, []]
+      if (model.uploading) return { model: retried }
       const first = failedIds[0]
-      if (first === undefined) return [retried, []]
+      if (first === undefined) return { model: retried }
       return startItem(
-        evo(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
+        modifyFields(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
         first,
       )
     },
@@ -436,13 +470,13 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const marked = markItem(model, itemId, 'done')
       // A settle racing a just-issued Stop: record it, but don't revive the
       // stopped run by chaining on.
-      if (!model.uploading) return [marked, []]
+      if (!model.uploading) return { model: marked }
       return runNextOrFinish(marked)
     },
     FailedUploadItem: ({ itemId, message }) => {
       // Post-Stop arrival (the aborted fetch's error): not a failure — put
       // the item back in line and leave the run stopped.
-      if (!model.uploading) return [restorePending(model, itemId), []]
+      if (!model.uploading) return { model: restorePending(model, itemId) }
       return runNextOrFinish(markItem(model, itemId, 'failed', message))
     },
 
@@ -451,10 +485,10 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     RequestDeleteTag: ({ id, label }) => openConfirm(model, { kind: 'tag', id, label }),
     ConfirmPending: () => {
       const pending = model.pendingConfirm
-      if (pending === undefined) return [model, []]
-      const [closedDialog, closeCommands] = Dialog.close(model.confirmDialog)
-      const cleared = evo(model, {
-        confirmDialog: () => closedDialog,
+      if (pending === undefined) return { model }
+      const dialogClosed = Dialog.close(model.confirmDialog)
+      const cleared = modifyFields(model, {
+        confirmDialog: () => dialogClosed.model,
         pendingConfirm: () => undefined,
       })
       const command =
@@ -470,24 +504,26 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
                   ? undefined
                   : model.activeTagSlug,
             })
-      return [
-        cleared,
-        [
+      return {
+        model: cleared,
+        commands: [
           command,
-          ...liftChildCommands(closeCommands, (message) => Message.GotConfirmMessage({ message })),
+          ...liftChildCommands(dialogClosed.commands ?? [], (message) =>
+            Message.GotConfirmMessage({ message }),
+          ),
         ],
-      ]
+      }
     },
     DeletedPhoto: ({ photos }) => {
       // Deleting from the edit sheet must also dismiss it (and drop the edit
       // state) — otherwise it lingers over a photo that no longer exists.
-      const [closedSheet, closeCommands] = Sheet.close(model.editSheet)
+      const sheetClosed = Sheet.close(model.editSheet)
       const refreshed = retainSelection(
-        evo(model, {
+        modifyFields(model, {
           photos: () => [...photos],
           nextCursor: () => null,
           loadingMore: () => false,
-          editSheet: () => closedSheet,
+          editSheet: () => sheetClosed.model,
           draft: () => emptyDraft(),
           draftTagIds: () => [],
           ...(model.editingId !== undefined ? { editingId: () => undefined } : {}),
@@ -498,7 +534,9 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         'Deleted',
         'Success',
         undefined,
-        liftChildCommands(closeCommands, (message) => Message.GotEditSheetMessage({ message })),
+        liftChildCommands(sheetClosed.commands ?? [], (message) =>
+          Message.GotEditSheetMessage({ message }),
+        ),
       )
     },
     DeletedTag: ({ tags, photos }) => {
@@ -508,7 +546,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const filterSurvives =
         model.activeTagSlug === undefined || tags.some((tag) => tag.slug === model.activeTagSlug)
       const settled = retainSelection(
-        evo(model, {
+        modifyFields(model, {
           tags: () => tags ?? [],
           photos: () => [...photos],
           nextCursor: () => null,
@@ -533,13 +571,13 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // its intents — filter toggle and delete mirror existing handlers;
     // create reuses CreateTagCmd via CreateTagRequested.
     GotTagManagerMessage: ({ message }) => {
-      const [nextManager] = TagManager.update(model.tagManager, message)
-      const synced = evo(model, { tagManager: () => nextManager })
+      const tagManagerUpdate = TagManager.update(model.tagManager, message)
+      const synced = modifyFields(model, { tagManager: () => tagManagerUpdate.model })
       return TagManager.Message.match<UpdateReturn>(message, {
-        SetInput: () => [synced, []],
+        SetInput: () => ({ model: synced }),
         SubmitCreate: () => {
           const label = model.tagManager.inputValue.trim()
-          if (label === '') return [model, []]
+          if (label === '') return { model }
           return transition(synced, Message.CreateTagRequested({ source: 'manager', label }))
         },
         ToggledFilter: ({ slug }) => applyTagFilter(synced, slug),
@@ -559,11 +597,13 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
 const openConfirm = (model: Model, pending: NonNullable<Model['pendingConfirm']>): UpdateReturn => {
   // `pendingConfirm` is optional; assign via spread (see `withOptional`).
   const armed = withOptional(model, { pendingConfirm: pending })
-  const [nextDialog, dialogCommands] = Dialog.open(armed.confirmDialog)
-  return [
-    evo(armed, { confirmDialog: () => nextDialog }),
-    liftChildCommands(dialogCommands, (message) => Message.GotConfirmMessage({ message })),
-  ]
+  const dialogOpened = Dialog.open(armed.confirmDialog)
+  return {
+    model: modifyFields(armed, { confirmDialog: () => dialogOpened.model }),
+    commands: liftChildCommands(dialogOpened.commands ?? [], (message) =>
+      Message.GotConfirmMessage({ message }),
+    ),
+  }
 }
 
 export function update(model: Model, message: Msg): UpdateReturn {

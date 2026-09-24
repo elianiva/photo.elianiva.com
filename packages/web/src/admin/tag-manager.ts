@@ -16,7 +16,8 @@ import { Schema as S } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineView } from 'foldkit/submodel'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
+import * as Update from 'foldkit/update'
 
 import { Trash2, Plus } from 'lucide'
 import type { Tag } from '@photo/shared'
@@ -51,12 +52,12 @@ export const init = (config: { id: string }): Model => ({ id: config.id, inputVa
 
 /** Intents ride to the parent via GotTagManagerMessage — the child itself
  *  only manages input text, so it never issues commands. */
-export const update = (model: Model, message: Message): readonly [Model, ReadonlyArray<never>] =>
-  Message.match<readonly [Model, ReadonlyArray<never>]>(message, {
-    SetInput: ({ value }) => [evo(model, { inputValue: () => value }), []],
-    SubmitCreate: () => [{ ...model, inputValue: '' }, []],
-    ToggledFilter: () => [model, []],
-    RequestedDelete: () => [model, []],
+export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
+  Message.match<Update.Return<Model, Message>>(message, {
+    SetInput: ({ value }) => ({ model: modifyFields(model, { inputValue: () => value }) }),
+    SubmitCreate: () => ({ model: { ...model, inputValue: '' } }),
+    ToggledFilter: () => ({ model }),
+    RequestedDelete: () => ({ model }),
   })
 
 // ---------------------------------------------------------------------------
