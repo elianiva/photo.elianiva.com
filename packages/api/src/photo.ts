@@ -185,16 +185,18 @@ const selectPhotoRows = (
   Effect.gen(function* () {
     const where: Array<string> = []
     const binds: Array<string> = []
-    if (filter.q !== undefined && filter.q.trim() !== '') {
-      const needle = `%${filter.q.trim().toLowerCase()}%`
+    const q = filter.q?.trim().slice(0, 120) ?? ''
+    if (q !== '') {
+      const needle = `%${q.toLowerCase()}%`
       where.push(`(LOWER(title) LIKE ? OR LOWER(slug) LIKE ? OR LOWER(metadata) LIKE ?)`)
       binds.push(needle, needle, needle)
     }
-    if (filter.tagSlug !== undefined && filter.tagSlug.trim() !== '') {
+    const tagSlug = filter.tagSlug?.trim().slice(0, 120) ?? ''
+    if (tagSlug !== '') {
       where.push(
         `id IN (SELECT pt.photoId FROM photo_tags pt JOIN tags t ON t.id = pt.tagId WHERE t.slug = ?)`,
       )
-      binds.push(filter.tagSlug.trim())
+      binds.push(tagSlug)
     }
     const limit = clampLimit(filter.limit)
     const cursor = filter.cursor !== undefined ? decodeCursor(filter.cursor) : null
@@ -247,22 +249,17 @@ const replaceTags = (
   tagIds: ReadonlyArray<string>,
 ) =>
   Effect.gen(function* () {
+    const deleteStmt = db.prepare(`DELETE FROM photo_tags WHERE photoId = ?`).bind(photoId)
+    const insertStmts = tagIds.map((tagId) =>
+      db
+        .prepare(`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (?, ?)`)
+        .bind(photoId, tagId),
+    )
     yield* Effect.tryPromise({
-      try: () => db.prepare(`DELETE FROM photo_tags WHERE photoId = ?`).bind(photoId).run(),
+      try: () => db.batch([deleteStmt, ...insertStmts]),
       catch: (cause) =>
-        new StorageError({ message: 'Failed to reset tags', cause: describeCause(cause) }),
+        new StorageError({ message: 'Failed to replace tags', cause: describeCause(cause) }),
     })
-    for (const tagId of tagIds) {
-      yield* Effect.tryPromise({
-        try: () =>
-          db
-            .prepare(`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (?, ?)`)
-            .bind(photoId, tagId)
-            .run(),
-        catch: (cause) =>
-          new StorageError({ message: `Failed to link tag ${tagId}`, cause: describeCause(cause) }),
-      })
-    }
   })
 
 /** True when no other photo owns this slug. */
@@ -328,7 +325,7 @@ export const PhotoServiceLive = Layer.effect(
               cause: describeCause(cause),
             }),
         })
-        yield* Effect.tryPromise({
+        const inserted = yield* Effect.tryPromise({
           try: () =>
             db
               .prepare(
@@ -348,7 +345,15 @@ export const PhotoServiceLive = Layer.effect(
               .run(),
           catch: (cause) =>
             new StorageError({ message: 'Failed to insert photo', cause: describeCause(cause) }),
-        })
+        }).pipe(
+          Effect.tapError(() =>
+            Effect.tryPromise({
+              try: () => gateway.photos.delete(input.r2Key),
+              catch: () => undefined,
+            }).pipe(Effect.orElseSucceed(() => undefined)),
+          ),
+        )
+        void inserted
         yield* replaceTags(db, id, input.tagIds)
         return { id, slug, r2Key: input.r2Key }
       })
@@ -407,7 +412,11 @@ export const PhotoServiceLive = Layer.effect(
         const row = yield* getRow(db, id)
         if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
         yield* Effect.tryPromise({
-          try: () => db.prepare(`DELETE FROM photos WHERE id = ?`).bind(id).run(),
+          try: () =>
+            db.batch([
+              db.prepare(`DELETE FROM photo_tags WHERE photoId = ?`).bind(id),
+              db.prepare(`DELETE FROM photos WHERE id = ?`).bind(id),
+            ]),
           catch: (cause) =>
             new StorageError({ message: 'Failed to delete photo', cause: describeCause(cause) }),
         })

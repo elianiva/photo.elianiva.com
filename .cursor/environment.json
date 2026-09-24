@@ -1,0 +1,17 @@
+{
+  "name": "photo.elianiva.com",
+  "install": "bash .cursor/scripts/install.sh",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "export PATH=\"$HOME/.bun/bin:$PATH\" && pnpm dev",
+      "description": "Alchemy dev stack at http://localhost:5173"
+    }
+  ],
+  "ports": [
+    {
+      "name": "dev",
+      "port": 5173
+    }
+  ]
+}

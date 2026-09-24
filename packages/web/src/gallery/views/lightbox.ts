@@ -7,6 +7,7 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 import { PhotoWithTags } from '@photo/shared'
+import { Option } from 'effect'
 
 import { originalUrl } from '@/lib/image'
 
@@ -19,7 +20,18 @@ export const lightbox = (photo: PhotoWithTags, h: HtmlBuilder<Message>): Child =
       h.Key('lightbox'),
       h.Class('fixed inset-0 z-50 flex items-center justify-center bg-white p-6 sm:p-10 lg:p-16'),
       h.OnClick(Message.CloseLightbox()),
+      // Tab cycles back to the close button so focus never leaves the dialog.
+      // The message is benign: re-selecting the open photo changes nothing.
+      h.OnKeyDownFocus((key) =>
+        key === 'Tab'
+          ? Option.some({
+              focusSelector: '#lightbox-close',
+              message: Message.ClickedPhoto({ id: photo.id }),
+            })
+          : Option.none(),
+      ),
       h.Attribute('role', 'dialog'),
+      h.AriaModal(true),
       h.AriaLabel(photo.title),
     ],
     [
@@ -34,6 +46,8 @@ export const lightbox = (photo: PhotoWithTags, h: HtmlBuilder<Message>): Child =
       ]),
       h.button(
         [
+          h.Id('lightbox-close'),
+          h.Autofocus(true),
           h.Class(
             'absolute top-6 right-6 sm:top-8 sm:right-8 text-[10px] uppercase tracking-[0.3em] text-neutral-400 hover:text-neutral-900 transition-colors',
           ),

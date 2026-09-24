@@ -1,0 +1,20 @@
+
+   • Packages in scope: @photo/api, @photo/shared, @photo/web
+   • Running typecheck in 3 packages
+   • Remote caching disabled
+
+@photo/shared:build: cache hit, replaying logs 80b428e89d11c3ea
+@photo/shared:build: $ tsc -p tsconfig.json --noEmit
+@photo/shared:typecheck: cache hit, replaying logs f67514ce192722b7
+@photo/shared:typecheck: $ tsc --noEmit
+@photo/api:build: cache hit, replaying logs 8a417431b24ad03f
+@photo/api:build: $ tsc -p tsconfig.json --noEmit
+@photo/api:typecheck: cache hit, replaying logs f1c676df911bf2d2
+@photo/api:typecheck: $ tsc --noEmit
+@photo/web:typecheck: cache hit, replaying logs 9e8b1baa2ce50b23
+@photo/web:typecheck: $ tsc --noEmit
+
+ Tasks:    5 successful, 5 total
+Cached:    5 cached, 5 total
+  Time:    9ms >>> FULL TURBO
+

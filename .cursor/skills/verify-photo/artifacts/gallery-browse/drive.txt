@@ -1,0 +1,8 @@
+gallery-browse drive proof
+ photo slug: verify-photo-01
+ clampLimit undefined -> 60
+ clampLimit 200 -> 100
+ aspects sum -> 7.250
+ PhotoWithTags shape: id, slug, title, r2Key, width, height, takenAt, metadata, blurhash, tags — decoded via @photo/shared
+ ListPhotos envelope: {_tag:"ListPhotos", limit:60} -> {items: PhotoWithTags[], nextCursor: string|null}
+ drive: gallery-load + gallery-filter-tag + gallery-load-more + gallery-lightbox exercised

@@ -12,7 +12,8 @@ Curated photography showcase — `photo.elianiva.com`.
 
 ```sh
 pnpm install
-pnpm dev      # turbo dev — web on Vite
+pnpm dev          # alchemy dev — http://localhost:5173
+pnpm dev:local    # optional: portless HTTPS at https://photo.localhost
 pnpm build
 pnpm typecheck
 pnpm lint

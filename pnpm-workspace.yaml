@@ -2,7 +2,19 @@ packages:
   - packages/*
 
 allowBuilds:
+  agent-browser: true
   esbuild: true
   msgpackr-extract: true
   sharp: true
   workerd: true
+
+# CI enforces pnpm's minimum-release-age policy (rejects packages published
+# within 24h). Pin transitives that floated onto day-old releases during
+# `pnpm update -r` back to proven versions until the new ones age out.
+# Remove these lines on the next dep bump, then verify CI install passes.
+overrides:
+  '@aws-sdk/credential-providers': 3.1117.0
+  '@cloudflare/unenv-preset': 2.16.1
+  '@cloudflare/workers-types': 5.20260825.1
+  '@oxlint/plugins': 1.73.0
+  undici: 8.10.0

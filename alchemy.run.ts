@@ -80,15 +80,16 @@ export default Alchemy.Stack(
       rootDir: 'packages/web',
       main: 'src/worker.ts',
       viteEnvironments: { entry: 'worker' },
-      assets: { notFoundHandling: 'single-page-application' },
+      assets: { notFoundHandling: 'none' },
       domain: 'photo.elianiva.com',
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
-      dev: { port: 13370, strictPort: true },
+      dev: { port: 5173, strictPort: true },
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
         IMAGES: Cloudflare.Images.Images('IMAGES'),
         ACCESS_TEAM_DOMAIN: teamDomain,
+        ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },
     }) {}
 
@@ -100,6 +101,7 @@ export default Alchemy.Stack(
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
         ACCESS_TEAM_DOMAIN: teamDomain,
+        ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },
       dev: { port: 13371, strictPort: true },
     })
@@ -160,4 +162,5 @@ export type WebsiteEnv = {
   }
   readonly IMAGES: unknown
   readonly ACCESS_TEAM_DOMAIN: string
+  readonly ACCESS_ALLOWED_EMAILS?: string
 }

@@ -27,7 +27,7 @@ const unwrapCause = (error: unknown): unknown => {
   // Effect Causes are tagged "Fail"/"Die"/"Interrupt" etc. – unwrap the typed failure
   if (error['_tag'] === 'Fail' && 'error' in error) return unwrapCause(error['error'])
   if (Array.isArray(error['failures'])) {
-    const failures = error['failures'] as ReadonlyArray<unknown>
+    const failures: ReadonlyArray<unknown> = error['failures']
     if (failures.length === 1) return unwrapCause(failures[0])
   }
   return error
