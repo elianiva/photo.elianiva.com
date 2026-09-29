@@ -59,6 +59,9 @@ export interface PhotoListPage {
 export interface PhotoCounts {
   /** Every live Photo — the Filter Bar's `ALL`. */
   readonly total: number
+  /** Soft-deleted Photos — the Trash row's number. The one count here that
+   *  is not over live Photos, because a trashed Photo is the fact. */
+  readonly trashed: number
   /** One entry per stored Status. `scheduled` is not a Status, so it has none. */
   readonly byStatus: Readonly<Record<PhotoStatus, number>>
   /** Every Tag with how many live Photos carry it. A count of 0 is a fact. */
@@ -77,6 +80,10 @@ export interface StorageUsage {
   /** Bytes those originals take, against the bucket cap. */
   readonly bytes: number
 }
+
+/** A configured constant, not a Settings row: the quota is a property of the
+ *  bucket, not something the operator authors. */
+export const STORAGE_CAP_BYTES = 50 * 1e9
 
 export interface PhotoUpdatePatch {
   readonly title?: string | undefined
@@ -140,7 +147,8 @@ export interface PhotoServiceContract {
   /** The irreversible one: drops the row, then the R2 object. Only a trashed
    *  Photo can be purged, so `Delete` in the Bulk Bar cannot skip the Trash. */
   readonly purge: (id: string) => Effect.Effect<void, StorageError | PhotoNotFound | InvalidInput>
-  /** Per Status, per Tag and grand total, over live Photos only. */
+  /** Per Status, per Tag and grand total, over live Photos only, plus the
+   *  Trash count — the one number a trashed Photo is still counted in. */
   readonly counts: () => Effect.Effect<PhotoCounts, StorageError>
   /** The load-bearing aggregate: the frame count and byte total behind the
    *  sidebar meter, the Archive bar and the SIZE column. */
@@ -508,23 +516,25 @@ const dropRow = (db: (typeof Gateway.Service)['db'], id: string) =>
 // ---------------------------------------------------------------------------
 
 interface CountRow {
-  readonly kind: 'status' | 'total' | 'tag'
+  readonly kind: 'status' | 'total' | 'tag' | 'trashed'
   readonly key: string
   readonly label: string | null
   readonly n: number
 }
 
 /**
- * The three counts the sidebar and the Filter Bar need, in one statement and
+ * The four counts the sidebar and the Filter Bar need, in one statement and
  * one round trip. `kind` is the discriminator: the Status counts, the grand
- * total and the per-Tag counts have different key spaces, so a UNION keeps
- * them in one result rather than three queries.
+ * total, the Trash and the per-Tag counts have different key spaces, so a
+ * UNION keeps them in one result rather than four queries.
  */
 const COUNTS_SQL = `
   SELECT 'status' AS kind, status AS key, NULL AS label, COUNT(*) AS n
     FROM photos WHERE ${LIVE} GROUP BY status
   UNION ALL
   SELECT 'total', 'all', NULL, COUNT(*) FROM photos WHERE ${LIVE}
+  UNION ALL
+  SELECT 'trashed', 'trashed', NULL, COUNT(*) FROM photos WHERE deletedAt IS NOT NULL
   UNION ALL
   SELECT 'tag', t.id, t.label, COUNT(p.id) AS n
     FROM tags t
@@ -788,6 +798,7 @@ export const PhotoServiceLive = Layer.effect(
         const byStatus: Record<PhotoStatus, number> = { ...NO_STATUSES }
         const byTag: Array<PhotoTagCount> = []
         let total = 0
+        let trashed = 0
         const rows = raw.results ?? []
         for (const status of PHOTO_STATUSES) {
           const row = rows.find(
@@ -798,6 +809,8 @@ export const PhotoServiceLive = Layer.effect(
         for (const row of rows) {
           if (row.kind === 'total') {
             total = row.n
+          } else if (row.kind === 'trashed') {
+            trashed = row.n
           } else if (row.kind === 'tag') {
             byTag.push({
               id: S.decodeSync(TagId)(row.key),
@@ -806,7 +819,7 @@ export const PhotoServiceLive = Layer.effect(
             })
           }
         }
-        return { total, byStatus, byTag }
+        return { total, trashed, byStatus, byTag }
       })
 
     const storageUsage: PhotoServiceContract['storageUsage'] = () =>

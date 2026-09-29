@@ -82,8 +82,8 @@ const env = (overrides: Partial<AccessEnv>): AccessEnv => ({
   ...overrides,
 })
 
-const outcome = (rejection: Response | null): number | 'allowed' =>
-  rejection === null ? 'allowed' : rejection.status
+const outcome = (access: { readonly rejection: Response | null }): number | 'allowed' =>
+  access.rejection === null ? 'allowed' : access.rejection.status
 
 /** Fails the test if an admin route reads a binding after the gate should have rejected. */
 const unbound = (): never => {
@@ -118,6 +118,29 @@ describe('admin access gate', () => {
       env({ STAGE: 'prod', ACCESS_TEAM_DOMAIN: '' }),
     )
     expect(outcome(rejection)).toBe(500)
+  })
+
+  it('hands the verified claim out with the answer, and nulls it where it stood down', async () => {
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const valid = await signAssertion(key, {
+      iss: key.teamDomain,
+      exp: 4102444800,
+      email: 'owner@photo.test',
+    })
+    const admitted = await verifyAdminAccess(
+      adminRequest(valid),
+      env({
+        ACCESS_TEAM_DOMAIN: key.teamDomain,
+      }),
+    )
+    expect(admitted.session).toEqual({ email: 'owner@photo.test', teamDomain: key.teamDomain })
+
+    const stoodDown = await verifyAdminAccess(
+      adminRequest(),
+      env({ STAGE: 'dev', ACCESS_TEAM_DOMAIN: '' }),
+    )
+    expect(stoodDown.session).toEqual({ email: null, teamDomain: '' })
   })
 
   it('admits a valid assertion and rejects a tampered one', async () => {
