@@ -350,6 +350,8 @@ export default {
     if (url.pathname === '/rpc') {
       const limited = rateLimited(publicRpcLimiter, request)
       if (limited !== null) return respond(limited)
+      // The admin group is mounted on `/admin/rpc`, which this path never
+      // matches, so the session it carries is unreachable from here.
       const res = await buildRpcHandler(env, null)(request)
       return respond(res)
     }
