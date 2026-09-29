@@ -7,6 +7,11 @@
  * step through the loaded photos, and changing `selectedId` tears the listener
  * down (close) or brings it up (open).
  *
+ * The Editor's two listeners run only while the Editor is on screen, and
+ * `Escape` is answered only when nothing else is holding it — the leave guard
+ * is a Dialog, and a Dialog's own Escape is a close. So the guard's own key
+ * handling is not raced by a second request to leave.
+ *
  * The search shortcut is a document listener for the lifetime of the app:
  * `⌘K` (or `Ctrl K` off a Mac) focuses the Page Head's search field. It is a
  * shortcut to a control, not a command palette — no list of pages or Photos
@@ -27,6 +32,7 @@ import { Subscription } from 'foldkit'
 
 import { Message } from './model'
 import type { Model } from './model'
+import { isEditorDirty } from './editor'
 
 /** The id the Page Head's search input carries, and therefore the element the
  *  shortcut reaches for. Declared here and read by `views/page-head.ts` so the
@@ -78,6 +84,56 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
             },
           }),
           Effect.sync(() => selectedId !== null),
+        ),
+    },
+  ),
+  // `Escape` leaves the Editor, through the same guard as `← Library` and a
+  // Back press: ask when the draft is dirty, go when it is not. It names no
+  // URL, because it has none of its own — the Model answers "back" with the
+  // route the Editor was opened from.
+  editorKeys: entry(
+    { onEditor: S.Boolean },
+    {
+      modelToDependencies: (model) => ({
+        onEditor: model.route._tag === 'Photo' && !model.editor.leaveDialog.isOpen,
+      }),
+      dependenciesToStream: ({ onEditor }) =>
+        Stream.when(
+          Subscription.fromEventFilterMap({
+            target: window,
+            type: 'keydown',
+            filterMapEvent: (event) =>
+              event.key === 'Escape' ? Option.some(Message.RequestLeaveEditor({})) : Option.none(),
+          }),
+          Effect.sync(() => onEditor),
+        ),
+    },
+  ),
+  // The browser's own ways out — a tab closed, a reload, a link to another
+  // origin — are same-document-agnostic and never reach the Model, so the
+  // Editor's unsaved changes are guarded here. `beforeunload` is the one hook
+  // a browser offers for it; the dialog text is the browser's, not ours, and
+  // the operator's only real choice is Stay.
+  editorUnloadGuard: entry(
+    { dirty: S.Boolean },
+    {
+      modelToDependencies: (model) => ({
+        dirty: model.route._tag === 'Photo' && isEditorDirty(model.editor),
+      }),
+      dependenciesToStream: ({ dirty }) =>
+        Stream.when(
+          Subscription.fromEventFilterMap({
+            target: window,
+            type: 'beforeunload',
+            filterMapEvent: (event) => {
+              event.preventDefault()
+              // Browsers ignore the string and show their own copy; assigning
+              // `returnValue` is what makes any of them ask at all.
+              event.returnValue = ''
+              return Option.none()
+            },
+          }),
+          Effect.sync(() => dirty),
         ),
     },
   ),

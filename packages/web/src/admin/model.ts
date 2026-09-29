@@ -10,6 +10,7 @@ import { UrlRequest } from 'foldkit/navigation'
 import { Url } from 'foldkit/url'
 import {
   PhotoId,
+  PhotoPresentation,
   PhotoWithTags,
   RenditionFormat,
   Settings,
@@ -161,6 +162,43 @@ export const AtomsState = S.Struct({
 })
 export type AtomsState = typeof AtomsState.Type
 
+/** The Editor's own state. The shell draws a sidebar and a Page Head on every
+ *  other route; the Editor is full-bleed, dark and has neither (CONTEXT.md,
+ *  Theme scope), so its state is one block rather than a dozen fields spread
+ *  through the shell's.
+ *
+ *  The two Stage Bar Segments are *not* here: a stateful atom keeps its
+ *  selection in the shared `segmentGroups` record, so the Editor contributes
+ *  two groups to it rather than two fields (see `editor.ts`). */
+export const EditorTab = S.Literals(['edit', 'details'])
+export type EditorTab = typeof EditorTab.Type
+
+export const EditorState = S.Struct({
+  /** Which Inspector tab is open. `EDIT` is the design's default; `DETAILS`
+   *  is the record. `HISTORY` is deferred (decision 8) and no third value
+   *  exists here, so nothing can select a tab that is not drawn. */
+  tab: EditorTab,
+  /** The Presentation as it was loaded — the value `Discard` reverts to and the
+   *  one `Update` is measured against. Absent until the read answers. */
+  snapshot: S.optional(PhotoPresentation),
+  /** The Presentation as edited. The Stage draws *this*, not the snapshot, so
+   *  an unsaved change is visible before it is saved. A copy of the snapshot
+   *  rather than a set of touched fields, so `Discard` needs no bookkeeping
+   *  beyond "put the snapshot back". */
+  draft: S.optional(PhotoPresentation),
+  saving: S.Boolean,
+  /** The route the Editor was opened from, so `← Library` returns to the list
+   *  the operator was reading rather than to `/admin` whatever it was. */
+  returnRoute: AppRoute,
+  /** `← Library`, `Escape` and the browser's own leave all ask through this.
+   *  Open only while the Editor is dirty; closing it is "keep editing". */
+  leaveDialog: Dialog.Model,
+  /** The URL the leave guard is holding on to. Written when the guard opens,
+   *  read once the operator says go, and never interpreted before that. */
+  leaveUrl: S.String,
+})
+export type EditorState = typeof EditorState.Type
+
 /** In-flight upload abort handles, keyed by queue-item id — the Model stays
  *  serializable. Registered by `UploadItemCmd`; aborted by `CancelUploads`. */
 export const abortStore = new Map<string, AbortController>()
@@ -214,6 +252,10 @@ export const Model = S.Struct({
   // the Photo route: the Photo the URL names, and how its fetch is going
   photo: S.optional(PhotoWithTags),
   photoStatus: S.Literals(['loading', 'ready', 'error']),
+
+  // the Editor route: one block, because the Editor is a document of its own
+  // rather than a page inside the shell (see `views/editor.ts`)
+  editor: EditorState,
 
   // lightbox: photo currently shown full-size; null while browsing the grid
   selectedId: S.NullOr(S.String),
@@ -425,6 +467,34 @@ export const Message = defineMessageUnion({
   CompletedNavigate: {},
   CompletedLoad: {},
   RetryFetchPhoto: {},
+
+  // the Editor route
+  SwitchedEditorTab: { tab: EditorTab },
+  SucceededFetchPresentation: { id: PhotoId, presentation: PhotoPresentation },
+  FailedFetchPresentation: { id: PhotoId, message: S.String },
+  /** The Mat's own on/off. It is the Editor's one control today because the
+   *  Mat is the one thing the Stage draws out of the stored Presentation;
+   *  #32 adds its colour, style and width beside this toggle. */
+  ToggledEditorMat: { enabled: S.Boolean },
+  /** Send the draft as one Presentation — the crop, the level, the mat and the
+   *  export overrides ride in a single call because the Presentation is one
+   *  fact (CONTEXT.md). */
+  SubmitEditorUpdate: {},
+  /** The stored truth the save answered with, which becomes the new snapshot
+   *  and the new draft in one step, so the indicator clears off the server's
+   *  answer rather than off the request. */
+  UpdatedEditor: { id: PhotoId, presentation: PhotoPresentation },
+  /** Put the snapshot back. No RPC: the loaded value is the truth the Editor
+   *  started from, so reverting is a copy, not a write. */
+  DiscardEditor: {},
+  /** `← Library`, `Escape`, a clicked link and a popstate all leave through
+   *  this, which navigates at once when the Editor is clean and asks first
+   *  when it is not. The URL is optional because `Escape` has none of its own:
+   *  it goes to the route the Editor was opened from. */
+  RequestLeaveEditor: { url: S.optional(S.String) },
+  /** The operator answered the leave guard: go. */
+  ConfirmedLeaveEditor: {},
+  GotEditorLeaveMessage: { message: Dialog.Message },
 })
 
 export type Message = typeof Message.Type

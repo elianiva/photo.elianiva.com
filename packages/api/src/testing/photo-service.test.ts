@@ -97,6 +97,14 @@ const storageUsage = (harness: TestHarness): Promise<StorageUsage> =>
     ),
   )
 
+const presentation = (harness: TestHarness, id: string) =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.presentation(id)),
+      harness,
+    ),
+  )
+
 const setPresentation = (harness: TestHarness, id: string, patch: PhotoPresentationPatch) =>
   Effect.runPromise(
     withTestServices(
@@ -1467,6 +1475,49 @@ describe('PhotoService.storageUsage', () => {
 
   it('is zero for an empty library', async () => {
     expect(await storageUsage(makeTestHarness())).toEqual({ photos: 0, bytes: 0 })
+  })
+})
+
+describe('PhotoService.presentation', () => {
+  it('reads the stored presentation, so the Editor has a snapshot to revert to', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    const saved = await setPresentation(harness, created.id, {
+      crop: { x: 12.5, y: 4, scale: 1.8 },
+      level: -2.5,
+      mat: { enabled: true, style: 'gallery', colour: 'ink', width: 4 },
+    })
+
+    // The read is the same value the save answered with, which is what lets a
+    // cold load and a save produce one snapshot shape rather than two.
+    expect(await presentation(harness, created.id)).toEqual(saved)
+  })
+
+  it('refuses a Photo that is not there, and one that is in the Trash', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, created.id)
+
+    // A trashed Photo still has its presentation columns; the Editor is not
+    // where the Trash is edited, so it reads as gone rather than as editable.
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.presentation(created.id)),
+          harness,
+        ),
+      ),
+    ).toBeInstanceOf(PhotoNotFound)
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) =>
+            service.presentation('00000000-0000-0000-0000-000000000000'),
+          ),
+          harness,
+        ),
+      ),
+    ).toBeInstanceOf(PhotoNotFound)
   })
 })
 

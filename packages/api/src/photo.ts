@@ -190,6 +190,13 @@ export interface PhotoServiceContract {
   /** The load-bearing aggregate: the frame count and byte total behind the
    *  sidebar meter, the Archive bar and the SIZE column. */
   readonly storageUsage: () => Effect.Effect<StorageUsage, StorageError>
+  /** The Editor's loaded snapshot: one Photo's whole Presentation as stored, or
+   *  `PhotoNotFound` for a Photo that is gone or in the Trash. `setPresentation`
+   *  returns this shape too, so the snapshot a save produces and the one a
+   *  cold load produces are the same value. */
+  readonly presentation: (
+    id: string,
+  ) => Effect.Effect<PhotoPresentation, StorageError | PhotoNotFound>
   /** Write the supplied presentation columns, then read the whole presentation
    *  back: a save answers with the stored truth, not with the patch. */
   readonly setPresentation: (
@@ -1131,6 +1138,16 @@ export const PhotoServiceLive = Layer.effect(
           }),
       }).pipe(Effect.map((row) => ({ photos: row?.photos ?? 0, bytes: row?.bytes ?? 0 })))
 
+    const presentation: PhotoServiceContract['presentation'] = (id) =>
+      Effect.gen(function* () {
+        // The read is scoped to live Photos, exactly as the write is: a
+        // trashed Photo has a stored Presentation, and the Editor is not where
+        // the Trash is edited.
+        const row = yield* presentationRow(db, id)
+        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        return toPhotoPresentation(row)
+      })
+
     const setPresentation: PhotoServiceContract['setPresentation'] = (id, patch) =>
       Effect.gen(function* () {
         if ((yield* rowById(db, id)) === null) {
@@ -1226,6 +1243,7 @@ export const PhotoServiceLive = Layer.effect(
       counts,
       index,
       storageUsage,
+      presentation,
       setPresentation,
       addTags,
       removeTags,

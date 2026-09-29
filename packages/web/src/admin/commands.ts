@@ -10,10 +10,9 @@
 
 import { Effect, Schema as S } from 'effect'
 import * as Command from 'foldkit/command'
-import { load, pushUrl } from 'foldkit/navigation'
-import { PhotoId } from '@photo/shared'
+import { load, pushUrl, back } from 'foldkit/navigation'
+import { PhotoId, PhotoPresentation, SettingsInput } from '@photo/shared'
 import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
-import { SettingsInput } from '@photo/shared'
 
 import { apiUrl } from '@/lib/api'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
@@ -165,6 +164,63 @@ export const FetchPhotoCmd = Command.define('FetchPhoto', {
 })
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// the Editor
+// ---------------------------------------------------------------------------
+
+/** The Editor's loaded snapshot. Separate from the Photo itself because
+ *  `GetPhoto` is declared once and served by both RPC groups (#20), and the
+ *  authored Presentation is the Admin's business — see `GetPhotoPresentation`
+ *  in `@photo/shared`. */
+export const FetchPresentationCmd = Command.define('FetchPresentation', {
+  args: { id: S.String },
+  messages: [Message.SucceededFetchPresentation, Message.FailedFetchPresentation],
+  execute: ({ id }) =>
+    Effect.map(rpcAdmin<PhotoPresentation>('GetPhotoPresentation', { id }), (presentation) =>
+      Message.SucceededFetchPresentation({ id: PhotoId.make(id), presentation }),
+    ).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(
+          Message.FailedFetchPresentation({ id: PhotoId.make(id), message: error.message }),
+        ),
+      ),
+    ),
+})
+
+/** The Editor's `Update`. The whole Presentation goes in one call, because the
+ *  Presentation is one fact (CONTEXT.md) and the crop, the level, the mat and
+ *  the export overrides are saved as one. The service answers with the stored
+ *  truth, which becomes the Editor's new snapshot — so the unsaved indicator
+ *  clears off what the database holds rather than off what was sent. */
+export const UpdateEditorCmd = Command.define('UpdateEditor', {
+  args: { id: S.String, presentation: PhotoPresentation },
+  messages: [Message.UpdatedEditor, Message.FailedRpc],
+  execute: ({ id, presentation }) =>
+    Effect.map(
+      rpcAdmin<PhotoPresentation>('UpdatePhotoPresentation', {
+        id,
+        crop: { x: presentation.cropX, y: presentation.cropY, scale: presentation.cropScale },
+        level: presentation.level,
+        mat: {
+          enabled: presentation.borderEnabled,
+          style: presentation.borderStyle,
+          colour: presentation.borderColour,
+          width: presentation.borderWidth,
+        },
+        export: {
+          previewLongEdge: presentation.previewLongEdge,
+          previewFormat: presentation.previewFormat,
+          previewQuality: presentation.previewQuality,
+          fullQuality: presentation.fullQuality,
+          keepExif: presentation.keepExif,
+          removeGps: presentation.removeGps,
+        },
+      }),
+      (stored) => Message.UpdatedEditor({ id: PhotoId.make(id), presentation: stored }),
+    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+// ---------------------------------------------------------------------------
 // the Settings page
 // ---------------------------------------------------------------------------
 
@@ -218,6 +274,16 @@ export const NavigateCmd = Command.define('Navigate', {
   args: { url: S.String },
   messages: [Message.CompletedNavigate],
   execute: ({ url }) => pushUrl(url).pipe(Effect.as(Message.CompletedNavigate())),
+})
+
+/** Step one entry back in the same-document history. The Editor's leave guard
+ *  needs this: a popstate has already moved the URL bar, and the operator's
+ *  Back press is undone by going back, not by writing the Editor's URL into
+ *  the bar again — which would be a guess about the current origin and would
+ *  still leave the entry we came from behind us. */
+export const BackCmd = Command.define('Back', {
+  messages: [Message.CompletedNavigate],
+  execute: back().pipe(Effect.as(Message.CompletedNavigate())),
 })
 
 /** A full document navigation — a URL the Admin's routes do not name, which
