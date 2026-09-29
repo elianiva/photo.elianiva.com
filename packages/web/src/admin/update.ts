@@ -23,17 +23,20 @@ import {
   CreateTagCmd,
   DeletePhotoCmd,
   DeleteTagCmd,
+  ExportCsvIndexCmd,
   FetchCountsCmd,
   FetchMoreCmd,
   FetchPhotoCmd,
   FetchPhotosCmd,
   FetchSessionCmd,
+  FetchSettingsCmd,
   FetchStorageCmd,
   FetchTagsCmd,
   LoadCmd,
   NavigateCmd,
   PersistColsCmd,
   SaveEditsCmd,
+  SaveSettingsCmd,
   UploadItemCmd,
   readStoredCols,
 } from './commands'
@@ -64,6 +67,14 @@ import { AdminToast, emptyDraft, abortStore, Message } from './model'
 import type { Message as Msg, Model } from './model'
 import { isAdminPath, urlToAppRoute } from './route'
 import type { AppRoute } from './route'
+import {
+  applySectionEdit,
+  emptySettingsDraft,
+  settingsInputOf,
+  settingsUnsaved,
+  toSettingsDraft,
+  type SettingsDraft,
+} from './settings-draft'
 import * as TagManager from './tag-manager'
 import { initAtomsState, initSheetSegments, specimenRowIndexes } from './atoms-sheet'
 
@@ -91,7 +102,7 @@ const initialModel = (route: AppRoute): Model => ({
   loadingMore: false,
   session: { status: 'loading', email: null, teamDomain: null },
   counts: { total: 0, trashed: 0, byStatus: { draft: 0, published: 0, failed: 0 }, byTag: [] },
-  storage: { bytes: 0, capBytes: 0 },
+  storage: { photos: 0, bytes: 0, capBytes: 0 },
   searchQuery: '',
   activeTagIds: [],
   cols: readStoredCols(),
@@ -120,6 +131,11 @@ const initialModel = (route: AppRoute): Model => ({
   uploading: false,
   confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
   toast: AdminToast.init({ id: 'admin-toasts' }),
+  settings: undefined,
+  settingsStatus: 'loading',
+  settingsDraft: emptySettingsDraft,
+  settingsSaving: false,
+  settingsIndexing: false,
 })
 
 /** Every route-driven command, in one place, so the two paths that resolve a
@@ -136,6 +152,12 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   // does not re-read what is already in the Model.
   const libraryCommands: Commands = Transition.isEntering(transition, 'Library')
     ? [FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery }), FetchTagsCmd()]
+    : []
+  // The Settings page is a form over a row, and a form over a row is only
+  // truthful if the row behind it is current. Fetched on entering, never
+  // cached across a navigation, exactly like the Library's first page.
+  const settingsCommands: Commands = Transition.isEntering(transition, 'Settings')
+    ? [FetchSettingsCmd()]
     : []
   // Entering the Photo route, and staying within it for a different id, both
   // mean one Photo to read.
@@ -160,7 +182,7 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   const next = Option.isSome(photoId)
     ? withOptional(model, { photo: undefined, photoStatus: 'loading' })
     : model
-  const commands = [...shellCommands, ...libraryCommands, ...photoCommands]
+  const commands = [...shellCommands, ...libraryCommands, ...settingsCommands, ...photoCommands]
   return commands.length > 0 ? { model: next, commands } : { model: next }
 }
 
@@ -804,6 +826,99 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       return showToast(settled, 'Tag deleted', 'Success', undefined, [FetchCountsCmd()])
     },
 
+    // ----- the Settings page ------------------------------------------------------
+    // One helper for every control: the draft is one value, so a write is a
+    // spread of one field over it, and the field's own type is the Message's.
+    SucceededGetSettings: ({ settings }) => {
+      // A re-read landing mid-edit must not throw the edit away. The row moves
+      // under the draft, the draft keeps what the operator typed, and the save
+      // still sends the draft — so the operator's edit wins and the read after
+      // the save is what confirms it.
+      const keepDraft = settingsUnsaved(model.settingsDraft, model.settings)
+      return {
+        model: modifyFields(withOptional(model, { settings }), {
+          settingsStatus: () => 'ready',
+          settingsDraft: () => (keepDraft ? model.settingsDraft : toSettingsDraft(settings)),
+        }),
+      }
+    },
+    FailedGetSettings: () => ({
+      model: modifyFields(model, { settingsStatus: () => 'error' }),
+    }),
+    RetryFetchSettings: () => ({
+      model: modifyFields(model, { settingsStatus: () => 'loading' }),
+      commands: [FetchSettingsCmd()],
+    }),
+    SetSettingsNumber: ({ field, value }) => ({ model: setDraftField(model, field, value) }),
+    SetSettingsText: ({ field, value }) => ({ model: setDraftField(model, field, value) }),
+    SetMetadataPolicy: ({ field, isChecked }) => ({
+      model: setDraftField(model, field, isChecked),
+    }),
+    SetPreviewFormat: ({ value }) => ({
+      model: setDraftField(model, 'defaultPreviewFormat', value),
+    }),
+    SetWatermarkEnabled: ({ isChecked }) => ({
+      model: setDraftField(model, 'watermarkEnabled', isChecked),
+    }),
+    SetWatermarkColour: ({ colour }) => ({
+      model: setDraftField(model, 'watermarkColour', colour),
+    }),
+    SetWatermarkPosition: ({ value }) => ({
+      model: setDraftField(model, 'watermarkPosition', value),
+    }),
+    SetRetention: ({ forever }) => ({ model: setDraftField(model, 'retainForever', forever) }),
+    EditedSection: ({ edit }) => ({
+      model: modifyFields(model, {
+        settingsDraft: () => ({
+          ...model.settingsDraft,
+          sections: [...applySectionEdit(model.settingsDraft.sections, edit)],
+        }),
+      }),
+    }),
+    // A save with nothing to save is not a save: it would stamp a new
+    // `updatedAt` and make the header claim a write the operator did not make.
+    SaveSettings: () => {
+      if (!settingsUnsaved(model.settingsDraft, model.settings)) return { model }
+      return {
+        model: modifyFields(model, { settingsSaving: () => true }),
+        commands: [SaveSettingsCmd({ input: settingsInputOf(model.settingsDraft) })],
+      }
+    },
+    // The stored row, not the draft that produced it: a save that the server
+    // narrowed answers with what it kept, and that is what the form now holds.
+    SavedSettings: ({ settings }) => {
+      const saved = modifyFields(withOptional(model, { settings }), {
+        settingsStatus: () => 'ready',
+        settingsDraft: () => toSettingsDraft(settings),
+        settingsSaving: () => false,
+      })
+      return showToast(saved, 'Settings saved', 'Success', undefined, [])
+    },
+    DiscardSettings: () => ({
+      model: modifyFields(model, {
+        settingsDraft: () =>
+          model.settings === undefined ? emptySettingsDraft : toSettingsDraft(model.settings),
+      }),
+    }),
+    ExportCsvIndex: () => {
+      if (model.settingsIndexing) return { model }
+      return {
+        model: modifyFields(model, { settingsIndexing: () => true }),
+        commands: [ExportCsvIndexCmd()],
+      }
+    },
+    ExportedCsvIndex: ({ photos }) =>
+      showToast(
+        modifyFields(model, { settingsIndexing: () => false }),
+        `Exported ${photoCountLabel(photos)}`,
+        'Success',
+        'photo-index.csv',
+      ),
+    FailedExportCsvIndex: ({ message: failure }) => {
+      const failed = modifyFields(model, { settingsIndexing: () => false })
+      return showToast(failed, 'Could not export the index', 'Error', failure)
+    },
+
     // ----- routing -------------------------------------------------------------------
     // A plain anchor the runtime intercepted, and a URL that changed without a
     // click (popstate, or a navigation the runtime itself performed).
@@ -864,6 +979,16 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     GotUploadComboMessage: ({ message }) => foldUploadCombo(model, message as never),
   })
+
+/** Write one field of the draft. The draft is one value, so a control's write
+ *  is a spread of its own field over it, and the field's type is the type the
+ *  Message carried. */
+const setDraftField = <K extends keyof SettingsDraft>(
+  model: Model,
+  field: K,
+  value: SettingsDraft[K],
+): Model =>
+  modifyFields(model, { settingsDraft: () => ({ ...model.settingsDraft, [field]: value }) })
 
 const openConfirm = (model: Model, pending: NonNullable<Model['pendingConfirm']>): UpdateReturn => {
   // `pendingConfirm` is optional; assign via spread (see `withOptional`).

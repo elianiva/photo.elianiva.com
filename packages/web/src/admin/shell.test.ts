@@ -58,9 +58,10 @@ const COUNTS: Counts = {
   ],
 }
 
-/** 7.9 GB against the one cap `STORAGE_CAP_BYTES` declares, which is the same
- *  constant #37's Storage block is measured against. */
-const STORAGE = { bytes: 7_900_000_000, capBytes: STORAGE_CAP_BYTES }
+/** 7.9 GB and 412 Photos against the one cap `STORAGE_CAP_BYTES` declares,
+ *  which is the same constant the Storage block is measured against and the
+ *  same read the sidebar's meter draws. */
+const STORAGE = { photos: 412, bytes: 7_900_000_000, capBytes: STORAGE_CAP_BYTES }
 
 const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null })
 
