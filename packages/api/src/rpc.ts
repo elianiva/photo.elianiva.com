@@ -17,6 +17,7 @@ import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs, PhotoNotFound } from '@p
 import { PhotoService, STORAGE_CAP_BYTES } from './photo'
 import { PublicPhotoService } from './public-photo'
 import { AdminSession } from './session'
+import { SettingsService } from './settings'
 import { TagService } from './tag'
 
 /**
@@ -174,6 +175,15 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
         }),
       )
     }),
+  GetSettings: () => SettingsService.use((service) => service.read),
+  UpdateSettings: (payload) => SettingsService.use((service) => service.update(payload)),
+  // The rows, not the document: the Storage block's CSV is assembled from
+  // these, and the join and the order are the service's to get right.
+  ListPhotoIndex: () =>
+    Effect.map(
+      PhotoService.use((service) => service.index()),
+      (items) => ({ items }),
+    ),
 })
 
 // `Compress` would sit in the admin group beside `UpdatePhotoPresentation` and

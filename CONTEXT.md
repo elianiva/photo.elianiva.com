@@ -40,6 +40,10 @@ _Avoid_: Post-processing, Effects, Filters
 The border the Editor draws around a Photo, outside its crop, before a Rendition is produced. The design heads its panel `BORDER`, labels its rows `Mat Colour` and `Mat Style`, and names the wrapper on the Stage `Mat` — one thing under two words. The schema and the code say `borderEnabled`, `borderStyle`, `borderColour`, `borderWidth`, following the heading the operator actually sees; `mat` appears only in the `color.mat.*` token names. Its colour is `white`, `paper` or `ink` and its style is `even`, `gallery` or `square`, taken from the design's swatches and segments.
 _Avoid_: Frame (that is display copy), Padding, Margin, Mounter
 
+**Watermark**:
+A mark stamped onto an exported frame, configured per-site in Settings and applied per-upload. It goes onto **published renditions only**, and never onto the original: a download serves the original from R2, so an operator's copy of a photograph is always the unmarked file. The four corner positions and the centre are the whole value set, because a Select with one option is a control that lies. Whether anything stamps it yet is a separate fact from what the contract says.
+_Avoid_: Logo, Overlay, Stamp (Stamp is the act, not the thing), Branding on renditions
+
 **Rendition**:
 A derived image file produced from a Photo's original. There are exactly two: `PREVIEW` (the long edge the Export panel sets, used by the library, the grid, and the public pages) and `FULL` (the presentation-sized export). A Rendition is regenerated whenever the crop, mat, level, or export settings change. The original in R2 is not a Rendition, and Renditions are never hand-placed in R2 outside the regeneration path.
 _Avoid_: Derivative, thumbnail, variant, export (the export is the action; the file it produces is a Rendition)
@@ -65,7 +69,7 @@ The public chronological index of every published Photo at `/archive`, grouped b
 _Avoid_: Storage (that is the Admin's block), Library (that is the Admin's), Collection, Set
 
 **Storage**:
-The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content. The quota is the configured constant `STORAGE_CAP_BYTES` in `@photo/shared`, not a Settings row, so the sidebar's meter and this block cannot report different caps; the design contradicts itself on the number (the meter draws `50 GB`, this block draws `20 GB`) and one constant settles it at 20 GiB.
+The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content. The quota is the configured constant `STORAGE_CAP_BYTES` in `@photo/shared`, not a Settings row, so the sidebar's meter and this block cannot report different caps; the design contradicts itself on the number (the meter draws `50 GB`, this block draws `20 GB`) and one constant settles it at 20 GiB. Both surfaces render that one cap the meter's way — decimal gigabytes, the cap rounded — so `20 GiB` reads as `21 GB` in both places; the design's own `20 GB` in this block is the one number nothing prints, because printing it would mean the block and the meter were reading different caps. The `RETAIN` setting is display-only: nothing purges on a timer anywhere in the chain, so it is drawn disabled at its one true value rather than offering a retention window no purge would honour.
 _Avoid_: Archive (that is the public page), Library, Backup, Sync
 
 **Session**:
@@ -73,7 +77,7 @@ The one operator, as the Cloudflare Access claim the Worker already verified —
 _Avoid_: Login, Auth, Sign-in state, Current user
 
 **Settings**:
-The Admin's single-row singleton, read by the Editor's export defaults, the public Masthead, the Folio nav and the Colophon. One row, `id` pinned to 1. Its `updatedAt` is what the Settings header's `SAVED 2 MINUTES AGO` reports.
+The Admin's single-row singleton, read by the Editor's export defaults, the public Masthead, the Folio nav and the Colophon. One row, `id` pinned to 1. Its `updatedAt` is what the Settings header's `SAVED 2 MINUTES AGO` reports, and it is nullable: a row nobody has saved has no date to report, so the header says so rather than naming the epoch. The page saves explicitly, so that stamp means something — a form with an unsaved edit reports `UNSAVED CHANGES` instead, which is the whole reason the header carries one. `copyright` is authored and stored; the Colophon's year range beside it is **not**, because it is the earliest `takenAt` year over published Photos through the current year, both read live — a stored range is wrong the first time a `takenAt` is edited and wrong again on 1 January. The Admin's form round-trips the whole row on every save, so a column with no control on the page (`volume`) is carried rather than reset.
 _Avoid_: Config, Preferences, Options, Site settings (the row and the page are the same thing)
 **Site Section**:
 One entry in the public Folio nav, authored as an ordered list in Settings. A Section is `{ label, kind, target }`: `kind` is `all` (the Front itself, and the only kind with no `target`), `tag` or `series` (a Tag's slug — a Series page _is_ a Tag page, see ADR 0008), or `page` (a page name). Stored as a JSON array on the Settings row; there is no sections table. The design draws `SECTIONS` as one `ALL · STREET · LANDSCAPE · SERIES · ABOUT` string, which cannot be routed, so the Settings UI is an ordered repeater instead — a deliberate, recorded deviation.

@@ -16,6 +16,7 @@ import { originalUrl } from '@/lib/image'
 
 import { atomsPage } from './atoms'
 import { grid } from './grid'
+import { settingsPage } from './settings'
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
 import { AppRoute, libraryRouter } from '../route'
@@ -214,10 +215,10 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // ---------------------------------------------------------------------------
 // routes whose pages are still being built
 // ---------------------------------------------------------------------------
-/** `Drafts`, `Uploads`, `Trash` and `Settings` are routes before they are
- *  pages. Each URL resolves, the route is right, and the Page Head above it
- *  names the page — but the body says what is actually true of it rather than
- *  pretending to. #29 and #36 own the bodies. */
+/** `Drafts`, `Uploads` and `Trash` are routes before they are pages. Each URL
+ *  resolves, the route is right, and the Page Head above it names the page —
+ *  but the body says what is actually true of it rather than pretending to.
+ *  #29 and #36 own the bodies. */
 const forthcomingPage = (note: string, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
@@ -286,7 +287,7 @@ export const routePage = (model: Model, h: HtmlBuilder<Msg>): Child =>
         'The Trash is still being built. A deleted photo is recoverable and nothing is purged on a timer.',
         h,
       ),
-    Settings: () => forthcomingPage('Settings is still being built.', h),
+    Settings: () => settingsPage(model, h),
     Photo: () => photoPage(model, h),
     NotFound: ({ path }) => notFoundPage(path, h),
   })
