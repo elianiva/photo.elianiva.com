@@ -12,6 +12,10 @@ _Avoid_: Dashboard, CMS, Studio, Backend, The Desk
 A curated work — a single image file (stored once in R2) plus its metadata. The unit the site showcases. Photos live in a flat list (no hierarchy); grouping is via Tags. Essential queryable fields are real columns (`title`, `takenAt`, dimensions, `r2Key`); the rest lives in a JSON `metadata` blob for cheap extensibility. The one carve-out from that rule is the four EXIF facts the public Exif line prints — `aperture`, `shutter`, `iso`, `focalLength` — which are columns because a formatted number has a type the boundary can check and a range it can validate; the blob keeps free-form strings like the caption, the place, and the camera body. Every one of the four is nullable, and a missing fact is omitted from the Exif line rather than invented.
 _Avoid_: Image (use only for raw bytes/technical context), picture, shot
 
+**Exif line**:
+The one line under a public plate that names how the Photo was made — `X-T20 · 25MM · F/8 · 1/1000 · ISO 200 · 31 AUG`. Six segments in a fixed order: camera body, focal length, aperture, shutter, ISO, then the day and month of `takenAt`; uppercased and joined by `· `. A fact the Photo does not carry is a segment that is not printed — never a `0`, a dash, or a gap between two separators — and a Photo carrying no facts at all has no Exif line, so the view omits the element instead of rendering an empty one. A shutter at or above a second is written `2S` and one below it as the fraction a camera is marked with (`1/1000`); a time no shutter is marked with is written as a time (`0.7S`), never as a fraction no barrel carries. Produced by `formatExifLine` in `@photo/shared`, from a Photo read model.
+_Avoid_: EXIF string, metadata line, tech specs, camera info
+
 **Photo Number**:
 A Photo's site-wide serial. One monotonic counter, assigned once at upload, unique across the site, and never reused — not by a deleted Photo, and not by a trashed one. A Photo keeps its number through soft delete and restore. What the number is _titled_ in public copy is not settled.
 _Avoid_: ID (that is the ULID), ordinal, row number, index, page number
