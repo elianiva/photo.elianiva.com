@@ -11,9 +11,14 @@
  * `dev` stage creates no Access applications, so blank means unauthenticated by
  * design and this gate stands down; every other stage fails closed. A team
  * domain that is set is always verified, on every stage.
+ *
+ * The gate hands the claims it verified back with the answer, so `GetSession`
+ * can report the identity this module already checked rather than computing a
+ * second one.
  */
 
 import { DateTime, Effect } from 'effect'
+import type { AdminSession } from '@photo/api'
 
 /** The env bindings the admin gate reads. */
 export interface AccessEnv {
@@ -22,6 +27,20 @@ export interface AccessEnv {
   readonly ACCESS_TEAM_DOMAIN?: string
   readonly ACCESS_ALLOWED_EMAILS?: string
 }
+
+/** The gate's whole answer to a request: either the rejection it failed with,
+ *  or the claims it verified on the way through. Never both. The session rides
+ *  out because `GetSession` reports the claim this module already checked —
+ *  verifying it a second time in the handler would be a second, unchecked
+ *  answer to the same question (ADR 0007). */
+export interface AdminAccess {
+  readonly rejection: Response | null
+  readonly session: AdminSession
+}
+
+/** Where the gate stands down there is no Access to describe, so the session
+ *  says so rather than inventing an identity. */
+const NO_SESSION: AdminSession = { email: null, teamDomain: '' }
 
 const jsonError = (message: string, status: number): Response =>
   new Response(JSON.stringify({ message }), {
@@ -127,7 +146,8 @@ export const verifyAccessToken = async (
 
 /**
  * The admin gate every Access-protected route runs. Returns the rejection
- * response, or `null` when the request may proceed.
+ * alongside the session it admitted, or `null`/`NO_SESSION` where the gate
+ * stood down.
  *
  * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on `dev`, where
  * Alchemy skips the Access applications (ADR 0007). On any other stage a blank
@@ -135,22 +155,19 @@ export const verifyAccessToken = async (
  * silently serving the Admin ungated is the one failure this gate must not
  * have.
  */
-export const verifyAdminAccess = async (
-  request: Request,
-  env: AccessEnv,
-): Promise<Response | null> => {
+export const verifyAdminAccess = async (request: Request, env: AccessEnv): Promise<AdminAccess> => {
   const teamDomain = (env.ACCESS_TEAM_DOMAIN ?? '').trim()
   if (teamDomain === '') {
-    if (env.STAGE === 'dev') return null
-    return jsonError('server misconfigured', 500)
+    if (env.STAGE === 'dev') return { rejection: null, session: NO_SESSION }
+    return { rejection: jsonError('server misconfigured', 500), session: NO_SESSION }
   }
   const token = request.headers.get('Cf-Access-Jwt-Assertion')
   if (token === null) {
-    return jsonError('missing access token', 401)
+    return { rejection: jsonError('missing access token', 401), session: NO_SESSION }
   }
   const result = await verifyAccessToken(token, teamDomain)
   if (!result.ok) {
-    return jsonError('access denied', 401)
+    return { rejection: jsonError('access denied', 401), session: NO_SESSION }
   }
   const allowlist = (env.ACCESS_ALLOWED_EMAILS ?? '')
     .split(',')
@@ -159,8 +176,8 @@ export const verifyAdminAccess = async (
   if (allowlist.length > 0) {
     const email = result.email?.toLowerCase() ?? ''
     if (!allowlist.includes(email)) {
-      return jsonError('access denied', 403)
+      return { rejection: jsonError('access denied', 403), session: NO_SESSION }
     }
   }
-  return null
+  return { rejection: null, session: { email: result.email ?? null, teamDomain } }
 }
