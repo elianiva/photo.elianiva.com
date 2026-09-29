@@ -193,6 +193,21 @@ export class UpdatePhoto extends Rpc.make('UpdatePhoto', {
   error: S.Union([PhotoNotFound, SlugConflict, InvalidInput, StorageError]),
 }) {}
 
+/** The Editor's loaded snapshot: one Photo's whole stored Presentation, the
+ *  thing `Discard` reverts to and `Update` sends back.
+ *
+ *  Its own admin-group RPC rather than a wider `GetPhoto`. `GetPhoto` is
+ *  declared once and served by both groups with different answers (#20), so
+ *  carrying the Presentation on it would publish the authored crop, mat and
+ *  export settings on the ungated `/rpc` as a side effect of the Admin needing
+ *  them. The public site does not read the Presentation — it reads the
+ *  Rendition it produced — so the read stays on the gated side. */
+export class GetPhotoPresentation extends Rpc.make('GetPhotoPresentation', {
+  payload: { id: S.String.pipe(S.check(S.isMaxLength(128))) },
+  success: PhotoPresentation,
+  error: S.Union([PhotoNotFound, StorageError]),
+}) {}
+
 export class DeletePhoto extends Rpc.make('DeletePhoto', {
   payload: { id: S.String },
   success: S.Boolean,
@@ -417,6 +432,7 @@ export class UpdateTag extends Rpc.make('UpdateTag', {
 
 export const PhotoAdminRpcs = RpcGroup.make(
   GetPhoto,
+  GetPhotoPresentation,
   UpdatePhoto,
   DeletePhoto,
   CreateTag,

@@ -14,6 +14,12 @@
  * A session the API could not verify replaces the whole shell rather than
  * sitting in a corner of it: there is no signed-out state, so a page that
  * renders at all is a page whose Access session is proven.
+ *
+ * The Editor is the one route that is not this shell. It is full-bleed and dark
+ * with no sidebar, so it is a document of its own (`views/editor.ts`) chosen
+ * here rather than a page rendered inside the shell with the sidebar
+ * conditionally hidden — which keeps the shell's own structure untouched and
+ * puts the one route switch in one place.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
@@ -21,6 +27,7 @@ import type { Document, HtmlBuilder } from 'foldkit/html'
 import { scopeTheme, themeForRoute } from '@/lib/theme'
 
 import type { Model, Msg } from './model'
+import { editorDocument } from './views/editor'
 import { editSheet } from './views/edit-sheet'
 import { lightbox } from './views/lightbox'
 import { confirmDialog, toastStack } from './views/overlays'
@@ -58,4 +65,8 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
 })
 
 export const view = (model: Model, h: HtmlBuilder<Msg>): Document =>
-  model.session.status === 'expired' ? sessionExpired(h) : shell(model, h)
+  model.session.status === 'expired'
+    ? sessionExpired(h)
+    : model.route._tag === 'Photo'
+      ? editorDocument(model, h)
+      : shell(model, h)

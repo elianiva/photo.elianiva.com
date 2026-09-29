@@ -20,6 +20,7 @@ import * as FileDrop from '@/components/ui/file-drop'
 import * as Sheet from '@/components/ui/sheet'
 
 import {
+  BackCmd,
   CreateTagCmd,
   DeletePhotoCmd,
   DeleteTagCmd,
@@ -27,6 +28,7 @@ import {
   FetchMoreCmd,
   FetchPhotoCmd,
   FetchPhotosCmd,
+  FetchPresentationCmd,
   FetchSessionCmd,
   FetchStorageCmd,
   FetchTagsCmd,
@@ -34,12 +36,14 @@ import {
   NavigateCmd,
   PersistColsCmd,
   SaveEditsCmd,
+  UpdateEditorCmd,
   UploadItemCmd,
   readStoredCols,
 } from './commands'
 import {
   foldConfirm,
   foldDraftCombo,
+  foldEditorLeave,
   foldFileDrop,
   foldSegmentGroup,
   foldSheet,
@@ -64,6 +68,13 @@ import { AdminToast, emptyDraft, abortStore, Message } from './model'
 import type { Message as Msg, Model } from './model'
 import { isAdminPath, urlToAppRoute } from './route'
 import type { AppRoute } from './route'
+import {
+  editorReturnUrl,
+  initEditorSegments,
+  initEditorState,
+  isEditorDirty,
+  withEditorMat,
+} from './editor'
 import * as TagManager from './tag-manager'
 import { initAtomsState, initSheetSegments, specimenRowIndexes } from './atoms-sheet'
 
@@ -95,9 +106,10 @@ const initialModel = (route: AppRoute): Model => ({
   searchQuery: '',
   activeTagIds: [],
   cols: readStoredCols(),
-  segmentGroups: initSheetSegments(),
+  segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
   atoms: initAtomsState(),
   photoStatus: 'loading',
+  editor: initEditorState(),
   selectedId: null,
   editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
   draft: emptyDraft(),
@@ -153,12 +165,27 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   )
   const photoCommands: Commands = Option.match(photoId, {
     onNone: () => [],
-    onSome: (id) => [FetchPhotoCmd({ id })],
+    // The Editor needs the Photo and its stored Presentation: one is the
+    // record the Top Bar prints, the other is the snapshot `Discard` reverts
+    // to and the only thing the Stage draws out of.
+    onSome: (id) => [FetchPhotoCmd({ id }), FetchPresentationCmd({ id })],
   })
   // A Photo loading is route state, not message state: the route change is
-  // what puts it there, whichever of the two paths got us here.
+  // what puts it there, whichever of the two paths got us here. The Editor's
+  // own state is reset with it, so arriving at another Photo cannot inherit the
+  // previous one's draft or a half-answered read.
   const next = Option.isSome(photoId)
-    ? withOptional(model, { photo: undefined, photoStatus: 'loading' })
+    ? withOptional(model, {
+        photo: undefined,
+        photoStatus: 'loading',
+        editor: {
+          ...model.editor,
+          snapshot: undefined,
+          draft: undefined,
+          saving: false,
+          leaveUrl: '',
+        },
+      })
     : model
   const commands = [...shellCommands, ...libraryCommands, ...photoCommands]
   return commands.length > 0 ? { model: next, commands } : { model: next }
@@ -334,7 +361,13 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       if (model.route._tag !== 'Photo') return { model }
       return {
         model: withOptional(model, { photo: undefined, photoStatus: 'loading' }),
-        commands: [FetchPhotoCmd({ id: model.route.id })],
+        // Both reads, because either one failing leaves the Editor without
+        // what it draws: the Photo is the record, the Presentation is the
+        // snapshot, and the Stage has nothing to show without both.
+        commands: [
+          FetchPhotoCmd({ id: model.route.id }),
+          FetchPresentationCmd({ id: model.route.id }),
+        ],
       }
     },
     FailedRpc: ({ message: failure }) => {
@@ -804,6 +837,99 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       return showToast(settled, 'Tag deleted', 'Success', undefined, [FetchCountsCmd()])
     },
 
+    // ----- the Editor route ---------------------------------------------------------
+    // Everything above reads the Photo; everything here is the Editor's own
+    // state, and the leave guard is shared with the routing arms at the bottom
+    // because a `← Library` click and a Back press are the same act.
+    SwitchedEditorTab: ({ tab }) => ({
+      model: modifyFields(model, { editor: () => ({ ...model.editor, tab }) }),
+    }),
+    SucceededFetchPresentation: ({ id, presentation }) => {
+      // A response for a Photo the URL no longer names is stale, the same as
+      // the Photo's own read.
+      if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
+      return {
+        model: withOptional(model, {
+          // The draft starts as a copy of the snapshot rather than the same
+          // value: nothing writes a Presentation in place, but two independent
+          // objects mean a future in-place edit cannot quietly move the thing
+          // `Discard` reverts to.
+          editor: { ...model.editor, snapshot: presentation, draft: { ...presentation } },
+        }),
+      }
+    },
+    FailedFetchPresentation: ({ id }) => {
+      if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
+      // One status for the whole Editor: a Photo with no Presentation has no
+      // mat, no crop and no save, so there is nothing the page could show and
+      // nothing it could be asked.
+      return {
+        model: withOptional(model, {
+          editor: { ...model.editor, snapshot: undefined, draft: undefined, saving: false },
+          photoStatus: 'error',
+        }),
+      }
+    },
+    ToggledEditorMat: ({ enabled }) => ({
+      model: modifyFields(model, { editor: () => withEditorMat(model.editor, enabled) }),
+    }),
+    SubmitEditorUpdate: () => {
+      if (model.route._tag !== 'Photo') return { model }
+      const { draft, saving } = model.editor
+      if (draft === undefined || saving || !isEditorDirty(model.editor)) return { model }
+      return {
+        model: modifyFields(model, { editor: () => ({ ...model.editor, saving: true }) }),
+        commands: [UpdateEditorCmd({ id: model.route.id, presentation: draft })],
+      }
+    },
+    UpdatedEditor: ({ id, presentation }) => {
+      if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
+      // The snapshot becomes what the database holds, not what was sent, so a
+      // value the service changed comes back as what it stored rather than as
+      // still-dirty. No toast: the unsaved dot going out and `Update` going
+      // quiet are the design's own confirmation, and this is the one place in
+      // the Admin where the operator is already looking at the answer.
+      return {
+        model: withOptional(model, {
+          editor: {
+            ...model.editor,
+            snapshot: presentation,
+            draft: { ...presentation },
+            saving: false,
+          },
+        }),
+      }
+    },
+    DiscardEditor: () => {
+      const { snapshot, draft } = model.editor
+      if (snapshot === undefined || draft === undefined) return { model }
+      return {
+        model: modifyFields(model, {
+          editor: () => ({ ...model.editor, snapshot, draft: { ...snapshot }, saving: false }),
+        }),
+      }
+    },
+    RequestLeaveEditor: ({ url }) => {
+      const target = url ?? editorReturnUrl(model.editor.returnRoute)
+      return model.route._tag === 'Photo' && isEditorDirty(model.editor)
+        ? withLeaveGuard(model, target)
+        : { model, commands: [NavigateCmd({ url: target })] }
+    },
+    ConfirmedLeaveEditor: () => {
+      const closed = Dialog.close(model.editor.leaveDialog)
+      return {
+        model: modifyFields(model, {
+          editor: () => ({ ...model.editor, leaveDialog: closed.model, leaveUrl: '' }),
+        }),
+        commands: [
+          NavigateCmd({ url: model.editor.leaveUrl }),
+          ...liftChildCommands(closed.commands ?? [], (message) =>
+            Message.GotEditorLeaveMessage({ message }),
+          ),
+        ],
+      }
+    },
+
     // ----- routing -------------------------------------------------------------------
     // A plain anchor the runtime intercepted, and a URL that changed without a
     // click (popstate, or a navigation the runtime itself performed).
@@ -813,16 +939,41 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         // operator links to: neither is this document. Everything inside the
         // Admin's own URL space is, including a path that names no route —
         // that one is the Admin's NotFound page, not a document to fetch.
-        Internal: ({ url }) =>
-          isAdminPath(url.pathname)
-            ? { model, commands: [NavigateCmd({ url: urlToString(url) })] }
-            : { model, commands: [LoadCmd({ href: urlToString(url) })] },
+        Internal: ({ url }) => {
+          const target = urlToString(url)
+          // Leaving the Editor with unsaved changes asks first, whether the
+          // link is `← Library` or anything else in the Admin's URL space.
+          if (discardsTheDraft(model, urlToAppRoute(url))) {
+            return withLeaveGuard(model, target)
+          }
+          return isAdminPath(url.pathname)
+            ? { model, commands: [NavigateCmd({ url: target })] }
+            : { model, commands: [LoadCmd({ href: target })] }
+        },
         External: ({ href }) => ({ model, commands: [LoadCmd({ href })] }),
       }),
     ChangedUrl: ({ url }) => {
       const nextRoute = urlToAppRoute(url)
+      // A popstate has already moved the URL bar. Leaving a dirty Editor
+      // through one undoes the step and asks, because an in-app history move
+      // does not fire `beforeunload` and would otherwise be the one way out of
+      // the Editor that loses an authored crop. Going *back* rather than
+      // writing the Editor's URL into the bar is what puts the operator where
+      // they were, with the entry they came from still behind them.
+      if (discardsTheDraft(model, nextRoute)) {
+        const guard = withLeaveGuard(model, editorReturnUrl(model.editor.returnRoute))
+        return { model: guard.model, commands: [BackCmd(), ...(guard.commands ?? [])] }
+      }
+      // `← Library` goes back to the route the Editor was opened from, so a
+      // Photo reached from Drafts returns to Drafts. Recorded here rather than
+      // in `applyRoute`, which is handed the model with the route already
+      // changed and so no longer knows where the Editor was opened from.
+      const returning =
+        model.route._tag !== 'Photo' && nextRoute._tag === 'Photo'
+          ? withOptional(model, { editor: { ...model.editor, returnRoute: model.route } })
+          : model
       return applyRoute(
-        modifyFields(model, { route: () => nextRoute }),
+        modifyFields(returning, { route: () => nextRoute }),
         Transition.make(model.route, nextRoute),
       )
     },
@@ -837,6 +988,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     GotToastMessage: ({ message }) => foldToast(model, message),
     GotSegmentMessage: ({ groupId, message }) => foldSegmentGroup(groupId)(model, message),
     GotTagActionsMessage: ({ message }) => foldTagActions(model, message),
+    GotEditorLeaveMessage: ({ message }) => foldEditorLeave(model, message),
 
     // Tag manager bar: keep the child's input state in sync, then act on
     // its intents — filter toggle and delete mirror existing handlers;
@@ -873,6 +1025,31 @@ const openConfirm = (model: Model, pending: NonNullable<Model['pendingConfirm']>
     model: modifyFields(armed, { confirmDialog: () => dialogOpened.model }),
     commands: liftChildCommands(dialogOpened.commands ?? [], (message) =>
       Message.GotConfirmMessage({ message }),
+    ),
+  }
+}
+
+/** Does moving to `next` throw away an unsaved draft? True for every route
+ *  change out of the Editor, and for a move to a *different* Photo inside it —
+ *  which re-reads both the Photo and its Presentation, so the draft goes with
+ *  it. Staying on the same Photo is the one move that keeps it. */
+const discardsTheDraft = (model: Model, next: AppRoute): boolean =>
+  model.route._tag === 'Photo' &&
+  (next._tag !== 'Photo' || next.id !== model.route.id) &&
+  isEditorDirty(model.editor)
+
+/** Raise the Editor's leave guard on `url`, or leave the model alone when it is
+ *  already raised — a second `← Library` press while the dialog is up must not
+ *  re-run the open animation or move the URL the guard is holding. */
+const withLeaveGuard = (model: Model, url: string): UpdateReturn => {
+  if (model.editor.leaveDialog.isOpen) return { model }
+  const opened = Dialog.open(model.editor.leaveDialog)
+  return {
+    model: modifyFields(model, {
+      editor: () => ({ ...model.editor, leaveDialog: opened.model, leaveUrl: url }),
+    }),
+    commands: liftChildCommands(opened.commands ?? [], (message) =>
+      Message.GotEditorLeaveMessage({ message }),
     ),
   }
 }

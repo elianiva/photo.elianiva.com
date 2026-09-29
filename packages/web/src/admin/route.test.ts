@@ -10,6 +10,7 @@ import {
   FetchCountsCmd,
   FetchPhotoCmd,
   FetchPhotosCmd,
+  FetchPresentationCmd,
   FetchSessionCmd,
   FetchStorageCmd,
   FetchTagsCmd,
@@ -47,6 +48,25 @@ const photo = {
   r2Key: 'originals/a-photo.jpg',
   width: 3000,
   height: 2000,
+} as const
+
+/** The Presentation the Editor's snapshot read answers with — the migration
+ *  0004 defaults, which is what an unedited Photo stores. */
+const PRESENTATION = {
+  cropX: 0,
+  cropY: 0,
+  cropScale: 1,
+  level: null,
+  borderEnabled: true,
+  borderStyle: 'gallery',
+  borderColour: 'white',
+  borderWidth: 4,
+  previewLongEdge: 1200,
+  previewFormat: 'avif',
+  previewQuality: 82,
+  fullQuality: 92,
+  keepExif: true,
+  removeGps: true,
 } as const
 
 describe('the route table', () => {
@@ -130,10 +150,12 @@ describe('a cold load', () => {
     expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
   })
 
-  it('fetches the shell and the photo on a cold load of a deep link', () => {
+  it('fetches the shell, the photo and its presentation on a cold load of a deep link', () => {
     const cold = init(at('/admin/photos/photo-1'))
     expect(cold.model.route).toEqual({ _tag: 'Photo', id: 'photo-1' })
-    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhoto'])
+    // The Editor draws the Mat out of the stored Presentation, so the Photo
+    // alone is not enough to draw the route.
+    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhoto', 'FetchPresentation'])
   })
 
   it('fetches the shell but no list on a cold load of a route with no data behind it yet', () => {
@@ -162,10 +184,13 @@ describe('an in-app navigation', () => {
     expect(commandNames(update(library, onUrlChange(at('/admin'))).commands)).toEqual(SHELL_READS)
   })
 
-  it('re-reads the photo when the id changes within the Photo route', () => {
+  it('re-reads the photo and its presentation when the id changes within the Photo route', () => {
     const onAPhoto = init(at('/admin/photos/photo-1')).model
     const result = update(onAPhoto, onUrlChange(at('/admin/photos/photo-2')))
-    expect(listReads(result)).toEqual([{ name: 'FetchPhoto', args: { id: 'photo-2' } }])
+    expect(listReads(result)).toEqual([
+      { name: 'FetchPhoto', args: { id: 'photo-2' } },
+      { name: 'FetchPresentation', args: { id: 'photo-2' } },
+    ])
   })
 
   it('pushes a URL inside the admin URL space, even one that names no route', () => {
@@ -217,8 +242,11 @@ describe('the Photo route', () => {
   it('offers a retry when the photo cannot be loaded', () => {
     const failed = update(loading, Message.FailedFetchPhoto({ id: PHOTO_ID, message: 'gone' }))
     expect(failed.model.photoStatus).toBe('error')
+    // Both reads, because either one failing leaves the Editor with nothing to
+    // draw: the Photo is the record, the Presentation is the Mat.
     expect(commandNames(update(failed.model, Message.RetryFetchPhoto()).commands)).toEqual([
       'FetchPhoto',
+      'FetchPresentation',
     ])
   })
 })
@@ -263,7 +291,7 @@ describe('the page a route draws', () => {
     )
   })
 
-  it('navigates in-app to a deep link and draws the Photo it fetches', () => {
+  it('navigates in-app to a deep link and draws the Editor it fetches', () => {
     Scene.scene(
       app,
       Scene.given(init(at('/admin')).model),
@@ -282,12 +310,20 @@ describe('the page a route draws', () => {
         [FetchCountsCmd, Message.FailedGetCounts({})],
         [FetchStorageCmd, Message.FailedGetStorage({})],
         [FetchPhotoCmd, Message.SucceededFetchPhoto({ id: PHOTO_ID, photo })],
+        [
+          FetchPresentationCmd,
+          Message.SucceededFetchPresentation({ id: PHOTO_ID, presentation: PRESENTATION }),
+        ],
       ),
+      // The Editor is a document of its own: the Photo's title is its heading
+      // and the Mat is on the Stage, with no sidebar and no Page Head anywhere.
       Scene.expect(Scene.role('heading', { name: 'A Photo' })).toExist(),
-      Scene.expect(Scene.role('link', { name: '← Library' })).toHaveAttr('href', '/admin'),
+      Scene.expect(Scene.selector('[data-slot="mat"]')).toExist(),
+      Scene.expect(Scene.role('navigation', { name: 'Admin sections' })).not.toExist(),
+      Scene.expect(Scene.role('link', { name: 'Library' })).toHaveAttr('href', '/admin'),
       // The back link is a plain anchor: the runtime owns the interception, so
       // the view registers no click handler of its own.
-      Scene.expect(Scene.role('link', { name: '← Library' })).not.toHaveHandler('click'),
+      Scene.expect(Scene.role('link', { name: 'Library' })).not.toHaveHandler('click'),
     )
   })
 })
