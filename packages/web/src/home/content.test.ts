@@ -1,11 +1,38 @@
 import { describe, expect, it } from 'vitest'
 
-import { RATIO_VALUE, edition, flowColumns, frameNo, plateUrl, sectionCount } from './content'
+import {
+  RATIO_VALUE,
+  edition,
+  flowColumns,
+  frameCount,
+  frameNo,
+  frameNoShort,
+  plateUrl,
+  sectionCount,
+} from './content'
 
 describe('frameNo', () => {
   it('pads the frame number to three digits', () => {
     expect(frameNo(24)).toBe('No. 024')
     expect(frameNo(7)).toBe('No. 007')
+  })
+})
+
+describe('frameNoShort', () => {
+  it('drops the prefix and keeps the three-digit pad', () => {
+    expect(frameNoShort(24)).toBe('024')
+    expect(frameNoShort(7)).toBe('007')
+  })
+})
+
+describe('frameCount', () => {
+  it('counts frames with no number range', () => {
+    expect(frameCount(9)).toBe('09 FRAMES')
+    expect(frameCount(10)).toBe('10 FRAMES')
+  })
+
+  it('uses the singular for one frame', () => {
+    expect(frameCount(1)).toBe('01 FRAME')
   })
 })
 

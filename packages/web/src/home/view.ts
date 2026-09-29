@@ -28,8 +28,12 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
     [
       // The colophon's "back to top" has a target to land on.
       h.Id('top'),
+      // The layout margin steps up at `tablet`; the composition itself flips at
+      // `desktop` in the views, because the desktop Front needs its full
+      // 1080px measure to fit. The range between shows the mobile composition
+      // at the tablet margin — the design has no tablet frame to follow.
       h.Class(
-        'min-h-screen bg-role-surface px-(--layout-margin-mobile) text-role-text-primary sm:px-(--layout-margin)',
+        'min-h-screen bg-role-surface px-(--layout-margin-mobile) text-role-text-primary tablet:px-(--layout-margin)',
       ),
     ],
     [
@@ -38,9 +42,11 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         [h.Class('flex flex-col')],
         [
           lede(model.edition, h),
-          ...model.edition.sections.map((section) => editionSection(section, h)),
+          ...model.edition.sections.map((section, index) =>
+            editionSection(section, index === 0 ? model.edition.lead : null, h),
+          ),
           h.div(
-            [h.Id('archive'), h.Class(`${BAND} pt-(--spacing-3xl)`)],
+            [h.Id('archive'), h.Class(`${BAND} pt-(--spacing-lg) desktop:pt-(--spacing-3xl)`)],
             [continued(model.edition.tail, h)],
           ),
         ],
