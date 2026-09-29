@@ -47,8 +47,9 @@ Ports and env:
 
 - Portless URL `https://photo.localhost` (`portless.json` `name: photo`, backing `appPort: 13370`, Alchemy `dev: { port: 13370, strictPort: true }`). Access the app only via the portless URL; the raw `127.0.0.1:13370` is an internal fallback. No second instance on same backing port.
 - Resolve the URL with `portless get photo` (`https://photo.localhost`). Override with `BASE=https://photo.localhost` for scripts.
-- Local dev needs no `ACCESS_TEAM_DOMAIN` and no `ACCESS_ALLOWED_EMAILS` — blank means unauthenticated. Non-dev stages fail closed without both secrets.
-- No `.env` required for local verification. R2 `photo-elianiva-originals` and D1 `photo-elianiva` are remote by default.
+- Local dev needs no `ACCESS_TEAM_DOMAIN` — blank means unauthenticated, and `alchemy dev --stage dev` defaults it to blank so the admin surface runs ungated by design. Non-dev stages require it and fail closed without it.
+- `ACCESS_ALLOWED_EMAILS` is read up front on every stage, `dev` included, so a `.env` carrying it (see `.env.example`) is required for local verification. It is dead weight locally — the gate stands down before the allowlist is consulted.
+- R2 `photo-elianiva-originals` and D1 `photo-elianiva` are remote by default.
 
 If `portless doctor` fails, `https://photo.localhost` is unreachable, or D1 unreachable, stop. Fix the base before writing the skill patch.
 

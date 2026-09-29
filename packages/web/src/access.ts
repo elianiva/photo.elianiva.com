@@ -7,11 +7,27 @@
  * (RS256 against the team JWKS) and expiry are checked; `aud` pinning can be
  * added later without interface changes.
  *
- * When `teamDomain` is empty (local dev, where no Access exists) verification
- * is skipped; when set, a missing or invalid token fails closed.
+ * A blank team domain is a stage-dependent signal, not a misconfiguration. The
+ * `dev` stage creates no Access applications, so blank means unauthenticated by
+ * design and this gate stands down; every other stage fails closed. A team
+ * domain that is set is always verified, on every stage.
  */
 
 import { DateTime, Effect } from 'effect'
+
+/** The env bindings the admin gate reads. */
+export interface AccessEnv {
+  /** Alchemy stage name. `dev` is the only stage with no Access edge. */
+  readonly STAGE: string
+  readonly ACCESS_TEAM_DOMAIN?: string
+  readonly ACCESS_ALLOWED_EMAILS?: string
+}
+
+const jsonError = (message: string, status: number): Response =>
+  new Response(JSON.stringify({ message }), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
 
 interface Jwk {
   readonly kid: string
@@ -107,4 +123,44 @@ export const verifyAccessToken = async (
   const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, data)
   if (!valid) return { ok: false, reason: 'bad signature' }
   return { ok: true, email: payload.email }
+}
+
+/**
+ * The admin gate every Access-protected route runs. Returns the rejection
+ * response, or `null` when the request may proceed.
+ *
+ * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on `dev`, where
+ * Alchemy skips the Access applications (ADR 0007). On any other stage a blank
+ * team domain is a misconfigured deploy and fails closed with 500, because
+ * silently serving the Admin ungated is the one failure this gate must not
+ * have.
+ */
+export const verifyAdminAccess = async (
+  request: Request,
+  env: AccessEnv,
+): Promise<Response | null> => {
+  const teamDomain = (env.ACCESS_TEAM_DOMAIN ?? '').trim()
+  if (teamDomain === '') {
+    if (env.STAGE === 'dev') return null
+    return jsonError('server misconfigured', 500)
+  }
+  const token = request.headers.get('Cf-Access-Jwt-Assertion')
+  if (token === null) {
+    return jsonError('missing access token', 401)
+  }
+  const result = await verifyAccessToken(token, teamDomain)
+  if (!result.ok) {
+    return jsonError('access denied', 401)
+  }
+  const allowlist = (env.ACCESS_ALLOWED_EMAILS ?? '')
+    .split(',')
+    .map((v) => v.trim().toLowerCase())
+    .filter((v) => v.length > 0)
+  if (allowlist.length > 0) {
+    const email = result.email?.toLowerCase() ?? ''
+    if (!allowlist.includes(email)) {
+      return jsonError('access denied', 403)
+    }
+  }
+  return null
 }
