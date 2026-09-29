@@ -5,9 +5,9 @@
  * structural Cloudflare contracts precisely so nothing in this package needs
  * workerd or Node types. Pulling in `@types/node` to typecheck two Node-only
  * test fakes would undo that, so the handful of members the fakes touch are
- * declared here instead. `node:sqlite` is stable from Node 24 (the repo
- * requires >= 22); a missing or renamed member surfaces as a typecheck error
- * in `d1-fake.ts` rather than as a silently divergent fake.
+ * declared here instead. `node:sqlite` is stable from Node 24, which is the
+ * floor `package.json` declares; a missing or renamed member surfaces as a
+ * typecheck error in `d1-fake.ts` rather than as a silently divergent fake.
  */
 
 declare module 'node:sqlite' {

@@ -30,7 +30,7 @@ Alternatives:
   heaviest: a new dev dependency and a custom vitest pool per package, and
   Node-only utilities (the image-metadata path, `node:fs`) stop working inside
   the worker runtime.
-- **`node:sqlite`** — a stable Node builtin (Node 24+; the repo requires >= 22)
+- **`node:sqlite`** — a stable Node builtin (Node 24+, the repo's floor)
   wrapping real SQLite. It loads the actual `migrations/*.sql`, so the schema
   under test is the schema that ships.
 
