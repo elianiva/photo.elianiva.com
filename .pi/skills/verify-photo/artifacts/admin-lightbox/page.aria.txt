@@ -1,0 +1,88 @@
+- banner
+  - link "photo.elianiva.com" [ref=e27]
+  - StaticText "Admin"
+  - button "2 columns" [ref=e28]
+    - StaticText "2"
+  - button "3 columns" [ref=e29]
+    - StaticText "3"
+  - button "4 columns" [ref=e30]
+    - StaticText "4"
+  - button "5 columns" [ref=e31]
+    - StaticText "5"
+  - button "6 columns" [ref=e32]
+    - StaticText "6"
+  - button "Upload photos" [ref=e33]
+- main
+  - heading "Photos" [level=1, ref=e34]
+  - generic
+    - heading "Tags" [level=2, ref=e35]
+    - StaticText "4"
+    - form
+      - textbox "New tag name" [ref=e50]
+      - button "Create tag" [ref=e51]
+    - button "animal 3" [ref=e36]
+      - StaticText "animal"
+      - StaticText "3"
+    - button "Delete tag animal" [ref=e37]
+    - button "architecture 2" [ref=e38]
+      - StaticText "architecture"
+      - StaticText "2"
+    - button "Delete tag architecture" [ref=e39]
+    - button "cat 3" [ref=e40]
+      - StaticText "cat"
+      - StaticText "3"
+    - button "Delete tag cat" [ref=e41]
+    - button "liminal 1" [ref=e42]
+      - StaticText "liminal"
+      - StaticText "1"
+    - button "Delete tag liminal" [ref=e43]
+    - paragraph
+      - StaticText "6 photos"
+  - figure
+    - button "Open Pipin" [ref=e44]
+    - generic
+      - StaticText "animal"
+      - StaticText "cat"
+      - button "Edit" [ref=e52]
+      - button "Delete" [ref=e53]
+  - figure
+    - button "Open Michi" [ref=e45]
+    - generic
+      - StaticText "animal"
+      - StaticText "cat"
+      - button "Edit" [ref=e54]
+      - button "Delete" [ref=e55]
+  - figure
+    - button "Open Momo" [ref=e46]
+    - generic
+      - StaticText "animal"
+      - StaticText "cat"
+      - button "Edit" [ref=e56]
+      - button "Delete" [ref=e57]
+  - figure
+    - button "Open 2026-06-11.1" [ref=e47]
+    - generic
+      - StaticText "architecture"
+      - button "Edit" [ref=e58]
+      - button "Delete" [ref=e59]
+  - figure
+    - button "Open Lift" [ref=e48]
+    - generic
+      - StaticText "liminal"
+      - button "Edit" [ref=e60]
+      - button "Delete" [ref=e61]
+  - figure
+    - button "Open Sabilillah Tower" [ref=e49]
+    - generic
+      - StaticText "architecture"
+      - button "Edit" [ref=e62]
+      - button "Delete" [ref=e63]
+- region "Notifications" [ref=e26]
+- dialog "Pipin"
+  - image "Pipin"
+  - StaticText "Pipin · 2026-06-11"
+  - button "Close" [ref=e64]
+  - button "Previous photo" [ref=e65]
+    - StaticText "‹"
+  - button "Next photo" [ref=e66]
+    - StaticText "›"
