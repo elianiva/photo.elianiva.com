@@ -1,6 +1,6 @@
 /**
  * Blurhash helpers — encode in the Admin (browser can decode pixels; the
- * Worker cannot), decode in the Gallery for placeholder tiles.
+ * Worker cannot), decode in the Admin grid for placeholder tiles.
  *
  * Matches len's parameters: 4×3 components from a ≤32px sample.
  */
