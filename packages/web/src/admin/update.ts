@@ -2,12 +2,18 @@
  * Admin update core: message → (model, commands) transition plus init.
  * Uploaded bytes live in `fileStore` keyed by queue-item id so the Model
  * stays serializable. RPC commands live in `commands.ts`; child submodel
- * folds in `children.ts`; shared helpers in `helpers.ts`.
+ * folds in `children.ts`; shared helpers in `helpers.ts`; the URL's route
+ * table in `route.ts`.
  */
 
+import { Option } from 'effect'
 import { Multi } from '@foldkit/ui/combobox'
 import { modifyFields } from 'foldkit/struct'
-import * as Update from 'foldkit/update'
+import { Runtime } from 'foldkit'
+import { Transition } from 'foldkit/route'
+import { UrlRequest } from 'foldkit/navigation'
+import { toString as urlToString } from 'foldkit/url'
+import type { Url } from 'foldkit/url'
 
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
@@ -18,8 +24,11 @@ import {
   DeletePhotoCmd,
   DeleteTagCmd,
   FetchMoreCmd,
+  FetchPhotoCmd,
   FetchPhotosCmd,
   FetchTagsCmd,
+  LoadCmd,
+  NavigateCmd,
   PersistColsCmd,
   SaveEditsCmd,
   UploadItemCmd,
@@ -48,42 +57,96 @@ import {
 } from './helpers'
 import { AdminToast, emptyDraft, abortStore, Message } from './model'
 import type { Message as Msg, Model } from './model'
+import { isAdminPath, urlToAppRoute } from './route'
+import type { AppRoute } from './route'
 import * as TagManager from './tag-manager'
+
+// ---------------------------------------------------------------------------
+// routing
+// ---------------------------------------------------------------------------
+
+/** The runtime's routing config. Declared beside the Messages it produces so
+ *  the two cannot drift. */
+export const onUrlRequest = (request: UrlRequest): Message => Message.ClickedLink({ request })
+export const onUrlChange = (url: Url): Message => Message.ChangedUrl({ url })
+
+export type AdminTransition = Transition.Transition<AppRoute>
 
 // ---------------------------------------------------------------------------
 // init
 // ---------------------------------------------------------------------------
 
-export const init = (): Update.Return<Model, Msg> => ({
-  model: {
-    status: 'loading',
-    photos: [],
-    tags: [],
-    nextCursor: null,
-    loadingMore: false,
-    cols: readStoredCols(),
-    selectedId: null,
-    editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
-    draft: emptyDraft(),
-    draftTagIds: [],
-    draftCombo: Multi.init({ id: 'admin-draft-combo' }),
-    saving: false,
-    // filter bar (chips + inline create)
-    tagManager: TagManager.init({ id: 'admin-tag-manager' }),
+const initialModel = (route: AppRoute): Model => ({
+  route,
+  status: 'loading',
+  photos: [],
+  tags: [],
+  nextCursor: null,
+  loadingMore: false,
+  cols: readStoredCols(),
+  photoStatus: 'loading',
+  selectedId: null,
+  editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
+  draft: emptyDraft(),
+  draftTagIds: [],
+  draftCombo: Multi.init({ id: 'admin-draft-combo' }),
+  saving: false,
+  // filter bar (chips + inline create)
+  tagManager: TagManager.init({ id: 'admin-tag-manager' }),
 
-    uploadDialog: Dialog.init({ id: 'admin-upload-dialog' }),
-    fileDrop: FileDrop.init({ id: 'admin-file-drop' }),
-    queue: [],
-    batchTotal: 0,
-    uploadTagIds: [],
-    uploadCombo: Multi.init({ id: 'admin-upload-combo' }),
-    uploadTakenAt: '',
-    uploading: false,
-    confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
-    toast: AdminToast.init({ id: 'admin-toasts' }),
-  },
-  commands: [FetchPhotosCmd({ tagSlug: '' }), FetchTagsCmd()],
+  uploadDialog: Dialog.init({ id: 'admin-upload-dialog' }),
+  fileDrop: FileDrop.init({ id: 'admin-file-drop' }),
+  queue: [],
+  batchTotal: 0,
+  uploadTagIds: [],
+  uploadCombo: Multi.init({ id: 'admin-upload-combo' }),
+  uploadTakenAt: '',
+  uploading: false,
+  confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
+  toast: AdminToast.init({ id: 'admin-toasts' }),
 })
+
+/** Every route-driven command, in one place, so the two paths that resolve a
+ *  URL into a route cannot disagree: `init` calls this with the cold-load
+ *  transition and `ChangedUrl` with the navigation one. A fetch returned from
+ *  `ChangedUrl` alone never fires on a direct visit or a reload. */
+const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => {
+  // Entering the Library loads it; staying within it (a reload, a back button)
+  // does not re-read what is already in the Model.
+  const libraryCommands: Commands = Transition.isEntering(transition, 'Library')
+    ? [FetchPhotosCmd({ tagSlug: '' }), FetchTagsCmd()]
+    : []
+  // Entering the Photo route, and staying within it for a different id, both
+  // mean one Photo to read.
+  const photoId = Option.match(Transition.entered(transition, 'Photo'), {
+    onNone: () => Option.none(),
+    onSome: ({ id }) => Option.some(id),
+  }).pipe(
+    Option.orElse(() =>
+      Option.match(Transition.stayed(transition, 'Photo'), {
+        onNone: () => Option.none(),
+        onSome: ({ previousRoute, nextRoute }) =>
+          previousRoute.id === nextRoute.id ? Option.none() : Option.some(nextRoute.id),
+      }),
+    ),
+  )
+  const photoCommands: Commands = Option.match(photoId, {
+    onNone: () => [],
+    onSome: (id) => [FetchPhotoCmd({ id })],
+  })
+  // A Photo loading is route state, not message state: the route change is
+  // what puts it there, whichever of the two paths got us here.
+  const next = Option.isSome(photoId)
+    ? withOptional(model, { photo: undefined, photoStatus: 'loading' })
+    : model
+  const commands = [...libraryCommands, ...photoCommands]
+  return commands.length > 0 ? { model: next, commands } : { model: next }
+}
+
+export const init: Runtime.RoutingApplicationInit<Model, Message> = (url: Url) => {
+  const route = urlToAppRoute(url)
+  return applyRoute(initialModel(route), Transition.coldLoad(route))
+}
 
 // ---------------------------------------------------------------------------
 // upload chaining
@@ -233,6 +296,23 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }),
     }),
     SucceededFetchTags: ({ tags }) => ({ model: modifyFields(model, { tags: () => tags ?? [] }) }),
+    SucceededFetchPhoto: ({ id, photo }) => {
+      // A response for a Photo the URL no longer names is stale: the route
+      // moved on while the request was in flight.
+      if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
+      return { model: withOptional(model, { photo, photoStatus: 'ready' }) }
+    },
+    FailedFetchPhoto: ({ id }) => {
+      if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
+      return { model: withOptional(model, { photo: undefined, photoStatus: 'error' }) }
+    },
+    RetryFetchPhoto: () => {
+      if (model.route._tag !== 'Photo') return { model }
+      return {
+        model: withOptional(model, { photo: undefined, photoStatus: 'loading' }),
+        commands: [FetchPhotoCmd({ id: model.route.id })],
+      }
+    },
     FailedRpc: ({ message: failure }) => {
       // `error` is optional and may be absent from normalized state; assign
       // via spread (see `withOptional`) instead of modifyFields.
@@ -559,6 +639,31 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         'Success',
       )
     },
+
+    // ----- routing -------------------------------------------------------------------
+    // A plain anchor the runtime intercepted, and a URL that changed without a
+    // click (popstate, or a navigation the runtime itself performed).
+    ClickedLink: ({ request }) =>
+      UrlRequest.match<UpdateReturn>(request, {
+        // The public Front shares this origin, and so does any other origin the
+        // operator links to: neither is this document. Everything inside the
+        // Admin's own URL space is, including a path that names no route —
+        // that one is the Admin's NotFound page, not a document to fetch.
+        Internal: ({ url }) =>
+          isAdminPath(url.pathname)
+            ? { model, commands: [NavigateCmd({ url: urlToString(url) })] }
+            : { model, commands: [LoadCmd({ href: urlToString(url) })] },
+        External: ({ href }) => ({ model, commands: [LoadCmd({ href })] }),
+      }),
+    ChangedUrl: ({ url }) => {
+      const nextRoute = urlToAppRoute(url)
+      return applyRoute(
+        modifyFields(model, { route: () => nextRoute }),
+        Transition.make(model.route, nextRoute),
+      )
+    },
+    CompletedNavigate: () => ({ model }),
+    CompletedLoad: () => ({ model }),
 
     // ----- child message folds ----------------------------------------------------------
     GotEditSheetMessage: ({ message }) => foldSheet(model, message),

@@ -6,7 +6,9 @@
 
 import { Schema as S } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
-import { PhotoWithTags, Tag } from '@photo/shared'
+import { UrlRequest } from 'foldkit/navigation'
+import { Url } from 'foldkit/url'
+import { PhotoId, PhotoWithTags, Tag } from '@photo/shared'
 
 import { Multi } from '@foldkit/ui/combobox'
 import * as Dialog from '@/components/ui/dialog'
@@ -14,6 +16,7 @@ import * as Sheet from '@/components/ui/sheet'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Toast from '@/components/ui/toast'
 
+import { AppRoute } from './route'
 import * as TagManager from './tag-manager'
 
 // ---------------------------------------------------------------------------
@@ -98,6 +101,9 @@ export const abortStore = new Map<string, AbortController>()
 export const previewStore = new Map<string, string>()
 
 export const Model = S.Struct({
+  /** The route the URL names. Every page the Admin shows is a function of it,
+   *  and it is the whole of the URL's meaning in the Model. */
+  route: AppRoute,
   status: S.Literals(['loading', 'ready', 'error']),
   error: S.optional(S.String),
   photos: S.Array(PhotoWithTags),
@@ -113,6 +119,10 @@ export const Model = S.Struct({
 
   // grid density: number of square-tile columns (persisted to localStorage)
   cols: GridCols,
+
+  // the Photo route: the Photo the URL names, and how its fetch is going
+  photo: S.optional(PhotoWithTags),
+  photoStatus: S.Literals(['loading', 'ready', 'error']),
 
   // lightbox: photo currently shown full-size; null while browsing the grid
   selectedId: S.NullOr(S.String),
@@ -156,6 +166,8 @@ export const Message = defineMessageUnion({
     nextCursor: S.NullOr(S.String),
   },
   SucceededFetchTags: { tags: S.Array(Tag) },
+  SucceededFetchPhoto: { id: PhotoId, photo: PhotoWithTags },
+  FailedFetchPhoto: { id: PhotoId, message: S.String },
   FailedRpc: { message: S.String },
   LoadMore: {},
   SucceededFetchMore: {
@@ -233,6 +245,14 @@ export const Message = defineMessageUnion({
 
   // toasts
   GotToastMessage: { message: AdminToast.Message },
+
+  // routing — the runtime's own variants. `ClickedLink` is a clicked plain
+  // anchor, `ChangedUrl` a popstate or a navigation the runtime performed.
+  ClickedLink: { request: UrlRequest },
+  ChangedUrl: { url: Url },
+  CompletedNavigate: {},
+  CompletedLoad: {},
+  RetryFetchPhoto: {},
 })
 
 export type Message = typeof Message.Type

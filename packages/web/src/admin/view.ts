@@ -1,25 +1,24 @@
 /**
- * Admin view root: header (brand + Upload), tag filter bar (chips with
- * counts + result line), and composition of the region views in `views/`
- * (justified day-grouped grid, lightbox, edit Sheet, upload Dialog, confirm
- * AlertDialog, toast stack). Header and content share one max-width
- * container so their edges align.
+ * Admin view root: the shell every route renders inside — header (brand +
+ * Upload), the route's own page, and the app-level overlays (edit Sheet,
+ * upload Dialog, confirm AlertDialog, toast stack) plus the Library's
+ * lightbox. The page itself is chosen by the route in `views/pages.ts`.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
-import type { Tag } from '@photo/shared'
 
 import * as Button from '@/components/ui/button'
 import * as Spinner from '@/components/ui/spinner'
 
 import { Message as M } from './model'
 import type { Model, Msg } from './model'
+import { AppRoute } from './route'
 import { editSheet } from './views/edit-sheet'
-import { grid } from './views/grid'
 import { lightbox } from './views/lightbox'
 import { confirmDialog, toastStack } from './views/overlays'
-import * as TagManager from './tag-manager'
+import { routePage } from './views/pages'
 import type { Child } from './views/shared'
+import { GUTTER } from './views/shared'
 import { uploadDialog } from './views/upload-dialog'
 
 // ---------------------------------------------------------------------------
@@ -27,10 +26,6 @@ import { uploadDialog } from './views/upload-dialog'
 // ---------------------------------------------------------------------------
 
 const COL_CHOICES = [2, 3, 4, 5, 6] as const
-
-/** The design system's page margin, and the content column the header aligns to. */
-const GUTTER =
-  'mx-auto w-full max-w-(--layout-content-max) px-(--layout-margin-mobile) sm:px-(--layout-margin)'
 
 const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
@@ -112,55 +107,30 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
   )
 
 // ---------------------------------------------------------------------------
-// filter bar: TagManager submodel (chips with counts + inline create +
-// result line). No "All photos" pill — an empty chip selection *is* all
-// photos; the count line states it.
-// ---------------------------------------------------------------------------
-
-const filterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const activeLabel = model.tags.find((tag) => tag.slug === model.activeTagSlug)?.label
-  return h.submodel({
-    slotId: 'admin-tag-manager',
-    model: model.tagManager,
-    view: TagManager.view,
-    viewInputs: {
-      tags: model.tags,
-      // Counts describe the loaded result set, so they only mean something
-      // unfiltered — a filtered list would repeat the same count on every chip.
-      ...(model.activeTagSlug === undefined
-        ? {
-            countFor: (tag: Tag): number =>
-              model.photos.filter((photo) =>
-                (photo.tags ?? []).some((entry) => entry.id === tag.id),
-              ).length,
-          }
-        : { activeSlug: model.activeTagSlug }),
-      resultText: `${String(model.photos.length)} photo${model.photos.length === 1 ? '' : 's'}${
-        activeLabel !== undefined ? ` · filtered by “${activeLabel}”` : ''
-      }`,
-    },
-    toParentMessage: (message) => M.GotTagManagerMessage({ message }),
-  })
-}
-
-// ---------------------------------------------------------------------------
 // document
 // ---------------------------------------------------------------------------
 
+const SUFFIX = ' — Admin'
+
+const routeTitle = (model: Model): string =>
+  AppRoute.match(model.route, {
+    Library: () => 'Admin — photo.elianiva.com',
+    Drafts: () => `Drafts${SUFFIX}`,
+    Settings: () => `Settings${SUFFIX}`,
+    Photo: () =>
+      model.photoStatus === 'ready' && model.photo !== undefined
+        ? `${model.photo.title}${SUFFIX}`
+        : `Photo${SUFFIX}`,
+    NotFound: () => `Not found${SUFFIX}`,
+  })
+
 export const view = (model: Model, h: HtmlBuilder<Msg>): Document => ({
-  title: 'Admin — photo.elianiva.com',
+  title: routeTitle(model),
   body: h.div(
     [h.Class('min-h-screen bg-role-surface text-role-text-primary')],
     [
       header(model, h),
-      h.main(
-        [h.Class(`${GUTTER} pb-(--spacing-5xl)`)],
-        [
-          h.h1([h.Class('mt-(--spacing-2xl) type-section text-role-text-primary')], ['Photos']),
-          filterBar(model, h),
-          grid(model, h),
-        ],
-      ),
+      h.main([h.Class(`${GUTTER} pb-(--spacing-5xl)`)], [routePage(model, h)]),
       editSheet(model, h),
       uploadDialog(model, h),
       confirmDialog(model, h),

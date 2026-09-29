@@ -23,6 +23,10 @@ import type { Model, Msg } from '../model'
 
 export type Child = Html | string
 
+/** The content column every page and the header align to. */
+export const GUTTER =
+  'mx-auto w-full max-w-(--layout-content-max) px-(--layout-margin-mobile) sm:px-(--layout-margin)'
+
 export const formatBytes = (size: number): string =>
   size >= 1024 * 1024
     ? `${(size / (1024 * 1024)).toFixed(1)} MB`
