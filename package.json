@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "turbo build",
+    "build": "turbo build && pnpm build:website",
+    "build:website": "node scripts/build-website.mjs",
     "check": "vp check",
     "check:node": "node scripts/check-node-version.mjs",
     "dev": "alchemy dev --stage dev",
