@@ -25,6 +25,10 @@ import {
 export const AppRoute = defineRouteUnion({
   /** `/admin` — every Photo. */
   Library: {},
+  /** `/admin/atoms` — the Desk's design-system sheet: every atom in
+   *  `components/ui`, drawn in the page each one belongs to. Nothing links to
+   *  it yet; the sidebar arrives with #24. */
+  Atoms: {},
   /** `/admin/drafts` — Photos that are not published. */
   Drafts: {},
   /** `/admin/settings` — the site settings singleton. */
@@ -41,6 +45,8 @@ const admin = literal(adminRoot)
 
 export const libraryRouter = pipe(admin, mapTo(AppRoute.Library))
 
+export const atomsRouter = pipe(admin, slash(literal('atoms')), mapTo(AppRoute.Atoms))
+
 export const draftsRouter = pipe(admin, slash(literal('drafts')), mapTo(AppRoute.Drafts))
 
 export const settingsRouter = pipe(admin, slash(literal('settings')), mapTo(AppRoute.Settings))
@@ -54,7 +60,7 @@ export const photoRouter = pipe(
 
 /** Every admin route. A parser only matches when it consumes the whole path,
  *  so the shared `admin` prefix never shadows a longer route. */
-const adminParser = oneOf(photoRouter, settingsRouter, draftsRouter, libraryRouter)
+const adminParser = oneOf(photoRouter, settingsRouter, draftsRouter, atomsRouter, libraryRouter)
 
 /** The route a URL names. A URL under `/admin` that no route names — a
  *  mistyped path, a photo id that is not one — is `NotFound`, which the Admin

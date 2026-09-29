@@ -123,6 +123,7 @@ const SUFFIX = ' — Admin'
 const routeTitle = (model: Model): string =>
   AppRoute.match(model.route, {
     Library: () => 'Admin — photo.elianiva.com',
+    Atoms: () => 'Atoms — Admin',
     Drafts: () => `Drafts${SUFFIX}`,
     Settings: () => `Settings${SUFFIX}`,
     Photo: () =>

@@ -1,7 +1,7 @@
 /**
  * Admin child submodel folds: edit Sheet, upload Dialog, confirm Dialog,
- * FileDrop, toast stack, and the tag comboboxes. Each fold re-keys the
- * child's messages into the matching Got*Message variant.
+ * FileDrop, toast stack, the Segment groups, and the tag comboboxes. Each fold
+ * re-keys the child's messages into the matching Got*Message variant.
  */
 
 import { Option as Opt, Schema as S } from 'effect'
@@ -12,6 +12,7 @@ import { Multi } from '@foldkit/ui/combobox'
 
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
+import * as Segment from '@/components/ui/segment'
 import * as Sheet from '@/components/ui/sheet'
 
 import { CreateTagCmd } from './commands'
@@ -204,6 +205,25 @@ export const foldToast = Update.foldChild({
     Message.GotToastMessage({ message }),
   foldOutMessage: (): Update.Step<Model, Msg> => (writtenModel) => ({ model: writtenModel }),
 })
+
+/** One Segment group, by id. A page can hold several — the atoms sheet draws
+ *  five, and the Editor will hold one per panel — so the fold is built per
+ *  group rather than once for all of them. A pick is the child's own state:
+ *  the fold writes it back and the parent reads the group it named. */
+export const foldSegmentGroup =
+  (groupId: string) =>
+  (model: Model, message: Segment.Message): UpdateReturn =>
+    Update.foldChild({
+      update: Segment.update,
+      read: (parent: Model) =>
+        Opt.fromUndefinedOr(Segment.readGroup(parent.segmentGroups, groupId)),
+      write: (parent: Model, nextGroup: Segment.Model) =>
+        modifyFields(parent, {
+          segmentGroups: () => Segment.writeGroup(parent.segmentGroups, groupId, nextGroup),
+        }),
+      toParentMessage: (childMessage: Segment.Message) =>
+        Message.GotSegmentMessage({ groupId, message: childMessage }),
+    })(model, message)
 
 // ---------------------------------------------------------------------------
 // tag combobox folds

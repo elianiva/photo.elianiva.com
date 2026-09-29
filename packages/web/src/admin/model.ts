@@ -14,6 +14,8 @@ import { Multi } from '@foldkit/ui/combobox'
 import * as Dialog from '@/components/ui/dialog'
 import * as Sheet from '@/components/ui/sheet'
 import * as FileDrop from '@/components/ui/file-drop'
+import * as Segment from '@/components/ui/segment'
+import * as Swatch from '@/components/ui/swatch'
 import * as Toast from '@/components/ui/toast'
 
 import { AppRoute } from './route'
@@ -91,6 +93,24 @@ export const UPLOAD_LIMITS = {
 export const GridCols = S.Literals([2, 3, 4, 5, 6])
 export type GridCols = typeof GridCols.Type
 
+/** The Mat's three colours, from the Swatch atom — the same three the Editor's
+ *  Border panel picks between (CONTEXT.md, Mat). */
+export const MatColour = S.Literals(Swatch.matColours)
+export type MatColour = typeof MatColour.Type
+
+/** What `/admin/atoms` remembers. Namespaced so the sheet's own state — a page
+ *  number, which specimen rows are ticked, which toggles are on — is never
+ *  mistaken for the Admin's. */
+export const AtomsState = S.Struct({
+  page: S.Number,
+  /** Indexes into the specimen rows of the current page. */
+  selectedRowIndexes: S.Array(S.Number),
+  switches: S.Record(S.String, S.Boolean),
+  inputs: S.Record(S.String, S.String),
+  matColour: MatColour,
+})
+export type AtomsState = typeof AtomsState.Type
+
 /** In-flight upload abort handles, keyed by queue-item id — the Model stays
  *  serializable. Registered by `UploadItemCmd`; aborted by `CancelUploads`. */
 export const abortStore = new Map<string, AbortController>()
@@ -119,6 +139,10 @@ export const Model = S.Struct({
 
   // grid density: number of square-tile columns (persisted to localStorage)
   cols: GridCols,
+
+  // the Desk atoms sheet: one Segment group per single-select it draws
+  segmentGroups: Segment.Groups,
+  atoms: AtomsState,
 
   // the Photo route: the Photo the URL names, and how its fetch is going
   photo: S.optional(PhotoWithTags),
@@ -242,6 +266,17 @@ export const Message = defineMessageUnion({
 
   // tag manager bar
   GotTagManagerMessage: { message: TagManager.Message },
+
+  // Desk atom submodels
+  GotSegmentMessage: { groupId: S.String, message: Segment.Message },
+
+  // the atoms sheet
+  SteppedAtomPage: { page: S.Number },
+  ToggledAtomSelection: {},
+  ToggledAtomRow: { index: S.Number },
+  ToggledAtomSwitch: { id: S.String, isChecked: S.Boolean },
+  SetAtomInput: { id: S.String, value: S.String },
+  PickedAtomMat: { colour: MatColour },
 
   // toasts
   GotToastMessage: { message: AdminToast.Message },
