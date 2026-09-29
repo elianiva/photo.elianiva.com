@@ -5,6 +5,8 @@
 
 import { Effect, Schema as S } from 'effect'
 import * as Command from 'foldkit/command'
+import { load, pushUrl } from 'foldkit/navigation'
+import { PhotoId } from '@photo/shared'
 import type { PhotoWithTags, Tag } from '@photo/shared'
 
 import { apiUrl } from '@/lib/api'
@@ -80,6 +82,43 @@ export const FetchTagsCmd = Command.define('FetchTags', {
   execute: Effect.map(rpcPublic<ReadonlyArray<Tag>>('ListTags', {}), (tags) =>
     Message.SucceededFetchTags({ tags: [...tags] }),
   ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** One Photo, for `/admin/photos/<id>`. The route already holds a `PhotoId`,
+ *  so this is the Photo's own fetch and it declares its own failure rather
+ *  than the grid's: a Photo that is gone must not put the Library in its
+ *  error state. */
+export const FetchPhotoCmd = Command.define('FetchPhoto', {
+  args: { id: S.String },
+  messages: [Message.SucceededFetchPhoto, Message.FailedFetchPhoto],
+  execute: ({ id }) =>
+    Effect.map(rpcPublic<PhotoWithTags>('GetPhoto', { id }), (photo) =>
+      Message.SucceededFetchPhoto({ id: PhotoId.make(id), photo }),
+    ).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(Message.FailedFetchPhoto({ id: PhotoId.make(id), message: error.message })),
+      ),
+    ),
+})
+
+// ---------------------------------------------------------------------------
+// navigation
+// ---------------------------------------------------------------------------
+
+/** Move the URL bar in-app. The runtime then reports the new URL back as
+ *  `ChangedUrl`, which is where the route is parsed. */
+export const NavigateCmd = Command.define('Navigate', {
+  args: { url: S.String },
+  messages: [Message.CompletedNavigate],
+  execute: ({ url }) => pushUrl(url).pipe(Effect.as(Message.CompletedNavigate())),
+})
+
+/** A full document navigation — a URL the Admin's routes do not name, which
+ *  includes the public Front on this same origin. */
+export const LoadCmd = Command.define('Load', {
+  args: { href: S.String },
+  messages: [Message.CompletedLoad],
+  execute: ({ href }) => load(href).pipe(Effect.as(Message.CompletedLoad())),
 })
 
 export const SaveEditsCmd = Command.define('SaveEdits', {

@@ -1,6 +1,7 @@
 import { Effect } from 'effect'
 import * as Server from 'foldkit/experimental/server'
 import type { WebsiteEnv } from '../../../alchemy.run'
+import { isAdminPath } from './admin/route'
 import { Model as HomeModel } from './home/model'
 import { init as homeInit } from './home/update'
 import { view as homeView } from './home/view'
@@ -139,8 +140,10 @@ const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Respons
     return renderSitemap(env)
   }
 
-  // Admin: SPA shell only. The client entry boots a fresh app (no SSR stamp).
-  if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
+  // Admin: SPA shell for every path in the Admin's URL space, so a deep route
+  // boots the app. The client parses the route and draws NotFound for a path
+  // that names none.
+  if (isAdminPath(url.pathname)) {
     if (request.method === 'GET') {
       return env.ASSETS.fetch(new Request(new URL('/index.html', request.url).toString()))
     }
