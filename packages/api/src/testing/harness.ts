@@ -25,11 +25,23 @@ import { makeR2Fake } from './r2-fake'
 const migrationsDir = new URL('../../../../migrations/', import.meta.url)
 
 /** `migrations/*.sql` in filename order — the same list Alchemy applies to D1. */
-export const repoMigrations = (): ReadonlyArray<string> =>
+export const migrationFiles = (): ReadonlyArray<{ name: string; sql: string }> =>
   readdirSync(migrationsDir)
     .filter((name) => name.endsWith('.sql'))
     .sort()
-    .map((name) => readFileSync(new URL(name, migrationsDir), 'utf8'))
+    .map((name) => ({ name, sql: readFileSync(new URL(name, migrationsDir), 'utf8') }))
+
+export const repoMigrations = (): ReadonlyArray<string> => migrationFiles().map((file) => file.sql)
+
+/**
+ * Migrations up to and including `last` — the schema a later migration has to
+ * apply to. Filenames sort into migration order, so the cut is by name rather
+ * than by index.
+ */
+export const migrationsThrough = (last: string): ReadonlyArray<string> =>
+  migrationFiles()
+    .filter((file) => file.name <= last)
+    .map((file) => file.sql)
 
 export interface TestHarness {
   readonly gateway: typeof Gateway.Service
