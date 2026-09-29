@@ -37,7 +37,7 @@ A derived image file produced from a Photo's original. There are exactly two: `P
 _Avoid_: Derivative, thumbnail, variant, export (the export is the action; the file it produces is a Rendition)
 
 **Tag**:
-A label for grouping/filtering Photos (e.g., `kyoto`, `film`, `portrait`). Free-form, many-to-many with Photo. Has `slug` (URL-safe, unique) and `label` (display). Managed from day one; no controlled vocabulary.
+A label for grouping/filtering Photos (e.g., `kyoto`, `film`, `portrait`). Free-form, many-to-many with Photo. Has `slug` (URL-safe, unique), `label` (the name) and an optional `caption` (the one-line sentence the public Series page prints under it, e.g. `Ferries, rain, and the long light on Istiklal.`). A Tag with no caption has `null` there, never an empty string. Managed from day one; no controlled vocabulary.
 _Avoid_: Collection (deferred), Category, Album
 
 **Image**:
@@ -59,6 +59,14 @@ _Avoid_: Storage (that is the Admin's block), Library (that is the Admin's), Col
 **Storage**:
 The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content.
 _Avoid_: Archive (that is the public page), Library, Backup, Sync
+
+**Settings**:
+The Admin's single-row singleton, read by the Editor's export defaults, the public Masthead, the Folio nav and the Colophon. One row, `id` pinned to 1. Its `updatedAt` is what the Settings header's `SAVED 2 MINUTES AGO` reports.
+_Avoid_: Config, Preferences, Options, Site settings (the row and the page are the same thing)
+
+**Site Section**:
+One entry in the public Folio nav, authored as an ordered list in Settings. A Section is `{ label, kind, target }`: `kind` is `all` (the Front itself, and the only kind with no `target`), `tag` or `series` (a Tag's slug — a Series page _is_ a Tag page, see ADR 0008), or `page` (a page name). Stored as a JSON array on the Settings row; there is no sections table. The design draws `SECTIONS` as one `ALL · STREET · LANDSCAPE · SERIES · ABOUT` string, which cannot be routed, so the Settings UI is an ordered repeater instead — a deliberate, recorded deviation.
+_Avoid_: Nav item, menu, link, category
 
 **Collection** _(deferred)_:
 Previously: a curated group of Photos (e.g., "Kyoto 2024"). Replaced by flat list + Tags for v1. Kept as a deferred term; reintroduce only if you need ordered, titled groupings with a cover.

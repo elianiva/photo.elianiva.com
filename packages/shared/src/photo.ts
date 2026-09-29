@@ -14,6 +14,9 @@ export const Tag = S.Struct({
   id: TagId,
   slug: S.String,
   label: S.String,
+  /** The sentence under the name on a public Series row. Null for a Tag whose
+   *  caption has never been written — not an empty string. */
+  caption: S.NullOr(S.String),
 })
 export type Tag = typeof Tag.Type
 
@@ -59,6 +62,7 @@ export const DbTagRow = S.Struct({
   id: TagId,
   slug: S.String,
   label: S.String,
+  caption: S.NullOr(S.String),
 })
 export type DbTagRow = typeof DbTagRow.Type
 
