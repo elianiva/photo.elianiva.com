@@ -8,7 +8,7 @@ import {
   type PhotoStatus,
   formatExifLine,
 } from '@photo/shared'
-import { Gateway, type D1DatabaseLike } from '../gateway'
+import { Gateway } from '../gateway'
 
 import {
   PhotoService,
@@ -1171,7 +1171,7 @@ describe('PhotoService.restore', () => {
     expect(await deletedAtOf(harness, created.id)).toBeNull()
     expect((await get(harness, created.id)).number).toBe(1)
     expect((await get(harness, created.id)).tags).toEqual([
-      { id: tag.id, slug: 'kyoto', label: 'Kyoto' },
+      { id: tag.id, slug: 'kyoto', label: 'Kyoto', caption: null },
     ])
     expect((await list(harness, {})).items.map((item) => item.id)).toEqual([created.id])
   })

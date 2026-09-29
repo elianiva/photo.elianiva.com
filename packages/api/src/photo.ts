@@ -345,10 +345,6 @@ const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<st
     return map as Map<string, ReadonlyArray<Tag>>
   })
 
-/** One column list for every Photo read, so a column added to `DbPhotoRow`
- *  cannot be read on one query and missing on another. */
-const PHOTO_COLUMNS =
-  'id, slug, title, r2Key, width, height, takenAt, aperture, shutter, iso, focalLength, metadata, blurhash'
 
 const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTags => ({
   id: row.id,
@@ -617,7 +613,7 @@ export const PhotoServiceLive = Layer.effect(
                    VALUES (?, ?, ?, ?, ?, ?,
                            (SELECT value FROM photo_number_counter WHERE id = 1),
                            ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?)`,
+                           ?, ?, ?, ?, ?, ?, ?)`,
                 )
                 .bind(
                   id,
