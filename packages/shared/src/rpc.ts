@@ -1,6 +1,6 @@
 import { Schema as S } from 'effect'
 import { Rpc, RpcGroup } from 'effect/unstable/rpc'
-import { PhotoMetadata, PhotoWithTags, Tag } from './photo'
+import { PhotoMetadata, PhotoWithTags, Tag, TagId } from './photo'
 
 // ---------------------------------------------------------------------------
 // Shared domain errors — part of the RPC contract so both sides typecheck
@@ -46,7 +46,12 @@ export const describeCause = (cause: unknown): string => {
 
 export class ListPhotos extends Rpc.make('ListPhotos', {
   payload: {
-    tagSlug: S.optional(S.String.pipe(S.check(S.isMaxLength(120)))),
+    /** Any-of: a Photo carrying at least one of these Tags. The Admin's
+     *  sidebar filter is multi-select, so this is a set and never a slug —
+     *  a slug would make the second pick replace the first. */
+    tagIds: S.optional(
+      S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(S.check(S.isMaxLength(32))),
+    ),
     q: S.optional(S.String.pipe(S.check(S.isMaxLength(120)))),
     limit: S.optional(S.Number),
     cursor: S.optional(S.String.pipe(S.check(S.isMaxLength(512)))),
@@ -115,4 +120,65 @@ export class DeleteTag extends Rpc.make('DeleteTag', {
   error: StorageError,
 }) {}
 
-export const PhotoAdminRpcs = RpcGroup.make(UpdatePhoto, DeletePhoto, CreateTag, DeleteTag)
+// ---------------------------------------------------------------------------
+// The shell reads — session, counts, storage (issue #24). All three are on
+// the admin group, so the edge gate and the in-worker JWT (ADR 0007) are what
+// make them readable at all. None of them is a mutation and none of them is
+// ever public.
+// ---------------------------------------------------------------------------
+
+/** The Access facts the gate already computed, read rather than recomputed
+ *  (ADR 0007). `email` is `null` only where the gate stood down — the `dev`
+ *  stage creates no Access applications — and `teamDomain` is `''` there too.
+ *  There is no signed-out state: Access gates the route before any of this
+ *  runs, so a caller either has a verified claim or never got this far. */
+export class GetSession extends Rpc.make('GetSession', {
+  payload: {},
+  success: S.Struct({
+    email: S.NullOr(S.String),
+    teamDomain: S.String,
+  }),
+}) {}
+
+/** The sidebar's counts, over live Photos. `scheduled` has no entry because
+ *  it is not a Status (CONTEXT.md) and nothing records a publish time. */
+export class GetCounts extends Rpc.make('GetCounts', {
+  payload: {},
+  success: S.Struct({
+    /** Every live Photo. */
+    total: S.Number,
+    /** Soft-deleted Photos, so the Trash row can report a real number. */
+    trashed: S.Number,
+    byStatus: S.Struct({
+      draft: S.Number,
+      published: S.Number,
+      failed: S.Number,
+    }),
+    /** Every Tag with how many live Photos carry it. A count of 0 is a fact. */
+    byTag: S.Array(S.Struct({ id: TagId, label: S.String, count: S.Number })),
+  }),
+  error: StorageError,
+}) {}
+
+/** The sidebar meter's aggregate. `capBytes` is a configured constant, not a
+ *  Settings row — the quota is a property of the bucket, not something the
+ *  operator authors. */
+export class GetStorageUsage extends Rpc.make('GetStorageUsage', {
+  payload: {},
+  success: S.Struct({
+    photos: S.Number,
+    bytes: S.Number,
+    capBytes: S.Number,
+  }),
+  error: StorageError,
+}) {}
+
+export const PhotoAdminRpcs = RpcGroup.make(
+  GetSession,
+  GetCounts,
+  GetStorageUsage,
+  UpdatePhoto,
+  DeletePhoto,
+  CreateTag,
+  DeleteTag,
+)
