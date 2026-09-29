@@ -1,0 +1,141 @@
+modes {
+  theme: [light, dark]
+}
+neutral: boldness(color(#77726A))
+accent: boldness(color(#B3321F))
+font.family: "Libre Franklin"
+font.family.sans: font.family
+font.family.serif: Newsreader
+font.family.mono: "IBM Plex Mono"
+font.size.2xs: 10
+font.size.3xs: 9
+color.surface: neutral.hint
+color.surface.container: neutral.faint
+color.surface.container.high: neutral.subtle
+color.on-surface: neutral.intense
+color.text.primary: neutral.intense
+color.text.secondary: neutral.firm
+color.text.disabled: neutral.mid
+color.rule: neutral.intense
+color.hairline: neutral.soft
+color.outline: neutral.soft
+color.outline.variant: neutral.subtle
+color.primary: neutral.intense
+color.on-primary: neutral.hint
+color.primary.container: neutral.faint
+color.accent: accent.firm
+color.on-accent: neutral.hint
+color.error: accent.firm
+color.on-error: neutral.hint
+color.error.container: accent.hint
+color.surface.hover: neutral.faint
+color.surface.selected: neutral.subtle
+typography.nameplate: { fontSize: 112, fontWeight: 500, lineHeight: 1.0, fontFamily: font.family.serif, letterSpacing: -0.03 }
+typography.nameplate.sm: { fontSize: 44, fontWeight: 500, lineHeight: 1.0, fontFamily: font.family.serif, letterSpacing: -0.02 }
+typography.headline: { fontSize: 44, fontWeight: 400, lineHeight: 1.05, fontFamily: font.family.serif, letterSpacing: -0.015 }
+typography.section: { fontSize: 28, fontWeight: 400, lineHeight: 1.1, fontFamily: font.family.serif, letterSpacing: -0.01 }
+typography.deck: { fontSize: 19, fontWeight: 400, lineHeight: 1.45, fontFamily: font.family.serif }
+typography.caption: { fontSize: 14, fontWeight: 400, lineHeight: 1.35, fontFamily: font.family.serif }
+typography.kicker: { fontSize: font.size.2xs, fontWeight: 600, lineHeight: 1.2, fontFamily: font.family, letterSpacing: 0.14 }
+typography.exif: { fontSize: font.size.2xs, fontWeight: 400, lineHeight: 1.3, fontFamily: font.family.mono, letterSpacing: 0.02 }
+typography.ui: { fontSize: 13, fontWeight: 500, lineHeight: 1.3, fontFamily: font.family }
+typography.ui.sm: { fontSize: font.size.xs, fontWeight: 400, lineHeight: 1.35, fontFamily: font.family }
+
+neutral.50: #F3F0E8
+neutral.100: #EAE6DC
+neutral.200: #B4AEA2
+neutral.300: #8F8A80
+neutral.400: #A29C8F
+neutral.500: #7C766B
+neutral.600: #5E5950
+neutral.700: #46423B
+neutral.800: #2F2C28
+neutral.900: #1B1A18
+neutral.950: #0F0E0D
+
+color.mat.white: #FFFFFF
+color.mat.paper: #F3F0E8
+color.mat.ink: #111111
+
+typography.nameplate.xs: { fontSize: 28, fontWeight: 500, lineHeight: 1.0, fontFamily: font.family.serif, letterSpacing: -0.02 }
+typography.section.sm: { fontSize: 24, fontWeight: 400, lineHeight: 1.1, fontFamily: font.family.serif, letterSpacing: -0.01 }
+typography.body: { fontSize: 16, fontWeight: 400, lineHeight: 1.45, fontFamily: font.family.serif }
+typography.exif.sm: { fontSize: font.size.3xs, fontWeight: 400, lineHeight: 1.3, fontFamily: font.family.mono, letterSpacing: 0.02 }
+
+color.focus: neutral.intense
+layout.content.max {
+  $type: number
+  $default: 1080
+}
+layout.margin {
+  $type: number
+  $default: 48
+}
+layout.margin.mobile {
+  $type: number
+  $default: 16
+}
+breakpoint.tablet {
+  $type: number
+  $default: 768
+}
+breakpoint.desktop {
+  $type: number
+  $default: 1176
+}
+grid.columns {
+  $type: number
+  $default: 3
+}
+grid.columns.mobile {
+  $type: number
+  $default: 2
+}
+motion.duration.fast {
+  $type: number
+  $default: 120
+}
+motion.duration.base {
+  $type: number
+  $default: 200
+}
+motion.duration.slow {
+  $type: number
+  $default: 320
+}
+motion.ease.out {
+  $type: string
+  $default: "decelerate"
+}
+motion.ease.in-out {
+  $type: string
+  $default: "standard"
+}
+image.preview.long-edge {
+  $type: number
+  $default: 1200
+}
+image.blurhash.x {
+  $type: number
+  $default: 4
+}
+image.blurhash.y {
+  $type: number
+  $default: 3
+}
+
+color.primary.hover: neutral.bold
+color.surface.pressed: neutral.subtle
+color.accent.hover: accent.bold
+motion.ease.in {
+  $type: string
+  $default: "accelerate"
+}
+image.preview.quality {
+  $type: number
+  $default: 82
+}
+image.full.quality {
+  $type: number
+  $default: 92
+}
