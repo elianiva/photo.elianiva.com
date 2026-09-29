@@ -66,6 +66,10 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
   // The same wire shape the public group declares, and the Editor's Photo: a
   // Draft, a failed upload, anything but the Trash.
   GetPhoto: (payload) => PhotoService.use((service) => service.get(payload.id)),
+  // The Editor's loaded snapshot. The gated group only: the public site reads
+  // the Rendition the Presentation produced, not the authoring state.
+  GetPhotoPresentation: (payload) =>
+    PhotoService.use((service) => service.presentation(payload.id)),
   UpdatePhoto: (payload) =>
     Effect.gen(function* () {
       if (

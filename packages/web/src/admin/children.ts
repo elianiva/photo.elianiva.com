@@ -224,6 +224,27 @@ export const foldFileDrop = Update.foldChild({
   },
 })
 
+/** The Editor's leave guard. Closing it (Esc, backdrop, close button) is
+ *  "keep editing", so the URL it was holding is forgotten with it: a guard that
+ *  remembered a stale target could navigate somewhere the operator never
+ *  asked for. */
+export const foldEditorLeave = Update.foldChild({
+  update: Dialog.update,
+  read: (model: Model) => Opt.some(model.editor.leaveDialog),
+  write: (model: Model, nextDialog: typeof model.editor.leaveDialog) =>
+    modifyFields(model, { editor: () => ({ ...model.editor, leaveDialog: nextDialog }) }),
+  toParentMessage: (message: typeof Dialog.Message.Type) =>
+    Message.GotEditorLeaveMessage({ message }),
+  foldOutMessage: (out): Update.Step<Model, Msg> =>
+    out._tag === 'Closed'
+      ? (writtenModel) => ({
+          model: modifyFields(writtenModel, {
+            editor: () => ({ ...writtenModel.editor, leaveUrl: '' }),
+          }),
+        })
+      : (writtenModel) => ({ model: writtenModel }),
+})
+
 /** Toast dismissal/expiry is fully owned by the toast submodel. */
 export const foldToast = Update.foldChild({
   update: AdminToast.update,

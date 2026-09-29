@@ -317,8 +317,14 @@ export default {
     }
 
     const url = new URL(request.url)
+    // Effect's HTTP RPC client appends a slash to the URL it is given, so the
+    // app itself asks for `/rpc/` and `/admin/rpc/`. Every path below is
+    // matched by hand against this string, so the trailing slash is dropped
+    // once here instead of being spelled into each comparison — otherwise the
+    // site's own client gets the Not found below from every read.
+    const pathname = url.pathname.replace(/\/+$/, '')
 
-    if (url.pathname === '/health') {
+    if (pathname === '/health') {
       try {
         const row = await env.DB.prepare('SELECT 1 as ok').first<{ ok: number }>()
         if (row === null) throw new Error('db probe failed')
@@ -328,7 +334,7 @@ export default {
       }
     }
 
-    if (url.pathname === '/upload' && request.method === 'POST') {
+    if (pathname === '/upload' && request.method === 'POST') {
       const limited = rateLimited(uploadLimiter, request)
       if (limited !== null) return respond(limited)
       // The upload is edge-gated, not identified: nothing it writes carries
@@ -339,7 +345,7 @@ export default {
       return respond(res)
     }
 
-    if (url.pathname === '/admin/rpc') {
+    if (pathname === '/admin/rpc') {
       const limited = rateLimited(adminRpcLimiter, request)
       if (limited !== null) return respond(limited)
       const gate = await verifyAdminAccess(request, env)
@@ -356,7 +362,7 @@ export default {
       return respond(res)
     }
 
-    if (url.pathname === '/rpc') {
+    if (pathname === '/rpc') {
       const limited = rateLimited(publicRpcLimiter, request)
       if (limited !== null) return respond(limited)
       // The admin group is mounted on `/admin/rpc`, which this path never

@@ -38,6 +38,12 @@ const RATIO_FRACTIONS: Record<PhotoRatio, readonly [number, number]> = {
   '9:16': [9, 16],
 }
 
+/** A Ratio as the CSS `aspect-ratio` value the Stage frames it with. Derived
+ *  from {@link RATIO_FRACTIONS} rather than written out again, so the two
+ *  cannot disagree; the Editor's frame and the Library's ratio filter are then
+ *  one table. */
+export const ratioAspect = (ratio: PhotoRatio): string => RATIO_FRACTIONS[ratio].join(' / ')
+
 /**
  * How far a measured frame may sit from a supported Ratio and still snap to it.
  * Migration 0004 spells the same number into the backfill's SQL `CASE`; a test
