@@ -65,6 +65,17 @@ export function toQueueItem(key: string): Model['queue'][number] {
 export const byLabel = (a: { readonly label: string }, b: { readonly label: string }): number =>
   a.label.localeCompare(b.label)
 
+/** The ticked Photos in the Library's own row order rather than the order they
+ *  were clicked in, so a bulk operation reads the way the table reads. A Photo
+ *  ticked on an earlier page is not in the list any more, so it follows, in
+ *  selection order. */
+export const selectedIds = (model: Model): ReadonlyArray<string> => {
+  const ticked = new Set(model.selected)
+  const onPage = model.photos.filter((photo) => ticked.has(photo.id)).map((photo) => photo.id)
+  const offPage = model.selected.filter((id) => !model.photos.some((photo) => photo.id === id))
+  return [...onPage, ...offPage]
+}
+
 export const photoCountLabel = (count: number): string =>
   `${String(count)} photo${count === 1 ? '' : 's'}`
 

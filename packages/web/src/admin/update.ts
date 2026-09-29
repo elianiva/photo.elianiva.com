@@ -20,7 +20,10 @@ import * as FileDrop from '@/components/ui/file-drop'
 import * as Sheet from '@/components/ui/sheet'
 
 import {
+  AddBorderCmd,
   BackCmd,
+  BulkAddTagsCmd,
+  BulkTrashCmd,
   CreateTagCmd,
   DeletePhotoCmd,
   DeleteTagCmd,
@@ -39,15 +42,18 @@ import {
   PersistColsCmd,
   SaveEditsCmd,
   SaveSettingsCmd,
+  SetRowStatusCmd,
   UpdateEditorCmd,
   UploadItemCmd,
   readStoredCols,
 } from './commands'
 import {
+  foldAddTag,
   foldConfirm,
   foldDraftCombo,
   foldEditorLeave,
   foldFileDrop,
+  foldRowMenu,
   foldSegmentGroup,
   foldSheet,
   foldTagActions,
@@ -61,15 +67,16 @@ import {
   disposeItemAssets,
   liftChildCommands,
   photoCountLabel,
+  selectedIds,
   showToast,
   toggleIn,
   withOptional,
   type Commands,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, emptyDraft, abortStore, Message } from './model'
-import type { Message as Msg, Model } from './model'
-import { isAdminPath, urlToAppRoute } from './route'
+import { AdminToast, BULK_BORDER_MAT, emptyDraft, abortStore, Message } from './model'
+import type { LibraryPage, Message as Msg, Model } from './model'
+import { appRouteToUrl, isAdminPath, urlToAppRoute } from './route'
 import type { AppRoute } from './route'
 import {
   editorReturnUrl,
@@ -148,6 +155,14 @@ const initialModel = (route: AppRoute): Model => ({
   settingsDraft: emptySettingsDraft,
   settingsSaving: false,
   settingsIndexing: false,
+
+  selected: [],
+  libraryPage: 0,
+  libraryCursors: [''],
+  libraryTotal: 0,
+  rowMenu: Dialog.init({ id: 'admin-row-menu' }),
+  addTagDialog: Dialog.init({ id: 'admin-add-tag-dialog' }),
+  addTagIds: [],
 })
 
 /** Every route-driven command, in one place, so the two paths that resolve a
@@ -162,7 +177,8 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   const shellCommands: Commands = [FetchSessionCmd(), FetchCountsCmd(), FetchStorageCmd()]
   // Entering the Library loads it; staying within it (a reload, a back button)
   // does not re-read what is already in the Model.
-  const libraryCommands: Commands = Transition.isEntering(transition, 'Library')
+  const enteringLibrary = Transition.isEntering(transition, 'Library')
+  const libraryCommands: Commands = enteringLibrary
     ? [FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery }), FetchTagsCmd()]
     : []
   // The Settings page is a form over a row, and a form over a row is only
@@ -196,7 +212,7 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   // what puts it there, whichever of the two paths got us here. The Editor's
   // own state is reset with it, so arriving at another Photo cannot inherit the
   // previous one's draft or a half-answered read.
-  const next = Option.isSome(photoId)
+  const withPhoto = Option.isSome(photoId)
     ? withOptional(model, {
         photo: undefined,
         photoStatus: 'loading',
@@ -209,6 +225,18 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
         },
       })
     : model
+  // The table's paging and selection are claims about the rows being looked at.
+  // Entering the Library from another route starts at page one with nothing
+  // ticked: a selection carried in from the Trash names rows this table is not
+  // showing, and applying it to whatever loads would be a bulk operation the
+  // operator never chose.
+  const next = enteringLibrary
+    ? modifyFields(withPhoto, {
+        libraryPage: () => 0,
+        libraryCursors: () => [''],
+        selected: () => [],
+      })
+    : withPhoto
   const commands = [...shellCommands, ...libraryCommands, ...settingsCommands, ...photoCommands]
   return commands.length > 0 ? { model: next, commands } : { model: next }
 }
@@ -326,6 +354,41 @@ const stepSelection = (model: Model, delta: 1 | -1): Model => {
 }
 
 // ---------------------------------------------------------------------------
+// the Library table
+// ---------------------------------------------------------------------------
+
+/** Where the table is reading, as the args every refresh-after-a-write takes.
+ *  Read from the Model at dispatch, so a command can never refetch page one by
+ *  accident while the operator is looking at page three. */
+const currentPage = (model: Model) => ({
+  tagIds: [...model.activeTagIds],
+  q: model.searchQuery,
+  cursor: model.libraryCursors[model.libraryPage] ?? '',
+})
+
+/** A selection is a claim about the rows being looked at. A filter change
+ *  replaces those rows, so a selection of forty that silently followed a new
+ *  query would be forty Photographs the operator never chose. */
+const clearSelection = (model: Model): Model => modifyFields(model, { selected: () => [] })
+
+/** The tail every write in the table shares: the refreshed page goes in, the
+ *  sidebar's counts are re-read, and the operator is told what happened. The
+ *  write may have changed the page's own membership — a Status filter or a Tag
+ *  filter both move rows — so the rows are read back rather than patched. */
+const settled = (model: Model, page: LibraryPage, title: string, detail?: string): UpdateReturn => {
+  const refreshed = modifyFields(
+    retainSelection(modifyFields(model, { status: () => 'ready', error: () => undefined })),
+    {
+      photos: () => [...page.photos],
+      nextCursor: () => page.nextCursor,
+      libraryTotal: () => page.total,
+      loadingMore: () => false,
+    },
+  )
+  return showToast(refreshed, title, 'Success', detail, [FetchCountsCmd()])
+}
+
+// ---------------------------------------------------------------------------
 // update
 // ---------------------------------------------------------------------------
 
@@ -342,7 +405,7 @@ function step(current: Model, message: Msg, prior: Commands = []): UpdateReturn 
 const toggleTagFilter = (model: Model, id: string): UpdateReturn => {
   const next = toggleIn(model.activeTagIds, id)
   return {
-    model: retainSelection(modifyFields(model, { activeTagIds: () => next })),
+    model: clearSelection(retainSelection(modifyFields(model, { activeTagIds: () => next }))),
     commands: [FetchPhotosCmd({ tagIds: [...next], q: model.searchQuery })],
   }
 }
@@ -350,11 +413,12 @@ const toggleTagFilter = (model: Model, id: string): UpdateReturn => {
 const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     // ----- data ---------------------------------------------------------------
-    SucceededFetchPhotos: ({ photos, nextCursor }) => ({
+    SucceededFetchPhotos: ({ photos, nextCursor, total }) => ({
       model: retainSelection(
         modifyFields(model, {
           photos: () => [...photos],
           nextCursor: () => nextCursor ?? null,
+          libraryTotal: () => total,
           loadingMore: () => false,
           status: () => 'ready',
           error: () => undefined,
@@ -447,7 +511,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // ----- the Page Head's search -----------------------------------------------
     SetSearchQuery: ({ value }) => ({ model: modifyFields(model, { searchQuery: () => value }) }),
     SubmittedSearch: () => ({
-      model: retainSelection(modifyFields(model, { status: () => 'loading' })),
+      model: clearSelection(retainSelection(modifyFields(model, { status: () => 'loading' }))),
       commands: [FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery.trim() })],
     }),
 
@@ -802,12 +866,14 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const command =
         pending.kind === 'photo'
           ? DeletePhotoCmd({ id: pending.id })
-          : DeleteTagCmd({
-              id: pending.id,
-              // If the dying tag IS one of the active filters, drop it; the
-              // refetch then runs against the filters that survive.
-              tagIds: model.activeTagIds.filter((candidate) => candidate !== pending.id),
-            })
+          : pending.kind === 'bulk'
+            ? BulkTrashCmd({ ids: selectedIds(model), page: currentPage(model) })
+            : DeleteTagCmd({
+                id: pending.id,
+                // If the dying tag IS one of the active filters, drop it; the
+                // refetch then runs against the filters that survive.
+                tagIds: model.activeTagIds.filter((candidate) => candidate !== pending.id),
+              })
       return {
         model: cleared,
         commands: [
@@ -1044,6 +1110,184 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       return showToast(failed, 'Could not export the index', 'Error', failure)
     },
 
+    // ----- the Library table ---------------------------------------------------------
+    ToggledRowSelection: ({ id }) => ({
+      model: modifyFields(model, { selected: () => toggleIn(model.selected, id) }),
+    }),
+    ToggledPageSelection: () => {
+      const ids: ReadonlyArray<string> = model.photos.map((photo) => photo.id)
+      // Off, some, all — over the page, because that is the set of rows a
+      // header checkbox on a paged table is talking about. Ticking it twice is
+      // unticking the page, which is what a checkbox means.
+      const allTicked = ids.length > 0 && ids.every((id) => model.selected.includes(id))
+      return {
+        model: modifyFields(model, {
+          selected: () =>
+            allTicked
+              ? model.selected.filter((id) => !ids.includes(id))
+              : [...model.selected, ...ids.filter((id) => !model.selected.includes(id))],
+        }),
+      }
+    },
+    ClearedSelection: () => ({ model: clearSelection(model) }),
+    SteppedLibraryPage: ({ delta }) => {
+      const target = model.libraryPage + delta
+      // The first page has no cursor to go back to, and the last page is the
+      // one whose response carried no `nextCursor`. A step past either end is
+      // a no-op rather than a fetch that answers with nothing.
+      if (target < 0 || (delta > 0 && model.nextCursor === null)) return { model }
+      // Going forwards reads the cursor the page on screen handed over; going
+      // back reads the one already held for that page. Both are positions in
+      // the same ordering, so neither is invented.
+      const cursor = delta > 0 ? (model.nextCursor ?? '') : (model.libraryCursors[target] ?? '')
+      const cursors =
+        delta > 0
+          ? [...model.libraryCursors.slice(0, target), cursor]
+          : model.libraryCursors.slice(0, target + 1)
+      return {
+        model: modifyFields(model, {
+          libraryPage: () => target,
+          libraryCursors: () => cursors,
+          status: () => 'loading',
+        }),
+        commands: [
+          FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery, cursor }),
+        ],
+      }
+    },
+
+    OpenedRowMenu: ({ id }) => {
+      const opened = Dialog.open(model.rowMenu)
+      return {
+        model: modifyFields(withOptional(model, { rowMenuId: id }), {
+          rowMenu: () => opened.model,
+        }),
+        commands: liftChildCommands(opened.commands ?? [], (message) =>
+          Message.GotRowMenuMessage({ message }),
+        ),
+      }
+    },
+    SetRowStatus: ({ id, status }) => {
+      // The menu has done its job; it closes rather than sitting behind the
+      // row it was opened on.
+      const closed = Dialog.close(model.rowMenu)
+      const dismissed = modifyFields(withOptional(model, { rowMenuId: undefined }), {
+        rowMenu: () => closed.model,
+      })
+      return {
+        model: dismissed,
+        commands: [
+          SetRowStatusCmd({ id, status, page: currentPage(dismissed) }),
+          ...liftChildCommands(closed.commands ?? [], (message) =>
+            Message.GotRowMenuMessage({ message }),
+          ),
+        ],
+      }
+    },
+    SucceededSetRowStatus: ({ status, ...page }) =>
+      settled(
+        model,
+        page,
+        status === 'published' ? 'Published' : 'Unpublished',
+        status === 'published'
+          ? 'A visitor can see it on the public site.'
+          : 'A visitor can no longer see it.',
+      ),
+    /** The row menu's `Move to Trash`. The menu closes before the confirm
+     *  opens: the confirm is the same Dialog every other destructive action
+     *  uses, and two stacked dialogs are two ways to cancel one thing. */
+    RequestedRowTrash: ({ id, title }) => {
+      const closed = Dialog.close(model.rowMenu)
+      const dismissed = modifyFields(withOptional(model, { rowMenuId: undefined }), {
+        rowMenu: () => closed.model,
+      })
+      const confirmed = openConfirm(dismissed, { kind: 'photo', id, label: title })
+      return {
+        model: confirmed.model,
+        commands: [
+          ...liftChildCommands(closed.commands ?? [], (message) =>
+            Message.GotRowMenuMessage({ message }),
+          ),
+          ...(confirmed.commands ?? []),
+        ],
+      }
+    },
+    OpenedPhoto: ({ id }) => ({
+      model,
+      commands: [NavigateCmd({ url: appRouteToUrl({ _tag: 'Photo', id }) })],
+    }),
+
+    OpenedAddTag: () => {
+      const opened = Dialog.open(model.addTagDialog)
+      return {
+        model: modifyFields(model, {
+          addTagDialog: () => opened.model,
+          addTagIds: () => [],
+        }),
+        commands: liftChildCommands(opened.commands ?? [], (message) =>
+          Message.GotAddTagDialogMessage({ message }),
+        ),
+      }
+    },
+    ToggledAddTag: ({ id }) => ({
+      model: modifyFields(model, { addTagIds: () => toggleIn(model.addTagIds, id) }),
+    }),
+    ConfirmAddTag: () => {
+      const tagIds = [...model.addTagIds]
+      const ids = selectedIds(model)
+      if (tagIds.length === 0 || ids.length === 0) return { model }
+      const closed = Dialog.close(model.addTagDialog)
+      const prepared = modifyFields(model, { addTagDialog: () => closed.model })
+      return {
+        model: prepared,
+        commands: [
+          BulkAddTagsCmd({ ids, tagIds, page: currentPage(prepared) }),
+          ...liftChildCommands(closed.commands ?? [], (message) =>
+            Message.GotAddTagDialogMessage({ message }),
+          ),
+        ],
+      }
+    },
+    // The picked Tags are still on the Model here — the pick is cleared by the
+    // write's outcome, not before it, so the toast can name what was applied.
+    SucceededAddTag: ({ count, ...page }) => {
+      const labels = model.addTagIds.map(
+        (id) => model.tags.find((tag) => tag.id === id)?.label ?? id,
+      )
+      return settled(
+        modifyFields(model, { addTagIds: () => [] }),
+        page,
+        `Tagged ${photoCountLabel(count)}`,
+        labels.length > 0 ? labels.map((label) => `“${label}”`).join(', ') : undefined,
+      )
+    },
+    AddBorderToSelection: () => {
+      const ids = selectedIds(model)
+      if (ids.length === 0) return { model }
+      return { model, commands: [AddBorderCmd({ ids, page: currentPage(model) })] }
+    },
+    SucceededAddBorder: ({ count, ...page }) =>
+      settled(
+        model,
+        page,
+        `Border added to ${photoCountLabel(count)}`,
+        `Even mat, paper, ${String(BULK_BORDER_MAT.width)}%.`,
+      ),
+    RequestBulkTrash: ({ count }) => openConfirm(model, { kind: 'bulk', count }),
+    SucceededBulkTrash: ({ count, ...page }) => {
+      // Every selected Photo left every list, so the selection goes with them:
+      // it named rows this page can no longer show, and a Bulk Bar still
+      // offering them would offer a second delete of photographs that are
+      // already in the Trash.
+      const cleared = clearSelection(model)
+      return settled(
+        cleared,
+        page,
+        `${photoCountLabel(count)} moved to Trash`,
+        'Recoverable from the Trash. Purging is the only irreversible step.',
+      )
+    },
+
     // ----- routing -------------------------------------------------------------------
     // A plain anchor the runtime intercepted, and a URL that changed without a
     // click (popstate, or a navigation the runtime itself performed).
@@ -1098,6 +1342,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     GotEditSheetMessage: ({ message }) => foldSheet(model, message),
     GotUploadDialogMessage: ({ message }) => foldUploadDialog(model, message),
     GotConfirmMessage: ({ message }) => foldConfirm(model, message),
+    GotRowMenuMessage: ({ message }) => foldRowMenu(model, message),
+    GotAddTagDialogMessage: ({ message }) => foldAddTag(model, message),
     GotFileDropMessage: ({ message }) => foldFileDrop(model, message),
     GotToastMessage: ({ message }) => foldToast(model, message),
     GotSegmentMessage: ({ groupId, message }) => foldSegmentGroup(groupId)(model, message),

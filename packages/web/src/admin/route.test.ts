@@ -279,7 +279,7 @@ describe('the page a route draws', () => {
         [FetchSessionCmd, STANDDOWN],
         [FetchCountsCmd, Message.FailedGetCounts({})],
         [FetchStorageCmd, Message.FailedGetStorage({})],
-        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null })],
+        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })],
         [FetchTagsCmd, Message.SucceededFetchTags({ tags: [] })],
       ),
       Scene.expect(Scene.role('heading', { name: 'Library' })).toExist(),
@@ -308,7 +308,7 @@ describe('the page a route draws', () => {
         [FetchSessionCmd, STANDDOWN],
         [FetchCountsCmd, Message.FailedGetCounts({})],
         [FetchStorageCmd, Message.FailedGetStorage({})],
-        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null })],
+        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })],
         [FetchTagsCmd, Message.SucceededFetchTags({ tags: [] })],
       ),
       // The runtime reports the new URL after a navigation, exactly as it does

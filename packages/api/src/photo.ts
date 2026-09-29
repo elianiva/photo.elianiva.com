@@ -159,6 +159,11 @@ export interface PhotoServiceContract {
   readonly list: (
     filter: PhotoListFilter,
   ) => Effect.Effect<PhotoListPage, StorageError | InvalidInput>
+  /** How many live Photos `filter` selects, across the whole result set and
+   *  not just one page — the `OF 412` in the Library's Pager. The cursor is
+   *  ignored: a cursor is a position in one ordering, not a filter, so the
+   *  number is the same on every page of the same filter. */
+  readonly count: (filter: PhotoListFilter) => Effect.Effect<number, StorageError>
   readonly get: (id: string) => Effect.Effect<PhotoWithTags, StorageError | PhotoNotFound>
   /** Insert the row, link the tags, then store the bytes. Used by upload. */
   readonly create: (
@@ -632,6 +637,51 @@ const assertTagsExist = (db: (typeof Gateway.Service)['db'], tagIds: ReadonlyArr
     }
   })
 
+/**
+ * The filters, and only the filters: the predicates that decide which Photos a
+ * filter selects, with their binds in the order the query reads them.
+ *
+ * The audience predicate is not here — live for `PhotoService`, published for
+ * the public read model, and each caller owns it. Nor is the keyset: a cursor
+ * is a position in one ordering rather than a filter, so it must never be part
+ * of a count. That leaves the row query and the count query reading the same
+ * filters, which is the whole point of it being one function.
+ */
+export const filterWhere = (
+  filter: PhotoListFilter,
+): { readonly sql: string; readonly binds: ReadonlyArray<string | number | null> } => {
+  const clauses: Array<string> = []
+  const binds: Array<string | number | null> = []
+  if (filter.status !== undefined) {
+    clauses.push('status = ?')
+    binds.push(filter.status)
+  }
+  if (filter.ratio !== undefined) {
+    clauses.push('ratio = ?')
+    binds.push(filter.ratio)
+  }
+  const tagIds = filter.tagIds ?? []
+  if (tagIds.length > 0) {
+    const placeholders = tagIds.map(() => '?').join(', ')
+    clauses.push(`id IN (SELECT photoId FROM photo_tags WHERE tagId IN (${placeholders}))`)
+    binds.push(...tagIds)
+  }
+  const q = filter.q?.trim().slice(0, 120) ?? ''
+  if (q !== '') {
+    const needle = `%${escapeLike(q.toLowerCase())}%`
+    clauses.push(
+      `(LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(slug) LIKE ? ESCAPE '\\' OR LOWER(metadata) LIKE ? ESCAPE '\\')`,
+    )
+    binds.push(needle, needle, needle)
+  }
+  return { sql: clauses.join(' AND '), binds }
+}
+
+/** The audience predicate AND the filters. An unfiltered query is the
+ *  predicate on its own rather than a dangling `AND`. */
+const andFilter = (predicate: string, filterSql: string): string =>
+  filterSql === '' ? predicate : `${predicate} AND ${filterSql}`
+
 const selectPhotoRows = (
   db: (typeof Gateway.Service)['db'],
   predicate: string,
@@ -640,30 +690,9 @@ const selectPhotoRows = (
   cursor: PhotoCursor | null,
 ): Effect.Effect<{ rows: ReadonlyArray<DbPhotoRow>; nextCursor: string | null }, StorageError> =>
   Effect.gen(function* () {
-    const where: Array<string> = [predicate]
-    const binds: Array<string | number | null> = []
-    if (filter.status !== undefined) {
-      where.push('status = ?')
-      binds.push(filter.status)
-    }
-    if (filter.ratio !== undefined) {
-      where.push('ratio = ?')
-      binds.push(filter.ratio)
-    }
-    const tagIds = filter.tagIds ?? []
-    if (tagIds.length > 0) {
-      const placeholders = tagIds.map(() => '?').join(', ')
-      where.push(`id IN (SELECT photoId FROM photo_tags WHERE tagId IN (${placeholders}))`)
-      binds.push(...tagIds)
-    }
-    const q = filter.q?.trim().slice(0, 120) ?? ''
-    if (q !== '') {
-      const needle = `%${escapeLike(q.toLowerCase())}%`
-      where.push(
-        `(LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(slug) LIKE ? ESCAPE '\\' OR LOWER(metadata) LIKE ? ESCAPE '\\')`,
-      )
-      binds.push(needle, needle, needle)
-    }
+    const filters = filterWhere(filter)
+    const where: Array<string> = [andFilter(predicate, filters.sql)]
+    const binds: Array<string | number | null> = [...filters.binds]
     if (cursor !== null) {
       const keyset = keysetWhere(sort, cursor.key)
       where.push(keyset.sql)
@@ -849,6 +878,27 @@ export const PhotoServiceLive = Layer.effect(
         )
         const items = rows.map((row) => toPhotoWithTags(row, tagMap.get(row.id) ?? []))
         return { items, nextCursor }
+      })
+
+    // The Pager's `OF 412`. Same predicate, same `filterWhere` as the row
+    // query, no keyset and no LIMIT — a count taken over one page would
+    // answer a question nobody asked.
+    const count: PhotoServiceContract['count'] = (filter) =>
+      Effect.gen(function* () {
+        const { sql, binds } = filterWhere(filter)
+        const row = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .prepare(`SELECT COUNT(*) AS n FROM photos WHERE ${andFilter(LIVE, sql)}`)
+              .bind(...binds)
+              .first<{ n: number }>(),
+          catch: (cause) =>
+            new StorageError({
+              message: 'Failed to count filtered photos',
+              cause: describeCause(cause),
+            }),
+        })
+        return row?.n ?? 0
       })
 
     const get: PhotoServiceContract['get'] = (id) =>
@@ -1233,6 +1283,7 @@ export const PhotoServiceLive = Layer.effect(
 
     return PhotoService.of({
       list,
+      count,
       get,
       create,
       update,

@@ -16,7 +16,14 @@ import * as Segment from '@/components/ui/segment'
 import * as Sheet from '@/components/ui/sheet'
 
 import { CreateTagCmd } from './commands'
-import { disposeItemAssets, showToast, toQueueItem, toggleIn, type UpdateReturn } from './helpers'
+import {
+  disposeItemAssets,
+  showToast,
+  toQueueItem,
+  toggleIn,
+  withOptional,
+  type UpdateReturn,
+} from './helpers'
 import {
   AdminToast,
   Message,
@@ -337,3 +344,35 @@ export const foldUploadCombo = makeComboFold(
   (model) => Opt.some(model.uploadCombo),
   (model, nextCombo) => modifyFields(model, { uploadCombo: () => nextCombo }),
 )
+
+/** The row `⋯` menu. Closing it forgets which Photo it was opened on, so a
+ *  later menu cannot act on a row the operator has paged away from. The same
+ *  shape as the sidebar's per-tag actions, for the same reason. */
+export const foldRowMenu = Update.foldChild({
+  update: Dialog.update,
+  read: (model: Model) => Opt.some(model.rowMenu),
+  write: (model: Model, nextDialog: typeof model.rowMenu) =>
+    modifyFields(model, { rowMenu: () => nextDialog }),
+  toParentMessage: (message: typeof Dialog.Message.Type) => Message.GotRowMenuMessage({ message }),
+  foldOutMessage: (out): Update.Step<Model, Msg> =>
+    out._tag === 'Closed'
+      ? // `rowMenuId` is optional; clear it with a spread (see `withOptional`).
+        (writtenModel) => ({ model: withOptional(writtenModel, { rowMenuId: undefined }) })
+      : (writtenModel) => ({ model: writtenModel }),
+})
+
+/** The Bulk Bar's `Add tag` picker. A dismissed dialog is a dismissed pick, so
+ *  the ticked Tags go with it rather than waiting to be applied by the next
+ *  one. */
+export const foldAddTag = Update.foldChild({
+  update: Dialog.update,
+  read: (model: Model) => Opt.some(model.addTagDialog),
+  write: (model: Model, nextDialog: typeof model.addTagDialog) =>
+    modifyFields(model, { addTagDialog: () => nextDialog }),
+  toParentMessage: (message: typeof Dialog.Message.Type) =>
+    Message.GotAddTagDialogMessage({ message }),
+  foldOutMessage: (out): Update.Step<Model, Msg> =>
+    out._tag === 'Closed'
+      ? (writtenModel) => ({ model: modifyFields(writtenModel, { addTagIds: () => [] }) })
+      : (writtenModel) => ({ model: writtenModel }),
+})

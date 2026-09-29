@@ -288,6 +288,15 @@ export const LibrarySort = S.Struct({
   direction: S.Literals(['asc', 'desc']),
 })
 
+/** The Library's one page read, plus the number the Pager prints after it:
+ *  `1–7 OF 412`, where 412 is the FILTERED total — how many Photos this filter
+ *  selects across the whole result set, not how many came back on this page.
+ *
+ *  `total` ignores the cursor: a cursor is a position in one ordering, not a
+ *  filter, so the count is the same on every page of the same filter. The
+ *  public `ListPhotos` is deliberately unchanged and carries no count — the
+ *  Front pages by Section and never draws a filtered total, so a visitor's
+ *  read pays for no COUNT. */
 export class ListLibraryRows extends Rpc.make('ListLibraryRows', {
   payload: {
     status: S.optional(PhotoStatus),
@@ -300,7 +309,12 @@ export class ListLibraryRows extends Rpc.make('ListLibraryRows', {
     cursor: S.optional(S.String.pipe(S.check(S.isMaxLength(512)))),
     limit: S.optional(S.Number),
   },
-  success: S.Struct({ items: S.Array(PhotoWithTags), nextCursor: S.NullOr(S.String) }),
+  success: S.Struct({
+    items: S.Array(PhotoWithTags),
+    nextCursor: S.NullOr(S.String),
+    /** The filtered total, across every page, cursor ignored. */
+    total: S.Number,
+  }),
   error: S.Union([InvalidInput, StorageError]),
 }) {}
 

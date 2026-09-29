@@ -19,12 +19,24 @@ import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { encodeBlurhash } from '@/lib/blurhash'
 
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
-import { DraftFields, GridCols, Message, Storage, abortStore, fileStore } from './model'
-import type { Counts as CountsType, GridCols as GridColsType } from './model'
+import {
+  BULK_BORDER_MAT,
+  DraftFields,
+  GridCols,
+  LIBRARY_PAGE_SIZE,
+  Message,
+  Storage,
+  abortStore,
+  fileStore,
+} from './model'
+import type { Counts as CountsType, GridCols as GridColsType, LibraryPage } from './model'
 
+/** `ListLibraryRows` as the wire delivers it: the page's rows under `items`,
+ *  the cursor that would follow, and the filtered total behind both. */
 interface PhotoPage {
   readonly items: ReadonlyArray<PhotoWithTags>
   readonly nextCursor: string | null
+  readonly total: number
 }
 
 /** The Access facts the sidebar's footer reads: the signed-in address and the
@@ -80,6 +92,114 @@ export const FetchStorageCmd = Command.define('FetchStorage', {
 // grid density persistence
 // ---------------------------------------------------------------------------
 
+/** Where the table is reading: its filter, and the keyset position of the page.
+ *  The empty string is the first page, which is the only page with no cursor. */
+export const PageArgs = S.Struct({
+  tagIds: S.Array(S.String),
+  q: S.String,
+  cursor: S.String,
+})
+export type PageArgs = typeof PageArgs.Type
+
+/** One `ListLibraryRows` read. Every list read in the Admin goes through here,
+ *  so a page of rows and the number it is paged over are never fetched under
+ *  two different filters. */
+const listPayload = (args: { tagIds: readonly string[]; q: string; cursor?: string }) =>
+  rpcAdmin<PhotoPage>('ListLibraryRows', {
+    ...(args.tagIds.length > 0 ? { tagIds: [...args.tagIds] } : {}),
+    ...(args.q === '' ? {} : { q: args.q }),
+    ...(args.cursor === '' ? {} : { cursor: args.cursor }),
+    limit: LIBRARY_PAGE_SIZE,
+  })
+
+const toLibraryPage = (page: PhotoPage): LibraryPage => ({
+  photos: [...page.items],
+  nextCursor: page.nextCursor,
+  total: page.total,
+})
+/** The contract's `PhotoIds` caps a call at a hundred ids, which is the D1 bind
+ *  bound rather than an arbitrary number, and a selection can span more pages
+ *  than that. The fold is all-or-nothing per call, so a chunked run is ordered
+ *  and stops at the first chunk that fails — the same guarantee one large call
+ *  would have given. */
+const BULK_CHUNK = 100
+const foldOverChunks = <E>(
+  ids: ReadonlyArray<string>,
+  batch: (ids: ReadonlyArray<string>) => Effect.Effect<unknown, E>,
+): Effect.Effect<void, E> =>
+  Effect.gen(function* () {
+    for (let start = 0; start < ids.length; start += BULK_CHUNK) {
+      yield* batch(ids.slice(start, start + BULK_CHUNK))
+    }
+  })
+
+// ---------------------------------------------------------------------------
+// the table's writes
+//
+// Every one of these ends by re-reading the page it was fired from. A Photo
+// that changed Status, gained a Tag, gained a Mat or left the library is a row
+// the table is now holding wrong, and a count read before the write is a count
+// that is already wrong. `FetchCountsCmd` rides along for the same reason: a
+// Status or a Tag moved, so the sidebar's numbers moved too.
+// ---------------------------------------------------------------------------
+
+/** A soft delete. The Bulk Bar's `Delete` and the Trash it lands in are one
+ *  decision: nothing here touches R2, and the purge that does is the Trash's
+ *  own irreversible step. */
+export const BulkTrashCmd = Command.define('BulkTrash', {
+  args: { ids: S.Array(S.String), page: PageArgs },
+  messages: [Message.SucceededBulkTrash, Message.FailedRpc],
+  execute: ({ ids, page }) =>
+    Effect.gen(function* () {
+      yield* foldOverChunks(ids, (batch) => rpcAdmin('TrashPhotos', { ids: [...batch] }))
+      const fresh = yield* listPayload(page)
+      return Message.SucceededBulkTrash({ count: ids.length, ...toLibraryPage(fresh) })
+    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** `Add border`: one Mat patch on every ticked Photo, folded over the ids one
+ *  at a time so a Photo that must exist has to. */
+export const AddBorderCmd = Command.define('AddBorder', {
+  args: { ids: S.Array(S.String), page: PageArgs },
+  messages: [Message.SucceededAddBorder, Message.FailedRpc],
+  execute: ({ ids, page }) =>
+    Effect.gen(function* () {
+      yield* foldOverChunks(ids, (batch) =>
+        rpcAdmin('AddBorderToPhotos', { photoIds: [...batch], mat: BULK_BORDER_MAT }),
+      )
+      const fresh = yield* listPayload(page)
+      return Message.SucceededAddBorder({ count: ids.length, ...toLibraryPage(fresh) })
+    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** The design's `Move to series`, re-pointed at `Add tag`: a Series page *is* a
+ *  Tag page (ADR 0008), so the grouping entity is the Tag. */
+export const BulkAddTagsCmd = Command.define('BulkAddTags', {
+  args: { ids: S.Array(S.String), tagIds: S.Array(S.String), page: PageArgs },
+  messages: [Message.SucceededAddTag, Message.FailedRpc],
+  execute: ({ ids, tagIds, page }) =>
+    Effect.gen(function* () {
+      yield* foldOverChunks(ids, (batch) =>
+        rpcAdmin('BulkAddTags', { photoIds: [...batch], tagIds: [...tagIds] }),
+      )
+      const fresh = yield* listPayload(page)
+      return Message.SucceededAddTag({ count: ids.length, ...toLibraryPage(fresh) })
+    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** Publish and unpublish from a row's `⋯` menu. One Photo, so no chunking and
+ *  no count — the row the operator clicked is the row that moves. */
+export const SetRowStatusCmd = Command.define('SetRowStatus', {
+  args: { id: S.String, status: S.Literals(['draft', 'published']), page: PageArgs },
+  messages: [Message.SucceededSetRowStatus, Message.FailedRpc],
+  execute: ({ id, status, page }) =>
+    Effect.gen(function* () {
+      yield* rpcAdmin('SetPhotoStatus', { id, status })
+      const fresh = yield* listPayload(page)
+      return Message.SucceededSetRowStatus({ status, ...toLibraryPage(fresh) })
+    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
 export const COLS_STORAGE_KEY = 'photo-admin:cols'
 const COL_CHOICES = [2, 3, 4, 5, 6] as const
 const DEFAULT_COLS = 4
@@ -107,19 +227,16 @@ export const PersistColsCmd = Command.define('PersistCols', {
  *  `tagSlug` would let a second pick replace the first rather than narrow it,
  *  and a query that had nowhere to go would be a control that lies. Both keys
  *  are omitted when empty, so "no filter" is the absence of a filter rather
- *  than an empty one. */
+ *  than an empty one.
+ *
+ *  `cursor` is the keyset position of the page being read. The empty string is
+ *  the first page, which is the only page with no cursor. */
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
-  args: { tagIds: S.Array(S.String), q: S.String },
+  args: { tagIds: S.Array(S.String), q: S.String, cursor: S.optional(S.String) },
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ tagIds, q }) =>
-    Effect.map(
-      rpcAdmin<PhotoPage>('ListLibraryRows', {
-        ...(tagIds.length > 0 ? { tagIds: [...tagIds] } : {}),
-        ...(q === '' ? {} : { q }),
-        limit: 60,
-      }),
-      (page) =>
-        Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
+  execute: ({ tagIds, q, cursor }) =>
+    Effect.map(listPayload({ tagIds, q, ...(cursor === undefined ? {} : { cursor }) }), (page) =>
+      Message.SucceededFetchPhotos(toLibraryPage(page)),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
@@ -127,15 +244,8 @@ export const FetchMoreCmd = Command.define('FetchMore', {
   args: { tagIds: S.Array(S.String), q: S.String, cursor: S.String },
   messages: [Message.SucceededFetchMore, Message.FailedRpc],
   execute: ({ tagIds, q, cursor }) =>
-    Effect.map(
-      rpcAdmin<PhotoPage>('ListLibraryRows', {
-        ...(tagIds.length > 0 ? { tagIds: [...tagIds] } : {}),
-        ...(q === '' ? {} : { q }),
-        limit: 60,
-        cursor,
-      }),
-      (page) =>
-        Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
+    Effect.map(listPayload({ tagIds, q, cursor }), (page) =>
+      Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
