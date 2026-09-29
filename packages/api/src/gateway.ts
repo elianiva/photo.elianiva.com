@@ -29,12 +29,29 @@ export interface D1DatabaseLike {
 }
 
 export interface R2ObjectLike {
+  readonly key: string
+  readonly size: number
+  readonly uploaded: Date
   readonly httpMetadata?: { readonly contentType?: string } | undefined
   readonly body: ReadableStream | null
 }
 
+export interface R2ListOptions {
+  readonly prefix?: string | undefined
+  readonly limit?: number | undefined
+  readonly cursor?: string | undefined
+}
+
+export interface R2ObjectsLike {
+  readonly objects: ReadonlyArray<R2ObjectLike>
+  readonly truncated: boolean
+  readonly cursor?: string | undefined
+}
+
 export interface R2BucketLike {
   get(key: string): Promise<R2ObjectLike | null>
+  head(key: string): Promise<R2ObjectLike | null>
+  list(options?: R2ListOptions): Promise<R2ObjectsLike>
   put(
     key: string,
     value: ArrayBuffer | ReadableStream | string,
