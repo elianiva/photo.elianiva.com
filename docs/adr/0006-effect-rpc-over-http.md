@@ -4,6 +4,14 @@
 
 Accepted
 
+> **Correction (2026-08, #13).** The decision below stands. The concrete paths
+> have since moved with the API onto its own Worker and hostname, so they are
+> now `photo-api.elianiva.com` with `/upload`, `/rpc`, `/admin/rpc` and
+> `/image/*` rather than `photo.elianiva.com` with `/api/*`. The routing and
+> protocol decisions — one typed RPC group per audience, no REST router, and
+> multipart staying out of the JSON envelope — are unchanged. The current table
+> lives in `docs/plan.md`.
+
 ## Context
 
 The Admin and the public gallery both talked to the Worker through hand-rolled
@@ -32,8 +40,8 @@ Alternatives:
 All client↔server traffic uses `effect/unstable/rpc` over HTTP transport.
 RPC groups live in `packages/shared`; handler services live in
 `packages/api`. The REST router is deleted, not deprecated — the only
-non-RPC endpoints are `/api/upload` (multipart file bytes do not belong in a
-JSON RPC message) and `/api/image/*` (binary R2 proxy). Both galleries —
+non-RPC endpoints are `/upload` (multipart file bytes do not belong in a
+JSON RPC message) and `/image/*` (binary R2 proxy). Both galleries —
 public and Admin — are `RpcClient`s of the same groups.
 
 ## Consequences

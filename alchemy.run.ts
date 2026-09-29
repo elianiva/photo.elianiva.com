@@ -87,7 +87,6 @@ export default Alchemy.Stack(
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
-        IMAGES: Cloudflare.Images.Images('IMAGES'),
         ACCESS_TEAM_DOMAIN: teamDomain,
         ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },
@@ -160,7 +159,6 @@ export type WebsiteEnv = {
     }
     batch(statements: ReadonlyArray<unknown>): Promise<ReadonlyArray<unknown>>
   }
-  readonly IMAGES: unknown
   readonly ACCESS_TEAM_DOMAIN: string
   readonly ACCESS_ALLOWED_EMAILS?: string
 }
