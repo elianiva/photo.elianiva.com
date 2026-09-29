@@ -82,6 +82,10 @@ export const ColophonColumnSchema = S.Struct({
   /** 'EQUIPMENT' */
   label: S.String,
   lines: S.Array(S.String),
+  /** The mobile Colophon's plainer list; absent prints `lines` as-is. */
+  linesMobile: S.optional(S.Array(S.String)),
+  /** The desktop Colophon's own column, e.g. EQUIPMENT. */
+  desktopOnly: S.optional(S.Boolean),
 })
 export type ColophonColumn = typeof ColophonColumnSchema.Type
 
@@ -89,6 +93,8 @@ export const ColophonSchema = S.Struct({
   blurb: S.String,
   columns: S.Array(ColophonColumnSchema),
   copyright: S.String,
+  /** The mobile Colophon drops the rights clause; absent prints `copyright`. */
+  copyrightMobile: S.optional(S.String),
   /** 'Set in Newsreader, Libre Franklin and IBM Plex Mono.' */
   note: S.String,
   /** 'BACK TO TOP ↑' */
@@ -110,10 +116,14 @@ export type Folio = typeof FolioSchema.Type
 export const EditionSchema = S.Struct({
   /** 'VOL. V — NO. 412' */
   volume: S.String,
+  /** 'NO. 412' — the mobile Ears Strip has no room for the volume numeral. */
+  volumeMobile: S.String,
   /** '412' — the folio's "412 FRAMES" */
   issue: S.String,
   /** 'SUNDAY, 31 AUGUST 2025' */
   folioDate: S.String,
+  /** '31 AUG 2025' — the mobile Ears Strip's shorter date. */
+  folioDateMobile: S.String,
   /** 'FROM JAKARTA' */
   origin: S.String,
   /** 'photo.elianiva.com' — the site name, centred in the ears strip. */
@@ -124,6 +134,8 @@ export const EditionSchema = S.Struct({
   archiveLine: S.String,
   /** 'THIS EDITION · JULY AND AUGUST 2025' */
   kicker: S.String,
+  /** 'THIS EDITION' — the mobile lede has one kicker, not a range. */
+  kickerMobile: S.String,
   headline: S.String,
   deck: S.String,
   /** The Page One figure. */
@@ -141,14 +153,17 @@ export type Edition = typeof EditionSchema.Type
 
 export const edition: Edition = {
   volume: 'VOL. V — NO. 412',
+  volumeMobile: 'NO. 412',
   issue: '412',
   folioDate: 'SUNDAY, 31 AUGUST 2025',
+  folioDateMobile: '31 AUG 2025',
   origin: 'FROM JAKARTA',
   motto: 'photo.elianiva.com',
   tagline: 'Street, mostly. Landscape, sometimes.',
   archiveLabel: 'THE ARCHIVE',
   archiveLine: 'Jakarta, Istanbul, Tokyo and New York, since 2021.',
   kicker: 'THIS EDITION · JULY AND AUGUST 2025',
+  kickerMobile: 'THIS EDITION',
   headline: 'A summer in New York, a night in Istanbul, then home to Jakarta.',
   deck: 'Nineteen frames from July and August, made on foot with one camera and one lens.',
   lead: {
@@ -331,17 +346,21 @@ export const edition: Edition = {
           'Film sim — Classic Chrome',
           'Based in Jakarta',
         ],
+        desktopOnly: true,
       },
       {
         label: 'SECTIONS',
         lines: ['Street', 'Landscape', 'Series', 'About', 'Archive'],
+        linesMobile: ['Street', 'Landscape', 'About', 'Archive'],
       },
       {
         label: 'ELSEWHERE',
         lines: ['Instagram (archive)', 'RSS feed', 'Prints on request', 'hello@elianiva.com'],
+        linesMobile: ['Instagram (archive)', 'RSS feed', 'hello@elianiva.com'],
       },
     ],
     copyright: '© 2021–2025 ELIANIVA · ALL RIGHTS RESERVED',
+    copyrightMobile: '© 2021–2025 ELIANIVA',
     note: 'Set in Newsreader, Libre Franklin and IBM Plex Mono.',
     backToTop: 'BACK TO TOP ↑',
   },
@@ -366,6 +385,13 @@ const pad = (value: number, width: number): string => String(value).padStart(wid
 
 /** A plate's placard number: `frameNo(24)` -> 'No. 024'. */
 export const frameNo = (index: number): string => `No. ${pad(index, 3)}`
+
+/** The mobile placard number, zero-padded and unprefixed: `frameNoShort(24)` -> '024'. */
+export const frameNoShort = (index: number): string => pad(index, 3)
+
+/** The mobile section head counts frames only, e.g. '09 FRAMES'. */
+export const frameCount = (count: number): string =>
+  `${pad(count, 2)} ${count === 1 ? 'FRAME' : 'FRAMES'}`
 
 /** The section head's right-hand line, e.g. '08 FRAMES · NO. 016–023'. */
 export const sectionCount = (section: EditionSection): string => {

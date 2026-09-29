@@ -1,7 +1,8 @@
 /**
  * Rules: the broadsheet's only structure. The masthead and the colophon each
- * open with the same three-band stack — hairline, paper, heavy — the middle
- * band being the 2px of bare stock the design leaves between the two rules.
+ * open with a three-band stack — hairline, bare stock, heavy — but in opposite
+ * order: the masthead leans its weight into the nameplate above the folio, and
+ * the colophon leans it into the fold at the page's foot.
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
@@ -20,5 +21,14 @@ const RULE_CLASS: Record<RuleWeight, string> = {
 const rule = (weight: RuleWeight, h: HtmlBuilder<Message>): Child =>
   h.div([h.Class(RULE_CLASS[weight])], [])
 
-export const ruleStack = (h: HtmlBuilder<Message>): Child =>
-  h.div([], [rule('hair', h), rule('gap', h), rule('heavy', h)])
+const stack = (weights: ReadonlyArray<RuleWeight>, h: HtmlBuilder<Message>): Child =>
+  h.div(
+    [],
+    weights.map((weight) => rule(weight, h)),
+  )
+
+/** The masthead's opening stack: heavy, bare stock, hairline. */
+export const mastheadRules = (h: HtmlBuilder<Message>): Child => stack(['heavy', 'gap', 'hair'], h)
+
+/** The colophon's opening stack: hairline, bare stock, heavy. */
+export const colophonRules = (h: HtmlBuilder<Message>): Child => stack(['hair', 'gap', 'heavy'], h)

@@ -3,18 +3,24 @@
  * `column` a plate inside a section — the two are otherwise identical, so the
  * variant only names the slot it occupies and only the slot changes how the
  * bytes are fetched.
+ *
+ * The mobile Figure master (size=mobile) differs from the desktop one at every
+ * level: the placard is a two-line clamped title with a zero-padded number
+ * under it, and the Exif line is gone. One tree carries both variants on the
+ * `desktop` breakpoint — the desktop composition needs its full 1080px
+ * measure, so `breakpoint.desktop` is where the `size` axis flips.
  */
 
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameNo, plateUrl, RATIO_VALUE, type Figure as Plate } from '../content'
+import { frameNo, frameNoShort, plateUrl, RATIO_VALUE, type Figure as Plate } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
 export const figure = (plate: Plate, variant: 'page' | 'column', h: HtmlBuilder<Message>): Child =>
   h.figure(
-    [h.Key(plate.id), h.Class('flex flex-col gap-(--spacing-md)')],
+    [h.Key(plate.id), h.Class('flex flex-col gap-(--spacing-sm) desktop:gap-(--spacing-md)')],
     [
       h.button(
         [
@@ -46,18 +52,34 @@ export const figure = (plate: Plate, variant: 'page' | 'column', h: HtmlBuilder<
         ],
       ),
       h.figcaption(
-        [h.Class('flex items-baseline justify-between gap-(--spacing-lg)')],
         [
-          h.span([h.Class('type-caption italic text-role-text-primary')], [plate.title]),
+          h.Class(
+            'flex flex-col gap-(--spacing-sm) desktop:flex-row desktop:items-baseline desktop:justify-between desktop:gap-(--spacing-lg)',
+          ),
+        ],
+        [
           h.span(
-            [h.Class('type-exif whitespace-nowrap text-role-text-secondary')],
+            [
+              h.Class(
+                'type-caption italic text-role-text-primary line-clamp-2 desktop:line-clamp-none',
+              ),
+            ],
+            [plate.title],
+          ),
+          // The mobile placard number is bare, not "No. 024".
+          h.span(
+            [h.Class('type-exif whitespace-nowrap text-role-text-secondary desktop:hidden')],
+            [frameNoShort(plate.index)],
+          ),
+          h.span(
+            [h.Class('hidden type-exif whitespace-nowrap text-role-text-secondary desktop:inline')],
             [frameNo(plate.index)],
           ),
         ],
       ),
       // The exposure line runs the full measure below the caption, not beside
       // the frame number: at column width it is one line, and tucked into the
-      // caption row it wraps.
-      h.span([h.Class('type-exif text-role-text-disabled')], [plate.exif]),
+      // caption row it wraps. The mobile Figure master omits it entirely.
+      h.span([h.Class('hidden type-exif text-role-text-disabled desktop:block')], [plate.exif]),
     ],
   )
