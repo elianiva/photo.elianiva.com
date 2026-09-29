@@ -12,6 +12,7 @@ import {
   Tag,
   TagId,
 } from './photo'
+import { SiteSection } from './settings'
 
 // ---------------------------------------------------------------------------
 // Shared domain errors — part of the RPC contract so both sides typecheck
@@ -52,7 +53,10 @@ export const describeCause = (cause: unknown): string => {
 }
 
 // ---------------------------------------------------------------------------
-// Public reads — the gallery and the Admin grid both consume these.
+// Public reads — everything a visitor's browser or the server-rendered Front
+// asks for, on the ungated `/rpc`. Nothing here can reach a Draft or a trashed
+// Photo: the filter lives in `PublicPhotoService`, so it cannot be forgotten
+// per handler (ADR 0010). The Admin reads the admin group instead.
 // ---------------------------------------------------------------------------
 
 export class ListPhotos extends Rpc.make('ListPhotos', {
@@ -69,6 +73,11 @@ export class ListPhotos extends Rpc.make('ListPhotos', {
   error: S.Union([InvalidInput, StorageError]),
 }) {}
 
+/** One Photo by id — and the one RPC both groups declare. The wire shape is the
+ *  same; the answer is not. On `/rpc` the id has to name a published,
+ *  non-trashed Photo or the call is `PhotoNotFound`, and on `/admin/rpc` it
+ *  answers for a Draft, a failed upload or anything but the Trash, because
+ *  that is the Editor's Photo. */
 export class GetPhoto extends Rpc.make('GetPhoto', {
   payload: { id: S.String },
   success: PhotoWithTags,
@@ -83,7 +92,86 @@ export class ListTags extends Rpc.make('ListTags', {
   error: StorageError,
 }) {}
 
-export const PhotoPublicRpcs = RpcGroup.make(ListPhotos, GetPhoto, ListTags)
+/** How many Edition Sections the Front's first paint renders — the design's
+ *  July and August. A page-weight tradeoff, not an accident: a Section is a
+ *  whole month of Photos with its Blurhash tiles, so a third one is a
+ *  noticeably heavier HTML document, and the `Continued` row fetches older
+ *  months on demand instead. Single-sourced here for the reason
+ *  `STORAGE_CAP_BYTES` is: the contract, the service that defaults it and the
+ *  call site that names it all live in this package. */
+export const FRONT_SECTION_COUNT = 2
+
+/** One Edition Section: a month of published Photos and the numbers it spans
+ *  (CONTEXT.md). `year` and `label` are the Section Head's two halves —
+ *  `August` over `2025` — read off the key rather than reformatted from a day,
+ *  so the heading never depends on a Worker's locale or zone. */
+const PublicSection = S.Struct({
+  /** `2025-08`, and the cursor that resumes below it. */
+  month: S.String,
+  year: S.String,
+  label: S.String,
+  frames: S.Number,
+  numberFrom: S.NullOr(S.Number),
+  numberTo: S.NullOr(S.Number),
+  photos: S.Array(PhotoWithTags),
+})
+
+/** The Masthead's `VOL. V — NO. 412`, the Folio's `412 FRAMES`, the lede's
+ *  edition line and the Colophon's copy, in one read. `number` is the site's
+ *  own counter read as the last photograph a visitor can see, so it moves back
+ *  when the highest-numbered Photo is trashed (CONTEXT.md, Photo Number). */
+const FrontStats = S.Struct({
+  number: S.NullOr(S.Number),
+  total: S.Number,
+  latestTakenAt: S.NullOr(S.String),
+  volume: S.String,
+  motto: S.NullOr(S.String),
+  siteSections: S.Array(SiteSection),
+  aboutCopy: S.NullOr(S.String),
+})
+
+/** The Front's one read. The cursor is a month, not a Photo: the page walks
+ *  backwards through Sections as the visitor scrolls, so `sectionCursor` is the
+ *  Section to resume strictly below. `sectionCount` is optional and defaults to
+ *  {@link FRONT_SECTION_COUNT}, which is also what a call site should name
+ *  rather than repeat the number. */
+export class GetFrontPage extends Rpc.make('GetFrontPage', {
+  payload: {
+    sectionCursor: S.optional(S.String.pipe(S.check(S.isMaxLength(16)))),
+    sectionCount: S.optional(S.Number),
+  },
+  success: S.Struct({
+    sections: S.Array(PublicSection),
+    nextSectionCursor: S.NullOr(S.String),
+    stats: FrontStats,
+  }),
+  error: S.Union([InvalidInput, StorageError]),
+}) {}
+
+/** A Photo page addressed the two ways the site links to one: its slug, or the
+ *  `No. 024` the design prints. Null is the answer, not an error — a slug or a
+ *  number nothing published carries is a 404 the view draws, and saying so
+ *  through the error channel would report a working request as a failure. */
+export class GetPublicPhoto extends Rpc.make('GetPublicPhoto', {
+  payload: { slug: S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200))) },
+  success: S.NullOr(PhotoWithTags),
+  error: StorageError,
+}) {}
+
+export class GetPublicPhotoByNumber extends Rpc.make('GetPublicPhotoByNumber', {
+  payload: { number: S.Number.pipe(S.check(S.isGreaterThan(0))) },
+  success: S.NullOr(PhotoWithTags),
+  error: StorageError,
+}) {}
+
+export const PhotoPublicRpcs = RpcGroup.make(
+  ListPhotos,
+  GetPhoto,
+  ListTags,
+  GetFrontPage,
+  GetPublicPhoto,
+  GetPublicPhotoByNumber,
+)
 
 // ---------------------------------------------------------------------------
 // Admin writes — edge-gated (Access on photo-api /admin/*) + JWT-verified in-worker
@@ -323,6 +411,7 @@ export class UpdateTag extends Rpc.make('UpdateTag', {
 }) {}
 
 export const PhotoAdminRpcs = RpcGroup.make(
+  GetPhoto,
   UpdatePhoto,
   DeletePhoto,
   CreateTag,

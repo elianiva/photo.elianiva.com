@@ -1,6 +1,11 @@
 /**
  * Admin commands — the RPC seam (ADR 0006). Every side-effecting operation
  * the Admin performs runs here and reports back through Message variants.
+ *
+ * Every Photo read goes through `rpcAdmin`. The Admin is the audience that
+ * needs a Draft, a failed upload and the Editor's own Photo, and the public
+ * group is the one that must not have them: it is the ungated `/rpc`, and
+ * `PublicPhotoService` is what keeps a Draft out of it.
  */
 
 import { Effect, Schema as S } from 'effect'
@@ -52,23 +57,21 @@ export const PersistColsCmd = Command.define('PersistCols', {
 })
 
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
-  args: { tagSlug: S.String },
+  args: { tagIds: S.Array(S.String) },
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ tagSlug }) =>
-    Effect.map(
-      rpcPublic<PhotoPage>('ListPhotos', tagSlug === '' ? { limit: 60 } : { tagSlug, limit: 60 }),
-      (page) =>
-        Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
+  execute: ({ tagIds }) =>
+    Effect.map(rpcAdmin<PhotoPage>('ListLibraryRows', { tagIds: [...tagIds], limit: 60 }), (page) =>
+      Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 export const FetchMoreCmd = Command.define('FetchMore', {
-  args: { tagSlug: S.String, cursor: S.String },
+  args: { tagIds: S.Array(S.String), cursor: S.String },
   messages: [Message.SucceededFetchMore, Message.FailedRpc],
-  execute: ({ tagSlug, cursor }) =>
+  execute: ({ tagIds, cursor }) =>
     Effect.map(
-      rpcPublic<PhotoPage>('ListPhotos', {
-        tagSlug: tagSlug || undefined,
+      rpcAdmin<PhotoPage>('ListLibraryRows', {
+        tagIds: [...tagIds],
         limit: 60,
         cursor,
       }),
@@ -92,7 +95,7 @@ export const FetchPhotoCmd = Command.define('FetchPhoto', {
   args: { id: S.String },
   messages: [Message.SucceededFetchPhoto, Message.FailedFetchPhoto],
   execute: ({ id }) =>
-    Effect.map(rpcPublic<PhotoWithTags>('GetPhoto', { id }), (photo) =>
+    Effect.map(rpcAdmin<PhotoWithTags>('GetPhoto', { id }), (photo) =>
       Message.SucceededFetchPhoto({ id: PhotoId.make(id), photo }),
     ).pipe(
       Effect.catch((error) =>
@@ -139,7 +142,7 @@ export const SaveEditsCmd = Command.define('SaveEdits', {
         tagIds: [...tagIds],
       })
       // refetch first page so ordering (takenAt DESC) stays truthful
-      const page = yield* rpcPublic<PhotoPage>('ListPhotos', { limit: 60 })
+      const page = yield* rpcAdmin<PhotoPage>('ListLibraryRows', { limit: 60 })
       return Message.SavedEdits({ photos: [...page.items] })
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
@@ -151,28 +154,25 @@ export const DeletePhotoCmd = Command.define('DeletePhoto', {
     Effect.map(
       Effect.andThen(
         rpcAdmin('DeletePhoto', { id }),
-        rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }),
+        rpcAdmin<PhotoPage>('ListLibraryRows', { limit: 60 }),
       ),
       (page) => Message.DeletedPhoto({ id, photos: [...page.items] }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 export const DeleteTagCmd = Command.define('DeleteTag', {
-  args: { id: S.String, activeTagSlug: S.optional(S.String) },
+  args: { id: S.String, tagIds: S.Array(S.String) },
   messages: [Message.DeletedTag, Message.FailedRpc],
-  execute: ({ id, activeTagSlug }) =>
+  execute: ({ id, tagIds }) =>
     Effect.map(
       Effect.andThen(
         rpcAdmin('DeleteTag', { id }),
         // Refetch both sides: cards would otherwise keep showing the deleted
-        // tag until the next full reload. The surviving filter slug rides
-        // along so a filtered view stays filtered after the delete.
+        // tag until the next full reload. The surviving filter rides along so
+        // a filtered view stays filtered after the delete.
         Effect.all({
           tags: rpcPublic<ReadonlyArray<Tag>>('ListTags', {}),
-          page: rpcPublic<PhotoPage>(
-            'ListPhotos',
-            activeTagSlug === undefined ? { limit: 60 } : { tagSlug: activeTagSlug, limit: 60 },
-          ),
+          page: rpcAdmin<PhotoPage>('ListLibraryRows', { tagIds: [...tagIds], limit: 60 }),
         }),
       ),
       ({ tags, page }) => Message.DeletedTag({ tags: [...tags], photos: [...page.items] }),

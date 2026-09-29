@@ -122,7 +122,9 @@ const rpcCaller = (group: unknown, url: string) => {
     })
 }
 
-/** Calls on the public group (`/rpc`) — list/get photos, list tags. */
+/** Calls on the public group (`/rpc`) — the ungated surface, and the one
+ *  `PublicPhotoService` keeps to published, non-trashed Photos. The Admin does
+ *  not read Photos through it: it needs Drafts, so it uses the admin group. */
 export const rpcPublic = rpcCaller(PhotoPublicRpcs, `${apiOrigin()}/rpc`)
 
 /** Calls on the admin group (`/admin/rpc`) — update/delete photos,

@@ -9,6 +9,7 @@ import {
   GatewayLive,
   PhotoService,
   PhotoServiceLive,
+  PublicPhotoServiceLive,
   PublicRpcHandlersLive,
   TagServiceLive,
   type AdminSessionValue,
@@ -252,7 +253,7 @@ const buildRpcHandler = (
     PublicRpcHandlersLive,
     Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, session)),
   ).pipe(
-    Layer.provide(Layer.merge(PhotoServiceLive, TagServiceLive)),
+    Layer.provide(Layer.mergeAll(PhotoServiceLive, PublicPhotoServiceLive, TagServiceLive)),
     Layer.provide(gatewayLayer(env)),
   )
   const appLayer = Layer.mergeAll(

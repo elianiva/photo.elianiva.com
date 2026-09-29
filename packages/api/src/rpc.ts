@@ -1,13 +1,21 @@
 /**
  * RPC handler layers: wire the shared RPC groups (the contract) to the
  * domain services (the implementation). The Worker composes these into its
- * HTTP router — public reads on `/rpc`, admin writes on
+ * HTTP router — public reads on `/rpc`, admin reads and writes on
  * `/admin/rpc` (ADR 0006/0007).
+ *
+ * A handler translates a payload and a result, and owns no visibility rule.
+ * The public group answers for published, non-trashed Photos because
+ * `PublicPhotoService` filters to them, so the ungated `/rpc` cannot leak a
+ * Draft by someone forgetting a `where`; the admin group answers through
+ * `PhotoService`, which deliberately sees Drafts, failed uploads and the
+ * Editor's Photo.
  */
 
 import { Effect } from 'effect'
-import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
-import { PhotoService, STORAGE_CAP_BYTES, slugify, type PhotoListFilter } from './photo'
+import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs, PhotoNotFound } from '@photo/shared'
+import { PhotoService, STORAGE_CAP_BYTES } from './photo'
+import { PublicPhotoService } from './public-photo'
 import { AdminSession } from './session'
 import { TagService } from './tag'
 
@@ -28,38 +36,35 @@ const foldOver = <A, E>(
   })
 
 export const PublicRpcHandlersLive = PhotoPublicRpcs.toLayer({
-  ListPhotos: (payload) =>
-    Effect.gen(function* () {
-      const filter: PhotoListFilter = {
-        q: payload.q,
-        limit: payload.limit,
-        cursor: payload.cursor,
-      }
-      const tagSlug = payload.tagSlug?.trim() ?? ''
-      if (tagSlug.includes(',')) {
-        return yield* new InvalidInput({ message: 'tagSlug takes one tag' })
-      }
-      if (tagSlug === '') {
-        return yield* PhotoService.use((service) => service.list(filter))
-      }
-      // The public contract speaks slugs and the service filters on ids, so
-      // the boundary resolves it. The read side normalises through the same
-      // `slugify` the write side uses, which is the whole of #42's fourth
-      // defect: a filter typed `Istanbul` finds the tag stored as `istanbul`.
-      const tag = yield* Effect.map(
-        TagService.use((service) => service.list),
-        (tags) => tags.find((candidate) => candidate.slug === slugify(tagSlug)),
-      )
-      // A slug nobody carries is a filter that matches nothing, which is a
-      // different answer from not filtering at all.
-      if (tag === undefined) return { items: [], nextCursor: null }
-      return yield* PhotoService.use((service) => service.list({ ...filter, tagIds: [tag.id] }))
-    }),
-  GetPhoto: (payload) => PhotoService.use((service) => service.get(payload.id)),
+  ListPhotos: (payload) => PublicPhotoService.use((service) => service.list(payload)),
+  // The id has to name a published Photo or the call is not found: a Draft is
+  // not a Photo the public has not been told about yet, it is a Photo the
+  // public has not been given. `PhotoNotFound` is the protocol answer, not a
+  // visibility decision — the scope that produced the null is the service's.
+  GetPhoto: (payload) =>
+    Effect.flatMap(
+      PublicPhotoService.use((service) => service.byId(payload.id)),
+      (photo) =>
+        photo === null ? Effect.fail(new PhotoNotFound({ id: payload.id })) : Effect.succeed(photo),
+    ),
   ListTags: () => TagService.use((service) => service.list),
+  // The Front's one read: the Sections this pass renders, the month to resume
+  // below them, and the Masthead's counters, in one call.
+  GetFrontPage: (payload) =>
+    Effect.gen(function* () {
+      const page = yield* PublicPhotoService.use((service) => service.frontPage(payload))
+      const stats = yield* PublicPhotoService.use((service) => service.frontStats())
+      return { ...page, stats }
+    }),
+  GetPublicPhoto: (payload) => PublicPhotoService.use((service) => service.bySlug(payload.slug)),
+  GetPublicPhotoByNumber: (payload) =>
+    PublicPhotoService.use((service) => service.byNumber(payload.number)),
 })
 
 export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
+  // The same wire shape the public group declares, and the Editor's Photo: a
+  // Draft, a failed upload, anything but the Trash.
+  GetPhoto: (payload) => PhotoService.use((service) => service.get(payload.id)),
   UpdatePhoto: (payload) =>
     Effect.gen(function* () {
       if (
