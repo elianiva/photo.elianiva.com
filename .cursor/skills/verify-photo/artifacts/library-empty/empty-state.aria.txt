@@ -1,0 +1,63 @@
+- generic
+  - StaticText "Elianiva"
+  - StaticText "THE DESK"
+  - navigation "Admin sections" [ref=e2]
+    - link "Library 0" [ref=e9]
+      - StaticText "Library"
+      - StaticText "0"
+    - link "Drafts 0" [ref=e10]
+      - StaticText "Drafts"
+      - StaticText "0"
+    - link "Uploads" [ref=e11]
+      - StaticText "Uploads"
+    - link "Trash 0" [ref=e12]
+      - StaticText "Trash"
+      - StaticText "0"
+    - link "Scheduled" [ref=e13]
+      - StaticText "Scheduled"
+    - link "Settings" [ref=e14]
+      - StaticText "Settings"
+  - heading "Tags" [level=2, ref=e3]
+  - paragraph
+    - StaticText "No tags yet."
+  - StaticText "Storage"
+  - StaticText "0.0 / 21 GB"
+  - link "View site" [ref=e4]
+- banner
+  - heading "Library" [level=1, ref=e5]
+  - form "Search photos"
+    - searchbox "Search photographs" [ref=e15]
+  - button "Upload" [ref=e6]
+- main
+  - group "Grid density"
+    - button "2 columns" [ref=e16]
+      - StaticText "2"
+    - button "3 columns" [ref=e17]
+      - StaticText "3"
+    - button "4 columns" [ref=e18]
+      - StaticText "4"
+    - button "5 columns" [ref=e19]
+      - StaticText "5"
+    - button "6 columns" [ref=e20]
+      - StaticText "6"
+  - generic
+    - heading "Tags" [level=2, ref=e21]
+    - StaticText "0"
+    - form
+      - textbox "New tag name" [ref=e24]
+      - button "Create tag" [ref=e25]
+    - paragraph
+      - StaticText "No tags yet — type a name above to create the first one."
+    - paragraph
+      - StaticText "0 photos"
+  - StaticText "No frames yet"
+  - StaticText "Drop your first photograph, or choose files from this computer."
+  - LabelText [ref=e7] clickable [cursor:pointer]
+    - StaticText "Choose files"
+    - button "Choose files" [ref=e22]: No file chosen
+  - LabelText [ref=e8] clickable [cursor:pointer]
+    - StaticText "Import from a folder"
+    - button "Import from a folder" [ref=e23]: No file chosen
+  - paragraph
+    - StaticText "3:2 · 2:3 · 4:3 · 3:4 · 16:9 · 9:16 · ORIGINALS ARE KEPT"
+- region "Notifications" [ref=e1]

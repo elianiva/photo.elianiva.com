@@ -1,0 +1,120 @@
+{
+ "viewport": [
+  1440,
+  900
+ ],
+ "block": {
+  "x": 352,
+  "y": 298,
+  "w": 984,
+  "h": 240,
+  "gap": "8px",
+  "padding": "24px",
+  "border": "1px dashed rgb(143, 138, 128)"
+ },
+ "icon": {
+  "x": 828,
+  "y": 349,
+  "w": 32,
+  "h": 32,
+  "font": "Libre Franklin",
+  "size": "16px",
+  "line": "24px",
+  "letterSpacing": "normal",
+  "color": "rgb(124, 118, 107)",
+  "textAlign": "center"
+ },
+ "title": {
+  "text": "No frames yet",
+  "x": 778,
+  "y": 389,
+  "w": 133,
+  "h": 26,
+  "font": "Newsreader",
+  "size": "24px",
+  "line": "26.4px",
+  "letterSpacing": "-0.24px",
+  "color": "rgb(27, 26, 24)",
+  "textAlign": "center"
+ },
+ "description": {
+  "text": "Drop your first photograph, or choose files from this computer.",
+  "x": 377,
+  "y": 424,
+  "w": 934,
+  "h": 19,
+  "font": "Newsreader",
+  "size": "14px",
+  "line": "18.9px",
+  "letterSpacing": "normal",
+  "color": "rgb(94, 89, 80)",
+  "textAlign": "center"
+ },
+ "actions": {
+  "x": 377,
+  "y": 451,
+  "w": 934,
+  "h": 36,
+  "gap": "8px",
+  "children": [
+   {
+    "tag": "LABEL",
+    "text": "Choose files",
+    "x": 707,
+    "y": 451,
+    "w": 109,
+    "h": 36,
+    "font": "Libre Franklin",
+    "size": "13px",
+    "line": "16.9px",
+    "letterSpacing": "normal",
+    "color": "rgb(243, 240, 232)",
+    "textAlign": "center",
+    "background": "rgb(27, 26, 24)",
+    "border": "1px rgba(0, 0, 0, 0)",
+    "input": {
+     "type": "file",
+     "multiple": true,
+     "webkitdirectory": false,
+     "accept": "image/jpeg,image/png,image/webp,image/gif,image/avif"
+    }
+   },
+   {
+    "tag": "LABEL",
+    "text": "Import from a folder",
+    "x": 824,
+    "y": 451,
+    "w": 157,
+    "h": 36,
+    "font": "Libre Franklin",
+    "size": "13px",
+    "line": "16.9px",
+    "letterSpacing": "normal",
+    "color": "rgb(27, 26, 24)",
+    "textAlign": "center",
+    "background": "rgba(0, 0, 0, 0)",
+    "border": "1px rgb(27, 26, 24)",
+    "input": {
+     "type": "file",
+     "multiple": true,
+     "webkitdirectory": true,
+     "accept": "image/jpeg,image/png,image/webp,image/gif,image/avif"
+    }
+   }
+  ]
+ },
+ "footnote": {
+  "text": "3:2 \u00b7 2:3 \u00b7 4:3 \u00b7 3:4 \u00b7 16:9 \u00b7 9:16 \u00b7 ORIGINALS ARE KEPT",
+  "x": 352,
+  "y": 562,
+  "w": 984,
+  "h": 13,
+  "font": "IBM Plex Mono",
+  "size": "10px",
+  "line": "13px",
+  "letterSpacing": "0.2px",
+  "color": "rgb(124, 118, 107)",
+  "textAlign": "center"
+ },
+ "gapBlockToFootnote": 24
+}

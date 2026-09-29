@@ -21,8 +21,9 @@
  * PREVIEW Rendition's. Both are commented where they happen.
  *
  * The tile grid this replaces stays on disk — `views/grid.ts` is #27's to
- * re-introduce as the grid view, and the error and empty-library states below
- * are its own, reused rather than duplicated.
+ * re-introduce as the grid view, and its error state is reused here for a read
+ * that could not be answered. The zero-photograph Library is not the grid's:
+ * `libraryEmpty` draws the design's own empty state.
  */
 
 import type { Html, HtmlBuilder } from 'foldkit/html'
@@ -47,6 +48,7 @@ import { cn } from '@/lib/utils'
 import { LIBRARY_PAGE_SIZE, Message as M } from '../model'
 import type { Model, Msg } from '../model'
 import { grid } from './grid'
+import { libraryEmpty } from './library-empty'
 import type { Child } from './shared'
 import { formatBytes } from './shared'
 
@@ -348,6 +350,12 @@ const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
 const hasFilter = (model: Model): boolean =>
   model.activeTagIds.length > 0 || model.searchQuery.trim() !== ''
 
+/** A Library with no Photographs at all: nothing narrows the list and the
+ *  filtered total — which, with no filter, *is* the Library — is zero. Not the
+ *  same predicate as "the filter matched nothing": that one is a filter hiding
+ *  a Library that has Photographs. */
+const isEmptyLibrary = (model: Model): boolean => !hasFilter(model) && model.libraryTotal === 0
+
 /** The design's loading state: rows, not a spinner, drawn on the Library Row's
  *  own geometry so the Table Head's column widths hold while the page arrives
  *  and the table does not jump when it does. */
@@ -383,7 +391,7 @@ const skeletonTable = (h: HtmlBuilder<Msg>): Child => {
 
 /** Nothing for the current filter. Not the same claim as an empty library: this
  *  one says the query is wrong and offers the way back, so it gets its own
- *  copy rather than the empty library's. #28 owns both bodies. */
+ *  copy rather than the empty library's. */
 const noMatchTable = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('mt-(--spacing-3xl)')],
@@ -432,9 +440,9 @@ export const libraryTable = (model: Model, h: HtmlBuilder<Msg>): Child => {
           // the truth about a list that could not be read.
           grid(model, h)
         : model.photos.length === 0
-          ? hasFilter(model)
-            ? noMatchTable(model, h)
-            : grid(model, h)
+          ? isEmptyLibrary(model)
+            ? libraryEmpty(h)
+            : noMatchTable(model, h)
           : h.div(
               [h.DataAttribute('slot', 'library-table')],
               [

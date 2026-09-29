@@ -20,7 +20,7 @@ import * as Spinner from '@/components/ui/spinner'
 
 import { icon } from '@/lib/icons'
 
-import { UPLOAD_LIMITS, Message as M, previewStore } from '../model'
+import { UPLOAD_ACCEPT, UPLOAD_LIMITS, Message as M, previewStore } from '../model'
 import type { Model, Msg, QueueItem } from '../model'
 import { photoCountLabel } from '../helpers'
 import { embedCombo, formatBytes, type Child } from './shared'
@@ -186,7 +186,7 @@ const uploadDialogContent = (
           viewInputs: FileDrop.styledViewInputs<Msg>(
             {
               multiple: true,
-              accept: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'],
+              accept: UPLOAD_ACCEPT,
               content: dropZoneContent(hasQueue, h),
               ...(hasQueue
                 ? { className: 'flex-row justify-start gap-3 px-4 py-3 text-left' }

@@ -4,9 +4,10 @@ type Child = Html | string
 
 import { cn } from '@/lib/utils'
 
-/** The design has no empty-state frame yet; the Desk reads one as a dashed
- *  `color.outline` well holding a `color.text.disabled` mark, a
- *  `$typography.section` line and a `$typography.caption` in
+/** The canvas draws the empty state twice — `b473b2e8ce68277f`, the Library's,
+ *  and the Series panel inside `cf5a3dff0a49583f` — and both title it in
+ *  `$typography.section.sm` (24px): a dashed `color.outline` well holding a
+ *  `color.text.disabled` mark, that title, and a `$typography.caption` line in
  *  `color.text.secondary`. */
 export const emptyClass =
   'gap-(--spacing-lg) border border-dashed border-role-outline p-(--spacing-3xl) flex w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance'
@@ -24,7 +25,7 @@ export const emptyMediaVariants: Record<EmptyMediaVariant, string> = {
   icon: 'flex size-(--spacing-3xl) shrink-0 items-center justify-center text-role-text-disabled [&_svg:not([class*="size-"])]:size-(--spacing-2xl)',
 }
 
-export const emptyTitleClass = 'type-section text-role-text-primary'
+export const emptyTitleClass = 'type-section-sm text-role-text-primary'
 
 export const emptyDescriptionClass =
   'type-caption text-role-text-secondary [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-role-text-primary'

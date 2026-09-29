@@ -5,6 +5,7 @@
  */
 
 import { Schema as S } from 'effect'
+import { File as FileSchema } from 'foldkit/file'
 import { defineMessageUnion } from 'foldkit/message'
 import { UrlRequest } from 'foldkit/navigation'
 import { Url } from 'foldkit/url'
@@ -127,6 +128,17 @@ export const UPLOAD_LIMITS = {
   maxFiles: 50,
   maxFileSize: 20 * 1024 * 1024,
 } as const
+
+/** What the file pickers offer. The server validates uploads with its own
+ *  `ALLOWED_UPLOAD_TYPES` in `api-worker.ts`; this is the picker hint, kept in
+ *  one place so the empty state's pickers and the upload dialog cannot drift. */
+export const UPLOAD_ACCEPT = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+] as const
 
 /** Column counts offered by the admin grid toggle (see `views/grid.ts`). */
 export const GridCols = S.Literals([2, 3, 4, 5, 6])
@@ -435,6 +447,9 @@ export const Message = defineMessageUnion({
   OpenUpload: {},
   GotUploadDialogMessage: { message: Dialog.Message },
   GotFileDropMessage: { message: FileDrop.Message },
+  /** A `change` event from the empty state's pickers. An Array and not a
+   *  NonEmptyArray: cancelling the picker fires `change` with zero files. */
+  ImportedFiles: { files: S.Array(FileSchema) },
   RemoveQueueItem: { id: S.String },
   RetryUpload: { id: S.String },
   RetryAllFailed: {},
