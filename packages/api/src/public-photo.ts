@@ -18,6 +18,7 @@
 import { Context, Effect, Layer } from 'effect'
 import {
   DbPhotoRow,
+  FRONT_SECTION_COUNT,
   InvalidInput,
   StorageError,
   describeCause,
@@ -30,6 +31,7 @@ import {
   DEFAULT_SORT,
   PHOTO_COLUMNS,
   orderBy,
+  pagePhotos,
   slugify,
   tagsForPhotos,
   toPhotoWithTags,
@@ -52,10 +54,10 @@ const MONTH_KEY = /^\d{4}-(?:0[1-9]|1[0-2])$/
  */
 const NEWEST_MONTH = '9999-12'
 
-/** How many Edition Sections a call gets when it does not say. The Front's
- *  first paint asks for two (the design's July and August); the cap keeps a
- *  caller from asking the Worker for the whole site's Photos in one payload. */
-const DEFAULT_SECTION_COUNT = 2
+/** The most Edition Sections one call may ask for, over {@link
+ *  FRONT_SECTION_COUNT} which is what it gets when it does not say. The cap
+ *  keeps a caller from asking the Worker for the whole site's Photos in one
+ *  payload. */
 const MAX_SECTION_COUNT = 12
 
 /** One Edition Section: a month of published Photos, and the numbers it spans. */
@@ -88,6 +90,20 @@ export interface FrontPage {
   readonly sections: ReadonlyArray<PublicSection>
   /** The month below the last Section, or null when there are no older ones. */
   readonly nextSectionCursor: string | null
+}
+
+export interface PublicPhotoPage {
+  readonly items: ReadonlyArray<PhotoWithTags>
+  readonly nextCursor: string | null
+}
+
+export interface PublicListInput {
+  /** One Tag's slug, not a list. A Series page _is_ a Tag page (ADR 0008), so
+   *  the public vocabulary is the slug and the id stays an internal detail. */
+  readonly tagSlug?: string | undefined
+  readonly q?: string | undefined
+  readonly limit?: number | undefined
+  readonly cursor?: string | undefined
 }
 
 export interface FrontStats {
@@ -125,6 +141,12 @@ export interface PublicSeries {
 }
 
 export interface PublicPhotoServiceContract {
+  /** Published Photos, newest first, keyset paginated. The public list carries
+   *  the same `q` and Tag filter the Admin's has and the same keyset cursor,
+   *  over the published set. */
+  readonly list: (
+    input?: PublicListInput,
+  ) => Effect.Effect<PublicPhotoPage, StorageError | InvalidInput>
   /** Published Photos grouped into Edition Sections, newest month first. */
   readonly frontPage: (
     input?: FrontPageInput,
@@ -133,6 +155,10 @@ export interface PublicPhotoServiceContract {
   readonly frontStats: () => Effect.Effect<FrontStats, StorageError | InvalidInput>
   /** A public Photo by slug, or null when none is published under it. */
   readonly bySlug: (slug: string) => Effect.Effect<PhotoWithTags | null, StorageError>
+  /** A public Photo by id, or null when the id names no published Photo. The
+   *  by-id twin of `bySlug`; a Photo page is addressed by slug or number, but
+   *  the id is what a caller that already holds a row asks with. */
+  readonly byId: (id: string) => Effect.Effect<PhotoWithTags | null, StorageError>
   /** The same Photo addressed by its Photo Number — the design prints `No. 024`. */
   readonly byNumber: (number: number) => Effect.Effect<PhotoWithTags | null, StorageError>
   /** Every published Photo, newest first — the public Archive's read. */
@@ -172,7 +198,7 @@ const monthLabel = (month: string): string =>
   `${MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? month} ${month.slice(0, 4)}`
 
 const clampSectionCount = (input: number | undefined): number => {
-  if (input === undefined || !Number.isFinite(input)) return DEFAULT_SECTION_COUNT
+  if (input === undefined || !Number.isFinite(input)) return FRONT_SECTION_COUNT
   return Math.min(Math.max(Math.floor(input), 1), MAX_SECTION_COUNT)
 }
 
@@ -315,7 +341,7 @@ const withTags = (
 
 const publishedBy = (
   db: (typeof Gateway.Service)['db'],
-  column: 'slug' | 'number',
+  column: 'id' | 'slug' | 'number',
   key: string | number,
 ): Effect.Effect<PhotoWithTags | null, StorageError> =>
   Effect.gen(function* () {
@@ -330,6 +356,25 @@ const publishedBy = (
     return photo ?? null
   })
 
+/**
+ * A Tag by slug, or null when no Tag carries it.
+ *
+ * The Photos table is keyed on ids and a public URL is keyed on slugs, so the
+ * translation is a read. It lives in the public read model rather than in a
+ * handler so a caller cannot resolve a slug over a set of Photos wider than
+ * the published one.
+ */
+const tagBySlug = (
+  db: (typeof Gateway.Service)['db'],
+  slug: string,
+): Effect.Effect<Tag | null, StorageError> =>
+  row<Tag>(
+    db,
+    `SELECT id, slug, label, caption FROM tags WHERE slug = ?`,
+    `Failed to get the tag ${slug}`,
+    [slug],
+  )
+
 // ---------------------------------------------------------------------------
 // live implementation
 // ---------------------------------------------------------------------------
@@ -339,6 +384,28 @@ export const PublicPhotoServiceLive = Layer.effect(
   Effect.gen(function* () {
     const gateway = yield* Gateway
     const db = gateway.db
+
+    const list: PublicPhotoServiceContract['list'] = (input) =>
+      Effect.gen(function* () {
+        const requested = input?.tagSlug?.trim() ?? ''
+        if (requested.includes(',')) {
+          return yield* new InvalidInput({ message: 'tagSlug takes one tag' })
+        }
+        // `slugify` is what the write side applied, so the read side applies
+        // it too: a filter typed `Istanbul` finds the Tag stored as
+        // `istanbul`.
+        const tag = requested === '' ? null : yield* tagBySlug(db, slugify(requested))
+        // A slug nobody carries is a filter that matches nothing, which is a
+        // different answer from not filtering at all.
+        if (requested !== '' && tag === null) return { items: [], nextCursor: null }
+        const { rows, nextCursor } = yield* pagePhotos(db, PUBLIC, {
+          q: input?.q,
+          limit: input?.limit,
+          cursor: input?.cursor,
+          tagIds: tag === null ? [] : [tag.id],
+        })
+        return { items: yield* withTags(db, rows), nextCursor }
+      })
 
     const frontPage: PublicPhotoServiceContract['frontPage'] = (input) =>
       Effect.gen(function* () {
@@ -399,6 +466,8 @@ export const PublicPhotoServiceLive = Layer.effect(
         return key === null ? null : yield* publishedBy(db, 'slug', key)
       })
 
+    const byId: PublicPhotoServiceContract['byId'] = (id) => publishedBy(db, 'id', id)
+
     const byNumber: PublicPhotoServiceContract['byNumber'] = (number) =>
       Number.isFinite(number) ? publishedBy(db, 'number', number) : Effect.succeed(null)
 
@@ -416,12 +485,7 @@ export const PublicPhotoServiceLive = Layer.effect(
       Effect.gen(function* () {
         const key = urlSlug(slug)
         if (key === null) return null
-        const tag = yield* row<Tag>(
-          db,
-          `SELECT id, slug, label, caption FROM tags WHERE slug = ?`,
-          `Failed to get the tag ${key}`,
-          [key],
-        )
+        const tag = yield* tagBySlug(db, key)
         if (tag === null) return null
         // Earliest first: a Series page leads with the earliest published
         // Photo (ADR 0008), so the cover is the head of the list.
@@ -438,9 +502,11 @@ export const PublicPhotoServiceLive = Layer.effect(
       })
 
     return PublicPhotoService.of({
+      list,
       frontPage,
       frontStats,
       bySlug,
+      byId,
       byNumber,
       archive,
       byTag,

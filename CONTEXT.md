@@ -87,7 +87,7 @@ The Admin's holding place for soft-deleted Photos. A Photo with a `deletedAt` is
 _Avoid_: Bin, Recycle bin, Soft delete (that is the act, not the place), Archive (that is the public page)
 
 **Public read**:
-Any read the public site makes, and every one of them goes through `PublicPhotoService` (`@photo/api`). That service filters to `published` and non-Trashed **inside** itself, so no caller can forget the filter and a Draft or a trashed Photo cannot leak to a visitor. `PhotoService` is the Admin's read model and deliberately answers for Drafts, failed uploads and the Trash; the two are the same `Gateway` and the same row decoder, so they cannot disagree about what a Photo is. Grouping and counting are SQL, never a whole table dragged into the isolate to be sorted there.
+Any read the public site makes, and every one of them goes through `PublicPhotoService` (`@photo/api`). That service filters to `published` and non-Trashed **inside** itself, so no caller can forget the filter and a Draft or a trashed Photo cannot leak to a visitor. `PhotoService` is the Admin's read model and deliberately answers for Drafts, failed uploads and the Trash; the two are the same `Gateway` and the same row decoder, so they cannot disagree about what a Photo is. Grouping and counting are SQL, never a whole table dragged into the isolate to be sorted there. The ungated `/rpc` group is that read model and nothing else, so the Admin reads Photos through `/admin/rpc` instead: the Editor still gets its Drafts, and `/rpc` cannot leak one.
 _Avoid_: public query, guest query, frontend query, live query
 
 **Edition Section**:

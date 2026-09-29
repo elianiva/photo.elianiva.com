@@ -46,6 +46,7 @@ import {
   releaseFinishedItems,
 } from './children'
 import {
+  activeTagIds,
   byLabel,
   disposeItemAssets,
   liftChildCommands,
@@ -118,7 +119,7 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   // Entering the Library loads it; staying within it (a reload, a back button)
   // does not re-read what is already in the Model.
   const libraryCommands: Commands = Transition.isEntering(transition, 'Library')
-    ? [FetchPhotosCmd({ tagSlug: '' }), FetchTagsCmd()]
+    ? [FetchPhotosCmd({ tagIds: [] }), FetchTagsCmd()]
     : []
   // Entering the Photo route, and staying within it for a different id, both
   // mean one Photo to read.
@@ -201,7 +202,7 @@ const runNextOrFinish = (model: Model): UpdateReturn => {
   // chain; now that the last item settled, drop everything not stuck.
   const finished =
     failedCount === 0 || !settled.uploadDialog.isOpen ? releaseFinishedItems(settled) : settled
-  const refresh = FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })
+  const refresh = FetchPhotosCmd({ tagIds: activeTagIds(model) })
   return failedCount === 0
     ? showToast(finished, `Uploaded ${photoCountLabel(uploadedCount)}`, 'Success', undefined, [
         refresh,
@@ -274,7 +275,7 @@ const applyTagFilter = (model: Model, slug: string): UpdateReturn => {
   const nextModel = withOptional(model, { activeTagSlug: next })
   return {
     model: retainSelection(nextModel),
-    commands: [FetchPhotosCmd({ tagSlug: next ?? '' })],
+    commands: [FetchPhotosCmd({ tagIds: activeTagIds(nextModel) })],
   }
 }
 
@@ -332,7 +333,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         model: modifyFields(model, { loadingMore: () => true }),
         commands: [
           FetchMoreCmd({
-            tagSlug: model.activeTagSlug ?? '',
+            tagIds: activeTagIds(model),
             cursor: model.nextCursor,
           }),
         ],
@@ -342,7 +343,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // ----- filter bar -----------------------------------------------------------
     RetryFetch: () => ({
       model,
-      commands: [FetchPhotosCmd({ tagSlug: model.activeTagSlug ?? '' })],
+      commands: [FetchPhotosCmd({ tagIds: activeTagIds(model) })],
     }),
     FilterByTag: ({ slug }) => applyTagFilter(model, slug),
 
@@ -636,11 +637,11 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
               id: pending.id,
               // If the dying tag IS the active filter, fetch unfiltered;
               // otherwise keep filtering by whatever is still applied.
-              activeTagSlug:
+              tagIds:
                 model.activeTagSlug !== undefined &&
                 model.tags.find((tag) => tag.id === pending.id)?.slug === model.activeTagSlug
-                  ? undefined
-                  : model.activeTagSlug,
+                  ? []
+                  : activeTagIds(model),
             })
       return {
         model: cleared,

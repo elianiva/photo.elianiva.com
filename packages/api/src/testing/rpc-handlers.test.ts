@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { Effect, Layer } from 'effect'
 import {
+  FRONT_SECTION_COUNT,
   InvalidInput,
   LibrarySort,
   PhotoAdminRpcs,
@@ -24,21 +25,22 @@ import {
   STORAGE_CAP_BYTES,
   type PhotoService,
 } from '../photo'
+import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
 import { AdminSession, type AdminSessionValue } from '../session'
 import { TagServiceLive, type TagService } from '../tag'
 import { createPhoto, createTag, setPhotoStatus, trashPhoto } from './fixtures'
 import { makeTestHarness, type TestHarness } from './harness'
 
 /**
- * The handler layer over the two services it talks to, and both over the
+ * The handler layer over the services it talks to, and all of them over the
  * harness's Gateway. `Layer.mergeAll` does not resolve one layer's requirement
  * from another's output, so the handlers are provided the services explicitly.
  */
 const stackOver = <ROut>(
   harness: TestHarness,
-  handlers: Layer.Layer<ROut, never, PhotoService | TagService>,
+  handlers: Layer.Layer<ROut, never, PhotoService | PublicPhotoService | TagService>,
 ) => {
-  const services = Layer.mergeAll(PhotoServiceLive, TagServiceLive)
+  const services = Layer.mergeAll(PhotoServiceLive, PublicPhotoServiceLive, TagServiceLive)
   return Layer.mergeAll(services, Layer.provide(handlers, services)).pipe(
     Layer.provide(Layer.succeed(Gateway, harness.gateway)),
   )
@@ -50,18 +52,37 @@ interface ListPayload {
   readonly limit?: number
 }
 
-const listPhotos = (harness: TestHarness, payload: ListPayload) =>
+const makePublicClient = RpcTest.makeClient(PhotoPublicRpcs)
+type PublicClient = RpcClient.FromGroup<typeof PhotoPublicRpcs>
+
+/** One public call over a live client, so the payload schema, the handler and
+ *  the success schema are all in the loop. A failing case passes `Effect.flip`
+ *  and gets the typed error back as a value. */
+const publicRpc = <A, E>(
+  harness: TestHarness,
+  call: (client: PublicClient) => Effect.Effect<A, E>,
+): Promise<A> =>
   Effect.runPromise(
     Effect.provide(
       Effect.scoped(
         Effect.gen(function* () {
-          const client = yield* RpcTest.makeClient(PhotoPublicRpcs)
-          return yield* client.ListPhotos(payload)
+          const client = yield* makePublicClient
+          return yield* call(client)
         }),
       ),
       stackOver(harness, PublicRpcHandlersLive),
     ),
   )
+
+const listPhotos = (harness: TestHarness, payload: ListPayload) =>
+  publicRpc(harness, (client) => client.ListPhotos(payload))
+
+/** A cursor is only handed back on a full page; a bare `?.` at a call site
+ *  would let a regression fall through as "page one again" and pass. */
+const cursorOf = (nextCursor: string | null): string => {
+  if (nextCursor === null) throw new Error('expected a nextCursor')
+  return nextCursor
+}
 
 /** The verified claims, as the Worker's gate hands them over. */
 const VERIFIED_SESSION: AdminSessionValue = {
@@ -128,13 +149,6 @@ const adminRpc = <A, E>(
       adminStackOver(harness, session),
     ),
   )
-
-/** The service only hands back a `nextCursor` on a full page; a bare `?.` here
- *  would let a regression fall through as "page one again" and pass. */
-const cursorOf = (nextCursor: string | null): string => {
-  if (nextCursor === null) throw new Error('expected a nextCursor')
-  return nextCursor
-}
 
 const DEFAULT_PRESENTATION: PhotoPresentation = {
   cropX: 0,
@@ -234,6 +248,208 @@ describe('ListPhotos handler', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// the public group
+// ---------------------------------------------------------------------------
+
+/** One Photo a month over four months, oldest first, so the Photo Numbers
+ *  ascend with the dates the Sections are grouped by. */
+const MONTHS: ReadonlyArray<{ readonly slug: string; readonly takenAt: string }> = [
+  { slug: 'june-01', takenAt: '2025-06-04' },
+  { slug: 'june-02', takenAt: '2025-06-21' },
+  { slug: 'july-01', takenAt: '2025-07-09' },
+  { slug: 'august-01', takenAt: '2025-08-05' },
+]
+
+const seedMonths = async (harness: TestHarness): Promise<void> => {
+  for (const month of MONTHS) {
+    await createPhoto(harness, { slug: month.slug, title: month.slug, takenAt: month.takenAt })
+  }
+}
+
+/** A Draft and a trashed Photo in a fifth month: the two rows no public read
+ *  may return, however it is addressed. */
+const seedHidden = async (
+  harness: TestHarness,
+): Promise<{ readonly draft: Hidden; readonly trashed: Hidden }> => {
+  const created = await createPhoto(harness, {
+    slug: 'september-draft',
+    title: 'A draft.',
+    takenAt: '2025-09-02',
+  })
+  const binned = await createPhoto(harness, {
+    slug: 'september-trashed',
+    title: 'A trashed photo.',
+    takenAt: '2025-09-03',
+  })
+  await setPhotoStatus(harness, created.id, 'draft')
+  await trashPhoto(harness, binned.id)
+  return { draft: created, trashed: binned }
+}
+
+interface Hidden {
+  readonly id: string
+  readonly slug: string
+}
+
+const numberOf = async (harness: TestHarness, id: string): Promise<number> => {
+  const row = await harness.db
+    .prepare('SELECT number FROM photos WHERE id = ?')
+    .bind(id)
+    .first<{ number: number }>()
+  if (row === null) throw new Error(`no photo ${id}`)
+  return row.number
+}
+
+describe('the public group only answers for published photos', () => {
+  it('leaves a draft and a trashed photo out of ListPhotos', async () => {
+    const harness = makeTestHarness()
+    const kept = await createPhoto(harness, {
+      slug: 'kept',
+      title: 'Kept',
+      takenAt: '2025-08-01',
+    })
+    await seedHidden(harness)
+
+    const page = await listPhotos(harness, { limit: 60 })
+
+    expect(page.items.map((item) => item.id)).toEqual([kept.id])
+  })
+
+  it('reports a draft and a trashed id from GetPhoto as not found', async () => {
+    const harness = makeTestHarness()
+    const shown = await createPhoto(harness, {
+      slug: 'shown',
+      title: 'Shown',
+      takenAt: '2025-08-01',
+    })
+    const { draft, trashed } = await seedHidden(harness)
+
+    expect((await publicRpc(harness, (client) => client.GetPhoto({ id: shown.id }))).slug).toBe(
+      'shown',
+    )
+
+    for (const hidden of [draft, trashed]) {
+      const error = await publicRpc(harness, (client) =>
+        client.GetPhoto({ id: hidden.id }).pipe(Effect.flip),
+      )
+      expect(error).toEqual(new PhotoNotFound({ id: hidden.id }))
+    }
+  })
+
+  it('answers null from GetPublicPhoto and GetPublicPhotoByNumber for either', async () => {
+    const harness = makeTestHarness()
+    const shown = await createPhoto(harness, {
+      slug: 'shown',
+      title: 'Shown',
+      takenAt: '2025-08-01',
+    })
+    const { draft, trashed } = await seedHidden(harness)
+    const shownNumber = await numberOf(harness, shown.id)
+
+    // The two URLs a Photo page is addressable by.
+    expect((await publicRpc(harness, (c) => c.GetPublicPhoto({ slug: shown.slug })))?.number).toBe(
+      shownNumber,
+    )
+    expect(
+      (await publicRpc(harness, (c) => c.GetPublicPhotoByNumber({ number: shownNumber })))?.slug,
+    ).toBe('shown')
+
+    for (const hidden of [draft, trashed]) {
+      const hiddenNumber = await numberOf(harness, hidden.id)
+      expect(await publicRpc(harness, (c) => c.GetPublicPhoto({ slug: hidden.slug }))).toBeNull()
+      expect(
+        await publicRpc(harness, (c) => c.GetPublicPhotoByNumber({ number: hiddenNumber })),
+      ).toBeNull()
+    }
+  })
+})
+
+describe('GetFrontPage handler', () => {
+  it('renders the first paint as FRONT_SECTION_COUNT sections and leaves a cursor', async () => {
+    const harness = makeTestHarness()
+    await seedMonths(harness)
+
+    const page = await publicRpc(harness, (client) => client.GetFrontPage({}))
+
+    // The design's July and August, and the constant is the Front's page
+    // weight rather than a number typed at the call site.
+    expect(FRONT_SECTION_COUNT).toBe(2)
+    expect(page.sections.map((section) => section.month)).toEqual(['2025-08', '2025-07'])
+    expect(page.sections[0]).toEqual({
+      month: '2025-08',
+      year: '2025',
+      label: 'August 2025',
+      frames: 1,
+      numberFrom: 4,
+      numberTo: 4,
+      photos: [expect.objectContaining({ slug: 'august-01' })],
+    })
+    expect(page.nextSectionCursor).toBe('2025-07')
+  })
+
+  it('carries the masthead counters and the site copy as the stats', async () => {
+    const harness = makeTestHarness()
+    await seedMonths(harness)
+
+    const { stats } = await publicRpc(harness, (client) => client.GetFrontPage({}))
+
+    expect(stats).toEqual({
+      number: 4,
+      total: 4,
+      latestTakenAt: '2025-08-05',
+      volume: 'V',
+      motto: null,
+      siteSections: [],
+      aboutCopy: null,
+    })
+  })
+
+  it('resumes below the section cursor month without repeating it', async () => {
+    const harness = makeTestHarness()
+    await seedMonths(harness)
+    const first = await publicRpc(harness, (client) => client.GetFrontPage({}))
+
+    const second = await publicRpc(harness, (client) =>
+      client.GetFrontPage({ sectionCursor: cursorOf(first.nextSectionCursor) }),
+    )
+
+    expect(second.sections.map((section) => section.month)).toEqual(['2025-06'])
+    expect(second.sections.flatMap((section) => section.photos.map((photo) => photo.slug))).toEqual(
+      ['june-02', 'june-01'],
+    )
+    expect(second.nextSectionCursor).toBeNull()
+  })
+
+  it('rejects a section cursor that is not a month rather than starting over', async () => {
+    const harness = makeTestHarness()
+    await seedMonths(harness)
+
+    const error = await publicRpc(harness, (client) =>
+      client.GetFrontPage({ sectionCursor: 'yesterday' }).pipe(Effect.flip),
+    )
+
+    expect(error).toEqual(
+      new InvalidInput({ message: 'sectionCursor is not a YYYY-MM month: yesterday' }),
+    )
+  })
+
+  it('leaves a draft and a trashed photo out of the sections and the stats', async () => {
+    const harness = makeTestHarness()
+    await seedMonths(harness)
+    await seedHidden(harness)
+
+    const page = await publicRpc(harness, (client) => client.GetFrontPage({ sectionCount: 5 }))
+
+    expect(page.sections.map((section) => section.month)).toEqual(['2025-08', '2025-07', '2025-06'])
+    expect(
+      page.sections.flatMap((section) => section.photos).map((photo) => photo.slug),
+    ).not.toContain('september-draft')
+    expect(page.stats.total).toBe(4)
+    expect(page.stats.number).toBe(4)
+  })
+})
+
 describe('DeletePhoto handler', () => {
   it('is a soft delete: the row stays, stamped, and R2 keeps the original', async () => {
     const harness = makeTestHarness()
@@ -252,6 +468,23 @@ describe('DeletePhoto handler', () => {
     expect(await deletePhotoFailure(harness, 'missing')).toEqual(
       new PhotoNotFound({ id: 'missing' }),
     )
+  })
+})
+
+describe('the admin group GetPhoto', () => {
+  it('answers with the draft the public group calls not found', async () => {
+    const harness = makeTestHarness()
+    const created = await createPhoto(harness, { slug: 'alley', title: 'Alley' })
+    await setPhotoStatus(harness, created.id, 'draft')
+
+    // The Editor's Photo is a Draft, so the admin route is where `/admin/photos/:id`
+    // reads it — and the ungated `/rpc` is the one that has to refuse.
+    expect((await adminRpc(harness, (client) => client.GetPhoto({ id: created.id }))).status).toBe(
+      'draft',
+    )
+    expect(
+      await publicRpc(harness, (client) => client.GetPhoto({ id: created.id }).pipe(Effect.flip)),
+    ).toEqual(new PhotoNotFound({ id: created.id }))
   })
 })
 

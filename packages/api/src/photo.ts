@@ -620,12 +620,13 @@ const assertTagsExist = (db: (typeof Gateway.Service)['db'], tagIds: ReadonlyArr
 
 const selectPhotoRows = (
   db: (typeof Gateway.Service)['db'],
+  predicate: string,
   filter: PhotoListFilter,
   sort: PhotoSort,
   cursor: PhotoCursor | null,
 ): Effect.Effect<{ rows: ReadonlyArray<DbPhotoRow>; nextCursor: string | null }, StorageError> =>
   Effect.gen(function* () {
-    const where: Array<string> = [LIVE]
+    const where: Array<string> = [predicate]
     const binds: Array<string | number | null> = []
     if (filter.status !== undefined) {
       where.push('status = ?')
@@ -671,6 +672,45 @@ const selectPhotoRows = (
     const rows = raw.results ?? []
     const nextCursor = rows.length === limit ? encodeCursor(rows[rows.length - 1]!, sort) : null
     return { rows, nextCursor }
+  })
+
+/**
+ * The paging half of every Photo list, over whichever audience predicate the
+ * caller owns.
+ *
+ * `PhotoService` pages live Photos; the public read model pages published ones
+ * with the same keyset cursor, the same LIKE escaping, the same clamp and the
+ * same check that a cursor was cut under the sort it claims. The filters, the
+ * ORDER BY and the cursor predicate are one thing here rather than two
+ * hand-kept copies that can start paging differently.
+ */
+export const pagePhotos = (
+  db: (typeof Gateway.Service)['db'],
+  predicate: string,
+  filter: PhotoListFilter,
+): Effect.Effect<
+  { rows: ReadonlyArray<DbPhotoRow>; nextCursor: string | null },
+  StorageError | InvalidInput
+> =>
+  Effect.gen(function* () {
+    const sort = filter.sort ?? DEFAULT_SORT
+    const cursor = filter.cursor === undefined ? null : decodeCursor(filter.cursor)
+    // A cursor is a position in one particular order. Reusing it under
+    // another is a caller bug, and silently answering with page one is how
+    // a list ends up repeating rows. A key of the wrong length is the same
+    // bug wearing a different hat — it would bind the wrong number of
+    // placeholders and come back as a StorageError.
+    if (
+      cursor !== null &&
+      (cursor.sort !== sortLabel(sort) || cursor.key.length !== SORTS[sort.key].columns.length)
+    ) {
+      return yield* Effect.fail(
+        new InvalidInput({
+          message: `cursor was cut under sort ${cursor.sort}, not ${sortLabel(sort)}`,
+        }),
+      )
+    }
+    return yield* selectPhotoRows(db, predicate, filter, sort, cursor)
   })
 
 /** Replace a Photo's tag links. The delete and the inserts go in one batch so
@@ -768,24 +808,7 @@ export const PhotoServiceLive = Layer.effect(
 
     const list: PhotoServiceContract['list'] = (filter) =>
       Effect.gen(function* () {
-        const sort = filter.sort ?? DEFAULT_SORT
-        const cursor = filter.cursor === undefined ? null : decodeCursor(filter.cursor)
-        // A cursor is a position in one particular order. Reusing it under
-        // another is a caller bug, and silently answering with page one is how
-        // a list ends up repeating rows. A key of the wrong length is the same
-        // bug wearing a different hat — it would bind the wrong number of
-        // placeholders and come back as a StorageError.
-        if (
-          cursor !== null &&
-          (cursor.sort !== sortLabel(sort) || cursor.key.length !== SORTS[sort.key].columns.length)
-        ) {
-          return yield* Effect.fail(
-            new InvalidInput({
-              message: `cursor was cut under sort ${cursor.sort}, not ${sortLabel(sort)}`,
-            }),
-          )
-        }
-        const { rows, nextCursor } = yield* selectPhotoRows(db, filter, sort, cursor)
+        const { rows, nextCursor } = yield* pagePhotos(db, LIVE, filter)
         const tagMap = yield* tagsForPhotos(
           db,
           rows.map((row) => row.id),
