@@ -71,8 +71,8 @@ const PRESENTATION = {
 
 describe('the route table', () => {
   it('names every admin route', () => {
-    expect(routeOf('/admin')).toEqual({ _tag: 'Library' })
-    expect(routeOf('/admin/')).toEqual({ _tag: 'Library' })
+    expect(routeOf('/admin')).toEqual({ _tag: 'Library', view: Option.none() })
+    expect(routeOf('/admin/')).toEqual({ _tag: 'Library', view: Option.none() })
     expect(routeOf('/admin/drafts')).toEqual({ _tag: 'Drafts' })
     expect(routeOf('/admin/scheduled')).toEqual({ _tag: 'Scheduled' })
     expect(routeOf('/admin/uploads')).toEqual({ _tag: 'Uploads' })
@@ -94,6 +94,18 @@ describe('the route table', () => {
     ]) {
       expect(appRouteToUrl(routeOf(path))).toBe(path)
     }
+  })
+
+  it('reads the Library view from the query string and prints it back', () => {
+    // The view is route state, so the URL is where it lives and the one route
+    // table both parses it and prints it. Absence is the table (the default),
+    // so a bare `/admin` is the same page the sidebar links to.
+    expect(routeOf('/admin?view=grid')).toEqual({
+      _tag: 'Library',
+      view: Option.some('grid'),
+    })
+    expect(appRouteToUrl(routeOf('/admin?view=grid'))).toBe('/admin?view=grid')
+    expect(appRouteToUrl(routeOf('/admin'))).toBe('/admin')
   })
 
   it('declines a photo path whose id is not an id, so no view has to defend itself', () => {
@@ -146,7 +158,15 @@ const listReads = (result: { readonly commands?: ReadonlyArray<Command<Message>>
 describe('a cold load', () => {
   it('fetches the shell and the library on a cold load of the library', () => {
     const cold = init(at('/admin'))
-    expect(cold.model.route).toEqual({ _tag: 'Library' })
+    expect(cold.model.route).toEqual({ _tag: 'Library', view: Option.none() })
+    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
+  })
+
+  it('applies the Library view from the URL on a cold load of that URL', () => {
+    const cold = init(at('/admin?view=grid'))
+    expect(cold.model.route).toEqual({ _tag: 'Library', view: Option.some('grid') })
+    // The cold load reads the list whatever the view: the grid and the table
+    // are two arrangements of one read.
     expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
   })
 
@@ -185,7 +205,7 @@ describe('an in-app navigation', () => {
   it('loads the library when a navigation lands on it', () => {
     const onAPhoto = init(at('/admin/photos/photo-1')).model
     const result = update(onAPhoto, onUrlChange(at('/admin')))
-    expect(result.model.route).toEqual({ _tag: 'Library' })
+    expect(result.model.route).toEqual({ _tag: 'Library', view: Option.none() })
     expect(commandNames(result.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
   })
 

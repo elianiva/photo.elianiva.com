@@ -17,7 +17,6 @@ import type { Url } from 'foldkit/url'
 
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
-import * as Sheet from '@/components/ui/sheet'
 
 import {
   AddBorderCmd,
@@ -29,7 +28,6 @@ import {
   DeleteTagCmd,
   ExportCsvIndexCmd,
   FetchCountsCmd,
-  FetchMoreCmd,
   FetchPhotoCmd,
   FetchPhotosCmd,
   FetchPresentationCmd,
@@ -40,7 +38,7 @@ import {
   LoadCmd,
   NavigateCmd,
   PersistColsCmd,
-  SaveEditsCmd,
+  ReplaceUrlCmd,
   SaveSettingsCmd,
   SetRowStatusCmd,
   UpdateEditorCmd,
@@ -50,12 +48,10 @@ import {
 import {
   foldAddTag,
   foldConfirm,
-  foldDraftCombo,
   foldEditorLeave,
   foldFileDrop,
   foldRowMenu,
   foldSegmentGroup,
-  foldSheet,
   foldTagActions,
   foldToast,
   foldUploadCombo,
@@ -74,9 +70,9 @@ import {
   type Commands,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, BULK_BORDER_MAT, emptyDraft, abortStore, Message } from './model'
+import { AdminToast, BULK_BORDER_MAT, abortStore, Message } from './model'
 import type { LibraryPage, Message as Msg, Model } from './model'
-import { appRouteToUrl, isAdminPath, urlToAppRoute } from './route'
+import { appRouteToUrl, isAdminPath, libraryRoute, urlToAppRoute } from './route'
 import type { AppRoute } from './route'
 import {
   editorReturnUrl,
@@ -128,12 +124,6 @@ const initialModel = (route: AppRoute): Model => ({
   atoms: initAtomsState(),
   photoStatus: 'loading',
   editor: initEditorState(),
-  selectedId: null,
-  editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
-  draft: emptyDraft(),
-  draftTagIds: [],
-  draftCombo: Multi.init({ id: 'admin-draft-combo' }),
-  saving: false,
   // filter bar (chips + inline create)
   tagManager: TagManager.init({ id: 'admin-tag-manager' }),
 
@@ -333,27 +323,6 @@ const markItem = (
   })
 
 // ---------------------------------------------------------------------------
-// lightbox selection helpers
-// ---------------------------------------------------------------------------
-
-/** Drop the lightbox selection when its photo is no longer in the list
- *  (deleted, or filtered out by the active tag). */
-const retainSelection = (model: Model): Model =>
-  model.selectedId !== null && !model.photos.some((photo) => photo.id === model.selectedId)
-    ? modifyFields(model, { selectedId: () => null })
-    : model
-
-/** Move the lightbox selection by `delta` positions within the loaded list,
- *  wrapping at the ends. No-op when nothing is selected. */
-const stepSelection = (model: Model, delta: 1 | -1): Model => {
-  const index = model.photos.findIndex((photo) => photo.id === model.selectedId)
-  if (index === -1 || model.photos.length === 0) return model
-  const nextIndex = (index + delta + model.photos.length) % model.photos.length
-  const next = model.photos[nextIndex]
-  return next === undefined ? model : modifyFields(model, { selectedId: () => next.id })
-}
-
-// ---------------------------------------------------------------------------
 // the Library table
 // ---------------------------------------------------------------------------
 
@@ -376,15 +345,14 @@ const clearSelection = (model: Model): Model => modifyFields(model, { selected: 
  *  write may have changed the page's own membership — a Status filter or a Tag
  *  filter both move rows — so the rows are read back rather than patched. */
 const settled = (model: Model, page: LibraryPage, title: string, detail?: string): UpdateReturn => {
-  const refreshed = modifyFields(
-    retainSelection(modifyFields(model, { status: () => 'ready', error: () => undefined })),
-    {
-      photos: () => [...page.photos],
-      nextCursor: () => page.nextCursor,
-      libraryTotal: () => page.total,
-      loadingMore: () => false,
-    },
-  )
+  const refreshed = modifyFields(model, {
+    status: () => 'ready' as const,
+    error: () => undefined,
+    photos: () => [...page.photos],
+    nextCursor: () => page.nextCursor,
+    libraryTotal: () => page.total,
+    loadingMore: () => false,
+  })
   return showToast(refreshed, title, 'Success', detail, [FetchCountsCmd()])
 }
 
@@ -414,13 +382,13 @@ function step(current: Model, message: Msg, prior: Commands = []): UpdateReturn 
 }
 
 /** Add or remove one Tag from the multi-select filter: refetch the first page
- *  through the surviving ids and drop a lightbox selection the filtered list
- *  can no longer back. Shared by the sidebar rows and the TagManager bar's
- *  chips, which are the same filter in two places. */
+ *  through the surviving ids and forget a selection the filtered list can no
+ *  longer back. Shared by the sidebar rows and the TagManager bar's chips,
+ *  which are the same filter in two places. */
 const toggleTagFilter = (model: Model, id: string): UpdateReturn => {
   const next = toggleIn(model.activeTagIds, id)
   return {
-    model: clearSelection(retainSelection(modifyFields(model, { activeTagIds: () => next }))),
+    model: clearSelection(modifyFields(model, { activeTagIds: () => next })),
     commands: [FetchPhotosCmd({ tagIds: [...next], q: model.searchQuery })],
   }
 }
@@ -429,22 +397,13 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     // ----- data ---------------------------------------------------------------
     SucceededFetchPhotos: ({ photos, nextCursor, total }) => ({
-      model: retainSelection(
-        modifyFields(model, {
-          photos: () => [...photos],
-          nextCursor: () => nextCursor ?? null,
-          libraryTotal: () => total,
-          loadingMore: () => false,
-          status: () => 'ready',
-          error: () => undefined,
-        }),
-      ),
-    }),
-    SucceededFetchMore: ({ photos, nextCursor }) => ({
       model: modifyFields(model, {
-        photos: () => [...model.photos, ...photos],
+        photos: () => [...photos],
         nextCursor: () => nextCursor ?? null,
+        libraryTotal: () => total,
         loadingMore: () => false,
+        status: () => 'ready',
+        error: () => undefined,
       }),
     }),
     SucceededFetchTags: ({ tags }) => ({ model: modifyFields(model, { tags: () => tags ?? [] }) }),
@@ -480,19 +439,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       })
       return showToast(errored, 'Something went wrong', 'Error', failure)
     },
-    LoadMore: () => {
-      if (model.nextCursor === null || model.loadingMore) return { model }
-      return {
-        model: modifyFields(model, { loadingMore: () => true }),
-        commands: [
-          FetchMoreCmd({
-            tagIds: [...model.activeTagIds],
-            q: model.searchQuery,
-            cursor: model.nextCursor,
-          }),
-        ],
-      }
-    },
 
     // ----- the shell ------------------------------------------------------------
     // A rejected `GetSession` is not a toast: the Admin has no signed-out state
@@ -526,7 +472,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // ----- the Page Head's search -----------------------------------------------
     SetSearchQuery: ({ value }) => ({ model: modifyFields(model, { searchQuery: () => value }) }),
     SubmittedSearch: () => ({
-      model: clearSelection(retainSelection(modifyFields(model, { status: () => 'loading' }))),
+      model: clearSelection(modifyFields(model, { status: () => 'loading' })),
       commands: [FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery.trim() })],
     }),
 
@@ -555,11 +501,22 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       return transition(model, Message.CreateTagRequested({ source: 'sidebar', label }))
     },
 
-    // ----- grid density ------------------------------------------------------------
+    // ----- grid density and view ---------------------------------------------------
     SelectedCols: ({ cols }) => ({
       model: modifyFields(model, { cols: () => cols }),
       commands: [PersistColsCmd({ cols })],
     }),
+    // The route is the state, so this writes the route and replaces the URL in
+    // the same step; `ChangedUrl` reads it back through the one route table.
+    // `replaceUrl` rather than `pushUrl` (#26's rule): the back button must not
+    // walk through every view the operator clicked through.
+    SelectedView: ({ view }) => {
+      const nextRoute = libraryRoute(view)
+      return {
+        model: modifyFields(model, { route: () => nextRoute }),
+        commands: [ReplaceUrlCmd({ url: appRouteToUrl(nextRoute) })],
+      }
+    },
     CompletedPersistCols: () => ({ model }),
 
     // ----- the atoms sheet -------------------------------------------------------
@@ -616,93 +573,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       model: modifyFields(model, { atoms: () => ({ ...model.atoms, matColour: colour }) }),
     }),
 
-    // ----- lightbox ---------------------------------------------------------------
-    ClickedPhoto: ({ id }) => ({ model: modifyFields(model, { selectedId: () => id }) }),
-    CloseLightbox: () => ({ model: modifyFields(model, { selectedId: () => null }) }),
-    NextPhoto: () => ({ model: stepSelection(model, 1) }),
-    PrevPhoto: () => ({ model: stepSelection(model, -1) }),
-
-    // ----- edit sheet -----------------------------------------------------------
-    OpenEdit: ({ photo }) => {
-      const meta = photo.metadata ?? {}
-      const draft = {
-        title: photo.title,
-        slug: photo.slug,
-        takenAt: photo.takenAt ?? '',
-        caption: typeof meta.caption === 'string' ? meta.caption : '',
-        location: typeof meta.location === 'string' ? meta.location : '',
-        camera: typeof meta.camera === 'string' ? meta.camera : '',
-        lens: typeof meta.lens === 'string' ? meta.lens : '',
-      }
-      // `editingId` is an optional field that schema-normalized state omits
-      // entirely; Struct.evolve only transforms existing keys, so assign it
-      // with a spread (see `withOptional`).
-      const started = withOptional(model, { editingId: photo.id })
-      const prepared = modifyFields(started, {
-        draft: () => draft,
-        draftTagIds: () => (photo.tags ?? []).map((tag) => tag.id),
-      })
-      const sheetOpened = Sheet.open(prepared.editSheet)
-      return {
-        model: modifyFields(prepared, { editSheet: () => sheetOpened.model }),
-        commands: liftChildCommands(sheetOpened.commands ?? [], (message) =>
-          Message.GotEditSheetMessage({ message }),
-        ),
-      }
-    },
-    SetDraftField: ({ field, value }) => ({
-      model: modifyFields(model, {
-        draft: () => {
-          const current = model.draft
-          switch (field) {
-            case 'title':
-              return { ...current, title: value }
-            case 'slug':
-              return { ...current, slug: value }
-            case 'takenAt':
-              return { ...current, takenAt: value }
-            case 'caption':
-              return { ...current, caption: value }
-            case 'location':
-              return { ...current, location: value }
-            case 'camera':
-              return { ...current, camera: value }
-            case 'lens':
-              return { ...current, lens: value }
-          }
-        },
-      }),
-    }),
-    SaveEdits: () => {
-      if (model.editingId === undefined) return { model }
-      return {
-        model: modifyFields(model, { saving: () => true }),
-        commands: [
-          SaveEditsCmd({ id: model.editingId, draft: model.draft, tagIds: [...model.draftTagIds] }),
-        ],
-      }
-    },
-    SavedEdits: ({ photos }) => {
-      const sheetClosed = Sheet.close(model.editSheet)
-      const saved = retainSelection(
-        modifyFields(model, {
-          photos: () => [...photos],
-          nextCursor: () => null,
-          loadingMore: () => false,
-          editSheet: () => sheetClosed.model,
-          editingId: () => undefined,
-          saving: () => false,
-        }),
-      )
-      return showToast(saved, 'Saved', 'Success', undefined, [
-        // A save can change a Tag's membership, so the sidebar's counts are as
-        // stale as the list is.
-        FetchCountsCmd(),
-        ...liftChildCommands(sheetClosed.commands ?? [], (message) =>
-          Message.GotEditSheetMessage({ message }),
-        ),
-      ])
-    },
     // ----- create tag inline ------------------------------------------------------
     CreateTagRequested: ({ source, label }) => ({
       model,
@@ -713,14 +583,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // A new Tag carries no Photos, but it does carry a row in the sidebar, so
       // the counts are re-read rather than the row being spliced in here.
       const recount: Commands = [FetchCountsCmd()]
-      if (source === 'draft') {
-        return {
-          model: modifyFields(withTag, {
-            draftTagIds: () => toggleIn(withTag.draftTagIds, tag.id),
-          }),
-          commands: recount,
-        }
-      }
       if (source === 'upload') {
         return {
           model: modifyFields(withTag, {
@@ -748,9 +610,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }
       return showToast(withTag, `Created tag “${tag.label}”`, 'Success', undefined, recount)
     },
-    RemoveDraftTag: ({ id }) => ({
-      model: modifyFields(model, { draftTagIds: () => toggleIn(model.draftTagIds, id) }),
-    }),
     RemoveUploadTag: ({ id }) => ({
       model: modifyFields(model, { uploadTagIds: () => toggleIn(model.uploadTagIds, id) }),
     }),
@@ -901,43 +760,27 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }
     },
     DeletedPhoto: ({ photos }) => {
-      // Deleting from the edit sheet must also dismiss it (and drop the edit
-      // state) — otherwise it lingers over a photo that no longer exists.
-      const sheetClosed = Sheet.close(model.editSheet)
-      const refreshed = retainSelection(
-        modifyFields(model, {
-          photos: () => [...photos],
-          nextCursor: () => null,
-          loadingMore: () => false,
-          editSheet: () => sheetClosed.model,
-          draft: () => emptyDraft(),
-          draftTagIds: () => [],
-          ...(model.editingId !== undefined ? { editingId: () => undefined } : {}),
-        }),
-      )
-      return showToast(refreshed, 'Deleted', 'Success', undefined, [
-        // A Photo left every list, so the Library total, its Status and every
-        // Tag it carried all just moved.
-        FetchCountsCmd(),
-        ...liftChildCommands(sheetClosed.commands ?? [], (message) =>
-          Message.GotEditSheetMessage({ message }),
-        ),
-      ])
+      // A Photo left every list, so the Library total, its Status and every Tag
+      // it carried all just moved.
+      const refreshed = modifyFields(model, {
+        photos: () => [...photos],
+        nextCursor: () => null,
+        loadingMore: () => false,
+      })
+      return showToast(refreshed, 'Deleted', 'Success', undefined, [FetchCountsCmd()])
     },
     DeletedTag: ({ tags, photos }) => {
       // If the deleted tag was one of the active filters, drop it — the
       // refetch already came back without it (ConfirmPending removed it from
       // the ids it passed to DeleteTagCmd).
       const activeTagIds = model.activeTagIds.filter((id) => tags.some((tag) => tag.id === id))
-      const settled = retainSelection(
-        modifyFields(model, {
-          tags: () => tags ?? [],
-          photos: () => [...photos],
-          nextCursor: () => null,
-          loadingMore: () => false,
-          activeTagIds: () => activeTagIds,
-        }),
-      )
+      const settled = modifyFields(model, {
+        tags: () => tags ?? [],
+        photos: () => [...photos],
+        nextCursor: () => null,
+        loadingMore: () => false,
+        activeTagIds: () => activeTagIds,
+      })
       return showToast(settled, 'Tag deleted', 'Success', undefined, [FetchCountsCmd()])
     },
 
@@ -1355,7 +1198,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     CompletedLoad: () => ({ model }),
 
     // ----- child message folds ----------------------------------------------------------
-    GotEditSheetMessage: ({ message }) => foldSheet(model, message),
     GotUploadDialogMessage: ({ message }) => foldUploadDialog(model, message),
     GotConfirmMessage: ({ message }) => foldConfirm(model, message),
     GotRowMenuMessage: ({ message }) => foldRowMenu(model, message),
@@ -1387,8 +1229,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // SAFETY: the carrier is S.Unknown because the multi-combobox child
     // message schema is not part of @foldkit/ui's public surface; these
     // messages were produced by this module's own toParentMessage wrapper.
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    GotDraftComboMessage: ({ message }) => foldDraftCombo(model, message as never),
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     GotUploadComboMessage: ({ message }) => foldUploadCombo(model, message as never),
   })

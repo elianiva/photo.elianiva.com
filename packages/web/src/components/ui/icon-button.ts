@@ -39,6 +39,10 @@ const iconButtonBase =
 export type IconButtonConfig<M> = Readonly<{
   onClick?: M
   isDisabled?: boolean
+  /** The toggle state of a button that is one of a set — the View toggle's
+   *  `list` / `squares-four` pair. Rendered as `aria-pressed`, and never
+   *  conflated with `isDisabled`: a pressed button is still operable. */
+  isPressed?: boolean
   type?: 'button' | 'submit' | 'reset'
   isAutofocus?: boolean
   /** Required: a glyph-only control still needs an accessible name. */
@@ -63,6 +67,7 @@ export const iconButton = <M>(
       h.AriaLabel(config.ariaLabel),
       ...(config.title === undefined ? [] : [h.Title(config.title)]),
       ...(config.onClick === undefined ? [] : [h.OnClick(config.onClick)]),
+      ...(config.isPressed === undefined ? [] : [h.AriaPressed(String(config.isPressed))]),
       ...(config.isDisabled === true ? [h.Disabled(true)] : []),
       ...(config.isAutofocus === true ? [h.Autofocus(true)] : []),
       h.Class(cn(iconButtonBase, iconButtonVariants[config.kind ?? 'ghost'], config.className)),

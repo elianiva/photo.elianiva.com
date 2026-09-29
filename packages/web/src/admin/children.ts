@@ -1,7 +1,7 @@
 /**
- * Admin child submodel folds: edit Sheet, upload Dialog, confirm Dialog,
- * FileDrop, toast stack, the Segment groups, and the tag comboboxes. Each fold
- * re-keys the child's messages into the matching Got*Message variant.
+ * Admin child submodel folds: upload Dialog, confirm Dialog, FileDrop, toast
+ * stack, the Segment groups, and the upload tag combobox. Each fold re-keys
+ * the child's messages into the matching Got*Message variant.
  */
 
 import { Option as Opt, Schema as S } from 'effect'
@@ -13,7 +13,6 @@ import { Multi } from '@foldkit/ui/combobox'
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Segment from '@/components/ui/segment'
-import * as Sheet from '@/components/ui/sheet'
 
 import { CreateTagCmd } from './commands'
 import {
@@ -24,38 +23,8 @@ import {
   withOptional,
   type UpdateReturn,
 } from './helpers'
-import {
-  AdminToast,
-  Message,
-  TagMultiCombo,
-  UPLOAD_LIMITS,
-  emptyDraft,
-  fileStore,
-  previewStore,
-} from './model'
+import { AdminToast, Message, TagMultiCombo, UPLOAD_LIMITS, fileStore, previewStore } from './model'
 import type { Message as Msg, Model } from './model'
-
-/** A user-driven close (Esc, backdrop, close button) surfaces as the child's
- *  `Closed` out-message; reset the edit state around it. */
-export const foldSheet = Update.foldChild({
-  update: Sheet.update,
-  read: (model: Model) => Opt.some(model.editSheet),
-  write: (model: Model, nextSheet: typeof model.editSheet) =>
-    modifyFields(model, { editSheet: () => nextSheet }),
-  toParentMessage: (message: typeof Sheet.Message.Type) => Message.GotEditSheetMessage({ message }),
-  foldOutMessage: (out): Update.Step<Model, Msg> =>
-    out._tag === 'Closed'
-      ? (writtenModel) => ({
-          // editingId is optional and may be absent from normalized state;
-          // spread instead of modifyFields, which cannot add missing keys.
-          model: modifyFields(writtenModel, {
-            draft: () => emptyDraft(),
-            draftTagIds: () => [],
-            ...(writtenModel.editingId !== undefined ? { editingId: () => undefined } : {}),
-          }),
-        })
-      : (writtenModel) => ({ model: writtenModel }),
-})
 
 /** Closing the upload dialog (Cancel button sends the child's requested-close
  *  message; Esc/backdrop emit `Closed`) drops queue items that are not stuck. */
@@ -276,13 +245,13 @@ export const foldSegmentGroup =
     })(model, message)
 
 // ---------------------------------------------------------------------------
-// tag combobox folds
+// the upload tag combobox
 //
-// Combos emit `Selected({ value })` through their out-channel: the value is
+// The combo emits `Selected({ value })` through its out-channel: the value is
 // either a Tag id (toggle membership) or a `create:<label>` pseudo-item
-// rendered by the filtered-items view (inline create). Internal combo
-// messages (typing, open/close, highlight) bubble up wrapped and are folded
-// straight back down.
+// rendered by the filtered-items view (inline create). Internal combo messages
+// (typing, open/close, highlight) bubble up wrapped and are folded straight
+// back down.
 // ---------------------------------------------------------------------------
 
 /** The combobox bundle's model shape, named here because @foldkit/ui does
@@ -293,57 +262,33 @@ interface ComboFold {
   (model: Model, message: never): UpdateReturn
 }
 
-const makeComboFold = (
-  which: 'draft' | 'upload',
-  read: (model: Model) => Opt.Option<TagComboModel>,
-  write: (model: Model, nextCombo: TagComboModel) => Model,
-): ComboFold =>
-  Update.foldChild({
-    update: TagMultiCombo.update,
-    read,
-    write,
-    toParentMessage: (message) =>
-      which === 'draft'
-        ? Message.GotDraftComboMessage({ message })
-        : Message.GotUploadComboMessage({ message }),
-    foldOutMessage: (out): Update.Step<Model, Msg> => {
-      if (out._tag !== 'Selected') {
-        return (comboModel) => ({ model: comboModel })
-      }
-      const value = out.value
-      if (value.startsWith('create:')) {
-        const label = value.slice('create:'.length)
-        return (comboModel) => ({
-          model: comboModel,
-          commands: [CreateTagCmd({ source: which, label })],
-        })
-      }
-      if (which === 'draft') {
-        return (comboModel) => ({
-          model: modifyFields(comboModel, {
-            draftTagIds: () => toggleIn(comboModel.draftTagIds, value),
-          }),
-        })
-      }
+/** The upload Dialog's Tag picker. A pick is a Tag id to toggle, or a
+ *  `create:<label>` pseudo-item that asks the API for a new Tag. */
+export const foldUploadCombo: ComboFold = Update.foldChild({
+  update: TagMultiCombo.update,
+  read: (model: Model) => Opt.some(model.uploadCombo),
+  write: (model: Model, nextCombo: TagComboModel) =>
+    modifyFields(model, { uploadCombo: () => nextCombo }),
+  toParentMessage: (message) => Message.GotUploadComboMessage({ message }),
+  foldOutMessage: (out): Update.Step<Model, Msg> => {
+    if (out._tag !== 'Selected') {
+      return (comboModel) => ({ model: comboModel })
+    }
+    const value = out.value
+    if (value.startsWith('create:')) {
+      const label = value.slice('create:'.length)
       return (comboModel) => ({
-        model: modifyFields(comboModel, {
-          uploadTagIds: () => toggleIn(comboModel.uploadTagIds, value),
-        }),
+        model: comboModel,
+        commands: [CreateTagCmd({ source: 'upload', label })],
       })
-    },
-  })
-
-export const foldDraftCombo = makeComboFold(
-  'draft',
-  (model) => Opt.some(model.draftCombo),
-  (model, nextCombo) => modifyFields(model, { draftCombo: () => nextCombo }),
-)
-
-export const foldUploadCombo = makeComboFold(
-  'upload',
-  (model) => Opt.some(model.uploadCombo),
-  (model, nextCombo) => modifyFields(model, { uploadCombo: () => nextCombo }),
-)
+    }
+    return (comboModel) => ({
+      model: modifyFields(comboModel, {
+        uploadTagIds: () => toggleIn(comboModel.uploadTagIds, value),
+      }),
+    })
+  },
+})
 
 /** The row `⋯` menu. Closing it forgets which Photo it was opened on, so a
  *  later menu cannot act on a row the operator has paged away from. The same

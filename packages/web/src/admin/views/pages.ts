@@ -8,18 +8,22 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 import type { PhotoWithTags, Tag } from '@photo/shared'
+import { LayoutGrid, List } from 'lucide'
 
 import * as Badge from '@/components/ui/badge'
 import * as Button from '@/components/ui/button'
+import { iconButton } from '@/components/ui/icon-button'
 import * as SpecRow from '@/components/ui/spec-row'
 import { originalUrl } from '@/lib/image'
 
 import { atomsPage } from './atoms'
+import { grid } from './grid'
 import { libraryTable } from './library-table'
 import { settingsPage } from './settings'
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
-import { AppRoute, libraryRouter } from '../route'
+import { AppRoute, libraryUrl, libraryViewOf } from '../route'
+import type { LibraryView } from '../route'
 import * as TagManager from '../tag-manager'
 import type { Child } from './shared'
 import { formatTakenAt } from './shared'
@@ -29,7 +33,7 @@ import { formatTakenAt } from './shared'
 const backToLibrary = (label: string, h: HtmlBuilder<Msg>): Child =>
   h.a(
     [
-      h.Href(libraryRouter()),
+      h.Href(libraryUrl()),
       h.Class(
         'type-ui inline-flex items-center gap-1 text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary',
       ),
@@ -73,9 +77,11 @@ const filterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
 }
 
 // ---------------------------------------------------------------------------
-// grid density: square-tile column count (2–6), persisted on change. It is a
-// Library control, so it lives on the Library page rather than in the Page
-// Head, which carries the title and the route's own actions.
+// the Library's view controls: a list/grid toggle and, in grid mode, the
+// square-tile column count (2–6). Both are Library controls, so they live on
+// the Library page rather than in the Page Head, which carries the title and
+// the route's own actions. The view is route state — the URL's `view` — and
+// the column count is a preference persisted on change.
 // ---------------------------------------------------------------------------
 
 const COL_CHOICES = [2, 3, 4, 5, 6] as const
@@ -103,19 +109,56 @@ const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
     ),
   )
 
-const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child =>
+/** The design's `View` control: a `list` and a `squares-four` Icon Button, the
+ *  current one filled and the other ghost. The grid toggle #26 places in the
+ *  Filter Bar; the Filter Bar itself is #26's, so it sits in the Library's own
+ *  control row for now. */
+const viewToggle = (view: LibraryView, h: HtmlBuilder<Msg>): Child =>
   h.div(
+    [h.Role('group'), h.AriaLabel('View'), h.Class('flex items-center gap-(--spacing-xs)')],
+    (
+      [
+        { view: 'list', label: 'List view', glyph: List },
+        { view: 'grid', label: 'Grid view', glyph: LayoutGrid },
+      ] as const
+    ).map((choice) =>
+      iconButton(
+        {
+          onClick: M.SelectedView({ view: choice.view }),
+          ariaLabel: choice.label,
+          isPressed: view === choice.view,
+          kind: view === choice.view ? 'filled' : 'ghost',
+        },
+        choice.glyph,
+        h,
+      ),
+    ),
+  )
+
+const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const view = libraryViewOf(model.route)
+  return h.div(
     [],
     [
-      h.div([h.Class('mt-(--spacing-lg) flex justify-end')], [colsToggle(model, h)]),
+      h.div(
+        [
+          h.Class(
+            'mt-(--spacing-lg) flex flex-wrap items-center justify-between gap-(--spacing-lg)',
+          ),
+        ],
+        [
+          h.div([h.Class('flex items-center')], [view === 'grid' ? colsToggle(model, h) : '']),
+          viewToggle(view, h),
+        ],
+      ),
       filterBar(model, h),
-      // #25: the `Table Head` → `Library Row` × N → `Pager` the design draws.
-      // The tile grid this replaces is left on disk — `views/grid.ts` and the
-      // density toggle above are #27's to re-introduce as the grid view, and
-      // the table's error and empty-library states are the grid's own.
-      libraryTable(model, h),
+      // One Library read, two views. The tile grid and the table are the only
+      // two ways to see the rows; there is no third path (no lightbox, no
+      // Sheet).
+      view === 'grid' ? grid(model, h) : libraryTable(model, h),
     ],
   )
+}
 
 // ---------------------------------------------------------------------------
 // Photo — `/admin/photos/<id>`

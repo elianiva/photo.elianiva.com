@@ -1,6 +1,6 @@
 /**
  * Shared Admin view helpers: formatting utilities and the tag combobox
- * embedding used by both the edit sheet and the upload dialog.
+ * embedding the upload dialog uses.
  *
  * The picker's items are the known Tag ids plus, when the typed text matches
  * no existing label, a `create:<label>` pseudo-item rendered inline. Selecting
@@ -75,7 +75,7 @@ const createRow = (label: string): Html =>
   )
 
 const comboViewInputs = (
-  combo: Model['draftCombo'],
+  combo: Model['uploadCombo'],
   tags: ReadonlyArray<Tag>,
   selectedIds: ReadonlyArray<string>,
 ): Multi.ViewInputs<string> => {
@@ -134,26 +134,18 @@ const pickedChip = (label: string, onRemove: Msg, h: HtmlBuilder<Msg>): Child =>
     ],
   )
 
-export const embedCombo = (model: Model, which: 'draft' | 'upload', h: HtmlBuilder<Msg>): Child => {
-  const selectedIds = which === 'draft' ? model.draftTagIds : model.uploadTagIds
-  const onRemove = (id: string): Msg =>
-    which === 'draft' ? M.RemoveDraftTag({ id }) : M.RemoveUploadTag({ id })
+export const embedCombo = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const selectedIds = model.uploadTagIds
+  const onRemove = (id: string): Msg => M.RemoveUploadTag({ id })
   return h.div(
     [h.Class('flex flex-col gap-(--spacing-sm)')],
     [
       h.submodel({
-        slotId: `${which}-tag-combo`,
-        model: which === 'draft' ? model.draftCombo : model.uploadCombo,
+        slotId: 'upload-tag-combo',
+        model: model.uploadCombo,
         view: TagMultiCombo.view,
-        viewInputs: comboViewInputs(
-          which === 'draft' ? model.draftCombo : model.uploadCombo,
-          model.tags,
-          selectedIds,
-        ),
-        toParentMessage: (message) =>
-          which === 'draft'
-            ? M.GotDraftComboMessage({ message })
-            : M.GotUploadComboMessage({ message }),
+        viewInputs: comboViewInputs(model.uploadCombo, model.tags, selectedIds),
+        toParentMessage: (message) => M.GotUploadComboMessage({ message }),
       }),
       // Picked tags as removable chips — the multi-select input itself rests
       // empty by design, so without these the selection is invisible until the

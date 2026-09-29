@@ -10,7 +10,7 @@
 
 import { Effect, Schema as S } from 'effect'
 import * as Command from 'foldkit/command'
-import { load, pushUrl, back } from 'foldkit/navigation'
+import { load, pushUrl, replaceUrl, back } from 'foldkit/navigation'
 import { PhotoId, PhotoPresentation, SettingsInput } from '@photo/shared'
 import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
 
@@ -21,7 +21,6 @@ import { encodeBlurhash } from '@/lib/blurhash'
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
 import {
   BULK_BORDER_MAT,
-  DraftFields,
   GridCols,
   LIBRARY_PAGE_SIZE,
   Message,
@@ -200,7 +199,7 @@ export const SetRowStatusCmd = Command.define('SetRowStatus', {
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
-export const COLS_STORAGE_KEY = 'photo-admin:cols'
+export const COLS_STORAGE_KEY = 'photo-admin:library:cols'
 const COL_CHOICES = [2, 3, 4, 5, 6] as const
 const DEFAULT_COLS = 4
 
@@ -237,15 +236,6 @@ export const FetchPhotosCmd = Command.define('FetchPhotos', {
   execute: ({ tagIds, q, cursor }) =>
     Effect.map(listPayload({ tagIds, q, ...(cursor === undefined ? {} : { cursor }) }), (page) =>
       Message.SucceededFetchPhotos(toLibraryPage(page)),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-export const FetchMoreCmd = Command.define('FetchMore', {
-  args: { tagIds: S.Array(S.String), q: S.String, cursor: S.String },
-  messages: [Message.SucceededFetchMore, Message.FailedRpc],
-  execute: ({ tagIds, q, cursor }) =>
-    Effect.map(listPayload({ tagIds, q, cursor }), (page) =>
-      Message.SucceededFetchMore({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
@@ -386,6 +376,16 @@ export const NavigateCmd = Command.define('Navigate', {
   execute: ({ url }) => pushUrl(url).pipe(Effect.as(Message.CompletedNavigate())),
 })
 
+/** Move the URL bar in place without adding a history entry. The runtime then
+ *  reports the new URL back as `ChangedUrl`, exactly as `pushUrl` does, so the
+ *  one route table parses both. Used by a view toggle: the back button must not
+ *  walk through every mode the operator clicked through (#26's rule). */
+export const ReplaceUrlCmd = Command.define('ReplaceUrl', {
+  args: { url: S.String },
+  messages: [Message.CompletedNavigate],
+  execute: ({ url }) => replaceUrl(url).pipe(Effect.as(Message.CompletedNavigate())),
+})
+
 /** Step one entry back in the same-document history. The Editor's leave guard
  *  needs this: a popstate has already moved the URL bar, and the operator's
  *  Back press is undone by going back, not by writing the Editor's URL into
@@ -402,29 +402,6 @@ export const LoadCmd = Command.define('Load', {
   args: { href: S.String },
   messages: [Message.CompletedLoad],
   execute: ({ href }) => load(href).pipe(Effect.as(Message.CompletedLoad())),
-})
-
-export const SaveEditsCmd = Command.define('SaveEdits', {
-  args: { id: S.String, draft: DraftFields, tagIds: S.Array(S.String) },
-  messages: [Message.SavedEdits, Message.FailedRpc],
-  execute: ({ id, draft, tagIds }) =>
-    Effect.gen(function* () {
-      const metadata: Record<string, string> = {}
-      for (const field of ['caption', 'location', 'camera', 'lens'] as const) {
-        if (draft[field] !== '') metadata[field] = draft[field]
-      }
-      yield* rpcAdmin('UpdatePhoto', {
-        id,
-        title: draft.title,
-        slug: draft.slug,
-        ...(draft.takenAt !== '' && { takenAt: draft.takenAt }),
-        ...(Object.keys(metadata).length > 0 && { metadata }),
-        tagIds: [...tagIds],
-      })
-      // refetch first page so ordering (takenAt DESC) stays truthful
-      const page = yield* rpcAdmin<PhotoPage>('ListLibraryRows', { limit: 60 })
-      return Message.SavedEdits({ photos: [...page.items] })
-    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 export const DeletePhotoCmd = Command.define('DeletePhoto', {
@@ -463,7 +440,7 @@ export const DeleteTagCmd = Command.define('DeleteTag', {
 })
 
 export const CreateTagCmd = Command.define('CreateTag', {
-  args: { source: S.Literals(['draft', 'upload', 'manager', 'sidebar']), label: S.String },
+  args: { source: S.Literals(['upload', 'manager', 'sidebar']), label: S.String },
   messages: [Message.SucceededCreateTag, Message.FailedRpc],
   execute: ({ source, label }) =>
     Effect.map(rpcAdmin<Tag>('CreateTag', { slug: label, label }), (tag) =>

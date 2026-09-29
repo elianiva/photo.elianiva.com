@@ -26,7 +26,7 @@ import { icon } from '@/lib/icons'
 
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
-import { AppRoute, appRouteToUrl } from '../route'
+import { AppRoute, appRouteToUrl, libraryRoute, libraryViewOf } from '../route'
 import type { AppRoute as AppRouteType } from '../route'
 import type { Child } from './shared'
 
@@ -133,7 +133,7 @@ const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const failed = model.counts.byStatus.failed
   const rows: ReadonlyArray<NavRow> = [
     {
-      route: AppRoute.Library(),
+      route: libraryRoute(libraryViewOf(model.route)),
       label: 'Library',
       glyph: Images,
       count: String(model.counts.total),

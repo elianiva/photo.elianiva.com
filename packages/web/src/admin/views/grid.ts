@@ -1,12 +1,20 @@
 /**
- * Admin photo grid: a fixed square-tile CSS grid whose column count the
- * operator picks in the header (2–6, persisted to localStorage — same
- * pattern as `len`). Tiles show the client-decoded blurhash placeholder
- * until the thumbnail loads; hovering reveals tags plus Edit / Delete
- * actions, clicking opens the lightbox (original file).
+ * Admin Library grid: a fixed square-tile CSS grid whose column count the
+ * operator picks (2–6, persisted to localStorage under its own key). Tiles
+ * show the client-decoded blurhash placeholder until the thumbnail loads —
+ * the box is `aspect-square` at every size, so the placeholder appearing or
+ * the bytes arriving never moves the rows around it. Hovering reveals the
+ * Tags plus Edit / Delete, and clicking a tile opens the Editor route (the
+ * lightbox-as-tile-click path is retired, decision 2).
  *
  * The overlay is a sibling of the click target — not a child — so clicks on
- * its buttons can never bubble into opening the lightbox.
+ * its buttons can never bubble into opening the Editor.
+ *
+ * It is one of the Library's two views over the same `ListLibraryRows` read,
+ * so its paging is the table's Pager and its error and filtered-empty states
+ * are the shared ones, not a second arrangement of the same facts. A Library
+ * with no Photographs at all is `library-empty.ts`, the design's own state with
+ * the two real pickers.
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
@@ -19,18 +27,30 @@ import { srcSet, thumbUrl } from '@/lib/image'
 
 import { Message as M } from '../model'
 import type { GridCols, Model, Msg } from '../model'
+import { libraryEmpty } from './library-empty'
+import { libraryPager } from './library-pager'
+import { libraryError, libraryIsEmpty, libraryNoMatch } from './library-states'
 import type { Child } from './shared'
 
 // ---------------------------------------------------------------------------
 // tile sizing hints
 // ---------------------------------------------------------------------------
 
-/** The grid lives in the max-w-6xl (72rem) container with px-6 gutters;
- *  tiles split it into `cols` equal columns separated by gap-3. */
-const tileSizes = (cols: GridCols): string =>
-  cols === 2
-    ? '(min-width: 1152px) calc((72rem - 3rem) / 2), calc((100vw - 3rem) / 2)'
-    : `(min-width: 1152px) calc((72rem - 3rem) / ${String(cols)}), calc((100vw - 4.5rem) / ${String(cols)})`
+/** The grid sits in the Admin's content column (`max-w-(--layout-content-max)`,
+ *  1080px) behind `px-(--layout-margin-mobile)` / `sm:px-(--layout-margin)`
+ *  gutters, with `gap-2` / `sm:gap-3` between tiles. `sizes` tells the browser
+ *  how wide one tile will be so it can pick from `srcset` before layout; the
+ *  numbers here mirror those tokens, and a token change is a two-line change
+ *  rather than a guess. */
+const tileSizes = (cols: GridCols): string => {
+  const gapsSm = ((cols - 1) * 0.75).toFixed(2)
+  const gapsXs = ((cols - 1) * 0.5).toFixed(2)
+  return [
+    `(min-width: 1080px) calc((67.5rem - 6rem - ${gapsSm}rem) / ${String(cols)})`,
+    `(min-width: 640px) calc((100vw - 6rem - ${gapsSm}rem) / ${String(cols)})`,
+    `calc((100vw - 2rem - ${gapsXs}rem) / ${String(cols)})`,
+  ].join(', ')
+}
 
 // ---------------------------------------------------------------------------
 // photo tile
@@ -43,12 +63,12 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
       : null
   const tags = photo.tags ?? []
   return h.figure(
-    [h.Key(photo.id), h.Class('group relative m-0')],
+    [h.Key(photo.id), h.DataAttribute('slot', 'photo-tile'), h.Class('group relative m-0')],
     [
       h.div(
         [
           h.Class(
-            'aspect-square w-full cursor-pointer overflow-hidden bg-role-surface-container bg-cover bg-center',
+            'aspect-square w-full cursor-pointer overflow-hidden border border-role-hairline bg-role-surface-container bg-cover bg-center',
           ),
           h.Style({
             // The decoded blurhash paints the box until thumbnail bytes
@@ -56,7 +76,12 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
             // the plain neutral background.
             ...(placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {}),
           }),
-          h.OnClick(M.ClickedPhoto({ id: photo.id })),
+          // The tile says which background it is painting, so the placeholder
+          // is an observable fact rather than an opaque inline style.
+          h.DataAttribute('placeholder', placeholder === null ? 'none' : 'blurhash'),
+          // A tile opens the Editor, which is the Photo route — the same
+          // destination the pencil reaches. There is no lightbox any more.
+          h.OnClick(M.OpenedPhoto({ id: photo.id })),
           h.Attribute('role', 'button'),
           h.AriaLabel(`Open ${photo.title}`),
         ],
@@ -90,7 +115,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
             [
               Button.button(
                 {
-                  onClick: M.OpenEdit({ photo }),
+                  onClick: M.OpenedPhoto({ id: photo.id }),
                   variant: 'secondary',
                   className: 'bg-role-mat-white/90 backdrop-blur',
                 },
@@ -123,58 +148,28 @@ const loadingState = (h: HtmlBuilder<Msg>): Child =>
     ['Loading photos…'],
   )
 
-const errorState = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [
-      h.Class(
-        'mt-(--spacing-3xl) border border-role-accent bg-role-error-container p-(--spacing-lg) type-ui text-role-error',
-      ),
-    ],
-    [
-      h.p([], [model.error ?? 'Failed to load photos']),
-      Button.button(
-        { onClick: M.RetryFetch(), variant: 'secondary', className: 'mt-3' },
-        'Retry',
-        h,
-      ),
-    ],
-  )
-
 // ---------------------------------------------------------------------------
 // grid
 // ---------------------------------------------------------------------------
 
 export const grid = (model: Model, h: HtmlBuilder<Msg>): Child => {
   if (model.status === 'loading') return loadingState(h)
-  if (model.status === 'error') return errorState(model, h)
+  if (model.status === 'error') return libraryError(model, h)
+  if (model.photos.length === 0) {
+    return libraryIsEmpty(model) ? libraryEmpty(h) : libraryNoMatch(model, h)
+  }
   return h.div(
     [],
     [
       h.div(
         [
+          h.DataAttribute('slot', 'library-grid'),
           h.Class('mt-2 grid gap-2 sm:gap-3'),
           h.Style({ gridTemplateColumns: `repeat(${String(model.cols)}, minmax(0, 1fr))` }),
         ],
         model.photos.map((photo) => photoTile(photo, tileSizes(model.cols), h)),
       ),
-      ...(model.nextCursor !== null
-        ? [
-            h.div(
-              [h.Class('mt-(--spacing-2xl) flex justify-center')],
-              [
-                Button.button(
-                  {
-                    onClick: M.LoadMore(),
-                    variant: 'secondary',
-                    isDisabled: model.loadingMore,
-                  },
-                  model.loadingMore ? 'Loading…' : 'Load more',
-                  h,
-                ),
-              ],
-            ),
-          ]
-        : []),
+      libraryPager(model, h),
     ],
   )
 }
