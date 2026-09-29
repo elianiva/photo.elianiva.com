@@ -21,6 +21,11 @@ export interface PhotoSeed {
   readonly title: string
   readonly r2Key?: string
   readonly takenAt?: string
+  /** The four EXIF facts `extractImageMeta` reads off the original. */
+  readonly aperture?: number
+  readonly shutter?: number
+  readonly iso?: number
+  readonly focalLength?: number
   readonly metadata?: string
   readonly blurhash?: string
   readonly contentType?: string
@@ -34,6 +39,10 @@ const toCreateInput = (seed: PhotoSeed): CreatePhotoInput => ({
   width: 1200,
   height: 800,
   takenAt: seed.takenAt,
+  aperture: seed.aperture,
+  shutter: seed.shutter,
+  iso: seed.iso,
+  focalLength: seed.focalLength,
   metadata: seed.metadata ?? '{}',
   blurhash: seed.blurhash,
   contentType: seed.contentType ?? 'image/jpeg',

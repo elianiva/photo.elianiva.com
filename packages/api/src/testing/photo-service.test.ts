@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
-import { PhotoNotFound, SlugConflict, StorageError } from '@photo/shared'
+import { PhotoNotFound, SlugConflict, StorageError, formatExifLine } from '@photo/shared'
 import type { D1DatabaseLike } from '../gateway'
 import {
   PhotoService,
@@ -278,6 +278,10 @@ describe('PhotoService.get', () => {
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour', location: 'Kyoto' },
       blurhash: null,
+      aperture: null,
+      shutter: null,
+      iso: null,
+      focalLength: null,
       tags: [{ id: tag.id, slug: 'kyoto', label: 'Kyoto', caption: null }],
     })
   })
@@ -334,6 +338,10 @@ describe('PhotoService.create', () => {
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour' },
       blurhash: 'LEHV6nWB2',
+      aperture: null,
+      shutter: null,
+      iso: null,
+      focalLength: null,
       tags: [{ id: tag.id, slug: 'kyoto', label: 'Kyoto', caption: null }],
     })
   })
@@ -344,6 +352,40 @@ describe('PhotoService.create', () => {
     const created = await seed(harness, { slug: 'plain', title: 'Plain' })
 
     expect((await harness.photos.head(created.r2Key))?.httpMetadata?.contentType).toBe('image/jpeg')
+  })
+
+  it('stores the extracted EXIF facts and reads them back', async () => {
+    const harness = makeTestHarness()
+
+    const created = await seed(harness, {
+      slug: 'exif',
+      title: 'Exif',
+      takenAt: '2025-08-31',
+      aperture: 8,
+      shutter: 1 / 1000,
+      iso: 200,
+      focalLength: 25,
+    })
+
+    const stored = await get(harness, created.id)
+    expect(stored.aperture).toBe(8)
+    expect(stored.shutter).toBe(0.001)
+    expect(stored.iso).toBe(200)
+    expect(stored.focalLength).toBe(25)
+    expect(formatExifLine(stored)).toBe('25MM · F/8 · 1/1000 · ISO 200 · 31 AUG')
+  })
+
+  it('leaves the EXIF facts null when the original carried none', async () => {
+    const harness = makeTestHarness()
+
+    const created = await seed(harness, { slug: 'bare', title: 'Bare', takenAt: '2025-08-31' })
+
+    const stored = await get(harness, created.id)
+    expect(stored.aperture).toBeNull()
+    expect(stored.shutter).toBeNull()
+    expect(stored.iso).toBeNull()
+    expect(stored.focalLength).toBeNull()
+    expect(formatExifLine(stored)).toBe('31 AUG')
   })
 
   it('suffixes a slug already taken instead of failing', async () => {
@@ -421,6 +463,10 @@ describe('PhotoService.update', () => {
       takenAt: '2024-07-04',
       metadata: { caption: 'new', camera: 'Ricoh GR III' },
       blurhash: null,
+      aperture: null,
+      shutter: null,
+      iso: null,
+      focalLength: null,
       tags: [{ id: newTag.id, slug: 'kyoto', label: 'Kyoto', caption: null }],
     })
     expect(await linkedPhotoIds(harness)).toEqual([created.id])
@@ -453,6 +499,10 @@ describe('PhotoService.update', () => {
       takenAt: '2024-01-01',
       metadata: {},
       blurhash: null,
+      aperture: null,
+      shutter: null,
+      iso: null,
+      focalLength: null,
       tags: [],
     })
   })
