@@ -65,21 +65,6 @@ export function toQueueItem(key: string): Model['queue'][number] {
 export const byLabel = (a: { readonly label: string }, b: { readonly label: string }): number =>
   a.label.localeCompare(b.label)
 
-/** The Tag ids the Library's active filter names.
- *
- *  The filter is a slug in the Model — that is what the chip row and the URL
- *  carry — and an id on the wire, because that is what `photo_tags` is keyed
- *  on, so the Model's own Tag list is where the two meet. Empty means no
- *  filter. A slug the Model does not carry resolves to nothing, which is the
- *  state the delete fold settles `activeTagSlug` out of before a refetch is
- *  asked for. */
-export const activeTagIds = (
-  model: Pick<Model, 'tags' | 'activeTagSlug'>,
-): ReadonlyArray<string> =>
-  model.activeTagSlug === undefined
-    ? []
-    : model.tags.filter((tag) => tag.slug === model.activeTagSlug).map((tag) => tag.id)
-
 export const photoCountLabel = (count: number): string =>
   `${String(count)} photo${count === 1 ? '' : 's'}`
 

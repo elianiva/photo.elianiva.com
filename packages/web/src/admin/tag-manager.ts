@@ -41,8 +41,9 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
   SetInput: { value: S.String },
   SubmitCreate: {},
-  /** The operator clicked a chip: the parent re-runs its filter toggle. */
-  ToggledFilter: { slug: S.String },
+  /** The operator clicked a chip: the parent adds or removes this Tag from
+   *  the shared multi-select filter. */
+  ToggledFilter: { id: S.String },
   /** The operator clicked a chip's delete button. */
   RequestedDelete: { id: S.String, label: S.String },
 })
@@ -66,11 +67,10 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 
 export interface ViewInputs {
   tags: ReadonlyArray<Tag>
-  /** Slug of the currently-applied filter, if any. */
-  activeSlug?: string
-  /** Photos per tag id. Return undefined to hide the count badge (counts
-   *  describe the loaded result set, so they are meaningless while
-   *  filtered — every chip would repeat the same number). */
+  /** Ids of the currently-applied filters. Empty or absent means no filter,
+   *  which is every Photo — there is no "all" pill. */
+  activeIds?: ReadonlyArray<string>
+  /** Photos per tag id. Return undefined to hide the count badge. */
   countFor?: (tag: Tag) => number | undefined
   /** Summary line under the chips ("12 photos · filtered by "kyoto""). */
   resultText: string
@@ -182,13 +182,13 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
               [h.Class('mt-3 flex flex-wrap gap-(--spacing-xs)')],
               [
                 ...inputs.tags.map((tag) => {
-                  const isActive = inputs.activeSlug === tag.slug
+                  const isActive = inputs.activeIds?.includes(tag.id) === true
                   return h.span(
                     [h.Key(`chip-${tag.slug}`), h.Class(chipClass(isActive))],
                     [
                       h.button(
                         [
-                          h.OnClick(Message.ToggledFilter({ slug: tag.slug })),
+                          h.OnClick(Message.ToggledFilter({ id: tag.id })),
                           h.Title(
                             isActive ? `Clear filter ${tag.label}` : `Filter by ${tag.label}`,
                           ),
