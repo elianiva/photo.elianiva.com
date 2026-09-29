@@ -1,7 +1,7 @@
 /**
- * Gallery view root — the public showcase. Editorial system: pure white
- * canvas, one display serif (Cormorant Garamond) over a quiet sans, hairline
- * rules as the only structure, and no chrome competing with the photographs.
+ * Gallery view root — the public showcase. Editorial system: newsprint paper,
+ * black ink, one display serif (Newsreader) over Libre Franklin, hairline rules
+ * as the only structure, and no chrome competing with the photographs.
  * Region views live in `views/`.
  */
 
@@ -18,8 +18,12 @@ import type { Child } from './views/shared'
 // layout tokens
 // ---------------------------------------------------------------------------
 
-/** Shared horizontal gutter so masthead, grid and footer align. */
-const GUTTER = 'px-6 sm:px-12 lg:px-20'
+/** Shared page gutter: the design system's content column and page margins. */
+const GUTTER =
+  'mx-auto w-full max-w-(--layout-content-max) px-(--layout-margin-mobile) sm:px-(--layout-margin)'
+
+/** Shared cursor feedback timing, from `motion.duration.fast`. */
+const TRANSITION = 'transition-colors duration-(--motion-duration-fast)'
 
 /** Current year via the effect DateTime module (lint rule). */
 const currentYear = (): number => DateTime.toPartsUtc(DateTime.nowUnsafe()).year
@@ -30,36 +34,44 @@ const currentYear = (): number => DateTime.toPartsUtc(DateTime.nowUnsafe()).year
 
 const masthead = (h: HtmlBuilder<Message>): Child =>
   h.header(
-    [h.Class(`${GUTTER} pt-10 lg:pt-14 flex items-baseline justify-between`)],
+    [
+      h.Class(
+        `${GUTTER} pt-(--spacing-3xl) lg:pt-(--spacing-4xl) flex items-baseline justify-between`,
+      ),
+    ],
     [
       h.a(
         [
           h.Href('/'),
           h.Class(
-            'text-[11px] font-medium uppercase tracking-[0.4em] text-neutral-900 hover:text-neutral-500 transition-colors',
+            `type-kicker text-role-text-primary hover:text-role-text-secondary ${TRANSITION}`,
           ),
         ],
         ['Elianiva'],
       ),
-      h.span([h.Class('text-[10px] uppercase tracking-[0.3em] text-neutral-400')], ['Photographs']),
+      h.span([h.Class('type-kicker text-role-text-disabled')], ['Photographs']),
     ],
   )
 
 const hero = (model: Model, h: HtmlBuilder<Message>): Child => {
   const span = yearSpan(model.photos)
   return h.section(
-    [h.Class(`${GUTTER} pt-16 pb-20 lg:pt-24 lg:pb-32`)],
+    [
+      h.Class(
+        `${GUTTER} pt-(--spacing-4xl) pb-(--spacing-5xl) lg:pt-(--spacing-5xl) lg:pb-(--spacing-6xl)`,
+      ),
+    ],
     [
       h.h1(
         [
           h.Class(
-            'font-serif font-light text-6xl sm:text-7xl lg:text-8xl leading-[1.02] tracking-tight text-neutral-900',
+            'type-nameplate-xs sm:type-nameplate-sm lg:type-nameplate text-role-text-primary',
           ),
         ],
         ['Photographs'],
       ),
       h.p(
-        [h.Class('mt-6 lg:mt-8 text-[10px] uppercase tracking-[0.35em] text-neutral-400')],
+        [h.Class('mt-(--spacing-xl) lg:mt-(--spacing-2xl) type-kicker text-role-text-disabled')],
         [span === '' ? 'Selected works' : `Selected works · ${span}`],
       ),
     ],
@@ -70,18 +82,15 @@ const footer = (h: HtmlBuilder<Message>): Child =>
   h.footer(
     [
       h.Class(
-        `${GUTTER} mt-8 border-t border-neutral-200 py-10 flex items-baseline justify-between`,
+        `${GUTTER} mt-(--spacing-2xl) border-t border-role-hairline py-(--spacing-3xl) flex items-baseline justify-between`,
       ),
     ],
     [
       h.span(
-        [h.Class('text-[10px] uppercase tracking-[0.3em] text-neutral-400')],
+        [h.Class('type-kicker text-role-text-disabled')],
         [`© ${String(currentYear())} Elianiva`],
       ),
-      h.span(
-        [h.Class('font-serif italic font-light text-sm text-neutral-300')],
-        ['All photographs.'],
-      ),
+      h.span([h.Class('type-caption italic text-role-text-disabled')], ['All photographs.']),
     ],
   )
 
@@ -97,7 +106,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
   return {
     title: 'Photographs — elianiva',
     body: h.div(
-      [h.Class('min-h-screen bg-white text-neutral-900')],
+      [h.Class('min-h-screen bg-role-surface text-role-text-primary')],
       [
         masthead(h),
         hero(model, h),

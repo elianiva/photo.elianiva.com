@@ -1,8 +1,8 @@
 /**
- * Lightbox: the only place Photo bytes are fetched on the public site.
- * Plain white canvas, the original HD file object-contained — no chrome
- * beyond a close affordance. Escape closes via the keydown Subscription;
- * clicking anywhere outside the image also closes.
+ * Lightbox: the only place Photo bytes are fetched on the public site. The
+ * photo sits on the design system's pure-white mat — no chrome beyond a close
+ * affordance. Escape closes via the keydown Subscription; clicking anywhere
+ * outside the image also closes.
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
@@ -18,7 +18,9 @@ export const lightbox = (photo: PhotoWithTags, h: HtmlBuilder<Message>): Child =
   h.div(
     [
       h.Key('lightbox'),
-      h.Class('fixed inset-0 z-50 flex items-center justify-center bg-white p-6 sm:p-10 lg:p-16'),
+      h.Class(
+        'fixed inset-0 z-50 flex items-center justify-center bg-role-mat-white p-(--spacing-xl) sm:p-(--spacing-3xl) lg:p-(--spacing-4xl)',
+      ),
       h.OnClick(Message.CloseLightbox()),
       // Tab cycles back to the close button so focus never leaves the dialog.
       // The message is benign: re-selecting the open photo changes nothing.
@@ -49,7 +51,7 @@ export const lightbox = (photo: PhotoWithTags, h: HtmlBuilder<Message>): Child =
           h.Id('lightbox-close'),
           h.Autofocus(true),
           h.Class(
-            'absolute top-6 right-6 sm:top-8 sm:right-8 text-[10px] uppercase tracking-[0.3em] text-neutral-400 hover:text-neutral-900 transition-colors',
+            'absolute top-(--spacing-3xl) right-(--spacing-3xl) sm:top-(--spacing-4xl) sm:right-(--spacing-4xl) type-kicker text-role-text-disabled hover:text-role-text-primary transition-colors duration-(--motion-duration-fast)',
           ),
           h.OnClick(Message.CloseLightbox()),
           h.AriaLabel('Close'),

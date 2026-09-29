@@ -18,11 +18,13 @@ import { Option } from 'effect'
 
 import { placeholderDataUrl } from '@/lib/blurhash'
 import { galleryTileSizes, srcSet, thumbUrl } from '@/lib/image'
-
 import { Message } from '../model'
 import type { Model } from '../model'
 import { breakRows, lastRowSlack, toAspects } from '@/lib/layout'
 import type { Child } from './shared'
+
+/** Shared cursor feedback timing, from `motion.duration.fast`. */
+const TRANSITION = 'transition-colors duration-(--motion-duration-fast)'
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -57,14 +59,20 @@ const photoFigure = (photo: PhotoWithTags, aspect: number, h: HtmlBuilder<Messag
       ? placeholderDataUrl(photo.blurhash)
       : null
   return h.figure(
-    [h.Key(photo.id), h.Style({ flex: `${aspect} 1 0%` }), h.Class('min-w-0 mb-16 lg:mb-24')],
+    [
+      h.Key(photo.id),
+      h.Style({ flex: `${aspect} 1 0%` }),
+      h.Class('min-w-0 mb-(--spacing-4xl) lg:mb-(--spacing-5xl)'),
+    ],
     [
       // Aspect-ratio box reserves layout space; blurhash paints it instantly and
       // the lazy thumbnail resolves on top. Photos without a stored blurhash
       // still load a thumbnail over the neutral fallback.
       h.div(
         [
-          h.Class('w-full cursor-pointer overflow-hidden bg-neutral-100 bg-cover bg-center'),
+          h.Class(
+            'w-full cursor-pointer overflow-hidden bg-role-surface-container bg-cover bg-center',
+          ),
           h.Style({
             aspectRatio: String(aspect),
             ...(placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {}),
@@ -92,14 +100,15 @@ const photoFigure = (photo: PhotoWithTags, aspect: number, h: HtmlBuilder<Messag
         ],
       ),
       h.figcaption(
-        [h.Class('mt-3 lg:mt-4 flex items-baseline justify-between gap-6')],
         [
-          h.span(
-            [h.Class('font-serif italic font-light text-lg leading-tight text-neutral-800')],
-            [photo.title],
+          h.Class(
+            'mt-(--spacing-md) lg:mt-(--spacing-lg) flex items-baseline justify-between gap-(--spacing-4xl)',
           ),
+        ],
+        [
+          h.span([h.Class('type-deck italic text-role-text-primary')], [photo.title]),
           h.span(
-            [h.Class('text-[10px] uppercase tracking-[0.25em] text-neutral-400 whitespace-nowrap')],
+            [h.Class('type-exif text-role-text-disabled whitespace-nowrap')],
             [placardLine(photo)],
           ),
         ],
@@ -114,27 +123,24 @@ const photoFigure = (photo: PhotoWithTags, aspect: number, h: HtmlBuilder<Messag
 
 const loadingState = (h: HtmlBuilder<Message>): Child =>
   h.p(
-    [h.Class('py-32 text-center font-serif italic font-light text-xl text-neutral-300')],
+    [h.Class('py-(--spacing-6xl) text-center type-deck italic text-role-text-disabled')],
     ['Loading…'],
   )
 
 const errorState = (model: Model, h: HtmlBuilder<Message>): Child =>
   h.div(
-    [h.Class('py-32 text-center')],
+    [h.Class('py-(--spacing-6xl) text-center')],
     [
+      h.p([h.Class('type-deck italic text-role-text-secondary')], ['Something went wrong.']),
       h.p(
-        [h.Class('font-serif italic font-light text-xl text-neutral-400')],
-        ['Something went wrong.'],
-      ),
-      h.p(
-        [h.Class('mt-2 text-xs text-neutral-400')],
+        [h.Class('mt-(--spacing-sm) text-xs text-role-text-disabled')],
         [model.error ?? 'Failed to load photographs'],
       ),
       h.button(
         [
           h.OnClick(Message.FetchPhotos()),
           h.Class(
-            'mt-6 text-[10px] uppercase tracking-[0.3em] text-neutral-500 border-b border-neutral-300 pb-1 hover:text-neutral-900 hover:border-neutral-900 transition-colors',
+            `mt-(--spacing-xl) type-kicker text-role-text-secondary border-b border-role-outline pb-(--spacing-xs) hover:text-role-text-primary hover:border-role-rule ${TRANSITION}`,
           ),
         ],
         ['Retry'],
@@ -144,20 +150,20 @@ const errorState = (model: Model, h: HtmlBuilder<Message>): Child =>
 
 const emptyState = (h: HtmlBuilder<Message>): Child =>
   h.p(
-    [h.Class('py-32 text-center font-serif italic font-light text-xl text-neutral-300')],
+    [h.Class('py-(--spacing-6xl) text-center type-deck italic text-role-text-disabled')],
     ['Nothing here yet.'],
   )
 
 const loadMoreButton = (model: Model, h: HtmlBuilder<Message>): Child =>
   h.div(
-    [h.Class('flex justify-center py-24')],
+    [h.Class('flex justify-center py-(--spacing-5xl)')],
     [
       h.button(
         [
           h.OnClick(Message.LoadMore()),
           ...(model.loadingMore ? [h.Disabled(true)] : []),
           h.Class(
-            'text-[10px] uppercase tracking-[0.35em] text-neutral-500 border-b border-neutral-200 pb-2 hover:text-neutral-900 hover:border-neutral-900 transition-colors disabled:text-neutral-300 disabled:border-neutral-100',
+            `type-kicker text-role-text-secondary border-b border-role-hairline pb-(--spacing-sm) hover:text-role-text-primary hover:border-role-rule disabled:text-role-text-disabled disabled:border-role-outline-variant ${TRANSITION}`,
           ),
         ],
         [model.loadingMore ? 'Loading' : 'Load more'],
@@ -193,7 +199,7 @@ export const grid = (model: Model, h: HtmlBuilder<Message>): Child => {
     return h.div(
       [
         h.Key(`row-${String(rowIndex)}-${String(row[0] ?? 0)}`),
-        h.Class('flex items-start gap-x-8 lg:gap-x-14'),
+        h.Class('flex items-start gap-x-(--spacing-2xl) lg:gap-x-(--spacing-4xl)'),
       ],
       children.filter((child): child is Exclude<typeof child, undefined> => child !== undefined),
     )
