@@ -29,6 +29,13 @@ const jsonError = (message: string, status: number): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
+/** What the gate decided: the verified email the admin handlers get to read,
+ *  or the response that answers the request instead. `email` is null on the
+ *  `dev` stand-down and when the claim carries none. */
+export type AdminGate =
+  | { readonly ok: true; readonly email: string | null }
+  | { readonly ok: false; readonly response: Response }
+
 interface Jwk {
   readonly kid: string
   readonly kty: string
@@ -126,8 +133,8 @@ export const verifyAccessToken = async (
 }
 
 /**
- * The admin gate every Access-protected route runs. Returns the rejection
- * response, or `null` when the request may proceed.
+ * The admin gate every Access-protected route runs. Returns the verified email
+ * the handlers answer with, or the rejection response.
  *
  * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on `dev`, where
  * Alchemy skips the Access applications (ADR 0007). On any other stage a blank
@@ -135,22 +142,19 @@ export const verifyAccessToken = async (
  * silently serving the Admin ungated is the one failure this gate must not
  * have.
  */
-export const verifyAdminAccess = async (
-  request: Request,
-  env: AccessEnv,
-): Promise<Response | null> => {
+export const verifyAdminAccess = async (request: Request, env: AccessEnv): Promise<AdminGate> => {
   const teamDomain = (env.ACCESS_TEAM_DOMAIN ?? '').trim()
   if (teamDomain === '') {
-    if (env.STAGE === 'dev') return null
-    return jsonError('server misconfigured', 500)
+    if (env.STAGE === 'dev') return { ok: true, email: null }
+    return { ok: false, response: jsonError('server misconfigured', 500) }
   }
   const token = request.headers.get('Cf-Access-Jwt-Assertion')
   if (token === null) {
-    return jsonError('missing access token', 401)
+    return { ok: false, response: jsonError('missing access token', 401) }
   }
   const result = await verifyAccessToken(token, teamDomain)
   if (!result.ok) {
-    return jsonError('access denied', 401)
+    return { ok: false, response: jsonError('access denied', 401) }
   }
   const allowlist = (env.ACCESS_ALLOWED_EMAILS ?? '')
     .split(',')
@@ -159,8 +163,10 @@ export const verifyAdminAccess = async (
   if (allowlist.length > 0) {
     const email = result.email?.toLowerCase() ?? ''
     if (!allowlist.includes(email)) {
-      return jsonError('access denied', 403)
+      return { ok: false, response: jsonError('access denied', 403) }
     }
   }
-  return null
+  // The claim's own email, handed on as verified: the handlers read the
+  // session, they never recompute who the caller is.
+  return { ok: true, email: result.email ?? null }
 }
