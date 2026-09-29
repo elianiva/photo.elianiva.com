@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { verifyAdminAccess, type AccessEnv } from './access'
+import { verifyAdminAccess, type AccessEnv, type AdminGate } from './access'
 import worker from './api-worker'
 
 const TEAM_DOMAIN = 'https://team.test'
@@ -82,8 +82,8 @@ const env = (overrides: Partial<AccessEnv>): AccessEnv => ({
   ...overrides,
 })
 
-const outcome = (rejection: Response | null): number | 'allowed' =>
-  rejection === null ? 'allowed' : rejection.status
+const outcome = (gate: AdminGate): number | 'allowed' =>
+  gate.ok ? 'allowed' : gate.response.status
 
 /** Fails the test if an admin route reads a binding after the gate should have rejected. */
 const unbound = (): never => {
@@ -105,19 +105,22 @@ afterEach(() => {
 
 describe('admin access gate', () => {
   it('lets a blank team domain through on the dev stage', async () => {
-    const rejection = await verifyAdminAccess(
+    const gate = await verifyAdminAccess(
       adminRequest(),
       env({ STAGE: 'dev', ACCESS_TEAM_DOMAIN: '' }),
     )
-    expect(outcome(rejection)).toBe('allowed')
+    expect(outcome(gate)).toBe('allowed')
+    // The dev stand-down is the one admitted state with no email: there is no
+    // Access claim to read, and no signed-out state to report (ADR 0007).
+    expect(gate).toEqual({ ok: true, email: null })
   })
 
   it('fails closed on a blank team domain off the dev stage', async () => {
-    const rejection = await verifyAdminAccess(
+    const gate = await verifyAdminAccess(
       adminRequest(),
       env({ STAGE: 'prod', ACCESS_TEAM_DOMAIN: '' }),
     )
-    expect(outcome(rejection)).toBe(500)
+    expect(outcome(gate)).toBe(500)
   })
 
   it('admits a valid assertion and rejects a tampered one', async () => {
@@ -150,6 +153,71 @@ describe('admin access gate', () => {
   })
 })
 
+describe('the email the gate hands back', () => {
+  it('carries the address from the assertion', async () => {
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const valid = await signAssertion(key, {
+      iss: key.teamDomain,
+      exp: 4102444800,
+      email: 'owner@photo.test',
+    })
+
+    const gate = await verifyAdminAccess(
+      adminRequest(valid),
+      env({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
+    )
+
+    expect(gate).toEqual({ ok: true, email: 'owner@photo.test' })
+  })
+
+  it('carries an allowlisted address, and withholds one that is not', async () => {
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const team = env({
+      ACCESS_TEAM_DOMAIN: key.teamDomain,
+      ACCESS_ALLOWED_EMAILS: 'owner@photo.test, second@photo.test',
+    })
+
+    const allowed = await verifyAdminAccess(
+      adminRequest(
+        await signAssertion(key, {
+          iss: key.teamDomain,
+          exp: 4102444800,
+          email: 'second@photo.test',
+        }),
+      ),
+      team,
+    )
+    const refused = await verifyAdminAccess(
+      adminRequest(
+        await signAssertion(key, {
+          iss: key.teamDomain,
+          exp: 4102444800,
+          email: 'stranger@photo.test',
+        }),
+      ),
+      team,
+    )
+
+    expect(allowed).toEqual({ ok: true, email: 'second@photo.test' })
+    expect(outcome(refused)).toBe(403)
+  })
+
+  it('is null when the assertion carries no email', async () => {
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const valid = await signAssertion(key, { iss: key.teamDomain, exp: 4102444800 })
+
+    const gate = await verifyAdminAccess(
+      adminRequest(valid),
+      env({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
+    )
+
+    expect(gate).toEqual({ ok: true, email: null })
+  })
+})
+
 describe('admin routes wired to the gate', () => {
   it('answer 500 for a blank team domain off the dev stage', async () => {
     for (const path of ['/admin/rpc', '/upload']) {
@@ -160,5 +228,45 @@ describe('admin routes wired to the gate', () => {
       )
       expect([path, response.status]).toEqual([path, 500])
     }
+  })
+
+  it('answers a GetSession RPC with the email the gate verified', async () => {
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const token = await signAssertion(key, {
+      iss: key.teamDomain,
+      exp: 4102444800,
+      email: 'owner@photo.test',
+    })
+
+    // `GetSession` reads no binding, so the unbound env stands: a handler that
+    // reached for D1 on this path would throw rather than answer.
+    const response = await worker.fetch(
+      new Request('https://photo-api.test/admin/rpc', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'Cf-Access-Jwt-Assertion': token },
+        body: JSON.stringify({
+          _tag: 'Request',
+          id: 'req-1',
+          tag: 'GetSession',
+          payload: {},
+          headers: [],
+        }),
+      }),
+      workerEnv({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
+      {},
+    )
+
+    expect(response.status).toBe(200)
+    // The server decodes a request or an array of them and answers with the
+    // responses, so the envelope is an array of per-request exits.
+    const body: unknown = await response.json()
+    expect(body).toEqual([
+      {
+        _tag: 'Exit',
+        requestId: 'req-1',
+        exit: { _tag: 'Success', value: { email: 'owner@photo.test' } },
+      },
+    ])
   })
 })

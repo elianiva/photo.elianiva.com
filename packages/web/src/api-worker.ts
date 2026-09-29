@@ -4,6 +4,7 @@ import { RpcSerialization, RpcServer } from 'effect/unstable/rpc'
 import type { WebsiteEnv } from '../../../alchemy.run'
 import {
   AdminRpcHandlersLive,
+  AdminSession,
   extractImageMeta,
   GatewayLive,
   PhotoService,
@@ -237,9 +238,18 @@ const handleImageProxy = async (env: ApiEnv, request: Request): Promise<Response
   return new Response(object.body, { headers })
 }
 
-const buildRpcHandler = (env: ApiEnv): ((request: Request) => Promise<Response>) => {
+/** `email` is the address `verifyAdminAccess` just verified; it is provided
+ *  into the admin handler layer per request, so a handler that reads the
+ *  session reads the one the gate checked. */
+const buildRpcHandler = (
+  env: ApiEnv,
+  email: string | null,
+): ((request: Request) => Promise<Response>) => {
   const routerLayer = HttpRouter.layer
-  const handlersLayer = Layer.merge(PublicRpcHandlersLive, AdminRpcHandlersLive).pipe(
+  const handlersLayer = Layer.merge(
+    PublicRpcHandlersLive,
+    Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, { email })),
+  ).pipe(
     Layer.provide(Layer.merge(PhotoServiceLive, TagServiceLive)),
     Layer.provide(gatewayLayer(env)),
   )
@@ -315,8 +325,10 @@ export default {
     if (url.pathname === '/upload' && request.method === 'POST') {
       const limited = rateLimited(uploadLimiter, request)
       if (limited !== null) return respond(limited)
-      const rejection = await verifyAdminAccess(request, env)
-      if (rejection !== null) return respond(rejection)
+      // The upload is edge-gated, not identified: nothing it writes carries
+      // the operator's email, so the verified address is read and dropped.
+      const gate = await verifyAdminAccess(request, env)
+      if (!gate.ok) return respond(gate.response)
       const res = await handleUpload(env, request)
       return respond(res)
     }
@@ -324,9 +336,9 @@ export default {
     if (url.pathname === '/admin/rpc') {
       const limited = rateLimited(adminRpcLimiter, request)
       if (limited !== null) return respond(limited)
-      const rejection = await verifyAdminAccess(request, env)
-      if (rejection !== null) return respond(rejection)
-      const res = await buildRpcHandler(env)(request)
+      const gate = await verifyAdminAccess(request, env)
+      if (!gate.ok) return respond(gate.response)
+      const res = await buildRpcHandler(env, gate.email)(request)
       return respond(res)
     }
 
@@ -338,7 +350,7 @@ export default {
     if (url.pathname === '/rpc') {
       const limited = rateLimited(publicRpcLimiter, request)
       if (limited !== null) return respond(limited)
-      const res = await buildRpcHandler(env)(request)
+      const res = await buildRpcHandler(env, null)(request)
       return respond(res)
     }
 
