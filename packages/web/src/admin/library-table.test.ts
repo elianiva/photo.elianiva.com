@@ -24,7 +24,7 @@ import { AcquireResources, ShowDialog } from '@foldkit/ui/dialog'
 import * as Dialog from '@/components/ui/dialog'
 
 import { FetchPhotosCmd, NavigateCmd } from './commands'
-import { Message } from './model'
+import { Message, UPLOAD_LIMITS } from './model'
 import type { Counts, Model } from './model'
 import { init, update } from './update'
 import { view } from './view'
@@ -609,14 +609,67 @@ describe('the states that are not rows', () => {
       app,
       Scene.given(settled.model),
       Scene.expect(Scene.text('Nothing matches this filter')).toExist(),
-      Scene.expect(Scene.text('No photos yet')).not.toExist(),
+      Scene.expect(Scene.text('No frames yet')).not.toExist(),
       Scene.click(Scene.role('button', { name: 'Clear the Tag filter' })),
       Scene.Command.resolve(FetchPhotosCmd({ tagIds: [], q: '' }), listed([], 0, null)),
     )
   })
 
-  it('an empty Library and a failed read keep the states they already had', () => {
-    Scene.scene(app, given([], 0, null), Scene.expect(Scene.text('No photos yet')).toExist())
+  it('an empty Library is the design’s own state, not the grid’s', () => {
+    Scene.scene(
+      app,
+      given([], 0, null),
+      Scene.expect(Scene.text('No frames yet')).toExist(),
+      Scene.expect(
+        Scene.text('Drop your first photograph, or choose files from this computer.'),
+      ).toExist(),
+      Scene.expect(Scene.text('Choose files')).toExist(),
+      Scene.expect(Scene.text('Import from a folder')).toExist(),
+      // Both pickers are real: a label wrapping a hidden file input, not a
+      // second dead button. The folder one asks for a directory.
+      Scene.expectAll(Scene.all.selector('input[type="file"]')).toHaveCount(2),
+      Scene.expect(Scene.selector('input[webkitdirectory]')).toExist(),
+      // The promise about what will be accepted, pinned to the design's literal
+      // so a change to PHOTO_RATIOS cannot silently drift it.
+      Scene.expect(
+        Scene.text('3:2 · 2:3 · 4:3 · 3:4 · 16:9 · 9:16 · ORIGINALS ARE KEPT'),
+      ).toExist(),
+    )
+  })
+
+  it('a picked file enters the drop intake: queued, capped, and size-checked', () => {
+    const picked = fold(Message.ImportedFiles({ files: [new File(['x'], 'one.jpg')] }))
+    expect(picked.model.queue.map((item) => item.name)).toEqual(['one.jpg'])
+    // The dialog opens so the operator can tag the batch and press Upload.
+    expect(picked.model.uploadDialog.isOpen).toBe(true)
+
+    const overCap = fold(
+      Message.ImportedFiles({
+        files: Array.from(
+          { length: UPLOAD_LIMITS.maxFiles + 1 },
+          (_, index) => new File(['x'], `pick-${String(index)}.jpg`),
+        ),
+      }),
+    )
+    expect(overCap.model.queue).toHaveLength(UPLOAD_LIMITS.maxFiles)
+
+    const oversized = fold(
+      Message.ImportedFiles({
+        files: [new File([new Uint8Array(UPLOAD_LIMITS.maxFileSize + 1)], 'huge.jpg')],
+      }),
+    )
+    expect(oversized.model.queue.map((item) => [item.name, item.status, item.error])).toEqual([
+      ['huge.jpg', 'failed', 'file too large (max 20 MB)'],
+    ])
+  })
+
+  it('a cancelled picker queues nothing and opens nothing', () => {
+    const cancelled = fold(Message.ImportedFiles({ files: [] }))
+    expect(cancelled.model.queue).toEqual([])
+    expect(cancelled.model.uploadDialog.isOpen).toBe(false)
+  })
+
+  it('a failed read still keeps the grid’s own error state', () => {
     const failed = update(
       cold(),
       Message.FailedRpc({ message: 'the Library could not be read' }),

@@ -45,3 +45,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Admin upload](./admin-upload.md) covers the multipart upload path, blurhash handling, tag assignment on upload, and queue behavior.
 - [Admin edit and delete photo](./admin-edit-delete.md) covers opening the edit sheet, changing draft fields and tags, save-then-relist ordering, and delete confirmation.
 - [Tag management](./tag-management.md) covers creating tags from the manager, draft/upload combos, counting per-tag, and delete propagation.
+- [Admin Library empty state](./admin-library-empty.md) covers the zero-Photograph Library — the design's block, its two file pickers, and the queue the Upload dialog opens on.

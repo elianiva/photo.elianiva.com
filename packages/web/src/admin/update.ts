@@ -392,6 +392,21 @@ const settled = (model: Model, page: LibraryPage, title: string, detail?: string
 // update
 // ---------------------------------------------------------------------------
 
+/** Opens the Upload dialog over whatever update just produced, so a caller
+ *  that queued files can hand the result straight back without repeating the
+ *  dialog fold. */
+const withUploadDialogOpen = (result: UpdateReturn): UpdateReturn => {
+  const dialogOpened = Dialog.open(result.model.uploadDialog)
+  const model = modifyFields(result.model, { uploadDialog: () => dialogOpened.model })
+  const commands: Commands = [
+    ...(result.commands ?? []),
+    ...liftChildCommands(dialogOpened.commands ?? [], (message) =>
+      Message.GotUploadDialogMessage({ message }),
+    ),
+  ]
+  return commands.length > 0 ? { model, commands } : { model }
+}
+
 function step(current: Model, message: Msg, prior: Commands = []): UpdateReturn {
   const result = transition(current, message)
   const commands = [...prior, ...(result.commands ?? [])]
@@ -741,14 +756,15 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     }),
 
     // ----- upload dialog ------------------------------------------------------------
-    OpenUpload: () => {
-      const dialogOpened = Dialog.open(model.uploadDialog)
-      return {
-        model: modifyFields(model, { uploadDialog: () => dialogOpened.model }),
-        commands: liftChildCommands(dialogOpened.commands ?? [], (message) =>
-          Message.GotUploadDialogMessage({ message }),
-        ),
-      }
+    OpenUpload: () => withUploadDialogOpen({ model }),
+    // A cancelled picker fires `change` with no files; there is nothing to queue.
+    ImportedFiles: ({ files }) => {
+      const [first, ...rest] = files
+      return first === undefined
+        ? { model }
+        : withUploadDialogOpen(
+            foldFileDrop(model, FileDrop.Message.DroppedFiles({ files: [first, ...rest] })),
+          )
     },
     ClearFinishedItems: () => {
       // Only 'done' rows go — pending/uploading items must survive (their

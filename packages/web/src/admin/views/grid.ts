@@ -10,11 +10,10 @@
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
-import type { PhotoWithTags, Tag } from '@photo/shared'
+import type { PhotoWithTags } from '@photo/shared'
 
 import * as Badge from '@/components/ui/badge'
 import * as Button from '@/components/ui/button'
-import { Empty } from '@/components/ui/empty'
 import { placeholderDataUrl } from '@/lib/blurhash'
 import { srcSet, thumbUrl } from '@/lib/image'
 
@@ -141,66 +140,6 @@ const errorState = (model: Model, h: HtmlBuilder<Msg>): Child =>
     ],
   )
 
-const noPhotosState = (h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('mt-(--spacing-3xl)')],
-    [
-      Empty(
-        { className: 'border border-dashed border-role-outline p-(--spacing-3xl)' },
-        [
-          Empty.header({}, [], h),
-          Empty.title({}, ['No photos yet'], h),
-          Empty.description({}, ['Upload your first photo to get started.'], h),
-        ],
-        h,
-      ),
-    ],
-  )
-
-/** The filter matched nothing. The filter is multi-select, so there is one
- *  clear per applied Tag rather than a single "clear everything" — with two
- *  Tags on, clearing one of them is the move most of the time. */
-const noMatchState = (active: ReadonlyArray<Tag>, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('mt-(--spacing-3xl)')],
-    [
-      Empty(
-        { className: 'border border-dashed border-role-outline p-(--spacing-3xl)' },
-        [
-          Empty.header({}, [], h),
-          Empty.title(
-            {},
-            [
-              active.length === 1
-                ? `Nothing tagged “${active[0]?.label ?? ''}”`
-                : `Nothing tagged ${active.map((tag) => `“${tag.label}”`).join(' or ')}`,
-            ],
-            h,
-          ),
-          Empty.description(
-            {},
-            [
-              'No loaded photos carry these tags. ',
-              ...active.map((tag) =>
-                h.button(
-                  [
-                    h.OnClick(M.ToggledTagFilter({ id: tag.id })),
-                    h.Class(
-                      'type-caption underline underline-offset-4 hover:text-role-text-primary',
-                    ),
-                  ],
-                  [`Clear “${tag.label}”`],
-                ),
-              ),
-            ],
-            h,
-          ),
-        ],
-        h,
-      ),
-    ],
-  )
-
 // ---------------------------------------------------------------------------
 // grid
 // ---------------------------------------------------------------------------
@@ -208,10 +147,6 @@ const noMatchState = (active: ReadonlyArray<Tag>, h: HtmlBuilder<Msg>): Child =>
 export const grid = (model: Model, h: HtmlBuilder<Msg>): Child => {
   if (model.status === 'loading') return loadingState(h)
   if (model.status === 'error') return errorState(model, h)
-  if (model.photos.length === 0) {
-    const active = model.tags.filter((tag) => model.activeTagIds.includes(tag.id))
-    return active.length > 0 ? noMatchState(active, h) : noPhotosState(h)
-  }
   return h.div(
     [],
     [
