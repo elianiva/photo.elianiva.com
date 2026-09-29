@@ -4,12 +4,18 @@
 
 Accepted
 
+> **Correction (2026-08, #13).** The three layers below stand. The paths have
+> since moved with the API onto its own Worker and hostname: the second Access
+> application covers `photo-api.elianiva.com/admin/rpc` and
+> `photo-api.elianiva.com/upload`, and the public route is
+> `photo-api.elianiva.com/rpc`. The current table is in `docs/plan.md`.
+
 ## Context
 
 Cloudflare Access gated only `photo.elianiva.com/admin*`. The mutation
-endpoints under `/api/*` were therefore publicly writable by anyone on the
-internet — found during the Admin design review. With the move to RPC
-(ADR 0006) there is a single route per audience instead of many paths, so
+endpoints under the API's write route were therefore publicly writable by
+anyone on the internet — found during the Admin design review. With the move to
+RPC (ADR 0006) there is a single route per audience instead of many paths, so
 authorization has to be decided per route, not per path pattern buried in a
 router.
 
@@ -33,11 +39,11 @@ them); every write must require the owner. Options:
 Three layers, cheapest first:
 
 1. **Edge**: two Access applications — the existing `/admin*` app for pages,
-   a second covering `photo.elianiva.com/api/admin*` and
-   `photo.elianiva.com/api/upload*` so admin RPC and multipart upload are
+   a second covering `photo-api.elianiva.com/admin/rpc` and
+   `photo-api.elianiva.com/upload` so admin RPC and multipart upload are
    OTP-gated before the Worker runs.
-2. **Route split**: public reads served from `/api/rpc` (no gate), all writes
-   from `/api/admin/rpc` (edge-gated).
+2. **Route split**: public reads served from `/rpc` (no gate), all writes
+   from `/admin/rpc` (edge-gated).
 3. **Defense-in-depth**: the Worker verifies the `Cf-Access-Jwt-Assertion`
    JWT against the team JWKS (`ACCESS_TEAM_DOMAIN` binding) on every admin
    route request — signature and expiry checked with WebCrypto, JWKS cached

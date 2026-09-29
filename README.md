@@ -3,9 +3,9 @@
 Curated photography showcase — `photo.elianiva.com`.
 
 - **Frontend**: Foldkit (SSR, `packages/web`) + Tailwind CSS v4
-- **Backend**: Effect (`packages/api`) — placeholder `HelloService`, wired via `packages/shared` schemas
-- **Shared**: Effect Schema API contract (`packages/shared`)
-- **Infra**: Alchemy (`alchemy.run.ts`) → Cloudflare `Website.Vite` (SSR, `photo.elianiva.com` on prod)
+- **Backend**: Effect (`packages/api`) — Photo and Tag services over R2 + D1, served by the `photo-api` Worker via Effect RPC
+- **Shared**: Effect Schema RPC contract (`packages/shared`) — the RPC groups and the domain schemas they encode
+- **Infra**: Alchemy (`alchemy.run.ts`) → Cloudflare `Website.Vite` (`photo.elianiva.com`) + `Worker` (`photo-api.elianiva.com`)
 - **Monorepo**: pnpm + Turborepo
 
 ## Develop
@@ -25,6 +25,6 @@ pnpm lint
 pnpm infra:deploy  # alchemy deploy --stage prod
 ```
 
-## CMS
+## Storage
 
-Scaffold uses mock `Photo`/`Collection` in `@photo/shared`. Next iteration wires a real CMS — candidate: **R2 + Cloudflare Images** (5k transforms free, zero egress, scriptable S3) for image delivery, with a UI like **Sanity** (hosted, 5GB free) or **Directus** (self-host + R2) to co-manage metadata + files in one place. See `CONTEXT.md` for domain language.
+Images live in R2 (`photo-elianiva-originals`) and metadata in D1 (`photo-elianiva`). The Admin at `/admin` is a single-operator surface behind Cloudflare Access. Delivery is R2 through the zone's `/cdn-cgi/image` resizing today and stored Renditions after the redesign. See `CONTEXT.md` for domain language, `docs/plan.md` for the route map, and `docs/adr/` for the decisions.
