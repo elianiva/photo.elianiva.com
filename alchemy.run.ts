@@ -30,9 +30,12 @@ export default Alchemy.Stack(
     //
     // Local dev (`alchemy dev --stage dev`) creates no Access applications
     // and runs unauthenticated by design (ADR 0007): ACCESS_TEAM_DOMAIN
-    // defaults to '' there and access.ts skips JWT verification when empty.
-    // Non-dev stages still require both values explicitly.
-    const isLocalDev = (yield* Stage) === 'dev'
+    // defaults to '' there and access.ts stands the admin gate down when the
+    // stage is dev. Non-dev stages still require both values explicitly.
+    // STAGE rides along as a binding because only the Worker can see the
+    // stage at request time, and the gate is stage-dependent.
+    const stage = yield* Stage
+    const isLocalDev = stage === 'dev'
     const allowedEmailsRaw = yield* Config.String('ACCESS_ALLOWED_EMAILS')
     const teamDomain = isLocalDev
       ? yield* Config.String('ACCESS_TEAM_DOMAIN').pipe(Config.withDefault(''))
@@ -99,6 +102,7 @@ export default Alchemy.Stack(
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
+        STAGE: stage,
         ACCESS_TEAM_DOMAIN: teamDomain,
         ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },

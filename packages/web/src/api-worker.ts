@@ -12,10 +12,13 @@ import {
   TagServiceLive,
 } from '@photo/api'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
-import { verifyAccessToken } from './access'
+import { verifyAdminAccess } from './access'
 import { clientKey, createRateLimiter } from './rate-limit'
 
-type ApiEnv = WebsiteEnv
+// The stage arrives as a binding because the admin gate is stage-dependent:
+// blank `ACCESS_TEAM_DOMAIN` means unauthenticated on `dev` and a hard failure
+// anywhere else. See `verifyAdminAccess` in ./access.
+type ApiEnv = WebsiteEnv & { readonly STAGE: string }
 
 const slugify = (input: string): string =>
   input
@@ -337,30 +340,4 @@ export default {
 
     return respond(new Response('Not found', { status: 404 }))
   },
-}
-
-const verifyAdminAccess = async (request: Request, env: ApiEnv): Promise<Response | null> => {
-  const teamDomain = env.ACCESS_TEAM_DOMAIN
-  if (teamDomain === undefined || teamDomain === '') {
-    return jsonResponse({ message: 'server misconfigured' }, { status: 500 })
-  }
-  const token = request.headers.get('Cf-Access-Jwt-Assertion')
-  if (token === null) {
-    return jsonResponse({ message: 'missing access token' }, { status: 401 })
-  }
-  const result = await verifyAccessToken(token, teamDomain)
-  if (!result.ok) {
-    return jsonResponse({ message: 'access denied' }, { status: 401 })
-  }
-  const allowlist = (env.ACCESS_ALLOWED_EMAILS ?? '')
-    .split(',')
-    .map((v) => v.trim().toLowerCase())
-    .filter((v) => v.length > 0)
-  if (allowlist.length > 0) {
-    const email = result.email?.toLowerCase() ?? ''
-    if (!allowlist.includes(email)) {
-      return jsonResponse({ message: 'access denied' }, { status: 403 })
-    }
-  }
-  return null
 }

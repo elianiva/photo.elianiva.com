@@ -47,9 +47,12 @@ Three layers, cheapest first:
 3. **Defense-in-depth**: the Worker verifies the `Cf-Access-Jwt-Assertion`
    JWT against the team JWKS (`ACCESS_TEAM_DOMAIN` binding) on every admin
    route request — signature and expiry checked with WebCrypto, JWKS cached
-   in global scope. When `ACCESS_TEAM_DOMAIN` is unset (local dev, where no
-   Access exists) verification is skipped; when set, an invalid or missing
-   token fails closed with 401.
+   in global scope. When `ACCESS_TEAM_DOMAIN` is blank the gate stands down,
+   but **only on the `dev` stage**, which is the one stage Alchemy creates no
+   Access applications for; on any other stage a blank team domain is a
+   misconfigured deploy and fails closed with 500 rather than serving the
+   Admin ungated. When the team domain is set, a missing or invalid token
+   fails closed with 401 on every stage including `dev`.
 
 ## Consequences
 
@@ -58,4 +61,6 @@ Three layers, cheapest first:
   - expiry is accepted as sufficient defense-in-depth behind edge gating
     (pinning `aud` per application can be added later without interface changes).
 - Local development runs unauthenticated by design; staging/prod stages set
-  `ACCESS_TEAM_DOMAIN` and get fail-closed behavior.
+  `ACCESS_TEAM_DOMAIN` and get fail-closed behavior. The stage reaches the
+  Worker as a `STAGE` binding, because only the Worker can see it at request
+  time and the gate's answer depends on it.

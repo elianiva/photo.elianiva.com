@@ -41,8 +41,9 @@ Ports and env:
 
 - Dev URL `http://localhost:5173` (Alchemy `dev: { port: 5173, strictPort: true }`). Override with `BASE=http://localhost:5173` for scripts.
 - Optional local HTTPS: `pnpm dev:local` → `http://localhost:5173` via [portless](https://github.com/vite-plus/portless) (`portless.json` `appPort: 5173`).
-- Local dev needs no `ACCESS_TEAM_DOMAIN` and no `ACCESS_ALLOWED_EMAILS` — blank means unauthenticated. Non-dev stages fail closed without both secrets.
-- No `.env` required for local verification. R2 `photo-elianiva-originals` and D1 `photo-elianiva` are remote by default.
+- Local dev needs no `ACCESS_TEAM_DOMAIN` — blank means unauthenticated, and `alchemy dev --stage dev` defaults it to blank so the admin surface runs ungated by design. Non-dev stages require it and fail closed without it.
+- `ACCESS_ALLOWED_EMAILS` is read up front on every stage, `dev` included, so a `.env` carrying it (see `.env.example`) is required for local verification. It is dead weight locally — the gate stands down before the allowlist is consulted.
+- R2 `photo-elianiva-originals` and D1 `photo-elianiva` are remote by default.
 
 If `http://localhost:5173` is unreachable or D1 unreachable, stop. Fix the base before writing the skill patch.
 
