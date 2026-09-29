@@ -74,23 +74,41 @@ export const applyMigrations = (db: DatabaseSync, migrations: ReadonlyArray<stri
  * The D1 contract over a SQLite engine. Exported so a test can migrate a
  * populated database between two assertions instead of only starting fresh.
  */
-export const d1Over = (db: DatabaseSync): D1DatabaseLike => ({
-  prepare: (sql) => makeStatement(db, sql, []),
-  // D1 runs a batch inside one transaction: any statement failing rolls the
-  // whole batch back.
-  batch: async (statements: ReadonlyArray<D1StatementResult>) => {
-    db.exec('BEGIN')
-    try {
-      const results: Array<unknown> = []
-      for (const statement of statements) results.push(await statement.run())
-      db.exec('COMMIT')
-      return results
-    } catch (error) {
-      if (db.isTransaction) db.exec('ROLLBACK')
-      throw error
-    }
-  },
-})
+export const d1Over = (db: DatabaseSync): D1DatabaseLike => {
+  // D1 runs one write transaction at a time: two batches issued together are
+  // serialised on the write lock rather than interleaved. `node:sqlite` has no
+  // such lock, and a service's two requests do interleave at every `await`, so
+  // batches queue here. A read sits outside the queue, which is what keeps a
+  // read-then-write pair able to race the way it does against real D1.
+  let queue: Promise<unknown> = Promise.resolve()
+  const serialise = <A>(run: () => Promise<A>): Promise<A> => {
+    const result = queue.then(run, run)
+    queue = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+
+  return {
+    prepare: (sql) => makeStatement(db, sql, []),
+    // D1 runs a batch inside one transaction: any statement failing rolls the
+    // whole batch back.
+    batch: (statements: ReadonlyArray<D1StatementResult>) =>
+      serialise(async () => {
+        db.exec('BEGIN')
+        try {
+          const results: Array<unknown> = []
+          for (const statement of statements) results.push(await statement.run())
+          db.exec('COMMIT')
+          return results
+        } catch (error) {
+          if (db.isTransaction) db.exec('ROLLBACK')
+          throw error
+        }
+      }),
+  }
+}
 
 /** A migrated in-memory D1. Each call is an isolated database. */
 export const makeD1Fake = (migrations: ReadonlyArray<string> = []): D1DatabaseLike => {

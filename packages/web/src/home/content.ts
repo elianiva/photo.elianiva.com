@@ -11,6 +11,7 @@
  */
 
 import { Schema as S } from 'effect'
+import { PHOTO_RATIOS } from '@photo/shared'
 
 import { imagePreviewLongEdge, imagePreviewQuality } from '@/lib/design-tokens'
 
@@ -18,8 +19,9 @@ import { imagePreviewLongEdge, imagePreviewQuality } from '@/lib/design-tokens'
 // plates
 // ---------------------------------------------------------------------------
 
-/** The six plate ratios the Figure component declares. */
-export const PLATE_RATIOS = ['3:2', '2:3', '4:3', '3:4', '16:9', '9:16'] as const
+/** The six plate ratios are the Photo's six supported Ratios (CONTEXT.md), so
+ *  they are named once, in the shared domain schema. */
+export const PLATE_RATIOS = PHOTO_RATIOS
 export type PlateRatio = (typeof PLATE_RATIOS)[number]
 
 export const PlateRatioSchema = S.Literals(PLATE_RATIOS)

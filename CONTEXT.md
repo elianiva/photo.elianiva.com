@@ -17,11 +17,11 @@ The one line under a public plate that names how the Photo was made — `X-T20 �
 _Avoid_: EXIF string, metadata line, tech specs, camera info
 
 **Photo Number**:
-A Photo's site-wide serial. One monotonic counter, assigned once at upload, unique across the site, and never reused — not by a deleted Photo, and not by a trashed one. A Photo keeps its number through soft delete and restore. What the number is _titled_ in public copy is not settled.
+A Photo's site-wide serial. One monotonic counter, assigned once at upload, unique across the site, and never reused — not by a deleted Photo, and not by a trashed one. The counter is its own, outside the Photos, because a count taken from the rows would reissue a serial the moment a purge deleted one. A Photo keeps its number through soft delete and restore. What the number is _titled_ in public copy is not settled.
 _Avoid_: ID (that is the ULID), ordinal, row number, index, page number
 
 **Status**:
-Where a Photo sits in the publish lifecycle: `draft`, `published`, or `failed`. Only `published` Photos are readable on the public site. `failed` marks a Photo whose processing did not finish. `scheduled` is not a fourth value — it is a display-only label over `draft` for a Photo with a future publish time, and nothing promotes it yet, so a Scheduled Photo is still a Draft.
+Where a Photo sits in the publish lifecycle: `draft`, `published`, or `failed`. Only `published` Photos are readable on the public site. `failed` marks a Photo whose processing did not finish. `scheduled` is not a fourth value — it is a display-only label over `draft` for a Photo with a future publish time, and nothing promotes it yet, so a Scheduled Photo is still a Draft. Nothing in the schema records a publish time, so there is no count of Scheduled Photos to report: the three stored Statuses are all there is.
 _Avoid_: Visibility, stage, state, Published (that is one value of Status, not the term)
 
 **Ratio**:
@@ -67,14 +67,17 @@ _Avoid_: Archive (that is the public page), Library, Backup, Sync
 **Settings**:
 The Admin's single-row singleton, read by the Editor's export defaults, the public Masthead, the Folio nav and the Colophon. One row, `id` pinned to 1. Its `updatedAt` is what the Settings header's `SAVED 2 MINUTES AGO` reports.
 _Avoid_: Config, Preferences, Options, Site settings (the row and the page are the same thing)
-
 **Site Section**:
 One entry in the public Folio nav, authored as an ordered list in Settings. A Section is `{ label, kind, target }`: `kind` is `all` (the Front itself, and the only kind with no `target`), `tag` or `series` (a Tag's slug — a Series page _is_ a Tag page, see ADR 0008), or `page` (a page name). Stored as a JSON array on the Settings row; there is no sections table. The design draws `SECTIONS` as one `ALL · STREET · LANDSCAPE · SERIES · ABOUT` string, which cannot be routed, so the Settings UI is an ordered repeater instead — a deliberate, recorded deviation.
 _Avoid_: Nav item, menu, link, category
-
 **Route**:
 What a URL in the Admin's address space means — `Library`, `Drafts`, `Settings`, `Photo`, or `NotFound` — declared once in `admin/route.ts`. The route is the whole of a URL's meaning in the Admin, so anything a URL decides (which page is drawn, which branch of the broadsheet it is drawn in) is read off the route and never off a second copy of the path.
 _Avoid_: path prefix, pathname matching outside the route table, screen
+
+**Trash**:
+The Admin's holding place for soft-deleted Photos. A Photo with a `deletedAt` is out of every list, count, meter and lookup, and its original stays in R2 — the delete that matters is reversible. Restoring clears the date; purging is the only irreversible act, and the only one that touches R2 on delete. Nothing purges on a timer, and a Photo Number is not recycled by a purge.
+_Avoid_: Bin, Recycle bin, Soft delete (that is the act, not the place), Archive (that is the public page)
+
 
 **Collection** _(deferred)_:
 Previously: a curated group of Photos (e.g., "Kyoto 2024"). Replaced by flat list + Tags for v1. Kept as a deferred term; reintroduce only if you need ordered, titled groupings with a cover.
