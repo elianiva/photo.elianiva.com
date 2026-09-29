@@ -32,6 +32,10 @@ _Avoid_: Aspect ratio, orientation, dimensions (those are the measured `width` a
 The window a Photo is presented through, authored in the Editor. `cropX` and `cropY` pan the source inside the Ratio, `cropScale` zooms it, and `level` is the straighten angle in degrees. The defaults — pan at origin, scale 1, no level — mean an un-cropped Photo is the source as shot. A crop is authored data, so it is stored as columns and the Rendition is regenerated from it, never beside it.
 _Avoid_: Resize, Zoom (that is the Stage's own control), Aspect ratio (that is the Ratio)
 
+**Presentation**:
+The authored presentation of a Photo — its Crop, its `level`, its Mat and its per-photo export overrides (Rendition format JPEG/WEBP/AVIF, preview long edge, preview and full quality, keep-EXIF and remove-GPS) — saved as one call and one fact, and the reason a Rendition is regenerated from it.
+_Avoid_: Post-processing, Effects, Filters
+
 **Mat**:
 The border the Editor draws around a Photo, outside its crop, before a Rendition is produced. The design heads its panel `BORDER`, labels its rows `Mat Colour` and `Mat Style`, and names the wrapper on the Stage `Mat` — one thing under two words. The schema and the code say `borderEnabled`, `borderStyle`, `borderColour`, `borderWidth`, following the heading the operator actually sees; `mat` appears only in the `color.mat.*` token names. Its colour is `white`, `paper` or `ink` and its style is `even`, `gallery` or `square`, taken from the design's swatches and segments.
 _Avoid_: Frame (that is display copy), Padding, Margin, Mounter
