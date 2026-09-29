@@ -9,6 +9,10 @@ export default defineConfig({
       '**/*.d.ts',
       'node_modules/**',
       '.wrangler/**',
+      // Vendored byte-identical from the Brilliant project, plus the CSS the
+      // token generator writes from them. Both are regenerated, not edited.
+      'packages/web/design/**',
+      'packages/web/src/tokens.css',
     ],
     semi: false,
     singleQuote: true,
@@ -22,6 +26,8 @@ export default defineConfig({
       '**/*.d.ts',
       'node_modules/**',
       '.wrangler/**',
+      'packages/web/design/**',
+      'packages/web/src/tokens.css',
     ],
     jsPlugins: [
       {
