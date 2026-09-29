@@ -11,6 +11,7 @@ import {
   PhotoServiceLive,
   PublicPhotoServiceLive,
   PublicRpcHandlersLive,
+  SettingsServiceLive,
   TagServiceLive,
   type AdminSessionValue,
 } from '@photo/api'
@@ -253,7 +254,9 @@ const buildRpcHandler = (
     PublicRpcHandlersLive,
     Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, session)),
   ).pipe(
-    Layer.provide(Layer.mergeAll(PhotoServiceLive, PublicPhotoServiceLive, TagServiceLive)),
+    Layer.provide(
+      Layer.mergeAll(PhotoServiceLive, PublicPhotoServiceLive, TagServiceLive, SettingsServiceLive),
+    ),
     Layer.provide(gatewayLayer(env)),
   )
   const appLayer = Layer.mergeAll(

@@ -19,6 +19,7 @@ import { Effect, Layer } from 'effect'
 import { Gateway, withGateway, type D1DatabaseLike, type R2BucketLike } from '../gateway'
 import { PhotoService, PhotoServiceLive } from '../photo'
 import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
+import { SettingsService, SettingsServiceLive } from '../settings'
 import { TagService, TagServiceLive } from '../tag'
 import { makeD1Fake } from './d1-fake'
 import { makeR2Fake } from './r2-fake'
@@ -57,14 +58,15 @@ export const makeTestHarness = (): TestHarness => {
   return { gateway: Gateway.of({ db, photos }), db, photos }
 }
 
-/** Run `effect` with the live `PhotoService` / `TagService` over `harness`. */
+/** Run `effect` with the live `PhotoService` / `TagService` / `SettingsService`
+ *  over `harness`. */
 export const withTestServices = <A, E>(
-  effect: Effect.Effect<A, E, PhotoService | TagService>,
+  effect: Effect.Effect<A, E, PhotoService | TagService | SettingsService>,
   harness: TestHarness = makeTestHarness(),
 ): Effect.Effect<A, E> =>
   withGateway(
     harness.gateway,
-    Effect.provide(effect, Layer.mergeAll(PhotoServiceLive, TagServiceLive)),
+    Effect.provide(effect, Layer.mergeAll(PhotoServiceLive, TagServiceLive, SettingsServiceLive)),
   )
 
 /** Run `effect` with the live `PublicPhotoService` over `harness`. It reads
