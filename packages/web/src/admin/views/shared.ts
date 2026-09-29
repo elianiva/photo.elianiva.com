@@ -59,7 +59,7 @@ const tagRow = (label: string, isSelected: boolean): Html =>
  *  as a distinct action rather than a regular option. */
 const createRow = (label: string): Html =>
   inertHtml.span(
-    [inertHtml.Class('flex w-full items-center gap-2 text-stone-500')],
+    [inertHtml.Class('flex w-full items-center gap-2 text-role-text-secondary')],
     [
       icon(inertHtml, Plus, 'size-3.5 shrink-0'),
       inertHtml.span([inertHtml.Class('truncate')], [`Create “${label}”`]),
@@ -95,7 +95,7 @@ const comboViewInputs = (
     itemToConfig: (item, { isSelected }) =>
       isCreate(item)
         ? {
-            className: 'data-active:bg-stone-100 data-selected:bg-transparent',
+            className: 'data-active:bg-role-surface-container data-selected:bg-transparent',
             content: createRow(item.slice(CREATE_PREFIX.length)),
           }
         : { content: tagRow(labelOf(tags, item), isSelected) },
@@ -107,7 +107,7 @@ const pickedChip = (label: string, onRemove: Msg, h: HtmlBuilder<Msg>): Child =>
   h.span(
     [
       h.Class(
-        'inline-flex max-w-full items-center gap-0.5 rounded-full border border-stone-200 bg-stone-100 py-0.5 pr-1 pl-2.5 text-xs font-medium text-stone-700',
+        'inline-flex max-w-full items-center gap-0.5 rounded-full border border-role-outline-variant bg-role-surface-container py-0.5 pr-1 pl-2.5 text-xs font-medium text-role-text-primary',
       ),
     ],
     [
@@ -118,7 +118,7 @@ const pickedChip = (label: string, onRemove: Msg, h: HtmlBuilder<Msg>): Child =>
           h.AriaLabel(`Remove tag ${label}`),
           h.Title(`Remove tag “${label}”`),
           h.Class(
-            'shrink-0 rounded-full p-0.5 text-stone-400 transition-colors hover:bg-stone-200 hover:text-stone-900 focus-visible:outline-none',
+            'shrink-0 rounded-full p-0.5 text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:outline-none',
           ),
         ],
         [icon(h, X, 'size-3')],

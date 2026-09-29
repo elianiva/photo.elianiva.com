@@ -28,9 +28,17 @@ import { uploadDialog } from './views/upload-dialog'
 
 const COL_CHOICES = [2, 3, 4, 5, 6] as const
 
+/** The design system's page margin, and the content column the header aligns to. */
+const GUTTER =
+  'mx-auto w-full max-w-(--layout-content-max) px-(--layout-margin-mobile) sm:px-(--layout-margin)'
+
 const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex items-center gap-1 rounded-full bg-stone-100 p-1 ring-1 ring-stone-200')],
+    [
+      h.Class(
+        'flex items-center gap-1 rounded-full bg-role-surface-container p-1 ring-1 ring-role-outline-variant',
+      ),
+    ],
     COL_CHOICES.map((cols) =>
       h.button(
         [
@@ -39,8 +47,8 @@ const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
           h.AriaPressed(String(cols === model.cols)),
           h.Class(
             cols === model.cols
-              ? 'rounded-full bg-white px-2.5 py-1 text-xs font-medium text-stone-900 shadow-sm ring-1 ring-stone-200'
-              : 'rounded-full px-2.5 py-1 text-xs font-medium text-stone-600 hover:text-stone-900',
+              ? 'rounded-full bg-role-surface px-2.5 py-1 text-xs font-medium text-role-text-primary shadow-sm ring-1 ring-role-outline-variant'
+              : 'rounded-full px-2.5 py-1 text-xs font-medium text-role-text-secondary hover:text-role-text-primary',
           ),
         ],
         [String(cols)],
@@ -55,19 +63,24 @@ const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
 
 const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.header(
-    [h.Class('sticky top-0 z-20 border-b border-stone-200 bg-white/85 backdrop-blur')],
+    [h.Class('sticky top-0 z-20 border-b border-role-hairline bg-role-surface/85 backdrop-blur')],
     [
       h.div(
-        [h.Class('mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3')],
+        [h.Class(`${GUTTER} flex flex-wrap items-center gap-x-6 gap-y-3 py-3`)],
         [
           h.div(
             [h.Class('mr-auto flex items-center gap-4')],
             [
               h.a(
-                [h.Href('/'), h.Class('text-sm font-semibold tracking-tight hover:text-stone-600')],
+                [
+                  h.Href('/'),
+                  h.Class(
+                    'type-ui font-firm text-role-text-primary hover:text-role-text-secondary transition-colors duration-(--motion-duration-fast)',
+                  ),
+                ],
                 ['photo.elianiva.com'],
               ),
-              h.span([h.Class('text-xs uppercase tracking-widest text-stone-400')], ['Admin']),
+              h.span([h.Class('type-kicker text-role-text-disabled')], ['Admin']),
             ],
           ),
           colsToggle(model, h),
@@ -137,13 +150,13 @@ const filterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
 export const view = (model: Model, h: HtmlBuilder<Msg>): Document => ({
   title: 'Admin — photo.elianiva.com',
   body: h.div(
-    [h.Class('min-h-screen bg-stone-50 text-stone-900')],
+    [h.Class('min-h-screen bg-role-surface text-role-text-primary')],
     [
       header(model, h),
       h.main(
-        [h.Class('mx-auto max-w-6xl px-6 pb-24')],
+        [h.Class(`${GUTTER} pb-(--spacing-5xl)`)],
         [
-          h.h1([h.Class('mt-8 text-2xl font-semibold tracking-tight')], ['Photos']),
+          h.h1([h.Class('mt-(--spacing-2xl) type-section text-role-text-primary')], ['Photos']),
           filterBar(model, h),
           grid(model, h),
         ],

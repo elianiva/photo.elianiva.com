@@ -70,7 +70,7 @@ const editSheetContent = (
         ),
         editing !== undefined
           ? h.img([
-              h.Class('w-full rounded-lg bg-stone-100 max-h-72 object-contain'),
+              h.Class('w-full rounded-lg bg-role-surface-container max-h-72 object-contain'),
               h.Src(thumbUrl(editing)),
               h.Attribute('srcset', srcSet(editing)),
               h.Attribute('sizes', cardSizes),

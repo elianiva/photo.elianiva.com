@@ -78,10 +78,10 @@ export interface ViewInputs {
 
 const chipClass = (isActive: boolean): string =>
   cn(
-    'group inline-flex max-w-full items-center overflow-hidden rounded-full border transition-colors',
+    'group inline-flex max-w-full items-center overflow-hidden rounded-full border transition-colors duration-(--motion-duration-fast)',
     isActive
-      ? 'border-stone-900 bg-stone-900 text-white shadow-sm'
-      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50',
+      ? 'border-role-primary bg-role-primary text-role-on-primary shadow-sm'
+      : 'border-role-outline-variant bg-role-surface text-role-text-primary hover:border-role-outline hover:bg-role-surface-hover',
   )
 
 const countBadge = (
@@ -95,8 +95,10 @@ const countBadge = (
         [
           h.Class(
             cn(
-              'rounded-full px-1.5 py-px text-[10px] leading-4 tabular-nums',
-              isActive ? 'bg-white/20 text-white/80' : 'bg-stone-100 text-stone-500',
+              'rounded-full px-1.5 py-px type-exif tabular-nums',
+              isActive
+                ? 'bg-role-on-primary/20 text-role-on-primary/80'
+                : 'bg-role-surface-container text-role-text-secondary',
             ),
           ),
         ],
@@ -113,7 +115,7 @@ const deleteButton = (tag: Tag, h: HtmlBuilder<Message>): Html =>
         cn(
           'mr-1.5 shrink-0 rounded-full p-0.5 transition-opacity',
           'opacity-0 group-hover:opacity-50 hover:!opacity-100 focus-visible:opacity-100',
-          'hover:text-red-600',
+          'hover:text-role-error',
         ),
       ),
     ],
@@ -122,7 +124,7 @@ const deleteButton = (tag: Tag, h: HtmlBuilder<Message>): Html =>
 
 export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): Html =>
   h.section(
-    [h.DataAttribute('slot', 'tag-manager'), h.Class('mt-8')],
+    [h.DataAttribute('slot', 'tag-manager'), h.Class('mt-(--spacing-2xl)')],
     [
       h.div(
         [h.Class('flex items-center justify-between gap-4')],
@@ -130,12 +132,9 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
           h.div(
             [h.Class('flex items-baseline gap-2')],
             [
-              h.h2(
-                [h.Class('text-xs font-medium uppercase tracking-widest text-stone-400')],
-                ['Tags'],
-              ),
+              h.h2([h.Class('type-kicker text-role-text-disabled')], ['Tags']),
               h.span(
-                [h.Class('text-xs tabular-nums text-stone-400')],
+                [h.Class('type-exif tabular-nums text-role-text-disabled')],
                 [String(inputs.tags.length)],
               ),
             ],
@@ -150,7 +149,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
                 h.Placeholder('New tag…'),
                 h.AriaLabel('New tag name'),
                 h.Class(
-                  'h-8 w-44 rounded-full border border-stone-200 bg-white pr-8 pl-3.5 text-xs shadow-xs placeholder:text-stone-400 focus:border-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-200',
+                  'h-8 w-44 rounded-full border border-role-outline-variant bg-role-surface pr-8 pl-3.5 text-xs shadow-xs placeholder:text-role-text-disabled focus:border-role-focus focus:outline-none focus:ring-2 focus:ring-role-outline-variant',
                 ),
               ]),
               h.button(
@@ -162,7 +161,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
                   ),
                   h.Class(
                     cn(
-                      'absolute top-1/2 right-1 -translate-y-1/2 rounded-full p-1 text-stone-400 transition-colors hover:text-stone-900 focus-visible:outline-none',
+                      'absolute top-1/2 right-1 -translate-y-1/2 rounded-full p-1 text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary focus-visible:outline-none',
                       model.inputValue.trim() === '' && 'opacity-40',
                     ),
                   ),
@@ -176,7 +175,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
       ...(inputs.tags.length === 0
         ? [
             h.p(
-              [h.Class('mt-3 text-sm text-stone-500')],
+              [h.Class('mt-3 text-sm text-role-text-secondary')],
               ['No tags yet — type a name above to create the first one.'],
             ),
           ]
@@ -210,7 +209,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
               ],
             ),
           ]),
-      h.p([h.Class('mt-3 text-xs text-stone-500')], [inputs.resultText]),
+      h.p([h.Class('mt-3 text-xs text-role-text-secondary')], [inputs.resultText]),
     ],
   ),
 )

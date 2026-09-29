@@ -59,14 +59,16 @@ const queueThumbnail = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
     return h.img([
       h.Src(preview),
       h.Alt(''),
-      h.Class('size-10 shrink-0 rounded-md border border-stone-200 bg-stone-100 object-cover'),
+      h.Class(
+        'size-10 shrink-0 rounded-md border border-role-outline-variant bg-role-surface-container object-cover',
+      ),
     ])
   }
   // Previews exist only after a client-side drop (SSR renders the fallback).
   return h.div(
     [
       h.Class(
-        'flex size-10 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-stone-100 text-stone-400',
+        'flex size-10 shrink-0 items-center justify-center rounded-md border border-role-outline-variant bg-role-surface-container text-role-text-disabled',
       ),
     ],
     [icon(h, ImageIcon, 'size-4')],
@@ -77,7 +79,7 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
   h.li(
     [
       h.Key(item.id),
-      h.Class('flex items-center gap-3 rounded-lg border border-stone-200 px-3 py-2'),
+      h.Class('flex items-center gap-3 rounded-lg border border-role-outline-variant px-3 py-2'),
     ],
     [
       queueThumbnail(item, h),
@@ -86,7 +88,7 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
         [
           h.p([h.Class('truncate text-sm font-medium')], [item.name]),
           h.p(
-            [h.Class('truncate text-xs text-stone-500')],
+            [h.Class('truncate text-xs text-role-text-secondary')],
             [
               item.error !== undefined
                 ? `${formatBytes(item.size)} — ${item.error}`
@@ -201,7 +203,7 @@ const uploadDialogContent = (
                 [
                   h.span([h.Class('text-sm font-medium')], ['Queue']),
                   h.span(
-                    [h.Class('text-xs tabular-nums text-stone-500')],
+                    [h.Class('text-xs tabular-nums text-role-text-secondary')],
                     [`${String(model.queue.length)}/${String(UPLOAD_LIMITS.maxFiles)} files`],
                   ),
                 ],
@@ -241,7 +243,9 @@ const uploadDialogContent = (
                       [
                         h.div(
                           [
-                            h.Class('h-1.5 flex-1 overflow-hidden rounded-full bg-stone-200'),
+                            h.Class(
+                              'h-1.5 flex-1 overflow-hidden rounded-full bg-role-surface-container-high',
+                            ),
                             h.Role('progressbar'),
                             h.AriaLabel('Upload progress'),
                             h.AriaValuemin(0),
@@ -252,7 +256,7 @@ const uploadDialogContent = (
                             h.div(
                               [
                                 h.Class(
-                                  'h-full rounded-full bg-primary transition-all duration-300',
+                                  'h-full rounded-full bg-primary transition-all duration-(--motion-duration-slow)',
                                 ),
                                 h.Style({ width: `${String(progressPercent)}%` }),
                               ],
@@ -261,7 +265,7 @@ const uploadDialogContent = (
                           ],
                         ),
                         h.span(
-                          [h.Class('shrink-0 text-xs tabular-nums text-stone-500')],
+                          [h.Class('shrink-0 text-xs tabular-nums text-role-text-secondary')],
                           [`${String(doneCount)}/${String(model.batchTotal)}`],
                         ),
                       ],

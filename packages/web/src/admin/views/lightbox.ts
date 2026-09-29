@@ -1,10 +1,13 @@
 /**
- * Admin lightbox: full-screen dark canvas with the original HD file
- * object-contained — the only place card bytes beyond the thumbnail are
- * fetched. The client-decoded blurhash paints the backdrop while the
- * original loads. Escape closes and ←/→ step through the loaded photos via
- * the keydown Subscription (`../subscriptions`); clicking the backdrop or
- * Close also closes.
+ * Admin lightbox: full-screen canvas in the design system's absolute shadow
+ * color, with the original HD file object-contained — the only place card
+ * bytes beyond the thumbnail are fetched. The client-decoded blurhash paints
+ * the backdrop while the original loads. Escape closes and ←/→ step through
+ * the loaded photos via the keydown Subscription (`../subscriptions`);
+ * clicking the backdrop or Close also closes.
+ *
+ * The scrim is always dark, so it and its foreground use the design system's
+ * absolute `color.shadow` / `color.glow` rather than theme-flipping roles.
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
@@ -29,7 +32,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
     [
       h.Key('admin-lightbox'),
       h.Class(
-        'fixed inset-0 z-50 flex items-center justify-center bg-stone-950/95 bg-cover bg-center p-6 sm:p-10 lg:p-16',
+        'fixed inset-0 z-50 flex items-center justify-center bg-role-shadow/95 bg-cover bg-center p-(--spacing-xl) sm:p-(--spacing-3xl) lg:p-(--spacing-4xl)',
       ),
       h.Style(placeholder !== null ? { backgroundImage: `url(${placeholder})` } : {}),
       h.OnClick(M.CloseLightbox()),
@@ -49,7 +52,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.div(
         [
           h.Class(
-            'absolute inset-x-0 bottom-5 text-center text-xs text-stone-400 pointer-events-none',
+            'absolute inset-x-0 bottom-(--spacing-xl) text-center type-exif text-role-glow/60 pointer-events-none',
           ),
         ],
         [caption],
@@ -57,7 +60,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.button(
         [
           h.Class(
-            'absolute top-5 right-6 rounded-full px-3 py-1.5 text-xs font-medium text-stone-300 hover:bg-white/10 hover:text-white transition-colors',
+            'absolute top-(--spacing-xl) right-(--spacing-xl) rounded-full px-(--spacing-md) py-(--spacing-xs) text-xs font-medium text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
           ),
           h.OnClick(M.CloseLightbox()),
           h.AriaLabel('Close'),
@@ -69,7 +72,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
             h.button(
               [
                 h.Class(
-                  'absolute left-4 top-1/2 -translate-y-1/2 flex size-10 items-center justify-center rounded-full text-2xl text-stone-300 hover:bg-white/10 hover:text-white transition-colors',
+                  'absolute left-(--spacing-lg) top-1/2 -translate-y-1/2 flex size-10 items-center justify-center rounded-full text-2xl text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
                 ),
                 h.OnClick(M.PrevPhoto()),
                 h.AriaLabel('Previous photo'),
@@ -79,7 +82,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
             h.button(
               [
                 h.Class(
-                  'absolute right-4 top-1/2 -translate-y-1/2 flex size-10 items-center justify-center rounded-full text-2xl text-stone-300 hover:bg-white/10 hover:text-white transition-colors',
+                  'absolute right-(--spacing-lg) top-1/2 -translate-y-1/2 flex size-10 items-center justify-center rounded-full text-2xl text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
                 ),
                 h.OnClick(M.NextPhoto()),
                 h.AriaLabel('Next photo'),

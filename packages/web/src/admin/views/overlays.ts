@@ -83,7 +83,12 @@ export const toastStack = (model: Model, h: HtmlBuilder<Msg>): Child =>
         toContent: (entry, innerH) => [
           innerH.p([innerH.Class('text-sm font-medium leading-none')], [entry.payload.title]),
           ...(entry.payload.detail !== undefined
-            ? [innerH.p([innerH.Class('text-sm text-stone-500 mt-1')], [entry.payload.detail])]
+            ? [
+                innerH.p(
+                  [innerH.Class('text-sm text-role-text-secondary mt-1')],
+                  [entry.payload.detail],
+                ),
+              ]
             : []),
         ],
       },
