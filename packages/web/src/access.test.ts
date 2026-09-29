@@ -293,3 +293,74 @@ describe('admin routes wired to the gate', () => {
     ])
   })
 })
+
+describe('the paths the app asks for', () => {
+  // Effect's HTTP RPC client appends a slash to the URL it is given, so both
+  // groups are addressed with one: `prependUrl('/rpc')` plus a request path of
+  // `''` joins into `/rpc/`. The Worker matches each path by hand, so a
+  // trailing slash it does not account for is the Not found at the bottom of
+  // `fetch` — from the site's own reads, not from a stranger's.
+  it('serves the admin group with and without the trailing slash', async () => {
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const token = await signAssertion(key, {
+      iss: key.teamDomain,
+      exp: 4102444800,
+      email: 'owner@photo.test',
+    })
+
+    for (const path of ['/admin/rpc', '/admin/rpc/']) {
+      const response = await worker.fetch(
+        new Request(`https://photo-api.test${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'Cf-Access-Jwt-Assertion': token },
+          body: JSON.stringify({
+            _tag: 'Request',
+            id: 'req-1',
+            tag: 'GetSession',
+            payload: {},
+            headers: [],
+          }),
+        }),
+        workerEnv({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
+        {},
+      )
+
+      expect([path, response.status]).toEqual([path, 200])
+    }
+  })
+
+  it('serves the public group with and without the trailing slash', async () => {
+    const ask = async (path: string): Promise<{ status: number; body: unknown }> => {
+      const response = await worker.fetch(
+        new Request(`https://photo-api.test${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            _tag: 'Request',
+            id: 'req-1',
+            tag: 'GetSession',
+            payload: {},
+            headers: [],
+          }),
+        }),
+        // The dev stand-down: no team domain, so the public route answers
+        // without an assertion.
+        workerEnv({ STAGE: 'dev', ACCESS_TEAM_DOMAIN: '' }),
+        {},
+      )
+      return { status: response.status, body: await response.json() }
+    }
+
+    const plain = await ask('/rpc')
+    const slashed = await ask('/rpc/')
+
+    expect(plain.status).toBe(200)
+    expect(slashed.status).toBe(200)
+    // The same group answered both, so the trailing slash reaches the public
+    // handlers rather than the Worker's Not found. `GetSession` is the admin
+    // group's tag and this path never mounts it, which is why the answer is a
+    // failure — a claim about the routing, not a passing test in disguise.
+    expect(slashed.body).toEqual(plain.body)
+  })
+})
