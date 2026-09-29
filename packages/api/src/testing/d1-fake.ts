@@ -70,25 +70,31 @@ export const applyMigrations = (db: DatabaseSync, migrations: ReadonlyArray<stri
   for (const sql of migrations) db.exec(sql)
 }
 
+/**
+ * The D1 contract over a SQLite engine. Exported so a test can migrate a
+ * populated database between two assertions instead of only starting fresh.
+ */
+export const d1Over = (db: DatabaseSync): D1DatabaseLike => ({
+  prepare: (sql) => makeStatement(db, sql, []),
+  // D1 runs a batch inside one transaction: any statement failing rolls the
+  // whole batch back.
+  batch: async (statements: ReadonlyArray<D1StatementResult>) => {
+    db.exec('BEGIN')
+    try {
+      const results: Array<unknown> = []
+      for (const statement of statements) results.push(await statement.run())
+      db.exec('COMMIT')
+      return results
+    } catch (error) {
+      if (db.isTransaction) db.exec('ROLLBACK')
+      throw error
+    }
+  },
+})
+
 /** A migrated in-memory D1. Each call is an isolated database. */
 export const makeD1Fake = (migrations: ReadonlyArray<string> = []): D1DatabaseLike => {
   const db = new DatabaseSync(':memory:')
   applyMigrations(db, migrations)
-  return {
-    prepare: (sql) => makeStatement(db, sql, []),
-    // D1 runs a batch inside one transaction: any statement failing rolls the
-    // whole batch back.
-    batch: async (statements: ReadonlyArray<D1StatementResult>) => {
-      db.exec('BEGIN')
-      try {
-        const results: Array<unknown> = []
-        for (const statement of statements) results.push(await statement.run())
-        db.exec('COMMIT')
-        return results
-      } catch (error) {
-        if (db.isTransaction) db.exec('ROLLBACK')
-        throw error
-      }
-    },
-  }
+  return d1Over(db)
 }

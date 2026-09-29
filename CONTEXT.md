@@ -9,7 +9,7 @@ The single-user management surface at `/admin` — browse, upload, edit, and del
 _Avoid_: Dashboard, CMS, Studio, Backend, The Desk
 
 **Photo**:
-A curated work — a single image file (stored once in R2) plus its metadata. The unit the site showcases. Photos live in a flat list (no hierarchy); grouping is via Tags. Essential queryable fields are real columns (`title`, `takenAt`, dimensions, `r2Key`); the rest lives in a JSON `metadata` blob for cheap extensibility.
+A curated work — a single image file (stored once in R2) plus its metadata. The unit the site showcases. Photos live in a flat list (no hierarchy); grouping is via Tags. Essential queryable fields are real columns (`title`, `takenAt`, dimensions, `r2Key`); the rest lives in a JSON `metadata` blob for cheap extensibility. The one carve-out from that rule is the four EXIF facts the public Exif line prints — `aperture`, `shutter`, `iso`, `focalLength` — which are columns because a formatted number has a type the boundary can check and a range it can validate; the blob keeps free-form strings like the caption, the place, and the camera body. Every one of the four is nullable, and a missing fact is omitted from the Exif line rather than invented.
 _Avoid_: Image (use only for raw bytes/technical context), picture, shot
 
 **Photo Number**:
@@ -23,6 +23,14 @@ _Avoid_: Visibility, stage, state, Published (that is one value of Status, not t
 **Ratio**:
 A Photo's frame proportion, always one of six supported values: `3:2`, `2:3`, `4:3`, `3:4`, `16:9`, `9:16`. The author sets it in the Editor's crop, and an incoming file is snapped to the nearest supported value at upload. The source file's own proportions stop mattering once a crop is authored.
 _Avoid_: Aspect ratio, orientation, dimensions (those are the measured `width` and `height`)
+
+**Crop**:
+The window a Photo is presented through, authored in the Editor. `cropX` and `cropY` pan the source inside the Ratio, `cropScale` zooms it, and `level` is the straighten angle in degrees. The defaults — pan at origin, scale 1, no level — mean an un-cropped Photo is the source as shot. A crop is authored data, so it is stored as columns and the Rendition is regenerated from it, never beside it.
+_Avoid_: Resize, Zoom (that is the Stage's own control), Aspect ratio (that is the Ratio)
+
+**Mat**:
+The border the Editor draws around a Photo, outside its crop, before a Rendition is produced. The design heads its panel `BORDER`, labels its rows `Mat Colour` and `Mat Style`, and names the wrapper on the Stage `Mat` — one thing under two words. The schema and the code say `borderEnabled`, `borderStyle`, `borderColour`, `borderWidth`, following the heading the operator actually sees; `mat` appears only in the `color.mat.*` token names. Its colour is `white`, `paper` or `ink` and its style is `even`, `gallery` or `square`, taken from the design's swatches and segments.
+_Avoid_: Frame (that is display copy), Padding, Margin, Mounter
 
 **Rendition**:
 A derived image file produced from a Photo's original. There are exactly two: `PREVIEW` (the long edge the Export panel sets, used by the library, the grid, and the public pages) and `FULL` (the presentation-sized export). A Rendition is regenerated whenever the crop, mat, level, or export settings change. The original in R2 is not a Rendition, and Renditions are never hand-placed in R2 outside the regeneration path.
