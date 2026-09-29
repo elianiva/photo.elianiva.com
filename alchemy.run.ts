@@ -79,17 +79,19 @@ export default Alchemy.Stack(
       sessionDuration: '24h',
     })
 
+    // The Worker's build is described in `packages/web/vite.config.ts`
+    // (`environments.ssr`): `src/worker.ts` as the entry of the environment
+    // Alchemy treats as the Worker, built to `dist/ssr/worker.js`. A plain
+    // `vite build` of that config builds the same environment, which is what
+    // makes `pnpm build` a gate on the artifact `pnpm infra:deploy` uploads
+    // instead of on a client-only bundle nobody deploys (#67).
+    //
+    // Nothing here names the entry, on purpose: `main` or a `viteEnvironments`
+    // entry would be a second description of that build, and a wrong one is
+    // invisible to `pnpm build` and fatal at deploy time — the shape of the 28
+    // red deploys behind #67.
     class Website extends Cloudflare.Website.Vite<Website>()('photo', {
       rootDir: 'packages/web',
-      main: 'src/worker.ts',
-      viteEnvironments: { entry: 'ssr' },
-      // The Worker runs in the `ssr` entry environment, which is the one the
-      // foldkit plugin's server build already claims. A `worker` entry left that
-      // environment behind with no build input of its own, so the app build
-      // fell back to the root `index.html` as an SSR entry and every `master`
-      // deploy has died on that since the foldkit 0.163 bump. `main` is what
-      // decides what the Worker exports: `src/worker.ts`, which renders the
-      // Front through `foldkit/experimental/server` itself.
       assets: { notFoundHandling: 'none' },
       domain: 'photo.elianiva.com',
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },

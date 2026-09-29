@@ -30,5 +30,15 @@ jobs:
         run: pnpm typecheck
       - name: Test
         run: pnpm test
-      - name: Build
+      # `pnpm build` builds the Worker `pnpm infra:deploy` uploads: its entry
+      # environment is declared in packages/web/vite.config.ts, and app mode
+      # makes the package's plain `vite build` build it alongside the client.
+      # CI used to build a client-only bundle nobody deploys (#67).
+      - name: Build (the artifact Deploy ships)
         run: pnpm build
+      # The deploy reads that bundle by path, so assert it is there. Without
+      # this, deleting `environments.ssr` from vite.config.ts would leave
+      # `pnpm build` green while the deploy fails — the shape of the 28 red
+      # deploys behind #67.
+      - name: Assert the deployed Worker bundle exists
+        run: test -f packages/web/dist/ssr/worker.js
