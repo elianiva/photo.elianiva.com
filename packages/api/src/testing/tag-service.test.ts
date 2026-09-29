@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
-import { SlugConflict } from '@photo/shared'
+import { InvalidInput, SlugConflict } from '@photo/shared'
 import type { D1DatabaseLike } from '../gateway'
 import { PhotoService } from '../photo'
-import { TagService } from '../tag'
+import { TagService, type TagUpdatePatch } from '../tag'
 import { createPhoto, createTag, fail } from './fixtures'
 import { makeTestHarness, withTestServices, type TestHarness } from './harness'
 
@@ -21,6 +21,14 @@ const removeTag = (harness: TestHarness, id: string) =>
   Effect.runPromise(
     withTestServices(
       TagService.use((service) => service.remove(id)),
+      harness,
+    ),
+  )
+
+const updateTag = (harness: TestHarness, id: string, patch: TagUpdatePatch) =>
+  Effect.runPromise(
+    withTestServices(
+      TagService.use((service) => service.update(id, patch)),
       harness,
     ),
   )
@@ -125,5 +133,77 @@ describe('TagService.remove', () => {
     )
     expect(page.items.map((item) => item.id)).toEqual([photo.id])
     expect(page.items[0]?.tags).toEqual([])
+  })
+})
+
+describe('TagService.update', () => {
+  it('writes a caption and leaves the slug alone', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+
+    const tag = await updateTag(harness, kyoto.id, {
+      caption: 'Ferries, rain, and the long light on Istiklal.',
+    })
+
+    expect(tag).toEqual({
+      id: kyoto.id,
+      slug: 'kyoto',
+      label: 'Kyoto',
+      caption: 'Ferries, rain, and the long light on Istiklal.',
+    })
+  })
+
+  it('clears a caption with null, never an empty string', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    await updateTag(harness, kyoto.id, { caption: 'A sentence.' })
+
+    const cleared = await updateTag(harness, kyoto.id, { caption: null })
+
+    expect(cleared.caption).toBeNull()
+    expect(await listTags(harness)).toEqual([
+      { id: kyoto.id, slug: 'kyoto', label: 'Kyoto', caption: null },
+    ])
+  })
+
+  it('relabels without touching the slug', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+
+    const relabelled = await updateTag(harness, kyoto.id, { label: 'Kyoto Nights' })
+
+    // A slug is a live URL: the public Series page is a Tag page (ADR 0008),
+    // so renaming one is delete + create, not an update.
+    expect(relabelled).toEqual({
+      id: kyoto.id,
+      slug: 'kyoto',
+      label: 'Kyoto Nights',
+      caption: null,
+    })
+  })
+
+  it('fails with InvalidInput for an unknown id', async () => {
+    const harness = makeTestHarness()
+
+    const error = await fail(
+      withTestServices(
+        TagService.use((service) => service.update('missing', { label: 'Nowhere' })),
+        harness,
+      ),
+    )
+
+    expect(error).toBeInstanceOf(InvalidInput)
+  })
+
+  it('answers the current tag for an empty patch', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+
+    expect(await updateTag(harness, kyoto.id, {})).toEqual({
+      id: kyoto.id,
+      slug: 'kyoto',
+      label: 'Kyoto',
+      caption: null,
+    })
   })
 })

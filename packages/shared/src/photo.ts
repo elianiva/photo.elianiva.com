@@ -71,6 +71,46 @@ export const nearestRatio = (width: number, height: number): PhotoRatio | null =
   return nearestDistance <= RATIO_SNAP_TOLERANCE ? nearest : null
 }
 
+// ---------------------------------------------------------------------------
+// Presentation — the authored presentation of a Photo: its Crop, its level,
+// its Mat and its per-photo export overrides. One fact, saved as one call,
+// and what a Rendition is regenerated from (see CONTEXT.md).
+// ---------------------------------------------------------------------------
+
+export const MAT_STYLES = ['even', 'gallery', 'square'] as const
+export const MatStyle = S.Literals(MAT_STYLES)
+export type MatStyle = typeof MatStyle.Type
+
+export const MAT_COLOURS = ['white', 'paper', 'ink'] as const
+export const MatColour = S.Literals(MAT_COLOURS)
+export type MatColour = typeof MatColour.Type
+
+export const RENDITION_FORMATS = ['jpeg', 'webp', 'avif'] as const
+export const RenditionFormat = S.Literals(RENDITION_FORMATS)
+export type RenditionFormat = typeof RenditionFormat.Type
+
+/** The whole stored presentation, as the boundary reads it back. A save
+ *  answers with this rather than with the patch, so a client never has to
+ *  guess the parts of the presentation it did not touch. */
+export const PhotoPresentation = S.Struct({
+  cropX: S.Number,
+  cropY: S.Number,
+  cropScale: S.Number,
+  /** The straighten angle in degrees. Null is un-levelled, not zero. */
+  level: S.NullOr(S.Number),
+  borderEnabled: S.Boolean,
+  borderStyle: S.NullOr(MatStyle),
+  borderColour: S.NullOr(MatColour),
+  borderWidth: S.NullOr(S.Number),
+  previewLongEdge: S.Number,
+  previewFormat: RenditionFormat,
+  previewQuality: S.Number,
+  fullQuality: S.Number,
+  keepExif: S.Boolean,
+  removeGps: S.Boolean,
+})
+export type PhotoPresentation = typeof PhotoPresentation.Type
+
 export const TagId = S.String.pipe(S.brand('TagId'))
 export type TagId = typeof TagId.Type
 

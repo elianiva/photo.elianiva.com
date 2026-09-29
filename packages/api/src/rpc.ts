@@ -6,9 +6,26 @@
  */
 
 import { Effect } from 'effect'
-import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
+import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs, STORAGE_CAP_BYTES } from '@photo/shared'
 import { PhotoService, slugify, type PhotoListFilter } from './photo'
+import { AdminSession } from './session'
 import { TagService } from './tag'
+
+/**
+ * The single-Photo operations, folded over a set in order. The lifecycle and
+ * the presentation rules stay owned by the service — a Photo must exist, only
+ * a trashed Photo can be purged — rather than being restated as bulk SQL that
+ * can drift from them.
+ */
+const foldOver = <A, E>(
+  ids: ReadonlyArray<string>,
+  operation: (id: string) => Effect.Effect<A, E>,
+): Effect.Effect<void, E> =>
+  Effect.gen(function* () {
+    for (const id of ids) {
+      yield* operation(id)
+    }
+  })
 
 export const PublicRpcHandlersLive = PhotoPublicRpcs.toLayer({
   ListPhotos: (payload) =>
@@ -81,4 +98,92 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
       )
     }),
   DeleteTag: (payload) => TagService.use((service) => service.remove(payload.id)),
+  // The email the gate already verified, read and never recomputed. `null` is
+  // the dev stand-down (ADR 0007), not a signed-out state.
+  GetSession: () => AdminSession.use((session) => Effect.succeed({ email: session.email })),
+  GetCounts: () => PhotoService.use((service) => service.counts()),
+  GetStorageUsage: () =>
+    Effect.map(
+      PhotoService.use((service) => service.storageUsage()),
+      (usage) => ({
+        ...usage,
+        capBytes: STORAGE_CAP_BYTES,
+      }),
+    ),
+  // A dedicated admin shape rather than an overload of the public `ListPhotos`,
+  // so the public contract stays small while the Library gets its Status,
+  // Ratio and Tag filters.
+  ListLibraryRows: (payload) =>
+    PhotoService.use((service) =>
+      service.list({
+        status: payload.status,
+        ratio: payload.ratio,
+        tagIds: payload.tagIds,
+        q: payload.q,
+        sort: payload.sort,
+        cursor: payload.cursor,
+        limit: payload.limit,
+      }),
+    ),
+  SetPhotoStatus: (payload) =>
+    PhotoService.use((service) => service.setStatus(payload.id, payload.status)),
+  UpdatePhotoPresentation: (payload) =>
+    PhotoService.use((service) =>
+      service.setPresentation(payload.id, {
+        crop: payload.crop,
+        level: payload.level,
+        mat: payload.mat,
+        export: payload.export,
+      }),
+    ),
+  // Count in, count out: the service operations are idempotent, so a Photo
+  // already in the target state counts as acted on.
+  TrashPhotos: (payload) =>
+    Effect.as(
+      PhotoService.use((service) => foldOver(payload.ids, (id) => service.trash(id))),
+      payload.ids.length,
+    ),
+  RestorePhotos: (payload) =>
+    Effect.as(
+      PhotoService.use((service) => foldOver(payload.ids, (id) => service.restore(id))),
+      payload.ids.length,
+    ),
+  PurgePhotos: (payload) =>
+    Effect.as(
+      PhotoService.use((service) => foldOver(payload.ids, (id) => service.purge(id))),
+      payload.ids.length,
+    ),
+  BulkAddTags: (payload) =>
+    Effect.as(
+      PhotoService.use((service) => service.addTags(payload.photoIds, payload.tagIds)),
+      payload.photoIds.length,
+    ),
+  BulkRemoveTags: (payload) =>
+    Effect.as(
+      PhotoService.use((service) => service.removeTags(payload.photoIds, payload.tagIds)),
+      payload.photoIds.length,
+    ),
+  AddBorderToPhotos: (payload) =>
+    Effect.as(
+      PhotoService.use((service) =>
+        foldOver(payload.photoIds, (id) => service.setPresentation(id, { mat: payload.mat })),
+      ),
+      payload.photoIds.length,
+    ),
+  UpdateTag: (payload) =>
+    Effect.gen(function* () {
+      if (payload.label !== undefined && payload.label.trim() === '') {
+        return yield* new InvalidInput({ message: 'label is required' })
+      }
+      return yield* TagService.use((service) =>
+        service.update(payload.id, {
+          label: payload.label?.trim(),
+          caption: payload.caption,
+        }),
+      )
+    }),
 })
+
+// `Compress` would sit in the admin group beside `UpdatePhotoPresentation` and
+// does not ship: it recompresses the `FULL` Rendition, which #35 creates. A
+// button that reports work it cannot do is a lie in the UI.
