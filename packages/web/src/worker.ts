@@ -1,21 +1,12 @@
-import { Effect, Layer } from 'effect'
+import { Effect } from 'effect'
 import * as Server from 'foldkit/experimental/server'
 import type { WebsiteEnv } from '../../../alchemy.run'
-import { Flags as GalleryFlags, Model as GalleryModel } from './gallery/model'
-import { init as galleryInit } from './gallery/update'
-import { view as galleryView } from './gallery/view'
-import { GatewayLive, PhotoService, PhotoServiceLive } from '@photo/api'
+import { Model as HomeModel } from './home/model'
+import { init as homeInit } from './home/update'
+import { view as homeView } from './home/view'
 
 type WorkerEnvWithAssets = WebsiteEnv & {
   ASSETS: { fetch: typeof fetch }
-}
-
-const gatewayLayer = (env: WorkerEnvWithAssets) => {
-  if (env.DB === undefined || env.DB === null || env.PHOTOS === undefined || env.PHOTOS === null) {
-    throw new Error('missing D1 or R2 binding')
-  }
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return GatewayLive({ db: env.DB as never, photos: env.PHOTOS as never })
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- import.meta.env is Vite-injected, probe without tightening type
@@ -50,34 +41,21 @@ const fetchTemplate = async (
   return FALLBACK_TEMPLATE
 }
 
-const renderGallerySsr = async (
+const renderHomeSsr = async (
   env: WorkerEnvWithAssets,
   request: Request,
 ): Promise<Response | null> => {
   const template = await fetchTemplate(env, request)
   if (template === null) return null
-  const emptyFlags: typeof GalleryFlags.Type = { photos: [], nextCursor: null }
-  const flags = await Effect.runPromise(
-    Effect.gen(function* () {
-      const service = yield* PhotoService
-      const page = yield* service.list({ limit: 60 })
-      return { photos: [...page.items], nextCursor: page.nextCursor }
-    }).pipe(
-      Effect.provide(PhotoServiceLive.pipe(Layer.provide(gatewayLayer(env)))),
-      Effect.catch(() => Effect.succeed(emptyFlags)),
-    ),
-  )
-  const galleryConfig = {
-    Model: GalleryModel,
-    Flags: GalleryFlags,
-    init: galleryInit,
-    view: galleryView,
+  const homeConfig = {
+    Model: HomeModel,
+    init: homeInit,
+    view: homeView,
   }
   let rendered: Server.RenderedApplication | null = null
   try {
     rendered = await Effect.runPromise(
-      Server.renderToString(galleryConfig, {
-        flags,
+      Server.renderToString(homeConfig, {
         buildId: BUILD_ID,
       }),
     )
@@ -149,9 +127,9 @@ const isAssetPath = (pathname: string): boolean =>
 const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Response> => {
   const url = new URL(request.url)
 
-  // Public gallery: SSR per the foldkit server-rendering contract.
+  // Public front page: SSR per the foldkit server-rendering contract.
   if ((url.pathname === '/' || url.pathname === '') && request.method === 'GET') {
-    const ssr = await renderGallerySsr(env, request)
+    const ssr = await renderHomeSsr(env, request)
     if (ssr !== null) return ssr
     return new Response('Not found', { status: 500 })
   }

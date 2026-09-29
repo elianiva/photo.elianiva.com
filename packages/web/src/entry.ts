@@ -1,15 +1,12 @@
 import './styles.css'
-import { Effect } from 'effect'
 import { Runtime } from 'foldkit'
 import type * as AdminApp from './admin/entry'
-import type * as GalleryApp from './main'
-import { rpcPublic } from '@/lib/rpc'
-import type { PhotoWithTags } from '@photo/shared'
+import type * as HomeApp from './home/entry'
 
 /**
  * Single SPA entry with route-based code splitting: `/admin` loads the Admin
- * bundle, every other path loads the public gallery. Visitors never ship
- * the admin Sheet/Dialog/FileDrop/combobox unless they visit /admin.
+ * bundle, every other path loads the broadsheet front page. Visitors never
+ * ship the admin Sheet/Dialog/FileDrop/combobox unless they visit /admin.
  */
 const isAdmin = window.location.pathname.startsWith('/admin')
 
@@ -34,36 +31,25 @@ if (isAdmin) {
     }
   })
 } else {
-  void import('./main').then((gallery: typeof GalleryApp) => {
+  void import('./home/entry').then((home: typeof HomeApp) => {
+    // The front page ships its edition in the bundle, so there is no fetch to
+    // await before the first paint — `run` is the whole lifecycle here.
     const program = Runtime.makeApplication({
-      Model: gallery.Model,
-      Flags: gallery.Flags,
-      init: gallery.init,
-      update: gallery.update,
-      view: gallery.view,
-      subscriptions: gallery.subscriptions,
+      Model: home.Model,
+      init: home.init,
+      update: home.update,
+      view: home.view,
+      subscriptions: home.subscriptions,
       container: document.getElementById('root'),
       devTools: {
-        Message: gallery.Message,
+        Message: home.Message,
       },
     })
     const isHydratable = document.querySelector('[data-foldkit-app]') !== null
     if (isHydratable) {
       Runtime.hydrate(program, { buildId: import.meta.env.FOLDKIT_BUILD_ID })
     } else {
-      interface PhotoPage {
-        readonly items: ReadonlyArray<PhotoWithTags>
-        readonly nextCursor: string | null
-      }
-      const emptyFlags: { photos: ReadonlyArray<PhotoWithTags>; nextCursor: string | null } = {
-        photos: [],
-        nextCursor: null,
-      }
-      const flags = Effect.map(rpcPublic<PhotoPage>('ListPhotos', { limit: 60 }), (page) => ({
-        photos: [...page.items],
-        nextCursor: page.nextCursor,
-      })).pipe(Effect.catch(() => Effect.succeed(emptyFlags)))
-      Runtime.run(program, { flags })
+      Runtime.run(program)
     }
   })
 }

@@ -1,24 +1,13 @@
-// oxlint-disable typescript/consistent-type-assertions
 import { Effect } from 'effect'
 import * as Server from 'foldkit/experimental/server'
 
-import { Flags as GalleryFlags } from './gallery/model'
-import { init as galleryInit } from './gallery/update'
-import { view as galleryView } from './gallery/view'
-import { Model as GalleryModel } from './gallery/model'
 import { Model as AdminModel, init as adminInit, view as adminView } from './admin/entry'
+import { Model as HomeModel, init as homeInit, view as homeView } from './home/entry'
 
-type FetchFlags = typeof GalleryFlags.Type
-
-const fetchGalleryFlags = async (_requestUrl: string): Promise<FetchFlags> => {
-  return { photos: [], nextCursor: null }
-}
-
-const galleryConfig = {
-  Model: GalleryModel,
-  Flags: GalleryFlags,
-  init: galleryInit,
-  view: galleryView,
+const homeConfig = {
+  Model: HomeModel,
+  init: homeInit,
+  view: homeView,
 }
 
 export const renderPage = async (request: Request): Promise<Server.EntryResult> => {
@@ -37,10 +26,8 @@ export const renderPage = async (request: Request): Promise<Server.EntryResult> 
     return Server.Rendered(rendered)
   }
 
-  const flags = await fetchGalleryFlags(request.url)
   const rendered = await Effect.runPromise(
-    Server.renderToString(galleryConfig, {
-      flags,
+    Server.renderToString(homeConfig, {
       buildId: import.meta.env.FOLDKIT_BUILD_ID ?? 'dev',
     }),
   )
