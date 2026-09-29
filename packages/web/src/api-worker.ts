@@ -3,14 +3,13 @@ import { HttpRouter } from 'effect/unstable/http'
 import { RpcSerialization, RpcServer } from 'effect/unstable/rpc'
 import type { WebsiteEnv } from '../../../alchemy.run'
 import {
-  PublicRpcHandlersLive,
-  adminRpcHandlersLive,
+  AdminRpcHandlersLive,
   extractImageMeta,
   GatewayLive,
   PhotoService,
   PhotoServiceLive,
+  PublicRpcHandlersLive,
   TagServiceLive,
-  type AdminSession,
 } from '@photo/api'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
 import { verifyAdminAccess } from './access'
@@ -238,51 +237,27 @@ const handleImageProxy = async (env: ApiEnv, request: Request): Promise<Response
   return new Response(object.body, { headers })
 }
 
-/** The public RPC router: the public group on `/rpc`, with the services its
- *  handlers need. Kept separate from the admin one so the public route never
- *  has the admin handlers mounted. */
-const publicRpcHandler = (env: ApiEnv): ((request: Request) => Promise<Response>) => {
+const buildRpcHandler = (env: ApiEnv): ((request: Request) => Promise<Response>) => {
+  const routerLayer = HttpRouter.layer
+  const handlersLayer = Layer.merge(PublicRpcHandlersLive, AdminRpcHandlersLive).pipe(
+    Layer.provide(Layer.merge(PhotoServiceLive, TagServiceLive)),
+    Layer.provide(gatewayLayer(env)),
+  )
   const appLayer = Layer.mergeAll(
     RpcServer.layerHttp({ group: PhotoPublicRpcs, path: '/rpc', protocol: 'http' }).pipe(
-      Layer.provide(HttpRouter.layer),
+      Layer.provide(routerLayer),
       Layer.provide(RpcSerialization.layerJson),
     ),
-    HttpRouter.layer,
-  ).pipe(
-    Layer.provide(
-      PublicRpcHandlersLive.pipe(
-        Layer.provide(Layer.merge(PhotoServiceLive, TagServiceLive)),
-        Layer.provide(gatewayLayer(env)),
-      ),
-    ),
-  )
-  const webHandler = HttpRouter.toWebHandler(appLayer, { disableLogger: true })
-  return (request: Request): Promise<Response> => webHandler.handler(request)
-}
-
-/** The admin group, over the session `verifyAdminAccess` admitted. `GetSession`
- *  answers from those claims, so this layer is built per request rather than
- *  once for the Worker's lifetime. */
-const adminRpcHandler = (
-  env: ApiEnv,
-  session: AdminSession,
-): ((request: Request) => Promise<Response>) => {
-  const appLayer = Layer.mergeAll(
     RpcServer.layerHttp({ group: PhotoAdminRpcs, path: '/admin/rpc', protocol: 'http' }).pipe(
-      Layer.provide(HttpRouter.layer),
+      Layer.provide(routerLayer),
       Layer.provide(RpcSerialization.layerJson),
     ),
-    HttpRouter.layer,
-  ).pipe(
-    Layer.provide(
-      adminRpcHandlersLive(session).pipe(
-        Layer.provide(Layer.merge(PhotoServiceLive, TagServiceLive)),
-        Layer.provide(gatewayLayer(env)),
-      ),
-    ),
-  )
+    routerLayer,
+  ).pipe(Layer.provide(handlersLayer))
+
   const webHandler = HttpRouter.toWebHandler(appLayer, { disableLogger: true })
-  return (request: Request): Promise<Response> => webHandler.handler(request)
+  const handler = (request: Request): Promise<Response> => webHandler.handler(request)
+  return handler
 }
 
 const ALLOWED_ORIGINS = new Set([
@@ -340,7 +315,7 @@ export default {
     if (url.pathname === '/upload' && request.method === 'POST') {
       const limited = rateLimited(uploadLimiter, request)
       if (limited !== null) return respond(limited)
-      const { rejection } = await verifyAdminAccess(request, env)
+      const rejection = await verifyAdminAccess(request, env)
       if (rejection !== null) return respond(rejection)
       const res = await handleUpload(env, request)
       return respond(res)
@@ -349,9 +324,9 @@ export default {
     if (url.pathname === '/admin/rpc') {
       const limited = rateLimited(adminRpcLimiter, request)
       if (limited !== null) return respond(limited)
-      const { rejection, session } = await verifyAdminAccess(request, env)
+      const rejection = await verifyAdminAccess(request, env)
       if (rejection !== null) return respond(rejection)
-      const res = await adminRpcHandler(env, session)(request)
+      const res = await buildRpcHandler(env)(request)
       return respond(res)
     }
 
@@ -363,7 +338,7 @@ export default {
     if (url.pathname === '/rpc') {
       const limited = rateLimited(publicRpcLimiter, request)
       if (limited !== null) return respond(limited)
-      const res = await publicRpcHandler(env)(request)
+      const res = await buildRpcHandler(env)(request)
       return respond(res)
     }
 

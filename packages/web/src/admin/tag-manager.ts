@@ -5,7 +5,7 @@
  * and the result line.
  *
  * The component owns only its create-input text. Everything domain-shaped —
- * tags, counts, the active filter, the result summary — arrives through
+ * tags, counts, the active filter slug, the result summary — arrives through
  * view inputs on every render, so it stays a dumb-ish leaf the parent can
  * feed from its own Model. Operator intents surface as plain Messages:
  * `ToggledFilter` / `RequestedDelete` / `SubmitCreate` are acted on by the
@@ -42,7 +42,7 @@ export const Message = defineMessageUnion({
   SetInput: { value: S.String },
   SubmitCreate: {},
   /** The operator clicked a chip: the parent re-runs its filter toggle. */
-  ToggledFilter: { id: S.String },
+  ToggledFilter: { slug: S.String },
   /** The operator clicked a chip's delete button. */
   RequestedDelete: { id: S.String, label: S.String },
 })
@@ -66,9 +66,8 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 
 export interface ViewInputs {
   tags: ReadonlyArray<Tag>
-  /** Ids of the currently-applied tags, if any. A set, not one id: the filter
-   *  is multi-select, and the same set drives the sidebar's tag rows. */
-  activeIds?: ReadonlyArray<string>
+  /** Slug of the currently-applied filter, if any. */
+  activeSlug?: string
   /** Photos per tag id. Return undefined to hide the count badge (counts
    *  describe the loaded result set, so they are meaningless while
    *  filtered — every chip would repeat the same number). */
@@ -183,13 +182,13 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
               [h.Class('mt-3 flex flex-wrap gap-(--spacing-xs)')],
               [
                 ...inputs.tags.map((tag) => {
-                  const isActive = inputs.activeIds?.includes(tag.id) === true
+                  const isActive = inputs.activeSlug === tag.slug
                   return h.span(
                     [h.Key(`chip-${tag.slug}`), h.Class(chipClass(isActive))],
                     [
                       h.button(
                         [
-                          h.OnClick(Message.ToggledFilter({ id: tag.id })),
+                          h.OnClick(Message.ToggledFilter({ slug: tag.slug })),
                           h.Title(
                             isActive ? `Clear filter ${tag.label}` : `Filter by ${tag.label}`,
                           ),

@@ -1,8 +1,8 @@
 /**
- * Admin pages, one per route. The shell — sidebar, Page Head, overlays, toast
- * stack — lives in `view.ts` and every page renders inside it. Each arm below
- * is its own view function, and the view-identity transform brands each one,
- * so navigating between routes tears the old page down and builds the new one
+ * Admin pages, one per route. The shell — header, overlays, toast stack —
+ * lives in `view.ts` and every page renders inside it. Each arm below is its
+ * own view function, and the view-identity transform brands each one, so
+ * navigating between routes tears the old page down and builds the new one
  * rather than patching one into the other.
  */
 
@@ -42,69 +42,37 @@ const backToLibrary = (label: string, h: HtmlBuilder<Msg>): Child =>
 // photos; the count line states it.
 // ---------------------------------------------------------------------------
 
-/** Counts come from `GetCounts`, so a chip and the sidebar row for the same
- *  Tag read from one number rather than two. */
-const countForTag = (model: Model, tag: Tag): number =>
-  model.counts.byTag.find((entry) => entry.id === tag.id)?.count ?? 0
-
-/** The names of the applied filters, for the result line. */
-const activeLabels = (model: Model): ReadonlyArray<string> =>
-  model.tags.filter((tag) => model.activeTagIds.includes(tag.id)).map((tag) => tag.label)
-
 const filterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const labels = activeLabels(model)
+  const activeLabel = model.tags.find((tag) => tag.slug === model.activeTagSlug)?.label
   return h.submodel({
     slotId: 'admin-tag-manager',
     model: model.tagManager,
     view: TagManager.view,
     viewInputs: {
       tags: model.tags,
-      countFor: (tag: Tag): number => countForTag(model, tag),
-      ...(labels.length > 0 ? { activeIds: [...model.activeTagIds] } : {}),
+      // Counts describe the loaded result set, so they only mean something
+      // unfiltered — a filtered list would repeat the same count on every chip.
+      ...(model.activeTagSlug === undefined
+        ? {
+            countFor: (tag: Tag): number =>
+              model.photos.filter((photo) =>
+                (photo.tags ?? []).some((entry) => entry.id === tag.id),
+              ).length,
+          }
+        : { activeSlug: model.activeTagSlug }),
       resultText: `${String(model.photos.length)} photo${model.photos.length === 1 ? '' : 's'}${
-        labels.length > 0 ? ` · filtered by ${labels.map((label) => `“${label}”`).join(', ')}` : ''
+        activeLabel !== undefined ? ` · filtered by “${activeLabel}”` : ''
       }`,
     },
     toParentMessage: (message) => M.GotTagManagerMessage({ message }),
   })
 }
 
-// ---------------------------------------------------------------------------
-// grid density: square-tile column count (2–6), persisted on change. It is a
-// Library control, so it lives on the Library page rather than in the Page
-// Head, which carries the title and the page's own actions.
-// ---------------------------------------------------------------------------
-
-const COL_CHOICES = [2, 3, 4, 5, 6] as const
-
-/** The design's `Segment`: 28px of 4/12 padding, `$typography.exif`, no
- *  container box and no corner radius. The chosen step fills with
- *  `color.primary` and reads in `color.on-primary`. */
-const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('flex items-center'), h.Role('group'), h.AriaLabel('Grid density')],
-    COL_CHOICES.map((cols) =>
-      h.button(
-        [
-          h.OnClick(M.SelectedCols({ cols })),
-          h.AriaLabel(`${String(cols)} columns`),
-          h.AriaPressed(String(cols === model.cols)),
-          h.Class(
-            cols === model.cols
-              ? 'bg-role-primary px-(--spacing-md) py-(--spacing-xs) type-exif text-role-on-primary'
-              : 'px-(--spacing-md) py-(--spacing-xs) type-exif text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary',
-          ),
-        ],
-        [String(cols)],
-      ),
-    ),
-  )
-
 const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [],
     [
-      h.div([h.Class('mt-(--spacing-lg) flex justify-end')], [colsToggle(model, h)]),
+      h.h1([h.Class('mt-(--spacing-2xl) type-section text-role-text-primary')], ['Photos']),
       filterBar(model, h),
       grid(model, h),
     ],
@@ -126,7 +94,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
     return h.div(
       [h.Class('mt-(--spacing-3xl) flex flex-col items-start gap-4')],
       [
-        backToLibrary('← Library', h),
+        backToLibrary('← Photos', h),
         model.photoStatus === 'error'
           ? h.div(
               [
@@ -160,12 +128,13 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.div(
         [h.Class('flex flex-wrap items-center justify-between gap-3')],
         [
-          backToLibrary('← Library', h),
+          backToLibrary('← Photos', h),
           ...(facts.length > 0
             ? [h.span([h.Class('type-exif text-role-text-secondary')], [facts.join(' · ')])]
             : []),
         ],
       ),
+      h.h1([h.Class('type-headline text-role-text-primary')], [photo.title]),
       h.figure(
         [h.Class('m-0')],
         [
@@ -215,33 +184,21 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // ---------------------------------------------------------------------------
 // routes whose pages are still being built
 // ---------------------------------------------------------------------------
-/** `Drafts`, `Uploads`, `Trash` and `Settings` are routes before they are
- *  pages. Each URL resolves, the route is right, and the Page Head above it
- *  names the page — but the body says what is actually true of it rather than
- *  pretending to. #29 and #36 own the bodies. */
-const forthcomingPage = (note: string, h: HtmlBuilder<Msg>): Child =>
+/** `/admin/drafts` and `/admin/settings` are routes before they are pages.
+ *  Both pages need domain work this branch does not have — a draft filter on
+ *  the RPC surface, a settings singleton to read — so until they land the URL
+ *  resolves, the route is right, and the page says it has nothing yet rather
+ *  than pretending to. */
+const forthcomingPage = (title: string, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
     [
-      h.p([h.Class('type-deck max-w-prose text-role-text-secondary')], [note]),
-      backToLibrary('← Library', h),
-    ],
-  )
-
-/** `Scheduled` says what is actually true of it rather than calling itself
- *  empty: nothing is scheduled, because nothing records a publish time
- *  (CONTEXT.md, Status). */
-const scheduledPage = (h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
-    [
+      h.h1([h.Class('type-section text-role-text-primary')], [title]),
       h.p(
         [h.Class('type-deck max-w-prose text-role-text-secondary')],
-        [
-          'Nothing is scheduled. A scheduled Photo is a draft with a publish time, and no publish time is recorded yet — so there is no schedule to show and nothing is waiting to be published.',
-        ],
+        ['This page is still being built.'],
       ),
-      backToLibrary('← Library', h),
+      backToLibrary('← Photos', h),
     ],
   )
 
@@ -253,11 +210,12 @@ const notFoundPage = (path: string, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
     [
+      h.h1([h.Class('type-section text-role-text-primary')], ['Not found']),
       h.p(
         [h.Class('type-deck max-w-prose text-role-text-secondary')],
         [`Nothing in the Admin answers to “${path}”.`],
       ),
-      backToLibrary('← Library', h),
+      backToLibrary('← Photos', h),
     ],
   )
 
@@ -269,25 +227,8 @@ export const routePage = (model: Model, h: HtmlBuilder<Msg>): Child =>
   AppRoute.match(model.route, {
     Library: () => libraryPage(model, h),
     Atoms: () => atomsPage(model, h),
-    Drafts: () =>
-      forthcomingPage(
-        'The drafts list is still being built. Everything not published is already counted in the sidebar.',
-        h,
-      ),
-    Scheduled: () => scheduledPage(h),
-    Uploads: () =>
-      forthcomingPage(
-        model.queue.length === 0
-          ? 'Nothing is queued for upload. The upload dialog runs a batch from the Library; the Upload button opens it.'
-          : `${String(model.queue.length)} item${model.queue.length === 1 ? '' : 's'} in this session’s upload queue. Reopen the upload dialog to retry anything that failed.`,
-        h,
-      ),
-    Trash: () =>
-      forthcomingPage(
-        'The Trash is still being built. A deleted photo is recoverable and nothing is purged on a timer.',
-        h,
-      ),
-    Settings: () => forthcomingPage('Settings is still being built.', h),
+    Drafts: () => forthcomingPage('Drafts', h),
+    Settings: () => forthcomingPage('Settings', h),
     Photo: () => photoPage(model, h),
     NotFound: ({ path }) => notFoundPage(path, h),
   })

@@ -41,7 +41,7 @@ A derived image file produced from a Photo's original. There are exactly two: `P
 _Avoid_: Derivative, thumbnail, variant, export (the export is the action; the file it produces is a Rendition)
 
 **Tag**:
-A label for grouping/filtering Photos (e.g., `kyoto`, `film`, `portrait`). Free-form, many-to-many with Photo. Has `slug` (URL-safe, unique), `label` (the name) and an optional `caption` (the one-line sentence the public Series page prints under it, e.g. `Ferries, rain, and the long light on Istiklal.`). A Tag with no caption has `null` there, never an empty string. Managed from day one; no controlled vocabulary. Filtering by Tag is **multi-select** — the filter is a set of Tag ids and a Photo carrying any one of them is in the result — because the Admin's tag rows live in the sidebar and a second pick narrows the list rather than replacing the first. A Tag's lifecycle is managed from the row that carries it, not from a Tags page.
+A label for grouping/filtering Photos (e.g., `kyoto`, `film`, `portrait`). Free-form, many-to-many with Photo. Has `slug` (URL-safe, unique), `label` (the name) and an optional `caption` (the one-line sentence the public Series page prints under it, e.g. `Ferries, rain, and the long light on Istiklal.`). A Tag with no caption has `null` there, never an empty string. Managed from day one; no controlled vocabulary.
 _Avoid_: Collection (deferred), Category, Album
 
 **Image**:
@@ -61,7 +61,7 @@ The public chronological index of every published Photo at `/archive`, grouped b
 _Avoid_: Storage (that is the Admin's block), Library (that is the Admin's), Collection, Set
 
 **Storage**:
-The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content. The quota is a **configured constant** — `STORAGE_CAP_BYTES` in `@photo/api` — and not a Settings row: it is a property of the bucket, not something the operator authors. The sidebar's meter draws the same aggregate as a fraction of that cap, and its number is a read, never a placeholder.
+The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content.
 _Avoid_: Archive (that is the public page), Library, Backup, Sync
 
 **Settings**:
@@ -71,12 +71,8 @@ _Avoid_: Config, Preferences, Options, Site settings (the row and the page are t
 One entry in the public Folio nav, authored as an ordered list in Settings. A Section is `{ label, kind, target }`: `kind` is `all` (the Front itself, and the only kind with no `target`), `tag` or `series` (a Tag's slug — a Series page _is_ a Tag page, see ADR 0008), or `page` (a page name). Stored as a JSON array on the Settings row; there is no sections table. The design draws `SECTIONS` as one `ALL · STREET · LANDSCAPE · SERIES · ABOUT` string, which cannot be routed, so the Settings UI is an ordered repeater instead — a deliberate, recorded deviation.
 _Avoid_: Nav item, menu, link, category
 **Route**:
-What a URL in the Admin's address space means — `Library`, `Drafts`, `Scheduled`, `Uploads`, `Trash`, `Settings`, `Photo`, `Atoms`, or `NotFound` — declared once in `admin/route.ts`. The route is the whole of a URL's meaning in the Admin, so anything a URL decides (which page is drawn, which branch of the broadsheet it is drawn in, which row the sidebar marks current, what the Page Head is titled) is read off the route and never off a second copy of the path. `Scheduled`, `Uploads` and `Trash` are routes before they are pages: their URLs resolve and boot the Admin, and their page bodies arrive with #29 and #36. `Atoms` (`/admin/atoms`) is the design-system sheet: the atoms of `components/ui` drawn once, at the design's own size, because no product page renders them until the Library, the Page Head and the Editor panels land. It is a surface, not a domain term, and nothing links to it.
+What a URL in the Admin's address space means — `Library`, `Drafts`, `Settings`, `Photo`, `Atoms`, or `NotFound` — declared once in `admin/route.ts`. The route is the whole of a URL's meaning in the Admin, so anything a URL decides (which page is drawn, which branch of the broadsheet it is drawn in) is read off the route and never off a second copy of the path. `Atoms` (`/admin/atoms`) is the design-system sheet: the atoms of `components/ui` drawn once, at the design's own size, because no product page renders them until the Library, the Page Head and the Editor panels land. It is a surface, not a domain term, and nothing links to it.
 _Avoid_: path prefix, pathname matching outside the route table, screen
-
-**Session**:
-The verified Cloudflare Access claim behind the Admin — the operator's email and the team domain it was verified against. There is no signed-out state: Access gates `/admin*` before the app runs, so a Session is either verified or the app draws the sign-in affordance instead of itself. On the `dev` stage, which creates no Access applications, the gate stands down and the Session carries no email and no domain. The claim is read from the gate, never recomputed (ADR 0007).
-_Avoid_: user, account, auth, login (there is no login form)
 
 **Trash**:
 The Admin's holding place for soft-deleted Photos. A Photo with a `deletedAt` is out of every list, count, meter and lookup, and its original stays in R2 — the delete that matters is reversible. Restoring clears the date; purging is the only irreversible act, and the only one that touches R2 on delete. Nothing purges on a timer, and a Photo Number is not recycled by a purge.
@@ -85,10 +81,10 @@ _Avoid_: Bin, Recycle bin, Soft delete (that is the act, not the place), Archive
 **Public read**:
 Any read the public site makes, and every one of them goes through `PublicPhotoService` (`@photo/api`). That service filters to `published` and non-Trashed **inside** itself, so no caller can forget the filter and a Draft or a trashed Photo cannot leak to a visitor. `PhotoService` is the Admin's read model and deliberately answers for Drafts, failed uploads and the Trash; the two are the same `Gateway` and the same row decoder, so they cannot disagree about what a Photo is. Grouping and counting are SQL, never a whole table dragged into the isolate to be sorted there.
 _Avoid_: public query, guest query, frontend query, live query
+
 **Edition Section**:
 One month of the Front's Edition — `August 2025`, headed by the design's `Section Head` and counted `08 FRAMES · NO. 016–023`. It is a grouping a public read computes, not a stored entity: `takenAt` is `YYYY-MM-DD` TEXT, so `substr(takenAt, 1, 7)` groups published Photos into Sections and the frame count and number range are SQL aggregates over that month's published set. A published Photo with no `takenAt` belongs to no Section, because a Section is a month. The Front walks backwards through Sections as the visitor scrolls, so its cursor is a month (`2025-08`), not a Photo.
 _Avoid_: Section (ambiguous — a Site Section is the nav entry), Month (that is the key, not the group), Page
-
 
 **Collection** _(deferred)_:
 Previously: a curated group of Photos (e.g., "Kyoto 2024"). Replaced by flat list + Tags for v1. Kept as a deferred term; reintroduce only if you need ordered, titled groupings with a cover.

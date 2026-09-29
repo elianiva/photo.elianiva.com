@@ -12,7 +12,6 @@ import { Gateway } from '../gateway'
 
 import {
   PhotoService,
-  STORAGE_CAP_BYTES,
   type PhotoListFilter,
   type PhotoListPage,
   type PhotoSort,
@@ -1281,7 +1280,6 @@ describe('PhotoService.counts', () => {
 
     expect(await counts(harness)).toEqual({
       total: 3,
-      trashed: 0,
       byStatus: { draft: 1, published: 1, failed: 1 },
       byTag: [
         { id: film.id, label: 'Film', count: 1 },
@@ -1289,12 +1287,10 @@ describe('PhotoService.counts', () => {
         { id: empty.id, label: 'Unused', count: 0 },
       ],
     })
-    // A trashed Photo leaves every live count, the grand total included, and
-    // shows up under the Trash instead.
+    // A trashed Photo leaves every count, the grand total included.
     await trash(harness, published.id)
     expect(await counts(harness)).toEqual({
       total: 2,
-      trashed: 1,
       byStatus: { draft: 1, published: 0, failed: 1 },
       byTag: [
         { id: film.id, label: 'Film', count: 0 },
@@ -1304,37 +1300,11 @@ describe('PhotoService.counts', () => {
     })
   })
 
-  it('counts the Trash once, however many times the photo is trashed', async () => {
-    const harness = makeTestHarness()
-    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-    const binned = await seed(harness, { slug: 'sunset', title: 'Sunset', tagIds: [kyoto.id] })
-    await seed(harness, { slug: 'kept', title: 'Kept' })
-    await setStatus(harness, binned.id, 'draft')
-
-    expect((await counts(harness)).trashed).toBe(0)
-
-    await trash(harness, binned.id)
-
-    expect(await counts(harness)).toEqual({
-      total: 1,
-      trashed: 1,
-      byStatus: { draft: 0, published: 1, failed: 0 },
-      byTag: [{ id: kyoto.id, label: 'Kyoto', count: 0 }],
-    })
-
-    // Trashing a trashed Photo is the state it is already in, so the Trash
-    // count must not move when the operator clicks twice.
-    await trash(harness, binned.id)
-
-    expect((await counts(harness)).trashed).toBe(1)
-  })
-
   it('counts every status at zero for an empty library', async () => {
     const harness = makeTestHarness()
 
     expect(await counts(harness)).toEqual({
       total: 0,
-      trashed: 0,
       byStatus: { draft: 0, published: 0, failed: 0 },
       byTag: [],
     })
@@ -1385,17 +1355,7 @@ describe('PhotoService.storageUsage', () => {
     const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
     await trash(harness, created.id)
 
-    // The Trash is where reversible deletes wait, not storage in use: the
-    // bytes are still billed until a purge drops them, but the meter the
-    // operator reads is the live library's.
     expect(await storageUsage(harness)).toEqual({ photos: 0, bytes: 0 })
-  })
-
-  it('measures the cap as a positive, finite number of bytes', () => {
-    // A cap that came back `NaN` or Infinity would render as a broken meter
-    // with no error to trace it to, so the constant is asserted, not assumed.
-    expect(Number.isFinite(STORAGE_CAP_BYTES)).toBe(true)
-    expect(STORAGE_CAP_BYTES).toBeGreaterThan(0)
   })
 
   it('reads zero rather than null when no row records its size', async () => {
