@@ -5,6 +5,7 @@
  */
 
 import { Effect } from 'effect'
+import type { PhotoStatus } from '@photo/shared'
 import type { CreatePhotoInput } from '../photo'
 import { PhotoService } from '../photo'
 import { TagService } from '../tag'
@@ -60,6 +61,37 @@ export const createTag = (harness: TestHarness, slug: string, label: string) =>
     ),
   )
 
+/** The SITE copy on the Settings row, in the shape `readSiteCopy` reads. No
+ *  settings service exists yet, so this writes the migrated row directly
+ *  rather than inventing a second way to reach it. */
+export const setSiteCopy = (
+  harness: TestHarness,
+  copy: {
+    volume?: string
+    motto?: string | null
+    aboutCopy?: string | null
+    sections?: string | null
+  },
+): Promise<unknown> => {
+  const fields: Array<string> = []
+  const binds: Array<string | null> = []
+  if (copy.volume !== undefined) {
+    fields.push('volume = ?')
+    binds.push(copy.volume)
+  }
+  for (const column of ['motto', 'aboutCopy', 'sections'] as const) {
+    if (copy[column] !== undefined) {
+      fields.push(`${column} = ?`)
+      binds.push(copy[column])
+    }
+  }
+  if (fields.length === 0) return Promise.resolve(undefined)
+  return harness.db
+    .prepare(`UPDATE settings SET ${fields.join(', ')} WHERE id = 1`)
+    .bind(...binds)
+    .run()
+}
+
 export const createPhoto = (harness: TestHarness, seed: PhotoSeed) =>
   Effect.runPromise(
     withTestServices(
@@ -71,3 +103,19 @@ export const createPhoto = (harness: TestHarness, seed: PhotoSeed) =>
 /** Resolve the failure channel so a typed error can be asserted as a value. */
 export const fail = <E>(effect: Effect.Effect<unknown, E>): Promise<E> =>
   Effect.runPromise(effect.pipe(Effect.flip))
+
+export const setPhotoStatus = (harness: TestHarness, id: string, status: PhotoStatus) =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.setStatus(id, status)),
+      harness,
+    ),
+  )
+
+export const trashPhoto = (harness: TestHarness, id: string) =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.trash(id)),
+      harness,
+    ),
+  )

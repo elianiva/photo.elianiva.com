@@ -17,7 +17,7 @@ The one line under a public plate that names how the Photo was made — `X-T20 �
 _Avoid_: EXIF string, metadata line, tech specs, camera info
 
 **Photo Number**:
-A Photo's site-wide serial. One monotonic counter, assigned once at upload, unique across the site, and never reused — not by a deleted Photo, and not by a trashed one. The counter is its own, outside the Photos, because a count taken from the rows would reissue a serial the moment a purge deleted one. A Photo keeps its number through soft delete and restore. What the number is _titled_ in public copy is not settled.
+A Photo's site-wide serial. One monotonic counter, assigned once at upload, unique across the site, and never reused — not by a deleted Photo, and not by a trashed one. The counter is its own, outside the Photos, because a count taken from the rows would reissue a serial the moment a purge deleted one. A Photo keeps its number through soft delete and restore. What the number is _titled_ in public copy is not settled. The site's own counter is the highest Photo Number among published, non-trashed Photos — the last photograph a visitor can see — so trashing the highest-numbered Photo moves the counter back while that Photo keeps its number in the Trash.
 _Avoid_: ID (that is the ULID), ordinal, row number, index, page number
 
 **Status**:
@@ -78,6 +78,13 @@ _Avoid_: path prefix, pathname matching outside the route table, screen
 The Admin's holding place for soft-deleted Photos. A Photo with a `deletedAt` is out of every list, count, meter and lookup, and its original stays in R2 — the delete that matters is reversible. Restoring clears the date; purging is the only irreversible act, and the only one that touches R2 on delete. Nothing purges on a timer, and a Photo Number is not recycled by a purge.
 _Avoid_: Bin, Recycle bin, Soft delete (that is the act, not the place), Archive (that is the public page)
 
+**Public read**:
+Any read the public site makes, and every one of them goes through `PublicPhotoService` (`@photo/api`). That service filters to `published` and non-Trashed **inside** itself, so no caller can forget the filter and a Draft or a trashed Photo cannot leak to a visitor. `PhotoService` is the Admin's read model and deliberately answers for Drafts, failed uploads and the Trash; the two are the same `Gateway` and the same row decoder, so they cannot disagree about what a Photo is. Grouping and counting are SQL, never a whole table dragged into the isolate to be sorted there.
+_Avoid_: public query, guest query, frontend query, live query
+
+**Edition Section**:
+One month of the Front's Edition — `August 2025`, headed by the design's `Section Head` and counted `08 FRAMES · NO. 016–023`. It is a grouping a public read computes, not a stored entity: `takenAt` is `YYYY-MM-DD` TEXT, so `substr(takenAt, 1, 7)` groups published Photos into Sections and the frame count and number range are SQL aggregates over that month's published set. A published Photo with no `takenAt` belongs to no Section, because a Section is a month. The Front walks backwards through Sections as the visitor scrolls, so its cursor is a month (`2025-08`), not a Photo.
+_Avoid_: Section (ambiguous — a Site Section is the nav entry), Month (that is the key, not the group), Page
 
 **Collection** _(deferred)_:
 Previously: a curated group of Photos (e.g., "Kyoto 2024"). Replaced by flat list + Tags for v1. Kept as a deferred term; reintroduce only if you need ordered, titled groupings with a cover.

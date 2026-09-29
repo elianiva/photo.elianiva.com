@@ -18,6 +18,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { Effect, Layer } from 'effect'
 import { Gateway, withGateway, type D1DatabaseLike, type R2BucketLike } from '../gateway'
 import { PhotoService, PhotoServiceLive } from '../photo'
+import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
 import { TagService, TagServiceLive } from '../tag'
 import { makeD1Fake } from './d1-fake'
 import { makeR2Fake } from './r2-fake'
@@ -65,3 +66,12 @@ export const withTestServices = <A, E>(
     harness.gateway,
     Effect.provide(effect, Layer.mergeAll(PhotoServiceLive, TagServiceLive)),
   )
+
+/** Run `effect` with the live `PublicPhotoService` over `harness`. It reads
+ *  through the same `Gateway` as the Admin services, so a public read is
+ *  exercised against the schema that ships rather than a second fixture. */
+export const withPublicRead = <A, E>(
+  effect: Effect.Effect<A, E, PublicPhotoService>,
+  harness: TestHarness = makeTestHarness(),
+): Effect.Effect<A, E> =>
+  withGateway(harness.gateway, Effect.provide(effect, PublicPhotoServiceLive))

@@ -171,8 +171,9 @@ export const slugify = (input: string): string =>
 const LIVE = 'deletedAt IS NULL'
 
 /** The Photo columns every read returns. One string, so `list` and `get`
- *  cannot disagree about the shape of a row. */
-const PHOTO_COLUMNS =
+ *  cannot disagree about the shape of a row — and so the public read model in
+ *  `public-photo.ts` selects the same row this one does. */
+export const PHOTO_COLUMNS =
   'id, slug, title, r2Key, width, height, status, number, ratio, bytes, aperture, shutter, iso, focalLength, takenAt, metadata, blurhash, deletedAt'
 
 /**
@@ -311,7 +312,7 @@ interface TagRowWithPhotoId extends Tag {
   readonly photoId: string
 }
 
-const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<string>) =>
+export const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const map = new Map<string, Array<Tag>>()
     for (const id of ids) map.set(id, [])
@@ -345,8 +346,7 @@ const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<st
     return map as Map<string, ReadonlyArray<Tag>>
   })
 
-
-const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTags => ({
+export const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTags => ({
   id: row.id,
   slug: row.slug,
   title: row.title,
