@@ -357,37 +357,64 @@ export const FetchPresentationCmd = Command.define('FetchPresentation', {
     ),
 })
 
-/** The Editor's `Update`. The whole Presentation goes in one call, because the
- *  Presentation is one fact (CONTEXT.md) and the crop, the level, the mat and
- *  the export overrides are saved as one. The service answers with the stored
- *  truth, which becomes the Editor's new snapshot — so the unsaved indicator
- *  clears off what the database holds rather than off what was sent. */
+/** The Editor's `Update`. One user action commits the two stored facts the
+ *  Crop section authors, and each fact is still one call to the RPC that owns
+ *  it: the Presentation (crop, level, mat, export) through
+ *  `UpdatePhotoPresentation`, and the Ratio through `UpdatePhoto`, because
+ *  Ratio is a Photo column rather than a Presentation field (CONTEXT.md).
+ *
+ *  `savePresentation` is what keeps a Ratio-only save off the crop: rewriting
+ *  the crop would enqueue a Rendition regeneration (#35) for a change that did
+ *  not touch it. The service answers with the stored truth, which becomes the
+ *  Editor's new snapshot — so the unsaved indicator clears off what the
+ *  database holds rather than off what was sent. */
 export const UpdateEditorCmd = Command.define('UpdateEditor', {
-  args: { id: S.String, presentation: PhotoPresentation },
+  args: {
+    id: S.String,
+    presentation: PhotoPresentation,
+    /** Present only while the operator's pick differs from the stored Ratio. */
+    ratio: S.optional(PhotoRatio),
+    savePresentation: S.Boolean,
+  },
   messages: [Message.UpdatedEditor, Message.FailedRpc],
-  execute: ({ id, presentation }) =>
-    Effect.map(
-      rpcAdmin<PhotoPresentation>('UpdatePhotoPresentation', {
-        id,
-        crop: { x: presentation.cropX, y: presentation.cropY, scale: presentation.cropScale },
-        level: presentation.level,
-        mat: {
-          enabled: presentation.borderEnabled,
-          style: presentation.borderStyle,
-          colour: presentation.borderColour,
-          width: presentation.borderWidth,
-        },
-        export: {
-          previewLongEdge: presentation.previewLongEdge,
-          previewFormat: presentation.previewFormat,
-          previewQuality: presentation.previewQuality,
-          fullQuality: presentation.fullQuality,
-          keepExif: presentation.keepExif,
-          removeGps: presentation.removeGps,
-        },
-      }),
-      (stored) => Message.UpdatedEditor({ id: PhotoId.make(id), presentation: stored }),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+  execute: ({ id, presentation, ratio, savePresentation }) =>
+    Effect.gen(function* () {
+      const stored = savePresentation
+        ? yield* rpcAdmin<PhotoPresentation>('UpdatePhotoPresentation', {
+            id,
+            crop: {
+              x: presentation.cropX,
+              y: presentation.cropY,
+              scale: presentation.cropScale,
+              flipX: presentation.cropFlipX,
+            },
+            level: presentation.level,
+            mat: {
+              enabled: presentation.borderEnabled,
+              style: presentation.borderStyle,
+              colour: presentation.borderColour,
+              width: presentation.borderWidth,
+            },
+            export: {
+              previewLongEdge: presentation.previewLongEdge,
+              previewFormat: presentation.previewFormat,
+              previewQuality: presentation.previewQuality,
+              fullQuality: presentation.fullQuality,
+              keepExif: presentation.keepExif,
+              removeGps: presentation.removeGps,
+            },
+          })
+        : presentation
+      const storedRatio =
+        ratio === undefined
+          ? undefined
+          : ((yield* rpcAdmin<PhotoWithTags>('UpdatePhoto', { id, ratio })).ratio ?? undefined)
+      return Message.UpdatedEditor({
+        id: PhotoId.make(id),
+        presentation: stored,
+        ratio: storedRatio,
+      })
+    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 // ---------------------------------------------------------------------------

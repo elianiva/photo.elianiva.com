@@ -19,7 +19,7 @@
  *   `Update` exist as a pair.
  */
 
-import { nearestRatio, ratioAspect } from '@photo/shared'
+import { PHOTO_RATIOS, nearestRatio, ratioAspect } from '@photo/shared'
 import type { PhotoPresentation, PhotoRatio, PhotoWithTags } from '@photo/shared'
 
 import * as Dialog from '@/components/ui/dialog'
@@ -92,6 +92,20 @@ export const COMPARE_SEGMENT = {
  *  `segmentGroups` record rather than two fields on the Editor. */
 export const editorSegments: ReadonlyArray<EditorSegmentGroup> = [ZOOM_SEGMENT, COMPARE_SEGMENT]
 
+/** The Crop section's six-Ratio `Segment`. Unlike the Stage Bar's two groups
+ *  this one is not a view mode: its pick is authored data, and its selection
+ *  is derived from the draft rather than kept in the shared record, so a save
+ *  or a `Discard` moves it without a second write to keep in step. */
+export const CROP_RATIO_SEGMENT = {
+  id: 'editor-crop-ratio',
+  ariaLabel: 'Ratio',
+  options: PHOTO_RATIOS.map((ratio) => ({ value: ratio, label: ratio })),
+} as const satisfies {
+  readonly id: string
+  readonly ariaLabel: string
+  readonly options: ReadonlyArray<Segment.SegmentOption>
+}
+
 export const initEditorSegments = (): Segment.Groups =>
   Segment.initGroups(editorSegments.map(({ id, selected }) => ({ id, selected })))
 
@@ -125,6 +139,7 @@ export const PRESENTATION_FIELDS: ReadonlyArray<keyof PhotoPresentation> = [
   'cropX',
   'cropY',
   'cropScale',
+  'cropFlipX',
   'level',
   'borderEnabled',
   'borderStyle',
@@ -141,8 +156,19 @@ export const PRESENTATION_FIELDS: ReadonlyArray<keyof PhotoPresentation> = [
 /** Whether the draft has moved off the snapshot. False before either is
  *  loaded: an Editor with no Presentation in it has nothing it could have
  *  changed, and claiming otherwise would light the indicator on every cold
- *  load. */
+ *  load. A Ratio override is a change on its own — it is another stored fact
+ *  the same `Update` commits — so it is checked first. */
 export const isEditorDirty = (editor: EditorState): boolean => {
+  if (editor.ratio !== undefined) return true
+  const { snapshot, draft } = editor
+  if (snapshot === undefined || draft === undefined) return false
+  return PRESENTATION_FIELDS.some((field) => snapshot[field] !== draft[field])
+}
+
+/** Whether the Presentation itself has moved, as opposed to the Ratio override
+ *  beside it. The save command needs the two apart: a Ratio-only save must not
+ *  rewrite the crop, because a crop write is a Rendition regeneration (#35). */
+export const isPresentationDirty = (editor: EditorState): boolean => {
   const { snapshot, draft } = editor
   if (snapshot === undefined || draft === undefined) return false
   return PRESENTATION_FIELDS.some((field) => snapshot[field] !== draft[field])
@@ -156,6 +182,167 @@ export const withEditorMat = (editor: EditorState, enabled: boolean): EditorStat
   editor.draft === undefined
     ? editor
     : { ...editor, draft: { ...editor.draft, borderEnabled: enabled } }
+
+// ---------------------------------------------------------------------------
+// the Crop's authored facts
+// ---------------------------------------------------------------------------
+
+/** How far one straighten click turns the frame. The design's readout is
+ *  `+0.4°`, so the step is a tenth of a degree: the readout's own precision. */
+export const LEVEL_STEP = 0.1
+
+/** A straighten beyond this is not a straighten, it is a rotation, and the
+ *  design has no control for one. Clamping keeps the frame recognisable. */
+export const LEVEL_LIMIT = 45
+
+/** The crop window's zoom. `1` is the source fitted to the Ratio; below it the
+ *  window would be smaller than the frame and show the Mat through the gap, so
+ *  it is the floor. */
+export const CROP_SCALE_MIN = 1
+export const CROP_SCALE_MAX = 4
+
+/** How far the source may be panned, as a percentage of the frame. The style
+ *  reads it as `50 + cropX`, so `50` is an edge of the source against an edge
+ *  of the frame and anything past it would show background. */
+export const CROP_PAN_LIMIT = 50
+
+/** One wheel notch's zoom. A trackpad sends many small deltas and a mouse one
+ *  large one, so the step is per event rather than scaled by the delta. */
+export const CROP_ZOOM_STEP = 1.1
+
+const roundTo = (value: number, places: number): number => {
+  const factor = 10 ** places
+  return Math.round(value * factor) / factor
+}
+
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Math.max(minimum, Math.min(maximum, value))
+
+/** Is this one of the six supported Ratios? A type predicate rather than a
+ *  cast, so a `Segment` pick that somehow carries a value the group does not
+ *  offer falls back to no change instead of typing its way into the draft. */
+export const isPhotoRatio = (value: string): value is PhotoRatio =>
+  PHOTO_RATIOS.some((ratio) => ratio === value)
+
+/** The Ratio the Stage frames: the draft's pick, else the Photo's stored one,
+ *  else the source's own nearest supported proportion — which is what the
+ *  upload snap would have stored and is therefore the honest fallback for a row
+ *  the backfill has not reached. `null` when the source matches none of the
+ *  six, which is `as shot` in the source's own proportion. */
+export const effectiveRatio = (
+  photo: PhotoWithTags | undefined,
+  editor: EditorState,
+): PhotoRatio | null => {
+  if (editor.ratio !== undefined) return editor.ratio
+  if (photo === undefined) return null
+  return photo.ratio ?? nearestRatio(photo.width, photo.height)
+}
+
+/** The proportion the camera made, which is what `AS SHOT` names. Derived from
+ *  the measured frame rather than stored twice: it is the same `nearestRatio`
+ *  the upload snap ran, so the two cannot disagree. */
+export const asShotRatio = (photo: PhotoWithTags): PhotoRatio | null =>
+  nearestRatio(photo.width, photo.height)
+
+/** The Crop head's right half: `<ratio> · AS SHOT` while the frame is the one
+ *  the camera made, and just `<ratio>` once the operator has re-cropped it. The
+ *  empty string while there is no Photo to name. */
+export const cropRatioLabel = (photo: PhotoWithTags | undefined, editor: EditorState): string => {
+  const ratio = effectiveRatio(photo, editor)
+  if (ratio === null) return ''
+  const asShot = photo === undefined ? null : asShotRatio(photo)
+  return ratio === asShot ? `${ratio} · AS SHOT` : ratio
+}
+
+/** The Transform row's readout: `LEVEL +0.4°`, one decimal because that is the
+ *  step, and a leading `+` so a positive angle reads as signed. A stored null
+ *  is un-levelled and prints `0.0°`, which is what it looks like. */
+export const levelLabel = (presentation: PhotoPresentation): string => {
+  const level = presentation.level ?? 0
+  return `LEVEL ${level > 0 ? '+' : ''}${level.toFixed(1)}°`
+}
+
+/** Pick a Ratio. A pick that lands back on the Photo's stored Ratio clears the
+ *  override rather than recording a no-op change, so `Discard` and the unsaved
+ *  indicator stay honest. */
+export const withEditorRatio = (
+  editor: EditorState,
+  photo: PhotoWithTags | undefined,
+  ratio: PhotoRatio,
+): EditorState =>
+  // Guarded on the draft rather than on the Photo: the two are read together
+  // and the draft is what the pick lands on, so a click during the load is a
+  // no-op instead of an override against a Photo that has not arrived.
+  editor.draft === undefined
+    ? editor
+    : { ...editor, ratio: photo?.ratio === ratio ? undefined : ratio }
+
+/** One straighten step, clamped and rounded to the readout's precision. A
+ *  result of zero is stored as null, because null is un-levelled rather than
+ *  zero (CONTEXT.md, Crop). */
+export const withEditorLevel = (editor: EditorState, direction: -1 | 1): EditorState => {
+  if (editor.draft === undefined) return editor
+  const next = clamp(
+    roundTo((editor.draft.level ?? 0) + direction * LEVEL_STEP, 1),
+    -LEVEL_LIMIT,
+    LEVEL_LIMIT,
+  )
+  return { ...editor, draft: { ...editor.draft, level: next === 0 ? null : next } }
+}
+
+/** Mirror the frame horizontally. */
+export const withEditorFlip = (editor: EditorState): EditorState =>
+  editor.draft === undefined
+    ? editor
+    : { ...editor, draft: { ...editor.draft, cropFlipX: !editor.draft.cropFlipX } }
+
+/** Start a pan. The frame's own box is captured here because the pointer move
+ *  that follows has only its own position; the drag needs a denominator. */
+export const withCropDragStart = (
+  editor: EditorState,
+  origin: { x: number; y: number; width: number; height: number },
+): EditorState => {
+  if (editor.draft === undefined) return editor
+  return {
+    ...editor,
+    cropDrag: {
+      ...origin,
+      startX: editor.draft.cropX,
+      startY: editor.draft.cropY,
+    },
+  }
+}
+
+/** Drag the photograph. The pan follows the pointer, so dragging right moves
+ *  the visible window left: the stored pan is the source's position, and the
+ *  pointer moves the source. Measured against the drag's origin, so a pointer
+ *  that returns to where it started restores the crop instead of drifting. */
+export const withEditorPan = (editor: EditorState, x: number, y: number): EditorState => {
+  const drag = editor.cropDrag
+  if (drag === undefined || editor.draft === undefined) return editor
+  const dx = drag.width === 0 ? 0 : ((x - drag.x) / drag.width) * 100
+  const dy = drag.height === 0 ? 0 : ((y - drag.y) / drag.height) * 100
+  return {
+    ...editor,
+    draft: {
+      ...editor.draft,
+      cropX: roundTo(clamp(drag.startX - dx, -CROP_PAN_LIMIT, CROP_PAN_LIMIT), 3),
+      cropY: roundTo(clamp(drag.startY - dy, -CROP_PAN_LIMIT, CROP_PAN_LIMIT), 3),
+    },
+  }
+}
+
+/** End a pan. The crop stays; only the in-flight state goes. */
+export const withCropDragEnd = (editor: EditorState): EditorState =>
+  editor.cropDrag === undefined ? editor : { ...editor, cropDrag: undefined }
+
+/** Zoom the crop window. Scrolling up (a negative `deltaY`) zooms in. */
+export const withEditorZoom = (editor: EditorState, deltaY: number): EditorState => {
+  if (editor.draft === undefined) return editor
+  const factor = deltaY < 0 ? CROP_ZOOM_STEP : 1 / CROP_ZOOM_STEP
+  const scale = roundTo(clamp(editor.draft.cropScale * factor, CROP_SCALE_MIN, CROP_SCALE_MAX), 3)
+  return { ...editor, draft: { ...editor.draft, cropScale: scale } }
+}
 
 // ---------------------------------------------------------------------------
 // the Stage's geometry
@@ -203,40 +390,94 @@ export const matColourClass = (presentation: PhotoPresentation): string => {
   }
 }
 
-/** The frame's proportion: the authored Ratio, or — for a Photo no Ratio has
- *  been snapped onto — the source file's own, which is what "as shot" means
- *  (CONTEXT.md, Crop). */
-export const frameAspect = (photo: PhotoWithTags): string => {
-  const ratio: PhotoRatio | null = photo.ratio ?? nearestRatio(photo.width, photo.height)
-  return ratio === null ? `${String(photo.width)} / ${String(photo.height)}` : ratioAspect(ratio)
+/** The frame's proportion: the authored Ratio when there is one, else the
+ *  Photo's stored Ratio, else the source file's own, which is what "as shot"
+ *  means (CONTEXT.md, Crop). */
+export const frameAspect = (photo: PhotoWithTags, ratio?: PhotoRatio | null): string => {
+  const chosen = ratio ?? photo.ratio ?? nearestRatio(photo.width, photo.height)
+  return chosen === null ? `${String(photo.width)} / ${String(photo.height)}` : ratioAspect(chosen)
 }
 
-/** The Crop as the Stage applies it: a pan, a zoom and a level, all relative
- *  to the source as shot.
+/** A `width / height` aspect string as a number, or `null` when it is not
+ *  one. The Stage's geometry is all derived from this. */
+const aspectValue = (aspect: string): number | null => {
+  const parts = aspect.split('/').map((part) => Number(part.trim()))
+  const width = parts[0]
+  const height = parts[1]
+  if (
+    width === undefined ||
+    height === undefined ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return null
+  }
+  return width / height
+}
+
+/** How much the frame must grow so a rotated crop still covers it. A level of
+ *  zero is exactly `1`; a small angle needs a hair more, which is why an
+ *  un-levelled Photo is not scaled at all. Derived from the frame's own
+ *  proportion, because a 3:2 frame and a 2:3 frame need different amounts for
+ *  the same angle. */
+export const levelCoverScale = (level: number | null, aspect: string): number => {
+  if (level === null || level === 0) return 1
+  const ratio = aspectValue(aspect)
+  if (ratio === null) return 1
+  const radians = (Math.abs(level) * Math.PI) / 180
+  const cosine = Math.cos(radians)
+  const sine = Math.sin(radians)
+  return roundTo(cosine + sine * Math.max(1 / ratio, ratio), 4)
+}
+
+/** The Crop as the Stage applies it: a pan, a zoom, a mirror and a level, all
+ *  relative to the source as shot.
  *
- *  This is the shell's rendering, not the authoring model. `object-position`
- *  pans a `cover`ed frame and `scale` zooms it, which is the whole of what a
- *  crop *is* once the numbers are stored; #31 owns how the operator produces
- *  those numbers (the three transform buttons, dragging the frame) and the
- *  exact convention for the offsets. */
-export const cropStyle = (presentation: PhotoPresentation): Record<string, string> => ({
-  'object-position': `${String(50 + presentation.cropX)}% ${String(50 + presentation.cropY)}%`,
-  transform: `scale(${String(presentation.cropScale)})${
-    presentation.level === null || presentation.level === 0
-      ? ''
-      : ` rotate(${String(presentation.level)}deg)`
-  }`,
-})
+ *  `object-position` pans a `cover`ed frame and the transform zooms it, which
+ *  is the whole of what a crop *is* once the numbers are stored. The level's
+ *  own scale is folded in so the rotated frame cannot show the surface at its
+ *  corners; the mirror is applied first, so the pan and the level read the same
+ *  way whichever way the frame faces. */
+export const cropStyle = (
+  presentation: PhotoPresentation,
+  aspect: string,
+): Record<string, string> => {
+  const level = presentation.level ?? 0
+  const transforms: Array<string> = [
+    `scale(${String(roundTo(presentation.cropScale * levelCoverScale(level, aspect), 4))})`,
+  ]
+  if (level !== 0) transforms.push(`rotate(${String(level)}deg)`)
+  if (presentation.cropFlipX) transforms.push('scaleX(-1)')
+  return {
+    'object-position': `${String(50 + presentation.cropX)}% ${String(50 + presentation.cropY)}%`,
+    transform: transforms.join(' '),
+  }
+}
 
 /** The frame's width, as the zoom asks for it. `FIT` is `undefined`: the frame
- *  is then sized by its own `aspect-ratio` against the space the Stage leaves
- *  it, which is the only level that needs a size the view cannot know. A
- *  percentage is that fraction of the source's own pixels, so `100%` is the
+ *  is then sized by {@link fitFrameWidth} against the Stage's own viewport, and
+ *  a percentage is that fraction of the source's own pixels, so `100%` is the
  *  file at its stored width and the Stage scrolls. */
 export const zoomWidth = (photo: PhotoWithTags, zoom: string): string | undefined => {
   if (zoom === 'fit') return undefined
   const factor = Number(zoom) / 100
   return `${String(Math.round(photo.width * factor))}px`
+}
+
+/** The frame's width at `FIT`. The Stage cannot measure the element it is
+ *  drawing, and an `aspect-ratio` box with no width collapses to nothing in a
+ *  shrink-to-fit parent, so the fit is spelled against the viewport the way
+ *  the Stage's own ceiling always was: the full width less the 360px
+ *  Inspector, the Canvas's `--spacing.2xl` and the Mat's 24/24 sides, and the
+ *  full height less the two 52px bars, the same Canvas padding and the Mat's
+ *  24/64. The width is the smaller of what the width allows and what the
+ *  height allows for this frame's own proportion, so a 2:3 frame fits the same
+ *  box rather than overflowing it. */
+export const fitFrameWidth = (aspect: string): string => {
+  const ratio = roundTo(aspectValue(aspect) ?? 1, 4)
+  return `min(calc(100vw - 29.5rem), calc((100dvh - 16rem) * ${String(ratio)}))`
 }
 
 // ---------------------------------------------------------------------------

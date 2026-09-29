@@ -13,7 +13,7 @@ import { Option } from 'effect'
 import { Scene } from 'foldkit'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
-import { PhotoId } from '@photo/shared'
+import { PHOTO_RATIOS, PhotoId } from '@photo/shared'
 import type { PhotoPresentation } from '@photo/shared'
 import * as Animation from '@foldkit/ui/animation'
 import { AcquireResources, CloseDialog, ShowDialog } from '@foldkit/ui/dialog'
@@ -27,7 +27,14 @@ import {
   NavigateCmd,
   UpdateEditorCmd,
 } from './commands'
-import { PRESENTATION_FIELDS } from './editor'
+import {
+  PRESENTATION_FIELDS,
+  cropRatioLabel,
+  cropStyle,
+  fitFrameWidth,
+  initEditorState,
+  levelLabel,
+} from './editor'
 import { Message } from './model'
 import type { Model } from './model'
 import { init, onUrlChange, update } from './update'
@@ -65,6 +72,7 @@ const PRESENTATION: PhotoPresentation = {
   cropX: 0,
   cropY: 0,
   cropScale: 1,
+  cropFlipX: false,
   level: null,
   borderEnabled: true,
   borderStyle: 'gallery',
@@ -82,10 +90,17 @@ const NO_MAT = { ...PRESENTATION, borderEnabled: false }
 
 const mat = Scene.selector('[data-slot="mat"]')
 const unsaved = Scene.selector('[data-slot="unsaved-kicker"]')
+const cropRatio = Scene.selector('[data-slot="crop-ratio"]')
+const authoredFrame = Scene.selector('[data-crop-frame]')
+// The crop's pan, zoom, mirror and level are the image's own style: the frame
+// is the window and the image inside it is what moves.
+const authoredImage = Scene.selector('[data-crop-image]')
+const originalFrame = Scene.selector('[data-slot="photograph-original"]')
 const matSwitch = Scene.role('switch', { name: 'Mat' })
 const discard = Scene.role('button', { name: 'Discard' })
 const save = Scene.role('button', { name: 'Update' })
 const backLink = Scene.role('link', { name: 'Library' })
+const button = (name: string) => Scene.role('button', { name })
 
 /** The shell's three reads, answered the way the `dev` stage answers them: a
  *  proven session with no claim to print. */
@@ -338,7 +353,7 @@ describe('the unsaved-changes indicator', () => {
       // The resolver matches on the command's arguments, so a patch that sent
       // only the Mat would leave this unresolved and the scene would fail.
       Scene.Command.resolve(
-        UpdateEditorCmd({ id: PHOTO_ID, presentation: NO_MAT }),
+        UpdateEditorCmd({ id: PHOTO_ID, presentation: NO_MAT, savePresentation: true }),
         Message.UpdatedEditor({ id: PHOTO_ID, presentation: NO_MAT }),
       ),
       Scene.expect(unsaved).not.toExist(),
@@ -415,6 +430,221 @@ describe('leaving the Editor', () => {
       Scene.expect(mat).not.toExist(),
       Scene.expect(Scene.role('button', { name: 'Keep editing' })).not.toExist(),
       Scene.Mount.expectEnded(AcquireResources),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// the Crop section
+// ---------------------------------------------------------------------------
+
+/** The Stage's authored frame with a crop set, as the snapshot read would
+ *  deliver it. Pan, zoom and a mirror are all on one frame so every part of
+ *  the style is exercised in one render. */
+const CROPPED: PhotoPresentation = {
+  ...PRESENTATION,
+  cropX: 10,
+  cropY: -5,
+  cropScale: 2,
+  cropFlipX: true,
+}
+
+const withPresentation = (presentation: PhotoPresentation): Model =>
+  foldIn(opened(), [Message.SucceededFetchPresentation({ id: PHOTO_ID, presentation })])
+
+describe('the Crop section', () => {
+  it('heads with the as-shot Ratio, draws six of them and the three transforms', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.expect(Scene.text('CROP')).toExist(),
+      Scene.expect(cropRatio).toHaveText('3:2 · AS SHOT'),
+      Scene.expect(Scene.role('group', { name: 'Ratio' })).toExist(),
+      ...PHOTO_RATIOS.map((ratio) => Scene.expect(button(ratio)).toExist()),
+      Scene.expect(button('3:2')).toHaveAttr('aria-pressed', 'true'),
+      Scene.expect(button('4:3')).toHaveAttr('aria-pressed', 'false'),
+      Scene.expect(button('Straighten clockwise')).toExist(),
+      Scene.expect(button('Straighten counter-clockwise')).toExist(),
+      Scene.expect(button('Flip horizontally')).toExist(),
+      Scene.expect(Scene.text('LEVEL 0.0°')).toExist(),
+    )
+  })
+
+  it('re-crops when a Ratio is picked, and the head stops claiming AS SHOT', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(button('4:3')),
+      Scene.expect(cropRatio).toHaveText('4:3'),
+      Scene.expect(button('4:3')).toHaveAttr('aria-pressed', 'true'),
+      // The plate is the authored Ratio, not the source's own.
+      Scene.expect(authoredFrame).toHaveStyle('aspect-ratio', '4 / 3'),
+      Scene.expect(unsaved).toExist(),
+    )
+  })
+
+  it('sizes the plate at FIT, so the crop cannot collapse to nothing', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.expect(authoredFrame).toHaveStyle(
+        'width',
+        'min(calc(100vw - 29.5rem), calc((100dvh - 16rem) * 1.5))',
+      ),
+    )
+  })
+
+  it('treats a pick that lands back on the as-shot Ratio as no change', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(button('4:3')),
+      Scene.expect(unsaved).toExist(),
+      Scene.click(button('3:2')),
+      Scene.expect(cropRatio).toHaveText('3:2 · AS SHOT'),
+      Scene.expect(unsaved).not.toExist(),
+      Scene.expect(discard).toBeDisabled(),
+      Scene.expect(save).toBeDisabled(),
+    )
+  })
+
+  it('steps the level by a tenth of a degree, in both directions', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(button('Straighten clockwise')),
+      Scene.expect(Scene.text('LEVEL +0.1°')).toExist(),
+      Scene.click(button('Straighten clockwise')),
+      Scene.expect(Scene.text('LEVEL +0.2°')).toExist(),
+      Scene.click(button('Straighten counter-clockwise')),
+      Scene.expect(Scene.text('LEVEL +0.1°')).toExist(),
+      Scene.expect(authoredImage).toHaveStyle('transform', 'scale(1.0026) rotate(0.1deg)'),
+      Scene.expect(unsaved).toExist(),
+    )
+  })
+
+  it('mirrors the frame, and the button says it is on', () => {
+    Scene.scene(
+      app,
+      Scene.given(withPresentation(CROPPED)),
+      Scene.expect(button('Flip horizontally')).toHaveAttr('aria-pressed', 'true'),
+      Scene.expect(authoredImage).toHaveStyle('object-position', '60% 45%'),
+      Scene.expect(authoredImage).toHaveStyle('transform', 'scale(2) scaleX(-1)'),
+      Scene.click(button('Flip horizontally')),
+      Scene.expect(button('Flip horizontally')).toHaveAttr('aria-pressed', 'false'),
+      Scene.expect(authoredImage).toHaveStyle('transform', 'scale(2)'),
+    )
+  })
+
+  it('keeps ORIGINAL the source as shot and applies the crop to EXPORT and SPLIT', () => {
+    Scene.scene(
+      app,
+      Scene.given(withPresentation(CROPPED)),
+      // EXPORT is the design's default and is the crop.
+      Scene.expect(authoredFrame).toExist(),
+      Scene.expect(authoredImage).toHaveStyle('object-position', '60% 45%'),
+      Scene.click(button('ORIGINAL')),
+      Scene.expect(originalFrame).toExist(),
+      Scene.expect(authoredFrame).not.toExist(),
+      Scene.click(button('SPLIT')),
+      Scene.expect(Scene.selector('[data-slot="compare-split"]')).toExist(),
+      Scene.expect(originalFrame).toExist(),
+      // Both halves of the Split, and the authored one is still the crop.
+      Scene.expect(authoredImage).toHaveStyle('object-position', '60% 45%'),
+      Scene.expect(authoredImage).toHaveStyle('transform', 'scale(2) scaleX(-1)'),
+    )
+  })
+
+  it('pans by drag and zooms by wheel, and draws both on the Stage', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.Subscription.emit(
+        Message.StartedEditorCropDrag({ x: 100, y: 100, width: 400, height: 200 }),
+      ),
+      Scene.Subscription.emit(Message.DraggedEditorCrop({ x: 140, y: 80 })),
+      // Dragging the photograph right and up moves the window with the pointer.
+      Scene.expect(authoredImage).toHaveStyle('object-position', '40% 60%'),
+      Scene.Subscription.emit(Message.EndedEditorCropDrag()),
+      Scene.Subscription.emit(Message.ZoomedEditorCrop({ deltaY: -100 })),
+      Scene.expect(authoredImage).toHaveStyle('transform', 'scale(1.1)'),
+      Scene.expect(unsaved).toExist(),
+    )
+  })
+
+  it('saves the Ratio through UpdatePhoto and the crop through UpdatePhotoPresentation', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(button('4:3')),
+      Scene.click(save),
+      // A Ratio-only save must not rewrite the crop: `savePresentation` is
+      // false, so the command carries the untouched Presentation and the pick.
+      Scene.Command.resolve(
+        UpdateEditorCmd({
+          id: PHOTO_ID,
+          presentation: PRESENTATION,
+          ratio: '4:3',
+          savePresentation: false,
+        }),
+        Message.UpdatedEditor({ id: PHOTO_ID, presentation: PRESENTATION, ratio: '4:3' }),
+      ),
+      Scene.expect(unsaved).not.toExist(),
+      Scene.expect(cropRatio).toHaveText('4:3'),
+      Scene.expect(save).toBeDisabled(),
+    )
+  })
+
+  it('reverts the Ratio, the flip and a half-drag on Discard', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(button('4:3')),
+      Scene.click(button('Flip horizontally')),
+      Scene.Subscription.emit(
+        Message.StartedEditorCropDrag({ x: 0, y: 0, width: 400, height: 200 }),
+      ),
+      Scene.Subscription.emit(Message.DraggedEditorCrop({ x: 40, y: 0 })),
+      Scene.expect(authoredImage).toHaveStyle('object-position', '40% 50%'),
+      Scene.click(discard),
+      Scene.expect(cropRatio).toHaveText('3:2 · AS SHOT'),
+      Scene.expect(button('Flip horizontally')).toHaveAttr('aria-pressed', 'false'),
+      Scene.expect(authoredImage).toHaveStyle('object-position', '50% 50%'),
+      Scene.expect(unsaved).not.toExist(),
+    )
+  })
+})
+
+describe('the Crop copy', () => {
+  it('names AS SHOT only while the frame is the one the camera made', () => {
+    const editor = initEditorState()
+    expect(cropRatioLabel(photo, editor)).toBe('3:2 · AS SHOT')
+    expect(cropRatioLabel(photo, { ...editor, ratio: '4:3' })).toBe('4:3')
+  })
+
+  it('prints the level at the step\u2019s own precision, signed', () => {
+    expect(levelLabel({ ...PRESENTATION, level: null })).toBe('LEVEL 0.0°')
+    expect(levelLabel({ ...PRESENTATION, level: 0.4 })).toBe('LEVEL +0.4°')
+    expect(levelLabel({ ...PRESENTATION, level: -0.3 })).toBe('LEVEL -0.3°')
+  })
+
+  it('leaves an un-cropped frame at scale one', () => {
+    expect(cropStyle(PRESENTATION, '3 / 2')).toEqual({
+      'object-position': '50% 50%',
+      transform: 'scale(1)',
+    })
+  })
+
+  it('grows the frame by the level so a straighten cannot show the surface', () => {
+    expect(cropStyle({ ...PRESENTATION, level: 1 }, '3 / 2').transform).toBe(
+      'scale(1.026) rotate(1deg)',
+    )
+  })
+
+  it('fits the plate to the smaller of the Stage’s width and height', () => {
+    expect(fitFrameWidth('3 / 2')).toBe('min(calc(100vw - 29.5rem), calc((100dvh - 16rem) * 1.5))')
+    expect(fitFrameWidth('2 / 3')).toBe(
+      'min(calc(100vw - 29.5rem), calc((100dvh - 16rem) * 0.6667))',
     )
   })
 })
