@@ -43,6 +43,11 @@ export type ButtonVariant = (typeof buttonVariantKeys)[number]
 const buttonBase =
   'focus-visible:border-role-focus focus-visible:ring-role-focus/50 aria-invalid:ring-role-error/20 aria-invalid:border-role-error disabled:text-role-text-disabled data-disabled:text-role-text-disabled h-9 gap-(--spacing-sm) border border-transparent bg-clip-padding px-(--spacing-lg) type-ui transition-colors duration-(--motion-duration-fast) outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed data-disabled:pointer-events-none [&_svg:not([class*="size-"])]:size-4'
 
+/** The Button's one geometry, exported so an element that cannot be a
+ *  `<button>` — a `<label>` wrapping a file input — can wear it. */
+export const buttonClass = (variant: ButtonVariant = 'default', className?: string): string =>
+  cn(buttonBase, buttonVariants[variant], className)
+
 export type ButtonConfig<M> = Readonly<{
   onClick?: M
   isDisabled?: boolean
@@ -67,7 +72,7 @@ export const button = <M>(config: ButtonConfig<M>, label: Html | string, h: Html
         h.button(
           [
             ...attributes.button,
-            h.Class(cn(buttonBase, buttonVariants[config.variant ?? 'default'], config.className)),
+            h.Class(buttonClass(config.variant, config.className)),
             h.DataAttribute('slot', 'button'),
             ...(config.attributes ?? []),
           ],
