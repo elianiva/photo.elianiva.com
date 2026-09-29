@@ -5,11 +5,11 @@ description: Drive photo.elianiva.com the way a visitor and the owner do — pub
 
 # Verify photo.elianiva.com
 
-Scripted way to launch this repo, drive it as a visitor and as the single admin in the browser, and capture proof. No mocks — the real gallery, upload, and edit flows against the shared remote D1/R2. External boundaries already isolated in prod: Cloudflare Access on `/admin*` and `/api/admin*` plus in-worker JWT verification (ADR 0007). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
+Scripted way to launch this repo, drive it as a visitor and as the single admin in the browser, and capture proof. No mocks — the real gallery, upload, and edit flows against the shared remote D1/R2. External boundaries already isolated in prod: Cloudflare Access on `photo.elianiva.com/admin`, `photo-api.elianiva.com/admin/rpc` and `/upload`, plus in-worker JWT verification (ADR 0007). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
 
 ## Launch
 
-Primary verification instance is the Alchemy dev server at `http://localhost:5173` (`pnpm dev`). Data hits the shared remote D1/R2 (Alchemy `remote()`), so only one instance at a time. For local HTTPS with a stable hostname, use `pnpm dev:local` (portless → `http://localhost:5173`).
+Primary verification instance is the Alchemy dev server (`pnpm dev`): the site's Vite dev server on `http://localhost:5173` and the API Worker on `http://localhost:13371`, both pins from `alchemy.run.ts`. Data hits the shared remote D1/R2 (Alchemy `remote()`), so only one instance at a time — a second `pnpm dev` cannot bind either port.
 
 ```bash
 pnpm install
@@ -39,8 +39,7 @@ All three run via turbo (`build` depends on `^build`). `pnpm build` emits `packa
 
 Ports and env:
 
-- Dev URL `http://localhost:5173` (Alchemy `dev: { port: 5173, strictPort: true }`). Override with `BASE=http://localhost:5173` for scripts.
-- Optional local HTTPS: `pnpm dev:local` → `http://localhost:5173` via [portless](https://github.com/vite-plus/portless) (`portless.json` `appPort: 5173`).
+- Dev URL `http://localhost:5173` (Alchemy `dev: { port: 5173, strictPort: true }`) and API Worker `http://localhost:13371` (`dev.port`, `strictPort: true`). `packages/web/src/lib/api.ts` names the same API origin for the browser (`devApiOrigin`). Override with `BASE=…` for scripts. Reach the API directly at `http://localhost:13371`: `/rpc`, `/admin/rpc`, `/upload`, `/image/<r2Key>`, `/health`.
 - Local dev needs no `ACCESS_TEAM_DOMAIN` — blank means unauthenticated, and `alchemy dev --stage dev` defaults it to blank so the admin surface runs ungated by design. Non-dev stages require it and fail closed without it.
 - `ACCESS_ALLOWED_EMAILS` is read up front on every stage, `dev` included, so a `.env` carrying it (see `.env.example`) is required for local verification. It is dead weight locally — the gate stands down before the allowlist is consulted.
 - R2 `photo-elianiva-originals` and D1 `photo-elianiva` are remote by default.
@@ -116,7 +115,7 @@ Standards:
 
 - UI proof: ARIA snapshot plus screenshot with app identity visible (`photo.elianiva.com` / `Elianiva` header). `npx agent-browser snapshot > .cursor/skills/verify-photo/artifacts/<id>/page.aria.txt` and `npx agent-browser screenshot .cursor/skills/verify-photo/artifacts/<id>/page.png`
 - Mutation proof: drive the write in the UI, then read back via a second UI view (re-open the sheet, reload the grid, or open the lightbox) — a toast alone is insufficient.
-- Image proof: open the photo's lightbox and assert the `<img src>` points at `/api/image/<r2Key>` and loads (alt text / network 200); headers `cache-control: public, max-age=31536000, immutable` are exercised implicitly via the proxy.
+- Image proof: open the photo's lightbox and assert the `<img src>` points at the API Worker's `/image/<r2Key>` and loads (alt text / network 200); the Worker's `cache-control: public, max-age=31536000, immutable` is what the response carries.
 - Never assert a skipped entry point as verified through a different path. Report unreachable with the attempted command and the missing precondition.
 
 ## Cleanup

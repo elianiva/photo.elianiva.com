@@ -4,10 +4,10 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Baseline preconditions
 
-- Launch `https://photo.localhost` via `pnpm dev` (portless `photo`, backing port 13370) with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated). Resolve URL with `portless get photo`.
+- Launch the dev server with `pnpm dev` — site on `http://localhost:5173`, API Worker on `http://localhost:13371` — with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated).
 - D1 `photo-elianiva` and R2 `photo-elianiva-originals` are remote and shared even in dev — never truncate tables. Seed data uses prefix `verify-`.
-- Put `agent-browser` and `portless` on PATH (`curl` optional for image header checks).
-- Run `.pi/skills/verify-photo/scripts/doctor.sh` and require GET / on the portless URL with the Foldkit app shell.
+- Put `agent-browser` on PATH (`curl` optional for image header checks).
+- Run `.pi/skills/verify-photo/scripts/doctor.sh` and require GET / on `http://localhost:5173` with the Foldkit app shell.
 - Never drive an instance that was not started by this verification run. One instance at a time.
 
 ## Driving conventions
@@ -23,7 +23,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Capture the user action and the resulting state, not only the final screen.
 - UI proof includes an ARIA snapshot and a screenshot with the app identity (`Elianiva` / `photo.elianiva.com` header) visible.
 - Mutation proof includes a second UI view of the stored value (re-open the sheet, reload the grid, or open the lightbox) — a toast alone is insufficient.
-- Image proof is the lightbox `<img>` loading from `/api/image/<r2Key>` (visible pixels, alt text, no broken image).
+- Image proof is the lightbox `<img>` loading from the API Worker's `/image/<r2Key>` (visible pixels, alt text, no broken image).
 - Record the feature ID and entry point used with every artifact.
 - Report an unreachable path with the attempted command and the unmet precondition.
 - Do not report a skipped entry point as verified through a different path.

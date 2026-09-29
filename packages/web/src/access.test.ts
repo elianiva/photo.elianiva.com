@@ -364,3 +364,41 @@ describe('the paths the app asks for', () => {
     expect(slashed.body).toEqual(plain.body)
   })
 })
+
+describe('CORS for the two dev origins', () => {
+  // The site's dev server (5173) and the API Worker (13371) are separate
+  // origins, so the browser preflights the admin group's POST before it is
+  // sent — the dev pair is a real CORS client, not a same-origin one.
+  const preflight = (origin: string, path = '/admin/rpc'): Request =>
+    new Request(`https://photo-api.test${path}`, {
+      method: 'OPTIONS',
+      headers: { origin, 'access-control-request-method': 'POST' },
+    })
+
+  it('answers the dev site origin', async () => {
+    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}), {})
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(response.headers.get('access-control-allow-headers')).toContain('content-type')
+    expect(response.headers.get('vary')).toBe('Origin')
+  })
+
+  it('carries the header on an answer, not only on the preflight', async () => {
+    const response = await worker.fetch(
+      new Request('https://photo-api.test/not-a-route', {
+        method: 'POST',
+        headers: { origin: 'http://localhost:5173' },
+      }),
+      workerEnv({}),
+      {},
+    )
+    expect(response.status).toBe(404)
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+  })
+
+  it('refuses a preflight from an origin outside the list', async () => {
+    const response = await worker.fetch(preflight('https://not-photo.test'), workerEnv({}), {})
+    expect(response.status).toBe(403)
+    expect(response.headers.get('access-control-allow-origin')).toBeNull()
+  })
+})

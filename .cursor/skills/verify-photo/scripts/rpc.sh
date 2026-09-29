@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="${BASE:-http://localhost:5173}"
+# The RPC surface lives on the API Worker, an origin of its own (the site at
+# 5173 does not proxy it). Override with BASE env var.
+BASE="${BASE:-http://localhost:13371}"
 TAG="${1:-ListPhotos}"
 PAYLOAD="${2:-{}}"
 
@@ -12,9 +14,9 @@ for t in $ADMIN_TAGS; do
 done
 
 if [ "$is_admin" -eq 1 ]; then
-  URL="$BASE/api/admin/rpc"
+  URL="$BASE/admin/rpc"
 else
-  URL="$BASE/api/rpc"
+  URL="$BASE/rpc"
 fi
 
 python3 -c "

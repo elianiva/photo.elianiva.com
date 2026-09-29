@@ -13,7 +13,12 @@ export interface RateLimitResult {
   readonly retryAfter: number
 }
 
-export const createRateLimiter = (limit: number, windowMs: number) => {
+export interface RateLimiter {
+  check(key: string, now?: number): RateLimitResult
+  reset(): void
+}
+
+export const createRateLimiter = (limit: number, windowMs: number): RateLimiter => {
   const hits = new Map<string, Array<number>>()
 
   const check = (key: string, now: number = Date.now()): RateLimitResult => {

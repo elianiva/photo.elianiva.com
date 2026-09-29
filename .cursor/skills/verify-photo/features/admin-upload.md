@@ -6,7 +6,7 @@ Admin upload lets the single owner drop original image files, assign Tags and an
 
 - `upload-open` opens the upload dialog from the admin header.
 - `upload-queue` enqueues files with per-item status pending/uploading/done/failed and fileStore bytes keyed by `${name}:${size}`.
-- `upload-send` POSTs each queued file as multipart to `/api/upload` with blurhash, tagIds, takenAt, and metadata overrides.
+- `upload-send` POSTs each queued file as multipart to `/upload` with blurhash, tagIds, takenAt, and metadata overrides.
 - `upload-cancel` aborts the in-flight fetch via `abortStore` and leaves remaining items pending.
 - `upload-retry` retries a single failed item or all failed items.
 
@@ -31,7 +31,7 @@ Preconditions:
 - **Send queue.** Start the run. Run `npx agent-browser click --role button --name "Start uploads"`. First item flips to `uploading`; on success it flips to `done` and the new photo appears in the admin grid without a reload. The header shows `Uploading done/batchTotal` while the queue drains.
 - **Cancel run.** During a multi-file run, abort the in-flight request. Run `npx agent-browser click --role button --name "Cancel uploads"` (sends `CancelUploads` message). In-flight fetch aborts, chain halts, remaining items stay `pending`.
 - **Retry.** After a failure, retry one item or all failed. Run `npx agent-browser click --role button --name "Retry"` on a failed row or `Retry all failed` — failed row flips back to `pending` then `uploading`.
-- **Verify upload landed.** After `done`, close or keep the dialog and assert the admin grid now shows a tile with the uploaded title. Open the new photo's lightbox — the `<img>` loads from `/api/image/<r2Key>` and the title/caption you set are visible.
+- **Verify upload landed.** After `done`, close or keep the dialog and assert the admin grid now shows a tile with the uploaded title. Open the new photo's lightbox — the `<img>` loads from the API Worker's `/image/<r2Key>` and the title/caption you set are visible.
 - **Proof.** Snapshot the admin grid and the new photo's detail/lightbox: `npx agent-browser snapshot > .cursor/skills/verify-photo/artifacts/admin-upload/grid.aria.txt` and `npx agent-browser screenshot .cursor/skills/verify-photo/artifacts/admin-upload/grid.png`.
 
 ## Gotchas

@@ -17,7 +17,7 @@ import {
 } from '@photo/api'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
 import { verifyAdminAccess } from './access'
-import { clientKey, createRateLimiter } from './rate-limit'
+import { clientKey, createRateLimiter, type RateLimiter } from './rate-limit'
 
 // The stage arrives as a binding because the admin gate is stage-dependent:
 // blank `ACCESS_TEAM_DOMAIN` means unauthenticated on `dev` and a hard failure
@@ -84,10 +84,7 @@ const uploadLimiter = createRateLimiter(10, 60_000)
 const adminRpcLimiter = createRateLimiter(60, 60_000)
 const publicRpcLimiter = createRateLimiter(180, 60_000)
 
-const rateLimited = (
-  limiter: ReturnType<typeof createRateLimiter>,
-  request: Request,
-): Response | null => {
+const rateLimited = (limiter: RateLimiter, request: Request): Response | null => {
   const result = limiter.check(clientKey(request))
   if (result.allowed) return null
   return jsonResponse(
@@ -279,8 +276,9 @@ const buildRpcHandler = (
 const ALLOWED_ORIGINS = new Set([
   'https://photo.elianiva.com',
   'https://photo-api.elianiva.com',
-  'https://photo.localhost',
-  'https://photo-api.localhost',
+  // The dev pair: the site's Vite dev server and this Worker's `dev.port`.
+  'http://localhost:5173',
+  'http://localhost:13371',
 ])
 
 const corsHeaders = (request: Request): Record<string, string> => {
