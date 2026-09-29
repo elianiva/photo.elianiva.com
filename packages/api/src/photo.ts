@@ -8,8 +8,12 @@ import { Context, DateTime, Effect, Layer, Schema as S } from 'effect'
 import {
   DbPhotoRow,
   InvalidInput,
+  MatColour,
+  MatStyle,
   PHOTO_STATUSES,
   PhotoNotFound,
+  PhotoPresentation,
+  RenditionFormat,
   SlugConflict,
   StorageError,
   TagId,
@@ -21,6 +25,12 @@ import {
   type Tag,
 } from '@photo/shared'
 import { Gateway } from './gateway'
+
+// The bucket cap is a configured constant, not a Settings row, and it is
+// single-sourced in `@photo/shared` because the RPC contract and the view that
+// renders the meter both need it. It is re-exported here so the module that
+// measures storage usage is where anything reaching for the cap looks first.
+export { STORAGE_CAP_BYTES } from '@photo/shared'
 
 // ---------------------------------------------------------------------------
 // filters, sorts and results
@@ -86,6 +96,34 @@ export interface PhotoUpdatePatch {
   readonly tagIds?: ReadonlyArray<string> | undefined
 }
 
+/** The authored presentation, in the four groups the Editor edits it in. Every
+ *  group is optional and only the supplied columns are written, so one group
+ *  can be saved without restating the other three. A `null` clears its column
+ *  — `level` and the three mat details are nullable, and null is un-levelled
+ *  rather than zero — where an absent key leaves the column alone. */
+export interface PhotoPresentationPatch {
+  readonly crop?: { readonly x: number; readonly y: number; readonly scale: number } | undefined
+  readonly level?: number | null | undefined
+  readonly mat?:
+    | {
+        readonly enabled: boolean
+        readonly style?: MatStyle | null | undefined
+        readonly colour?: MatColour | null | undefined
+        readonly width?: number | null | undefined
+      }
+    | undefined
+  readonly export?:
+    | {
+        readonly previewLongEdge?: number | undefined
+        readonly previewFormat?: RenditionFormat | undefined
+        readonly previewQuality?: number | undefined
+        readonly fullQuality?: number | undefined
+        readonly keepExif?: boolean | undefined
+        readonly removeGps?: boolean | undefined
+      }
+    | undefined
+}
+
 export interface CreatePhotoResult {
   readonly id: string
   readonly slug: string
@@ -145,6 +183,26 @@ export interface PhotoServiceContract {
   /** The load-bearing aggregate: the frame count and byte total behind the
    *  sidebar meter, the Archive bar and the SIZE column. */
   readonly storageUsage: () => Effect.Effect<StorageUsage, StorageError>
+  /** Write the supplied presentation columns, then read the whole presentation
+   *  back: a save answers with the stored truth, not with the patch. */
+  readonly setPresentation: (
+    id: string,
+    patch: PhotoPresentationPatch,
+  ) => Effect.Effect<PhotoPresentation, StorageError | PhotoNotFound | InvalidInput>
+  /** Link Tags to Photos. The one set-shaped write with no per-Photo rule, so
+   *  it is one statement rather than a fold over `update`. Idempotent. An id
+   *  that resolves to no live Photo is `PhotoNotFound`; a Tag id that resolves
+   *  to no Tag is `InvalidInput`. */
+  readonly addTags: (
+    photoIds: ReadonlyArray<string>,
+    tagIds: ReadonlyArray<string>,
+  ) => Effect.Effect<void, StorageError | PhotoNotFound | InvalidInput>
+  /** The counterpart, for a row's tags. Idempotent, and the same two id
+   *  checks. */
+  readonly removeTags: (
+    photoIds: ReadonlyArray<string>,
+    tagIds: ReadonlyArray<string>,
+  ) => Effect.Effect<void, StorageError | PhotoNotFound | InvalidInput>
 }
 
 export class PhotoService extends Context.Service<PhotoService, PhotoServiceContract>()(
@@ -162,6 +220,13 @@ export const slugify = (input: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'untitled'
+
+/** Split an id list into bind-sized pieces. D1 caps a statement's bind list,
+ *  so every `IN (...)` over more than a handful of ids goes through this. */
+const chunkOf = (ids: ReadonlyArray<string>, size: number): ReadonlyArray<ReadonlyArray<string>> =>
+  Array.from({ length: Math.ceil(ids.length / size) }, (_unused, index) =>
+    ids.slice(index * size, (index + 1) * size),
+  )
 
 /**
  * Every read is scoped to live Photos. The lifecycle operations address a row
@@ -319,9 +384,7 @@ export const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyA
     if (ids.length === 0) return new Map<string, ReadonlyArray<Tag>>()
 
     // Chunk IN lists to stay well under D1's ~100 bind limit
-    const chunkSize = 80
-    for (let offset = 0; offset < ids.length; offset += chunkSize) {
-      const chunk = ids.slice(offset, offset + chunkSize)
+    for (const chunk of chunkOf(ids, 80)) {
       const placeholders = chunk.map(() => '?').join(', ')
       const raw = yield* Effect.tryPromise({
         try: () =>
@@ -397,6 +460,162 @@ const withTags = (db: (typeof Gateway.Service)['db'], row: DbPhotoRow) =>
   Effect.gen(function* () {
     const tagMap = yield* tagsForPhotos(db, [row.id])
     return toPhotoWithTags(row, tagMap.get(row.id) ?? [])
+  })
+
+// ---------------------------------------------------------------------------
+// presentation
+// ---------------------------------------------------------------------------
+
+/** The presentation columns migration 0004 added, in one string so the write
+ *  and the read-back can never name different columns. */
+const PRESENTATION_COLUMNS =
+  'cropX, cropY, cropScale, level, borderEnabled, borderStyle, borderColour, borderWidth, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps'
+
+/** SQLite hands booleans back as the 0/1 the columns are declared with. */
+interface DbPresentationRow {
+  readonly cropX: number
+  readonly cropY: number
+  readonly cropScale: number
+  readonly level: number | null
+  readonly borderEnabled: number
+  readonly borderStyle: MatStyle | null
+  readonly borderColour: MatColour | null
+  readonly borderWidth: number | null
+  readonly previewLongEdge: number
+  readonly previewFormat: RenditionFormat
+  readonly previewQuality: number
+  readonly fullQuality: number
+  readonly keepExif: number
+  readonly removeGps: number
+}
+
+const toPhotoPresentation = (row: DbPresentationRow): PhotoPresentation => ({
+  cropX: row.cropX,
+  cropY: row.cropY,
+  cropScale: row.cropScale,
+  level: row.level,
+  borderEnabled: row.borderEnabled !== 0,
+  borderStyle: row.borderStyle,
+  borderColour: row.borderColour,
+  borderWidth: row.borderWidth,
+  previewLongEdge: row.previewLongEdge,
+  previewFormat: row.previewFormat,
+  previewQuality: row.previewQuality,
+  fullQuality: row.fullQuality,
+  keepExif: row.keepExif !== 0,
+  removeGps: row.removeGps !== 0,
+})
+
+const presentationRow = (db: (typeof Gateway.Service)['db'], id: string) =>
+  Effect.tryPromise({
+    try: () =>
+      db
+        .prepare(`SELECT ${PRESENTATION_COLUMNS} FROM photos WHERE id = ? AND ${LIVE}`)
+        .bind(id)
+        .first<DbPresentationRow>(),
+    catch: (cause) =>
+      new StorageError({
+        message: `Failed to get presentation for photo ${id}`,
+        cause: describeCause(cause),
+      }),
+  })
+
+/** Only the supplied columns, in the order the four groups are named. An empty
+ *  result is an empty patch, which is an error rather than a no-op UPDATE. */
+const presentationColumns = (
+  patch: PhotoPresentationPatch,
+): { fields: Array<string>; binds: Array<unknown> } => {
+  const fields: Array<string> = []
+  const binds: Array<unknown> = []
+  const set = (column: string, value: unknown): void => {
+    fields.push(`${column} = ?`)
+    binds.push(value)
+  }
+  if (patch.crop !== undefined) {
+    set('cropX', patch.crop.x)
+    set('cropY', patch.crop.y)
+    set('cropScale', patch.crop.scale)
+  }
+  if (patch.level !== undefined) set('level', patch.level)
+  if (patch.mat !== undefined) {
+    set('borderEnabled', patch.mat.enabled ? 1 : 0)
+    if (patch.mat.style !== undefined) set('borderStyle', patch.mat.style)
+    if (patch.mat.colour !== undefined) set('borderColour', patch.mat.colour)
+    if (patch.mat.width !== undefined) set('borderWidth', patch.mat.width)
+  }
+  if (patch.export !== undefined) {
+    const settings = patch.export
+    if (settings.previewLongEdge !== undefined) set('previewLongEdge', settings.previewLongEdge)
+    if (settings.previewFormat !== undefined) set('previewFormat', settings.previewFormat)
+    if (settings.previewQuality !== undefined) set('previewQuality', settings.previewQuality)
+    if (settings.fullQuality !== undefined) set('fullQuality', settings.fullQuality)
+    if (settings.keepExif !== undefined) set('keepExif', settings.keepExif ? 1 : 0)
+    if (settings.removeGps !== undefined) set('removeGps', settings.removeGps ? 1 : 0)
+  }
+  return { fields, binds }
+}
+
+// ---------------------------------------------------------------------------
+// set-shaped tag links
+// ---------------------------------------------------------------------------
+
+/** D1's bind list is the limit, not the id count: a tag-link statement binds
+ *  the Photo ids it selects and the Tag id it links them to. */
+export const LINK_BIND_BUDGET = 80
+
+/** A link statement names one `tagId` and binds the Photo ids it selects, so
+ *  the chunk size is the budget less the bind the tag takes. */
+const linkPhotoChunks = (photoIds: ReadonlyArray<string>): ReadonlyArray<ReadonlyArray<string>> =>
+  chunkOf(photoIds, LINK_BIND_BUDGET - 1)
+
+/** An unknown id is a failure rather than a silent no-op, so a Bulk Bar move
+ *  over a stale selection cannot report success for a Photo that is gone. */
+const assertLivePhotos = (db: (typeof Gateway.Service)['db'], photoIds: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const found = new Set<string>()
+    for (const chunk of chunkOf(photoIds, LINK_BIND_BUDGET)) {
+      const placeholders = chunk.map(() => '?').join(', ')
+      const raw = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .prepare(`SELECT id FROM photos WHERE ${LIVE} AND id IN (${placeholders})`)
+            .bind(...chunk)
+            .all<{ id: string }>(),
+        catch: (cause) =>
+          new StorageError({ message: 'Failed to check photos', cause: describeCause(cause) }),
+      })
+      for (const row of raw.results ?? []) found.add(row.id)
+    }
+    const missing = photoIds.find((id) => !found.has(id))
+    if (missing !== undefined) return yield* Effect.fail(new PhotoNotFound({ id: missing }))
+  })
+
+/** A Tag id nobody carries is `InvalidInput` rather than a storage failure.
+ *  `photo_tags.tagId` is a foreign key and `INSERT OR IGNORE` does not suppress
+ *  a foreign-key violation, so without this the batch dies on the stale id and
+ *  the operator is told D1 is broken. The whole set is one batch, so without
+ *  the check ahead of it a single stale Tag rolls back every good link in the
+ *  call. */
+const assertTagsExist = (db: (typeof Gateway.Service)['db'], tagIds: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const found = new Set<string>()
+    for (const chunk of chunkOf(tagIds, LINK_BIND_BUDGET)) {
+      const placeholders = chunk.map(() => '?').join(', ')
+      const raw = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .prepare(`SELECT id FROM tags WHERE id IN (${placeholders})`)
+            .bind(...chunk)
+            .all<{ id: string }>(),
+        catch: (cause) =>
+          new StorageError({ message: 'Failed to check tags', cause: describeCause(cause) }),
+      })
+      for (const row of raw.results ?? []) found.add(row.id)
+    }
+    const missing = tagIds.find((id) => !found.has(id))
+    if (missing !== undefined) {
+      return yield* Effect.fail(new InvalidInput({ message: `no tag with id ${missing}` }))
+    }
   })
 
 const selectPhotoRows = (
@@ -824,6 +1043,89 @@ export const PhotoServiceLive = Layer.effect(
           }),
       }).pipe(Effect.map((row) => ({ photos: row?.photos ?? 0, bytes: row?.bytes ?? 0 })))
 
+    const setPresentation: PhotoServiceContract['setPresentation'] = (id, patch) =>
+      Effect.gen(function* () {
+        if ((yield* rowById(db, id)) === null) {
+          return yield* Effect.fail(new PhotoNotFound({ id }))
+        }
+        const { fields, binds } = presentationColumns(patch)
+        if (fields.length === 0) {
+          return yield* Effect.fail(new InvalidInput({ message: 'empty presentation patch' }))
+        }
+        // The column carries no CHECK, and a crop scale of zero is not a tight
+        // crop, it is a divide by zero in the Rendition generator. Guarded here
+        // so a caller that is not the RPC boundary cannot write one.
+        if (patch.crop !== undefined && !(patch.crop.scale > 0)) {
+          return yield* Effect.fail(new InvalidInput({ message: 'crop scale must be positive' }))
+        }
+        if (patch.level !== undefined && patch.level !== null && !Number.isFinite(patch.level)) {
+          return yield* Effect.fail(new InvalidInput({ message: 'level must be a finite angle' }))
+        }
+        yield* Effect.tryPromise({
+          try: () =>
+            db
+              .prepare(`UPDATE photos SET ${fields.join(', ')} WHERE id = ?`)
+              .bind(...binds, id)
+              .run(),
+          catch: (cause) =>
+            new StorageError({
+              message: 'Failed to update photo presentation',
+              cause: describeCause(cause),
+            }),
+        })
+        // The whole presentation, not the patch: a save returns the stored
+        // truth so the Editor never has to guess what it did not send.
+        const row = yield* presentationRow(db, id)
+        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        return toPhotoPresentation(row)
+      })
+
+    const addTags: PhotoServiceContract['addTags'] = (photoIds, tagIds) =>
+      Effect.gen(function* () {
+        yield* assertLivePhotos(db, photoIds)
+        yield* assertTagsExist(db, tagIds)
+        // One statement per Tag over a chunk of Photos: a link names exactly
+        // one `tagId`, so the Tag ids are the loop and the Photo ids are the
+        // binds inside one statement.
+        const statements = tagIds.flatMap((tagId) =>
+          linkPhotoChunks(photoIds).map((chunk) => {
+            const placeholders = chunk.map(() => '?').join(', ')
+            return db
+              .prepare(
+                `INSERT OR IGNORE INTO photo_tags (photoId, tagId)
+                   SELECT id, ? FROM photos WHERE ${LIVE} AND id IN (${placeholders})`,
+              )
+              .bind(tagId, ...chunk)
+          }),
+        )
+        if (statements.length === 0) return
+        yield* Effect.tryPromise({
+          try: () => db.batch(statements),
+          catch: (cause) =>
+            new StorageError({ message: 'Failed to add tags', cause: describeCause(cause) }),
+        })
+      })
+
+    const removeTags: PhotoServiceContract['removeTags'] = (photoIds, tagIds) =>
+      Effect.gen(function* () {
+        yield* assertLivePhotos(db, photoIds)
+        yield* assertTagsExist(db, tagIds)
+        const statements = tagIds.flatMap((tagId) =>
+          linkPhotoChunks(photoIds).map((chunk) => {
+            const placeholders = chunk.map(() => '?').join(', ')
+            return db
+              .prepare(`DELETE FROM photo_tags WHERE tagId = ? AND photoId IN (${placeholders})`)
+              .bind(tagId, ...chunk)
+          }),
+        )
+        if (statements.length === 0) return
+        yield* Effect.tryPromise({
+          try: () => db.batch(statements),
+          catch: (cause) =>
+            new StorageError({ message: 'Failed to remove tags', cause: describeCause(cause) }),
+        })
+      })
+
     return PhotoService.of({
       list,
       get,
@@ -835,6 +1137,9 @@ export const PhotoServiceLive = Layer.effect(
       purge,
       counts,
       storageUsage,
+      setPresentation,
+      addTags,
+      removeTags,
     })
   }),
 )

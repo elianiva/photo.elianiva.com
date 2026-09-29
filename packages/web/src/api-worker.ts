@@ -4,12 +4,14 @@ import { RpcSerialization, RpcServer } from 'effect/unstable/rpc'
 import type { WebsiteEnv } from '../../../alchemy.run'
 import {
   AdminRpcHandlersLive,
+  AdminSession,
   extractImageMeta,
   GatewayLive,
   PhotoService,
   PhotoServiceLive,
   PublicRpcHandlersLive,
   TagServiceLive,
+  type AdminSessionValue,
 } from '@photo/api'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
 import { verifyAdminAccess } from './access'
@@ -237,9 +239,19 @@ const handleImageProxy = async (env: ApiEnv, request: Request): Promise<Response
   return new Response(object.body, { headers })
 }
 
-const buildRpcHandler = (env: ApiEnv): ((request: Request) => Promise<Response>) => {
+/** The claims `verifyAdminAccess` just verified, provided into the admin
+ *  handler layer per request, so a handler that reads the session reads the
+ *  one the gate checked. The public route has no gate, so it provides the
+ *  stand-down shape and the admin group is unreachable there. */
+const buildRpcHandler = (
+  env: ApiEnv,
+  session: AdminSessionValue,
+): ((request: Request) => Promise<Response>) => {
   const routerLayer = HttpRouter.layer
-  const handlersLayer = Layer.merge(PublicRpcHandlersLive, AdminRpcHandlersLive).pipe(
+  const handlersLayer = Layer.merge(
+    PublicRpcHandlersLive,
+    Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, session)),
+  ).pipe(
     Layer.provide(Layer.merge(PhotoServiceLive, TagServiceLive)),
     Layer.provide(gatewayLayer(env)),
   )
@@ -315,8 +327,10 @@ export default {
     if (url.pathname === '/upload' && request.method === 'POST') {
       const limited = rateLimited(uploadLimiter, request)
       if (limited !== null) return respond(limited)
-      const rejection = await verifyAdminAccess(request, env)
-      if (rejection !== null) return respond(rejection)
+      // The upload is edge-gated, not identified: nothing it writes carries
+      // the operator's email, so the verified address is read and dropped.
+      const gate = await verifyAdminAccess(request, env)
+      if (!gate.ok) return respond(gate.response)
       const res = await handleUpload(env, request)
       return respond(res)
     }
@@ -324,9 +338,12 @@ export default {
     if (url.pathname === '/admin/rpc') {
       const limited = rateLimited(adminRpcLimiter, request)
       if (limited !== null) return respond(limited)
-      const rejection = await verifyAdminAccess(request, env)
-      if (rejection !== null) return respond(rejection)
-      const res = await buildRpcHandler(env)(request)
+      const gate = await verifyAdminAccess(request, env)
+      if (!gate.ok) return respond(gate.response)
+      const res = await buildRpcHandler(env, {
+        email: gate.email,
+        teamDomain: gate.teamDomain,
+      })(request)
       return respond(res)
     }
 
@@ -338,7 +355,9 @@ export default {
     if (url.pathname === '/rpc') {
       const limited = rateLimited(publicRpcLimiter, request)
       if (limited !== null) return respond(limited)
-      const res = await buildRpcHandler(env)(request)
+      // The admin group is mounted on `/admin/rpc`, which this path never
+      // matches, so the session it carries is unreachable from here.
+      const res = await buildRpcHandler(env, { email: null, teamDomain: null })(request)
       return respond(res)
     }
 

@@ -32,6 +32,10 @@ _Avoid_: Aspect ratio, orientation, dimensions (those are the measured `width` a
 The window a Photo is presented through, authored in the Editor. `cropX` and `cropY` pan the source inside the Ratio, `cropScale` zooms it, and `level` is the straighten angle in degrees. The defaults — pan at origin, scale 1, no level — mean an un-cropped Photo is the source as shot. A crop is authored data, so it is stored as columns and the Rendition is regenerated from it, never beside it.
 _Avoid_: Resize, Zoom (that is the Stage's own control), Aspect ratio (that is the Ratio)
 
+**Presentation**:
+The authored presentation of a Photo — its Crop, its `level`, its Mat and its per-photo export overrides (Rendition format JPEG/WEBP/AVIF, preview long edge, preview and full quality, keep-EXIF and remove-GPS) — saved as one call and one fact, and the reason a Rendition is regenerated from it.
+_Avoid_: Post-processing, Effects, Filters
+
 **Mat**:
 The border the Editor draws around a Photo, outside its crop, before a Rendition is produced. The design heads its panel `BORDER`, labels its rows `Mat Colour` and `Mat Style`, and names the wrapper on the Stage `Mat` — one thing under two words. The schema and the code say `borderEnabled`, `borderStyle`, `borderColour`, `borderWidth`, following the heading the operator actually sees; `mat` appears only in the `color.mat.*` token names. Its colour is `white`, `paper` or `ink` and its style is `even`, `gallery` or `square`, taken from the design's swatches and segments.
 _Avoid_: Frame (that is display copy), Padding, Margin, Mounter
@@ -61,8 +65,12 @@ The public chronological index of every published Photo at `/archive`, grouped b
 _Avoid_: Storage (that is the Admin's block), Library (that is the Admin's), Collection, Set
 
 **Storage**:
-The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content.
+The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content. The quota is the configured constant `STORAGE_CAP_BYTES` in `@photo/shared`, not a Settings row, so the sidebar's meter and this block cannot report different caps; the design contradicts itself on the number (the meter draws `50 GB`, this block draws `20 GB`) and one constant settles it at 20 GiB.
 _Avoid_: Archive (that is the public page), Library, Backup, Sync
+
+**Session**:
+The one operator, as the Cloudflare Access claim the Worker already verified — an `email` and the `teamDomain` that vouched for it, handed from `verifyAdminAccess` to the admin handlers as an `AdminSession` and read by `GetSession`. It is never recomputed from the request, and there is no signed-out state and no sign-in form: Access gates the route before any of this runs (ADR 0007), so a rejected `GetSession` is a session-expired affordance and nothing more. `teamDomain` is what makes the sidebar's `Sign out` a real link, because the Access logout lives under it. Both fields are null only on the `dev` stand-down, where the gate verifies nothing because there is nothing to verify.
+_Avoid_: Login, Auth, Sign-in state, Current user
 
 **Settings**:
 The Admin's single-row singleton, read by the Editor's export defaults, the public Masthead, the Folio nav and the Colophon. One row, `id` pinned to 1. Its `updatedAt` is what the Settings header's `SAVED 2 MINUTES AGO` reports.

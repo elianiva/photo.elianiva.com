@@ -7,8 +7,25 @@
 
 import { Effect } from 'effect'
 import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
-import { PhotoService, slugify, type PhotoListFilter } from './photo'
+import { PhotoService, STORAGE_CAP_BYTES, slugify, type PhotoListFilter } from './photo'
+import { AdminSession } from './session'
 import { TagService } from './tag'
+
+/**
+ * The single-Photo operations, folded over a set in order. The lifecycle and
+ * the presentation rules stay owned by the service — a Photo must exist, only
+ * a trashed Photo can be purged — rather than being restated as bulk SQL that
+ * can drift from them.
+ */
+const foldOver = <A, E>(
+  ids: ReadonlyArray<string>,
+  operation: (id: string) => Effect.Effect<A, E>,
+): Effect.Effect<void, E> =>
+  Effect.gen(function* () {
+    for (const id of ids) {
+      yield* operation(id)
+    }
+  })
 
 export const PublicRpcHandlersLive = PhotoPublicRpcs.toLayer({
   ListPhotos: (payload) =>
@@ -81,4 +98,79 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
       )
     }),
   DeleteTag: (payload) => TagService.use((service) => service.remove(payload.id)),
+  // The claims the gate already verified, read and never recomputed. A null is
+  // the dev stand-down (ADR 0007), not a signed-out state: there is no sign-in
+  // form to show and no session to end.
+  GetSession: () =>
+    AdminSession.use((session) =>
+      Effect.succeed({ email: session.email, teamDomain: session.teamDomain }),
+    ),
+  GetCounts: () => PhotoService.use((service) => service.counts()),
+  GetStorageUsage: () =>
+    Effect.map(
+      PhotoService.use((service) => service.storageUsage()),
+      (usage) => ({
+        ...usage,
+        capBytes: STORAGE_CAP_BYTES,
+      }),
+    ),
+  // A dedicated admin shape rather than an overload of the public `ListPhotos`,
+  // so the public contract stays small while the Library gets its Status,
+  // Ratio and Tag filters.
+  ListLibraryRows: (payload) =>
+    PhotoService.use((service) =>
+      service.list({
+        status: payload.status,
+        ratio: payload.ratio,
+        tagIds: payload.tagIds,
+        q: payload.q,
+        sort: payload.sort,
+        cursor: payload.cursor,
+        limit: payload.limit,
+      }),
+    ),
+  SetPhotoStatus: (payload) =>
+    PhotoService.use((service) => service.setStatus(payload.id, payload.status)),
+  UpdatePhotoPresentation: (payload) =>
+    PhotoService.use((service) =>
+      service.setPresentation(payload.id, {
+        crop: payload.crop,
+        level: payload.level,
+        mat: payload.mat,
+        export: payload.export,
+      }),
+    ),
+  // `void` on purpose: the fold is all-or-nothing, so there is no partial
+  // count to report, and a number read off the payload would report the
+  // request back to the client. The Bulk Bar re-reads the list and the counts.
+  TrashPhotos: (payload) =>
+    PhotoService.use((service) => foldOver(payload.ids, (id) => service.trash(id))),
+  RestorePhotos: (payload) =>
+    PhotoService.use((service) => foldOver(payload.ids, (id) => service.restore(id))),
+  PurgePhotos: (payload) =>
+    PhotoService.use((service) => foldOver(payload.ids, (id) => service.purge(id))),
+  BulkAddTags: (payload) =>
+    PhotoService.use((service) => service.addTags(payload.photoIds, payload.tagIds)),
+  BulkRemoveTags: (payload) =>
+    PhotoService.use((service) => service.removeTags(payload.photoIds, payload.tagIds)),
+  AddBorderToPhotos: (payload) =>
+    PhotoService.use((service) =>
+      foldOver(payload.photoIds, (id) => service.setPresentation(id, { mat: payload.mat })),
+    ),
+  UpdateTag: (payload) =>
+    Effect.gen(function* () {
+      if (payload.label !== undefined && payload.label.trim() === '') {
+        return yield* new InvalidInput({ message: 'label is required' })
+      }
+      return yield* TagService.use((service) =>
+        service.update(payload.id, {
+          label: payload.label?.trim(),
+          caption: payload.caption,
+        }),
+      )
+    }),
 })
+
+// `Compress` would sit in the admin group beside `UpdatePhotoPresentation` and
+// does not ship: it recompresses the `FULL` Rendition, which #35 creates. A
+// button that reports work it cannot do is a lie in the UI.

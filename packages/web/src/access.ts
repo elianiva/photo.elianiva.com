@@ -29,6 +29,17 @@ const jsonError = (message: string, status: number): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
+/** What the gate decided: the verified claims the admin handlers get to read,
+ *  or the response that answers the request instead. `email` and `teamDomain`
+ *  are null on the `dev` stand-down and when the claim carries none. */
+export type AdminGate =
+  | {
+      readonly ok: true
+      readonly email: string | null
+      readonly teamDomain: string | null
+    }
+  | { readonly ok: false; readonly response: Response }
+
 interface Jwk {
   readonly kid: string
   readonly kty: string
@@ -67,11 +78,14 @@ const fetchJwks = async (teamDomain: string): Promise<ReadonlyArray<Jwk>> => {
   return keys
 }
 
-/** Verify an Access JWT. Returns the subject email when valid. */
+/** Verify an Access JWT. Returns the claim's subject email and its issuer when
+ *  valid; the issuer is the team that vouched for the signature. */
 export const verifyAccessToken = async (
   token: string,
   teamDomain: string,
-): Promise<{ ok: true; email: string | undefined } | { ok: false; reason: string }> => {
+): Promise<
+  { ok: true; email: string | undefined; teamDomain: string } | { ok: false; reason: string }
+> => {
   const parts = token.split('.')
   if (
     parts.length !== 3 ||
@@ -122,12 +136,15 @@ export const verifyAccessToken = async (
   const signature = base64UrlDecodeToBuffer(parts[2])
   const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, data)
   if (!valid) return { ok: false, reason: 'bad signature' }
-  return { ok: true, email: payload.email }
+  // The issuer the claim names, which the check above already matched to the
+  // team domain; the configured value is the fallback for a claim carrying
+  // none, so the session is never a half-read claim.
+  return { ok: true, email: payload.email, teamDomain: payload.iss ?? teamDomain }
 }
 
 /**
- * The admin gate every Access-protected route runs. Returns the rejection
- * response, or `null` when the request may proceed.
+ * The admin gate every Access-protected route runs. Returns the verified
+ * claims the handlers answer with, or the rejection response.
  *
  * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on `dev`, where
  * Alchemy skips the Access applications (ADR 0007). On any other stage a blank
@@ -135,22 +152,19 @@ export const verifyAccessToken = async (
  * silently serving the Admin ungated is the one failure this gate must not
  * have.
  */
-export const verifyAdminAccess = async (
-  request: Request,
-  env: AccessEnv,
-): Promise<Response | null> => {
+export const verifyAdminAccess = async (request: Request, env: AccessEnv): Promise<AdminGate> => {
   const teamDomain = (env.ACCESS_TEAM_DOMAIN ?? '').trim()
   if (teamDomain === '') {
-    if (env.STAGE === 'dev') return null
-    return jsonError('server misconfigured', 500)
+    if (env.STAGE === 'dev') return { ok: true, email: null, teamDomain: null }
+    return { ok: false, response: jsonError('server misconfigured', 500) }
   }
   const token = request.headers.get('Cf-Access-Jwt-Assertion')
   if (token === null) {
-    return jsonError('missing access token', 401)
+    return { ok: false, response: jsonError('missing access token', 401) }
   }
   const result = await verifyAccessToken(token, teamDomain)
   if (!result.ok) {
-    return jsonError('access denied', 401)
+    return { ok: false, response: jsonError('access denied', 401) }
   }
   const allowlist = (env.ACCESS_ALLOWED_EMAILS ?? '')
     .split(',')
@@ -159,8 +173,10 @@ export const verifyAdminAccess = async (
   if (allowlist.length > 0) {
     const email = result.email?.toLowerCase() ?? ''
     if (!allowlist.includes(email)) {
-      return jsonError('access denied', 403)
+      return { ok: false, response: jsonError('access denied', 403) }
     }
   }
-  return null
+  // The claim's own email and issuer, handed on as verified: the handlers read
+  // the session, they never recompute who the caller is.
+  return { ok: true, email: result.email ?? null, teamDomain: result.teamDomain }
 }
