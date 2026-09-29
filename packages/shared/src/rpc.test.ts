@@ -13,7 +13,7 @@ describe('shared schemas', () => {
       height: 800,
       takenAt: '2024-01-15',
       metadata: { caption: 'hello' },
-      tags: [{ id: 'tag_kyoto', slug: 'kyoto', label: 'Kyoto' }],
+      tags: [{ id: 'tag_kyoto', slug: 'kyoto', label: 'Kyoto', caption: null }],
     }
     const decoded = S.decodeSync(PhotoWithTags)(raw)
     expect(decoded.slug).toBe('seed-photo-01')
@@ -21,7 +21,7 @@ describe('shared schemas', () => {
   })
 
   it('decodes Tag', () => {
-    const tag = S.decodeSync(Tag)({ id: 'tag_1', slug: 'kyoto', label: 'Kyoto' })
+    const tag = S.decodeSync(Tag)({ id: 'tag_1', slug: 'kyoto', label: 'Kyoto', caption: null })
     expect(tag.slug).toBe('kyoto')
   })
 

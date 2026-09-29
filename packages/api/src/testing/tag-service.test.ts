@@ -38,8 +38,8 @@ describe('TagService.list', () => {
     const alpha = await createTag(harness, 'alpha', 'Zebra')
 
     expect(await listTags(harness)).toEqual([
-      { id: zen.id, slug: 'zen', label: 'Alley' },
-      { id: alpha.id, slug: 'alpha', label: 'Zebra' },
+      { id: zen.id, slug: 'zen', label: 'Alley', caption: null },
+      { id: alpha.id, slug: 'alpha', label: 'Zebra', caption: null },
     ])
   })
 
@@ -58,7 +58,7 @@ describe('TagService.create', () => {
 
     expect(tag.id).toMatch(UUID)
     expect(await listTags(harness)).toEqual([
-      { id: tag.id, slug: 'golden-hour', label: 'Golden Hour' },
+      { id: tag.id, slug: 'golden-hour', label: 'Golden Hour', caption: null },
     ])
   })
 
@@ -84,7 +84,7 @@ describe('TagService.create', () => {
 
     expect(error).toEqual(new SlugConflict({ slug: 'golden-hour' }))
     expect(await listTags(harness)).toEqual([
-      { id: first.id, slug: 'golden-hour', label: 'Golden Hour' },
+      { id: first.id, slug: 'golden-hour', label: 'Golden Hour', caption: null },
     ])
   })
 })
@@ -95,7 +95,9 @@ describe('TagService.remove', () => {
     const tag = await createTag(harness, 'film', 'Film')
 
     expect(await removeTag(harness, 'missing')).toBe(true)
-    expect(await listTags(harness)).toEqual([{ id: tag.id, slug: 'film', label: 'Film' }])
+    expect(await listTags(harness)).toEqual([
+      { id: tag.id, slug: 'film', label: 'Film', caption: null },
+    ])
   })
 
   it('deletes the tag and its photo_tags links, leaving the Photo intact', async () => {
@@ -111,7 +113,9 @@ describe('TagService.remove', () => {
 
     expect(await removeTag(harness, kyoto.id)).toBe(true)
 
-    expect(await listTags(harness)).toEqual([{ id: film.id, slug: 'film', label: 'Film' }])
+    expect(await listTags(harness)).toEqual([
+      { id: film.id, slug: 'film', label: 'Film', caption: null },
+    ])
     expect(await linkedTagIds(harness.db)).toEqual([])
     const page = await Effect.runPromise(
       withTestServices(

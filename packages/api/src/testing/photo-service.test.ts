@@ -137,9 +137,9 @@ describe('PhotoService.list', () => {
     const page = await list(harness, {})
 
     expect(page.items[0]?.tags).toEqual([
-      { id: alley.id, slug: 'mmm', label: 'Alley' },
-      { id: film.id, slug: 'aaa', label: 'Film' },
-      { id: kyoto.id, slug: 'zzz', label: 'Kyoto' },
+      { id: alley.id, slug: 'mmm', label: 'Alley', caption: null },
+      { id: film.id, slug: 'aaa', label: 'Film', caption: null },
+      { id: kyoto.id, slug: 'zzz', label: 'Kyoto', caption: null },
     ])
     expect(page.items[1]?.tags).toEqual([])
   })
@@ -278,7 +278,7 @@ describe('PhotoService.get', () => {
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour', location: 'Kyoto' },
       blurhash: null,
-      tags: [{ id: tag.id, slug: 'kyoto', label: 'Kyoto' }],
+      tags: [{ id: tag.id, slug: 'kyoto', label: 'Kyoto', caption: null }],
     })
   })
 
@@ -334,7 +334,7 @@ describe('PhotoService.create', () => {
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour' },
       blurhash: 'LEHV6nWB2',
-      tags: [{ id: tag.id, slug: 'kyoto', label: 'Kyoto' }],
+      tags: [{ id: tag.id, slug: 'kyoto', label: 'Kyoto', caption: null }],
     })
   })
 
@@ -421,7 +421,7 @@ describe('PhotoService.update', () => {
       takenAt: '2024-07-04',
       metadata: { caption: 'new', camera: 'Ricoh GR III' },
       blurhash: null,
-      tags: [{ id: newTag.id, slug: 'kyoto', label: 'Kyoto' }],
+      tags: [{ id: newTag.id, slug: 'kyoto', label: 'Kyoto', caption: null }],
     })
     expect(await linkedPhotoIds(harness)).toEqual([created.id])
   })

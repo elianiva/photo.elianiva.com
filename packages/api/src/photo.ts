@@ -111,7 +111,7 @@ const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<st
         try: () =>
           db
             .prepare(
-              `SELECT t.id, t.slug, t.label, pt.photoId as photoId FROM tags t JOIN photo_tags pt ON pt.tagId = t.id WHERE pt.photoId IN (${placeholders}) ORDER BY t.label`,
+              `SELECT t.id, t.slug, t.label, t.caption, pt.photoId as photoId FROM tags t JOIN photo_tags pt ON pt.tagId = t.id WHERE pt.photoId IN (${placeholders}) ORDER BY t.label`,
             )
             .bind(...chunk)
             .all<TagRowWithPhotoId>(),
@@ -123,7 +123,7 @@ const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<st
       })
       for (const row of raw.results ?? []) {
         const list = map.get(row.photoId)
-        if (list) list.push({ id: row.id, slug: row.slug, label: row.label })
+        if (list) list.push({ id: row.id, slug: row.slug, label: row.label, caption: row.caption })
       }
     }
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- Array<Tag> is assignable to ReadonlyArray<Tag> for the return view

@@ -28,7 +28,7 @@ export const TagServiceLive = Layer.effect(
     const db = gateway.db
 
     const list: TagServiceContract['list'] = Effect.tryPromise({
-      try: () => db.prepare(`SELECT id, slug, label FROM tags ORDER BY label`).all<Tag>(),
+      try: () => db.prepare(`SELECT id, slug, label, caption FROM tags ORDER BY label`).all<Tag>(),
       catch: (cause) =>
         new StorageError({ message: 'Failed to list tags', cause: describeCause(cause) }),
     }).pipe(Effect.map((raw) => raw.results ?? []))
@@ -55,7 +55,7 @@ export const TagServiceLive = Layer.effect(
             new StorageError({ message: 'Failed to insert tag', cause: describeCause(cause) }),
         })
         // Decode brands the freshly-generated id through the shared schema.
-        return S.decodeSync(Tag)({ id, slug, label: input.label })
+        return S.decodeSync(Tag)({ id, slug, label: input.label, caption: null })
       })
 
     const remove: TagServiceContract['remove'] = (id) =>
