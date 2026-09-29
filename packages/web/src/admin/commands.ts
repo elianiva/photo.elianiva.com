@@ -18,17 +18,63 @@ import { apiUrl } from '@/lib/api'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { encodeBlurhash } from '@/lib/blurhash'
 
-import { DraftFields, GridCols, Message, abortStore, fileStore } from './model'
-import type { GridCols as GridColsType } from './model'
+import { DraftFields, GridCols, Message, Storage, abortStore, fileStore } from './model'
+import type { Counts as CountsType, GridCols as GridColsType } from './model'
 
 interface PhotoPage {
   readonly items: ReadonlyArray<PhotoWithTags>
   readonly nextCursor: string | null
 }
 
+/** The Access facts the sidebar's footer reads: the signed-in address and the
+ *  team that vouched for it. */
+interface Session {
+  readonly email: string | null
+  readonly teamDomain: string | null
+}
+
+/** The `GetStorageUsage` success, as the wire delivers it. */
+interface StorageUsage extends Storage {
+  readonly photos: number
+}
+
 /** Narrow on purpose: widening this to the whole Message union would leak
  *  every variant into each command's success channel. */
 const failWith = (error: RpcFailure) => Message.FailedRpc({ message: error.message })
+
+// ---------------------------------------------------------------------------
+// the shell's three reads
+// ---------------------------------------------------------------------------
+
+/** The Access claims the API worker's gate already verified. A failure is not
+ *  a toast: the Admin has no signed-out state to fall back to, so a session it
+ *  cannot prove is the one thing that replaces the whole shell with the
+ *  sign-in affordance. */
+export const FetchSessionCmd = Command.define('FetchSession', {
+  messages: [Message.SucceededGetSession, Message.FailedGetSession],
+  execute: Effect.map(rpcAdmin<Session>('GetSession', {}), ({ email, teamDomain }) =>
+    Message.SucceededGetSession({ email, teamDomain }),
+  ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetSession({})))),
+})
+
+/** The sidebar's counts. Re-issued on every route change and after every
+ *  mutation, so a count never outlives the write that moved it. */
+export const FetchCountsCmd = Command.define('FetchCounts', {
+  messages: [Message.SucceededGetCounts, Message.FailedGetCounts],
+  execute: Effect.map(rpcAdmin<CountsType>('GetCounts', {}), (counts) =>
+    Message.SucceededGetCounts(counts),
+  ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetCounts({})))),
+})
+
+/** The sidebar meter's aggregate. `photos` rides in the same payload and
+ *  belongs to the Settings Storage block (#37), so the Model keeps the byte
+ *  fraction the sidebar actually draws. */
+export const FetchStorageCmd = Command.define('FetchStorage', {
+  messages: [Message.SucceededGetStorage, Message.FailedGetStorage],
+  execute: Effect.map(rpcAdmin<StorageUsage>('GetStorageUsage', {}), ({ bytes, capBytes }) =>
+    Message.SucceededGetStorage({ bytes, capBytes }),
+  ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetStorage({})))),
+})
 
 // ---------------------------------------------------------------------------
 // grid density persistence
@@ -56,22 +102,35 @@ export const PersistColsCmd = Command.define('PersistCols', {
     ),
 })
 
+/** The Admin's Photo list. It carries the sidebar's filter as a set of Tag ids
+ *  and the Page Head's search as `q`, because both are set-shaped: a single
+ *  `tagSlug` would let a second pick replace the first rather than narrow it,
+ *  and a query that had nowhere to go would be a control that lies. Both keys
+ *  are omitted when empty, so "no filter" is the absence of a filter rather
+ *  than an empty one. */
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
-  args: { tagIds: S.Array(S.String) },
+  args: { tagIds: S.Array(S.String), q: S.String },
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ tagIds }) =>
-    Effect.map(rpcAdmin<PhotoPage>('ListLibraryRows', { tagIds: [...tagIds], limit: 60 }), (page) =>
-      Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
+  execute: ({ tagIds, q }) =>
+    Effect.map(
+      rpcAdmin<PhotoPage>('ListLibraryRows', {
+        ...(tagIds.length > 0 ? { tagIds: [...tagIds] } : {}),
+        ...(q === '' ? {} : { q }),
+        limit: 60,
+      }),
+      (page) =>
+        Message.SucceededFetchPhotos({ photos: [...page.items], nextCursor: page.nextCursor }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 export const FetchMoreCmd = Command.define('FetchMore', {
-  args: { tagIds: S.Array(S.String), cursor: S.String },
+  args: { tagIds: S.Array(S.String), q: S.String, cursor: S.String },
   messages: [Message.SucceededFetchMore, Message.FailedRpc],
-  execute: ({ tagIds, cursor }) =>
+  execute: ({ tagIds, q, cursor }) =>
     Effect.map(
       rpcAdmin<PhotoPage>('ListLibraryRows', {
-        tagIds: [...tagIds],
+        ...(tagIds.length > 0 ? { tagIds: [...tagIds] } : {}),
+        ...(q === '' ? {} : { q }),
         limit: 60,
         cursor,
       }),
@@ -172,7 +231,10 @@ export const DeleteTagCmd = Command.define('DeleteTag', {
         // a filtered view stays filtered after the delete.
         Effect.all({
           tags: rpcPublic<ReadonlyArray<Tag>>('ListTags', {}),
-          page: rpcAdmin<PhotoPage>('ListLibraryRows', { tagIds: [...tagIds], limit: 60 }),
+          page: rpcAdmin<PhotoPage>('ListLibraryRows', {
+            ...(tagIds.length > 0 ? { tagIds: [...tagIds] } : {}),
+            limit: 60,
+          }),
         }),
       ),
       ({ tags, page }) => Message.DeletedTag({ tags: [...tags], photos: [...page.items] }),
@@ -180,7 +242,7 @@ export const DeleteTagCmd = Command.define('DeleteTag', {
 })
 
 export const CreateTagCmd = Command.define('CreateTag', {
-  args: { source: S.Literals(['draft', 'upload', 'manager']), label: S.String },
+  args: { source: S.Literals(['draft', 'upload', 'manager', 'sidebar']), label: S.String },
   messages: [Message.SucceededCreateTag, Message.FailedRpc],
   execute: ({ source, label }) =>
     Effect.map(rpcAdmin<Tag>('CreateTag', { slug: label, label }), (tag) =>

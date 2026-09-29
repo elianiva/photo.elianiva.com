@@ -26,11 +26,20 @@ export const AppRoute = defineRouteUnion({
   /** `/admin` — every Photo. */
   Library: {},
   /** `/admin/atoms` — the Desk's design-system sheet: every atom in
-   *  `components/ui`, drawn in the page each one belongs to. Nothing links to
-   *  it yet; the sidebar arrives with #24. */
+   *  `components/ui`, drawn in the page each one belongs to. A surface for
+   *  looking at the atoms, not a destination: nothing in the Admin links to
+   *  it, and the sidebar's nav is the design's own six rows. */
   Atoms: {},
   /** `/admin/drafts` — Photos that are not published. */
   Drafts: {},
+  /** `/admin/scheduled` — drafts flagged for later publication. Nothing
+   *  promotes a scheduled Photo yet (CONTEXT.md, Status), so this route
+   *  exists before the page does. */
+  Scheduled: {},
+  /** `/admin/uploads` — the upload queue. */
+  Uploads: {},
+  /** `/admin/trash` — soft-deleted Photos. */
+  Trash: {},
   /** `/admin/settings` — the site settings singleton. */
   Settings: {},
   /** `/admin/photos/<id>` — one Photo. */
@@ -49,6 +58,12 @@ export const atomsRouter = pipe(admin, slash(literal('atoms')), mapTo(AppRoute.A
 
 export const draftsRouter = pipe(admin, slash(literal('drafts')), mapTo(AppRoute.Drafts))
 
+export const scheduledRouter = pipe(admin, slash(literal('scheduled')), mapTo(AppRoute.Scheduled))
+
+export const uploadsRouter = pipe(admin, slash(literal('uploads')), mapTo(AppRoute.Uploads))
+
+export const trashRouter = pipe(admin, slash(literal('trash')), mapTo(AppRoute.Trash))
+
 export const settingsRouter = pipe(admin, slash(literal('settings')), mapTo(AppRoute.Settings))
 
 export const photoRouter = pipe(
@@ -60,7 +75,33 @@ export const photoRouter = pipe(
 
 /** Every admin route. A parser only matches when it consumes the whole path,
  *  so the shared `admin` prefix never shadows a longer route. */
-const adminParser = oneOf(photoRouter, settingsRouter, draftsRouter, atomsRouter, libraryRouter)
+const adminParser = oneOf(
+  photoRouter,
+  settingsRouter,
+  trashRouter,
+  scheduledRouter,
+  uploadsRouter,
+  draftsRouter,
+  atomsRouter,
+  libraryRouter,
+)
+
+/** A route back into its URL. The inverse of {@link urlToAppRoute}, built from
+ *  the same routers, so the sidebar's links and the router can never disagree
+ *  about what a route is called. `NotFound` is the one route with no router of
+ *  its own — it is the path that named none, so it prints as itself. */
+export const appRouteToUrl = (route: AppRoute): string =>
+  AppRoute.match(route, {
+    Library: () => libraryRouter(),
+    Atoms: () => atomsRouter(),
+    Drafts: () => draftsRouter(),
+    Scheduled: () => scheduledRouter(),
+    Uploads: () => uploadsRouter(),
+    Trash: () => trashRouter(),
+    Settings: () => settingsRouter(),
+    Photo: ({ id }) => photoRouter({ id }),
+    NotFound: ({ path }) => path,
+  })
 
 /** The route a URL names. A URL under `/admin` that no route names — a
  *  mistyped path, a photo id that is not one — is `NotFound`, which the Admin

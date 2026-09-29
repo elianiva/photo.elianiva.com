@@ -1362,6 +1362,7 @@ describe('PhotoService.counts', () => {
 
     expect(await counts(harness)).toEqual({
       total: 3,
+      trashed: 0,
       byStatus: { draft: 1, published: 1, failed: 1 },
       byTag: [
         { id: film.id, label: 'Film', count: 1 },
@@ -1369,10 +1370,12 @@ describe('PhotoService.counts', () => {
         { id: empty.id, label: 'Unused', count: 0 },
       ],
     })
-    // A trashed Photo leaves every count, the grand total included.
+    // A trashed Photo leaves every live count, the grand total included, and
+    // is what `trashed` reports instead.
     await trash(harness, published.id)
     expect(await counts(harness)).toEqual({
       total: 2,
+      trashed: 1,
       byStatus: { draft: 1, published: 0, failed: 1 },
       byTag: [
         { id: film.id, label: 'Film', count: 0 },
@@ -1382,11 +1385,26 @@ describe('PhotoService.counts', () => {
     })
   })
 
+  it('counts a photo trashed twice once', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+
+    await trash(harness, created.id)
+    // `trash` is idempotent, and so is its count: the row is stamped, not
+    // appended to, so a second call cannot report a second Photo in the Trash.
+    await trash(harness, created.id)
+
+    const result = await counts(harness)
+    expect(result.trashed).toBe(1)
+    expect(result.total).toBe(0)
+  })
+
   it('counts every status at zero for an empty library', async () => {
     const harness = makeTestHarness()
 
     expect(await counts(harness)).toEqual({
       total: 0,
+      trashed: 0,
       byStatus: { draft: 0, published: 0, failed: 0 },
       byTag: [],
     })

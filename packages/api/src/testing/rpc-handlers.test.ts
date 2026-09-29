@@ -522,7 +522,7 @@ describe('GetSession handler', () => {
 })
 
 describe('GetCounts handler', () => {
-  it('reports the total, each status and each tag, with no scheduled key', async () => {
+  it('reports the total, each status, each tag and the trashed count, with no scheduled key', async () => {
     const harness = makeTestHarness()
     const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
     const unused = await createTag(harness, 'unused', 'Unused')
@@ -538,9 +538,11 @@ describe('GetCounts handler', () => {
 
     const result = await adminRpc(harness, (client) => client.GetCounts({}))
 
-    // The trashed Photo is out of every count; the Tag it carried is not.
+    // The trashed Photo is out of every live count and in `trashed`; the Tag
+    // it carried is neither.
     expect(result).toEqual({
       total: 1,
+      trashed: 1,
       byStatus: { draft: 1, published: 0, failed: 0 },
       byTag: [
         { id: kyoto.id, label: 'Kyoto', count: 0 },

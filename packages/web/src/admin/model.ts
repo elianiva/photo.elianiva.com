@@ -8,7 +8,7 @@ import { Schema as S } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 import { UrlRequest } from 'foldkit/navigation'
 import { Url } from 'foldkit/url'
-import { PhotoId, PhotoWithTags, Tag } from '@photo/shared'
+import { PhotoId, PhotoWithTags, Tag, TagId } from '@photo/shared'
 
 import { Multi } from '@foldkit/ui/combobox'
 import * as Dialog from '@/components/ui/dialog'
@@ -98,6 +98,44 @@ export type GridCols = typeof GridCols.Type
 export const MatColour = S.Literals(Swatch.matColours)
 export type MatColour = typeof MatColour.Type
 
+// ---------------------------------------------------------------------------
+// shell state — what the sidebar and the Page Head read
+// ---------------------------------------------------------------------------
+
+/** The Access facts behind the Admin. There is no signed-out state: Access
+ *  gates the route before the app runs (ADR 0007), so `status` distinguishes
+ *  "not asked yet" from "the gate refused" rather than a user who is not
+ *  signed in. `email` and `teamDomain` are null only where the gate stood
+ *  down, which is what hides an address and a sign-out link that would go
+ *  nowhere. */
+export const Session = S.Struct({
+  status: S.Literals(['loading', 'verified', 'expired']),
+  email: S.NullOr(S.String),
+  teamDomain: S.NullOr(S.String),
+})
+export type Session = typeof Session.Type
+
+/** The sidebar's counts, as `GetCounts` reports them. Declared as fields once
+ *  so the Model's Struct and the Message that fills it cannot disagree. */
+const countsFields = {
+  total: S.Number,
+  trashed: S.Number,
+  byStatus: S.Struct({ draft: S.Number, published: S.Number, failed: S.Number }),
+  byTag: S.Array(S.Struct({ id: TagId, label: S.String, count: S.Number })),
+}
+export const Counts = S.Struct(countsFields)
+export type Counts = typeof Counts.Type
+
+/** The sidebar meter's aggregate, from `GetStorageUsage`. Only the byte
+ *  fraction is kept: the same payload's Photo count belongs to #37's Storage
+ *  block, and carrying it here would be a field the sidebar never reads. */
+const storageFields = {
+  bytes: S.Number,
+  capBytes: S.Number,
+}
+export const Storage = S.Struct(storageFields)
+export type Storage = typeof Storage.Type
+
 /** What `/admin/atoms` remembers. Namespaced so the sheet's own state — a page
  *  number, which specimen rows are ticked, which toggles are on — is never
  *  mistaken for the Admin's. */
@@ -131,11 +169,28 @@ export const Model = S.Struct({
   nextCursor: S.NullOr(S.String),
   loadingMore: S.Boolean,
 
-  // filter bar
-  activeTagSlug: S.optional(S.String),
+  // the shell: the session, the sidebar's two aggregates, the Page Head's search
+  session: Session,
+  counts: Counts,
+  storage: Storage,
+  /** The Page Head search's text. Submitted into the list by
+   *  `SubmittedSearch`; #26 moves it into the URL. */
+  searchQuery: S.String,
+
+  // tag filter, as Tag ids. A set, not one slug: the sidebar's tag filter is
+  // multi-select, and a second pick narrows the list rather than replacing the
+  // first. Empty means every Photo.
+  activeTagIds: S.Array(S.String),
 
   // tag manager bar (chips + inline create)
   tagManager: TagManager.Model,
+
+  // the sidebar's per-tag actions: create a Tag, delete this one
+  tagActions: Dialog.Model,
+  /** The Tag whose actions are open, if any. */
+  tagActionsId: S.optional(S.String),
+  /** The label typed into the create field. */
+  tagActionLabel: S.String,
 
   // grid density: number of square-tile columns (persisted to localStorage)
   cols: GridCols,
@@ -199,9 +254,30 @@ export const Message = defineMessageUnion({
     nextCursor: S.NullOr(S.String),
   },
 
+  // the shell
+  SucceededGetSession: { email: S.NullOr(S.String), teamDomain: S.NullOr(S.String) },
+  /** The gate refused, or could not be reached. Either way the session is not
+   *  proven, and the app's only answer is the sign-in affordance. */
+  FailedGetSession: {},
+  SucceededGetCounts: countsFields,
+  FailedGetCounts: {},
+  SucceededGetStorage: storageFields,
+  FailedGetStorage: {},
+
   // filter bar
-  FilterByTag: { slug: S.String },
+  /** Add or remove one Tag from the multi-select filter. */
+  ToggledTagFilter: { id: S.String },
   RetryFetch: {},
+
+  // the Page Head's search
+  SetSearchQuery: { value: S.String },
+  SubmittedSearch: {},
+
+  // the sidebar's per-tag actions
+  OpenedTagActions: { id: S.String },
+  SetTagActionLabel: { value: S.String },
+  SubmitTagCreate: {},
+  GotTagActionsMessage: { message: Dialog.Message },
 
   // grid density
   SelectedCols: { cols: GridCols },
@@ -224,9 +300,10 @@ export const Message = defineMessageUnion({
   GotEditSheetMessage: { message: Sheet.Message },
   GotDraftComboMessage: { message: S.Unknown },
 
-  // create tag inline (from either combo or the tag manager bar)
+  // create tag inline (from either combo, the tag manager bar, or the
+  // sidebar's per-row actions)
   CreateTagRequested: {
-    source: S.Literals(['draft', 'upload', 'manager']),
+    source: S.Literals(['draft', 'upload', 'manager', 'sidebar']),
     label: S.String,
   },
 
@@ -235,7 +312,7 @@ export const Message = defineMessageUnion({
   RemoveUploadTag: { id: S.String },
 
   SucceededCreateTag: {
-    source: S.Literals(['draft', 'upload', 'manager']),
+    source: S.Literals(['draft', 'upload', 'manager', 'sidebar']),
     tag: Tag,
   },
 

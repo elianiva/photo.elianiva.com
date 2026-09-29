@@ -233,11 +233,16 @@ export class GetSession extends Rpc.make('GetSession', {
 }) {}
 
 /** Every stored Status, always. `scheduled` is a display label over a draft
- *  (CONTEXT.md), not a fourth value with a count. */
+ *  (CONTEXT.md), not a fourth value with a count.
+ *
+ *  `trashed` is the one count that is not over live Photos, and it is the only
+ *  one that can be: the sidebar's `Trash` row carries a number, and a count
+ *  taken over the same set the `total` is taken over can never report it. */
 export class GetCounts extends Rpc.make('GetCounts', {
   payload: {},
   success: S.Struct({
     total: S.Number,
+    trashed: S.Number,
     byStatus: S.Struct({ draft: S.Number, published: S.Number, failed: S.Number }),
     byTag: S.Array(S.Struct({ id: TagId, label: S.String, count: S.Number })),
   }),

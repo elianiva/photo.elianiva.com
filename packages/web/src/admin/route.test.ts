@@ -6,9 +6,16 @@ import type { Command } from 'foldkit/command'
 import { fromString as urlFromString } from 'foldkit/url'
 import { UrlRequest } from 'foldkit/navigation'
 
-import { FetchPhotoCmd } from './commands'
+import {
+  FetchCountsCmd,
+  FetchPhotoCmd,
+  FetchPhotosCmd,
+  FetchSessionCmd,
+  FetchStorageCmd,
+  FetchTagsCmd,
+} from './commands'
 import { Message } from './model'
-import { isAdminPath, urlToAppRoute } from './route'
+import { isAdminPath, appRouteToUrl, urlToAppRoute } from './route'
 import { init, onUrlChange, onUrlRequest, update } from './update'
 import { view } from './view'
 
@@ -47,8 +54,26 @@ describe('the route table', () => {
     expect(routeOf('/admin')).toEqual({ _tag: 'Library' })
     expect(routeOf('/admin/')).toEqual({ _tag: 'Library' })
     expect(routeOf('/admin/drafts')).toEqual({ _tag: 'Drafts' })
+    expect(routeOf('/admin/scheduled')).toEqual({ _tag: 'Scheduled' })
+    expect(routeOf('/admin/uploads')).toEqual({ _tag: 'Uploads' })
+    expect(routeOf('/admin/trash')).toEqual({ _tag: 'Trash' })
     expect(routeOf('/admin/settings')).toEqual({ _tag: 'Settings' })
     expect(routeOf('/admin/photos/abc')).toEqual({ _tag: 'Photo', id: 'abc' })
+  })
+
+  it('prints every route back into the URL it parsed from', () => {
+    for (const path of [
+      '/admin',
+      '/admin/atoms',
+      '/admin/drafts',
+      '/admin/scheduled',
+      '/admin/uploads',
+      '/admin/trash',
+      '/admin/settings',
+      '/admin/photos/photo-1',
+    ]) {
+      expect(appRouteToUrl(routeOf(path))).toBe(path)
+    }
   })
 
   it('declines a photo path whose id is not an id, so no view has to defend itself', () => {
@@ -71,6 +96,9 @@ describe('the admin URL space', () => {
       '/admin',
       '/admin/',
       '/admin/drafts',
+      '/admin/scheduled',
+      '/admin/uploads',
+      '/admin/trash',
       '/admin/settings',
       '/admin/photos/abc',
       '/admin/photos',
@@ -87,28 +115,36 @@ describe('the admin URL space', () => {
   })
 })
 
+/** The three reads the shell itself needs, on every route and every
+ *  navigation. Nothing is cached across a route change: a session can expire
+ *  between two pages, and a count is a fact about the moment it was read. */
+const SHELL_READS = ['FetchSession', 'FetchCounts', 'FetchStorage']
+
+const listReads = (result: { readonly commands?: ReadonlyArray<Command<Message>> }) =>
+  dispatched(result).filter((entry) => !SHELL_READS.includes(entry.name))
+
 describe('a cold load', () => {
-  it('fetches the library on a cold load of the library', () => {
+  it('fetches the shell and the library on a cold load of the library', () => {
     const cold = init(at('/admin'))
     expect(cold.model.route).toEqual({ _tag: 'Library' })
-    expect(commandNames(cold.commands)).toEqual(['FetchPhotos', 'FetchTags'])
+    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
   })
 
-  it('fetches the photo on a cold load of a deep link', () => {
+  it('fetches the shell and the photo on a cold load of a deep link', () => {
     const cold = init(at('/admin/photos/photo-1'))
     expect(cold.model.route).toEqual({ _tag: 'Photo', id: 'photo-1' })
-    expect(commandNames(cold.commands)).toEqual(['FetchPhoto'])
+    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhoto'])
   })
 
-  it('fetches nothing on a cold load of a route with no data behind it yet', () => {
-    expect(init(at('/admin/drafts')).commands ?? []).toEqual([])
-    expect(init(at('/admin/settings')).commands ?? []).toEqual([])
+  it('fetches the shell but no list on a cold load of a route with no data behind it yet', () => {
+    expect(commandNames(init(at('/admin/drafts')).commands)).toEqual(SHELL_READS)
+    expect(commandNames(init(at('/admin/settings')).commands)).toEqual(SHELL_READS)
   })
 
-  it('fetches nothing on a cold load of a URL no route names, and lands on NotFound', () => {
+  it('fetches the shell but no list on a URL no route names, and lands on NotFound', () => {
     const cold = init(at('/admin/photos/abc/edit'))
     expect(cold.model.route._tag).toBe('NotFound')
-    expect(cold.commands ?? []).toEqual([])
+    expect(commandNames(cold.commands)).toEqual(SHELL_READS)
   })
 })
 
@@ -119,17 +155,17 @@ describe('an in-app navigation', () => {
     const onAPhoto = init(at('/admin/photos/photo-1')).model
     const result = update(onAPhoto, onUrlChange(at('/admin')))
     expect(result.model.route).toEqual({ _tag: 'Library' })
-    expect(commandNames(result.commands)).toEqual(['FetchPhotos', 'FetchTags'])
+    expect(commandNames(result.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
   })
 
-  it('does not re-read the library when the route stays', () => {
-    expect(commandNames(update(library, onUrlChange(at('/admin'))).commands)).toEqual([])
+  it('re-reads the shell but not the list when the route stays', () => {
+    expect(commandNames(update(library, onUrlChange(at('/admin'))).commands)).toEqual(SHELL_READS)
   })
 
   it('re-reads the photo when the id changes within the Photo route', () => {
     const onAPhoto = init(at('/admin/photos/photo-1')).model
     const result = update(onAPhoto, onUrlChange(at('/admin/photos/photo-2')))
-    expect(dispatched(result)).toEqual([{ name: 'FetchPhoto', args: { id: 'photo-2' } }])
+    expect(listReads(result)).toEqual([{ name: 'FetchPhoto', args: { id: 'photo-2' } }])
   })
 
   it('pushes a URL inside the admin URL space, even one that names no route', () => {
@@ -168,7 +204,6 @@ describe('the Photo route', () => {
     expect(ready.model.photoStatus).toBe('ready')
     expect(ready.model.photo?.title).toBe('A Photo')
   })
-
   it('ignores a photo that arrives after the route moved on', () => {
     const elsewhere = update(loading, onUrlChange(at('/admin')))
     const stale = update(
@@ -190,6 +225,11 @@ describe('the Photo route', () => {
 
 // Scene asserts through the view, which is where the operator's side of a
 // route is visible: which page a URL draws, and where its links point.
+/** A proven session with no claim, which is the `dev` stage's Access
+ *  stand-down: the shell draws, and the sidebar has no address and no
+ *  sign-out to print. */
+const STANDDOWN = Message.SucceededGetSession({ email: null, teamDomain: null })
+
 describe('the page a route draws', () => {
   const app = { update, view }
 
@@ -197,7 +237,15 @@ describe('the page a route draws', () => {
     Scene.scene(
       app,
       Scene.given(init(at('/admin')).model),
-      Scene.expect(Scene.role('heading', { name: 'Photos' })).toExist(),
+      // The Page Head names the route, and the shell reads are still pending.
+      Scene.Command.resolveAll(
+        [FetchSessionCmd, STANDDOWN],
+        [FetchCountsCmd, Message.FailedGetCounts({})],
+        [FetchStorageCmd, Message.FailedGetStorage({})],
+        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null })],
+        [FetchTagsCmd, Message.SucceededFetchTags({ tags: [] })],
+      ),
+      Scene.expect(Scene.role('heading', { name: 'Library' })).toExist(),
     )
   })
 
@@ -205,8 +253,13 @@ describe('the page a route draws', () => {
     Scene.scene(
       app,
       Scene.given(init(at('/admin/photos/abc/edit')).model),
+      Scene.Command.resolveAll(
+        [FetchSessionCmd, STANDDOWN],
+        [FetchCountsCmd, Message.FailedGetCounts({})],
+        [FetchStorageCmd, Message.FailedGetStorage({})],
+      ),
       Scene.expect(Scene.role('heading', { name: 'Not found' })).toExist(),
-      Scene.expect(Scene.role('link', { name: '← Photos' })).toHaveAttr('href', '/admin'),
+      Scene.expect(Scene.role('link', { name: '← Library' })).toHaveAttr('href', '/admin'),
     )
   })
 
@@ -214,18 +267,27 @@ describe('the page a route draws', () => {
     Scene.scene(
       app,
       Scene.given(init(at('/admin')).model),
+      Scene.Command.resolveAll(
+        [FetchSessionCmd, STANDDOWN],
+        [FetchCountsCmd, Message.FailedGetCounts({})],
+        [FetchStorageCmd, Message.FailedGetStorage({})],
+        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null })],
+        [FetchTagsCmd, Message.SucceededFetchTags({ tags: [] })],
+      ),
       // The runtime reports the new URL after a navigation, exactly as it does
       // for a click and for the back button.
       Scene.Subscription.emit(onUrlChange(at('/admin/photos/photo-1'))),
-      Scene.Command.resolve(
-        FetchPhotoCmd({ id: 'photo-1' }),
-        Message.SucceededFetchPhoto({ id: PHOTO_ID, photo }),
+      Scene.Command.resolveAll(
+        [FetchSessionCmd, STANDDOWN],
+        [FetchCountsCmd, Message.FailedGetCounts({})],
+        [FetchStorageCmd, Message.FailedGetStorage({})],
+        [FetchPhotoCmd, Message.SucceededFetchPhoto({ id: PHOTO_ID, photo })],
       ),
       Scene.expect(Scene.role('heading', { name: 'A Photo' })).toExist(),
-      Scene.expect(Scene.role('link', { name: '← Photos' })).toHaveAttr('href', '/admin'),
+      Scene.expect(Scene.role('link', { name: '← Library' })).toHaveAttr('href', '/admin'),
       // The back link is a plain anchor: the runtime owns the interception, so
       // the view registers no click handler of its own.
-      Scene.expect(Scene.role('link', { name: '← Photos' })).not.toHaveHandler('click'),
+      Scene.expect(Scene.role('link', { name: '← Library' })).not.toHaveHandler('click'),
     )
   })
 })
