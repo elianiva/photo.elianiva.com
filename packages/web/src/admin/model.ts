@@ -22,13 +22,12 @@ import {
 
 import { Multi } from '@foldkit/ui/combobox'
 import * as Dialog from '@/components/ui/dialog'
-import * as Sheet from '@/components/ui/sheet'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Segment from '@/components/ui/segment'
 import * as Swatch from '@/components/ui/swatch'
 import * as Toast from '@/components/ui/toast'
 
-import { AppRoute } from './route'
+import { AppRoute, LibraryView } from './route'
 import { SectionEdit, SettingsDraft } from './settings-draft'
 import * as TagManager from './tag-manager'
 
@@ -66,27 +65,6 @@ export const QueueItem = S.Struct({
   error: S.optional(S.String),
 })
 export type QueueItem = typeof QueueItem.Type
-
-export const DraftFields = S.Struct({
-  title: S.String,
-  slug: S.String,
-  takenAt: S.String,
-  caption: S.String,
-  location: S.String,
-  camera: S.String,
-  lens: S.String,
-})
-export type DraftFields = typeof DraftFields.Type
-
-export const emptyDraft = (): DraftFields => ({
-  title: '',
-  slug: '',
-  takenAt: '',
-  caption: '',
-  location: '',
-  camera: '',
-  lens: '',
-})
 
 /** The photo, one tag, or the whole ticked selection awaiting destructive
  *  confirmation. `bulk` carries a count because there is no single label to
@@ -298,17 +276,6 @@ export const Model = S.Struct({
   // rather than a page inside the shell (see `views/editor.ts`)
   editor: EditorState,
 
-  // lightbox: photo currently shown full-size; null while browsing the grid
-  selectedId: S.NullOr(S.String),
-
-  // edit sheet
-  editSheet: Sheet.Model,
-  editingId: S.optional(S.String),
-  draft: DraftFields,
-  draftTagIds: S.Array(S.String),
-  draftCombo: Multi.Model,
-  saving: S.Boolean,
-
   // upload dialog
   uploadDialog: Dialog.Model,
   fileDrop: FileDrop.Model,
@@ -375,11 +342,6 @@ export const Message = defineMessageUnion({
   SucceededFetchPhoto: { id: PhotoId, photo: PhotoWithTags },
   FailedFetchPhoto: { id: PhotoId, message: S.String },
   FailedRpc: { message: S.String },
-  LoadMore: {},
-  SucceededFetchMore: {
-    photos: S.Array(PhotoWithTags),
-    nextCursor: S.NullOr(S.String),
-  },
 
   // the shell
   SucceededGetSession: { email: S.NullOr(S.String), teamDomain: S.NullOr(S.String) },
@@ -406,40 +368,26 @@ export const Message = defineMessageUnion({
   SubmitTagCreate: {},
   GotTagActionsMessage: { message: Dialog.Message },
 
-  // grid density
+  // grid density and view
   SelectedCols: { cols: GridCols },
+  /** The Library's view mode. The URL is the state, so this only prints it:
+   *  the arm writes the route and replaces the URL, and `ChangedUrl` reads it
+   *  back through the same table. */
+  SelectedView: { view: LibraryView },
   CompletedPersistCols: {},
-
-  // lightbox
-  ClickedPhoto: { id: S.String },
-  CloseLightbox: {},
-  NextPhoto: {},
-  PrevPhoto: {},
-
-  // edit sheet
-  OpenEdit: { photo: PhotoWithTags },
-  SetDraftField: {
-    field: S.Literals(['title', 'slug', 'takenAt', 'caption', 'location', 'camera', 'lens']),
-    value: S.String,
-  },
-  SaveEdits: {},
-  SavedEdits: { photos: S.Array(PhotoWithTags) },
-  GotEditSheetMessage: { message: Sheet.Message },
-  GotDraftComboMessage: { message: S.Unknown },
 
   // create tag inline (from either combo, the tag manager bar, or the
   // sidebar's per-row actions)
   CreateTagRequested: {
-    source: S.Literals(['draft', 'upload', 'manager', 'sidebar']),
+    source: S.Literals(['upload', 'manager', 'sidebar']),
     label: S.String,
   },
 
-  // remove a picked tag from the edit-sheet / upload-dialog chip row
-  RemoveDraftTag: { id: S.String },
+  // remove a picked tag from the upload dialog's chip row
   RemoveUploadTag: { id: S.String },
 
   SucceededCreateTag: {
-    source: S.Literals(['draft', 'upload', 'manager', 'sidebar']),
+    source: S.Literals(['upload', 'manager', 'sidebar']),
     tag: Tag,
   },
 

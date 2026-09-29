@@ -230,7 +230,7 @@ const uploadDialogContent = (
                     [h.Class('type-kicker text-role-text-secondary')],
                     ['Tags for this batch'],
                   ),
-                  embedCombo(model, 'upload', h),
+                  embedCombo(model, h),
                 ],
               ),
               ...(model.uploading

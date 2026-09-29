@@ -20,10 +20,10 @@
  * cell, which prints the original's byte count because no read returns the
  * PREVIEW Rendition's. Both are commented where they happen.
  *
- * The tile grid this replaces stays on disk — `views/grid.ts` is #27's to
- * re-introduce as the grid view, and its error state is reused here for a read
- * that could not be answered. The zero-photograph Library is not the grid's:
- * `libraryEmpty` draws the design's own empty state.
+ * The tile grid beside it — `views/grid.ts` — is the other view over the same
+ * read, reachable from the Library's view toggle; both draw the shared Pager
+ * and the shared error / filtered-empty states, so switching views keeps the
+ * page, the rows and the message in step.
  */
 
 import type { Html, HtmlBuilder } from 'foldkit/html'
@@ -32,9 +32,7 @@ import type { PhotoWithTags } from '@photo/shared'
 import * as Button from '@/components/ui/button'
 import { checkbox } from '@/components/ui/checkbox'
 import * as Dialog from '@/components/ui/dialog'
-import { Empty } from '@/components/ui/empty'
 import { libraryRow, libraryRowClass } from '@/components/ui/library-row'
-import { pager } from '@/components/ui/pager'
 import type { StatusVariant } from '@/components/ui/status'
 import {
   columnWidths,
@@ -47,8 +45,9 @@ import { cn } from '@/lib/utils'
 
 import { LIBRARY_PAGE_SIZE, Message as M } from '../model'
 import type { Model, Msg } from '../model'
-import { grid } from './grid'
 import { libraryEmpty } from './library-empty'
+import { libraryPager } from './library-pager'
+import { libraryError, libraryIsEmpty, libraryNoMatch } from './library-states'
 import type { Child } from './shared'
 import { formatBytes } from './shared'
 
@@ -344,18 +343,6 @@ const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // states
 // ---------------------------------------------------------------------------
 
-/** Whether anything narrows the list. #26 owns the whole filter state and the
- *  URL it will live in; the two filters the Admin has today are the sidebar's
- *  Tags and the Page Head's search. */
-const hasFilter = (model: Model): boolean =>
-  model.activeTagIds.length > 0 || model.searchQuery.trim() !== ''
-
-/** A Library with no Photographs at all: nothing narrows the list and the
- *  filtered total — which, with no filter, *is* the Library — is zero. Not the
- *  same predicate as "the filter matched nothing": that one is a filter hiding
- *  a Library that has Photographs. */
-const isEmptyLibrary = (model: Model): boolean => !hasFilter(model) && model.libraryTotal === 0
-
 /** The design's loading state: rows, not a spinner, drawn on the Library Row's
  *  own geometry so the Table Head's column widths hold while the page arrives
  *  and the table does not jump when it does. */
@@ -389,44 +376,6 @@ const skeletonTable = (h: HtmlBuilder<Msg>): Child => {
   )
 }
 
-/** Nothing for the current filter. Not the same claim as an empty library: this
- *  one says the query is wrong and offers the way back, so it gets its own
- *  copy rather than the empty library's. */
-const noMatchTable = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('mt-(--spacing-3xl)')],
-    [
-      Empty(
-        { className: 'border border-dashed border-role-outline p-(--spacing-3xl)' },
-        [
-          Empty.header({}, [], h),
-          Empty.title({}, ['Nothing matches this filter'], h),
-          Empty.description(
-            {},
-            [
-              'The Library has Photographs; this filter selects none of them.',
-              ...(model.activeTagIds.length > 0
-                ? [
-                    h.button(
-                      [
-                        h.OnClick(M.ToggledTagFilter({ id: model.activeTagIds[0] ?? '' })),
-                        h.Class(
-                          'type-caption underline underline-offset-4 hover:text-role-text-primary',
-                        ),
-                      ],
-                      ['Clear the Tag filter'],
-                    ),
-                  ]
-                : []),
-            ],
-            h,
-          ),
-        ],
-        h,
-      ),
-    ],
-  )
-
 // ---------------------------------------------------------------------------
 // the table
 // ---------------------------------------------------------------------------
@@ -436,13 +385,11 @@ export const libraryTable = (model: Model, h: HtmlBuilder<Msg>): Child => {
     model.status === 'loading'
       ? skeletonTable(h)
       : model.status === 'error'
-        ? // The error state and its Retry are the grid's, and they are still
-          // the truth about a list that could not be read.
-          grid(model, h)
+        ? libraryError(model, h)
         : model.photos.length === 0
-          ? isEmptyLibrary(model)
+          ? libraryIsEmpty(model)
             ? libraryEmpty(h)
-            : noMatchTable(model, h)
+            : libraryNoMatch(model, h)
           : h.div(
               [h.DataAttribute('slot', 'library-table')],
               [
@@ -455,7 +402,7 @@ export const libraryTable = (model: Model, h: HtmlBuilder<Msg>): Child => {
                   h,
                 ),
                 ...model.photos.map((photo) => row(photo, model, h)),
-                pager({ ...pagerPage(model), className: 'border-t border-role-hairline' }, h),
+                libraryPager(model, h),
               ],
             )
   return h.div([], [body, rowMenu(model, h), addTagDialog(model, h)])
@@ -473,20 +420,5 @@ const headSelection = (model: Model) => {
     ...(ticked > 0 && ticked < ids.length ? { isIndeterminate: true } : {}),
     ariaLabel: 'Select every photograph on this page',
     onToggle: M.ToggledPageSelection(),
-  }
-}
-
-/** The Pager's own arithmetic: the page's first and last row, and the filtered
- *  total behind them. */
-const pagerPage = (model: Model) => {
-  const from = model.libraryPage * LIBRARY_PAGE_SIZE + 1
-  return {
-    from,
-    to: from + model.photos.length - 1,
-    total: model.libraryTotal,
-    onPrevious: M.SteppedLibraryPage({ delta: -1 }),
-    onNext: M.SteppedLibraryPage({ delta: 1 }),
-    isPreviousDisabled: model.libraryPage === 0,
-    isNextDisabled: model.nextCursor === null,
   }
 }

@@ -10,7 +10,7 @@
  * itself.
  */
 
-import { Schema as S, pipe } from 'effect'
+import { Option, Schema as S, pipe } from 'effect'
 import { PhotoId } from '@photo/shared'
 import {
   defineRouteUnion,
@@ -18,13 +18,28 @@ import {
   mapTo,
   oneOf,
   parseUrlWithFallback,
+  query,
   schemaSegment,
   slash,
 } from 'foldkit/route'
 
+/** The Library's two views: the table and the tile grid. The same read feeds
+ *  both, so this is a view mode over one Library and not a second page. */
+export const LibraryView = S.Literals(['list', 'grid'])
+export type LibraryView = typeof LibraryView.Type
+
+/** The Library's query string. `view` is the only parameter the Library carries
+ *  today; #26 adds the filter set (status, ratio, sort, tag, q, page) to this
+ *  same Struct. Absence is the default, so `/admin` is the table and
+ *  `?view=grid` is the grid. */
+export const LibraryQuery = S.Struct({
+  view: S.OptionFromOptional(LibraryView),
+})
+export type LibraryQuery = typeof LibraryQuery.Type
+
 export const AppRoute = defineRouteUnion({
-  /** `/admin` — every Photo. */
-  Library: {},
+  /** `/admin` — every Photo. `?view=grid` draws it as tiles. */
+  Library: LibraryQuery.fields,
   /** `/admin/atoms` — the Desk's design-system sheet: every atom in
    *  `components/ui`, drawn in the page each one belongs to. A surface for
    *  looking at the atoms, not a destination: nothing in the Admin links to
@@ -52,7 +67,7 @@ export type AppRoute = typeof AppRoute.Type
 const adminRoot = 'admin'
 const admin = literal(adminRoot)
 
-export const libraryRouter = pipe(admin, mapTo(AppRoute.Library))
+export const libraryRouter = pipe(admin, query(LibraryQuery), mapTo(AppRoute.Library))
 
 export const atomsRouter = pipe(admin, slash(literal('atoms')), mapTo(AppRoute.Atoms))
 
@@ -92,7 +107,7 @@ const adminParser = oneOf(
  *  its own — it is the path that named none, so it prints as itself. */
 export const appRouteToUrl = (route: AppRoute): string =>
   AppRoute.match(route, {
-    Library: () => libraryRouter(),
+    Library: ({ view }) => libraryRouter({ view }),
     Atoms: () => atomsRouter(),
     Drafts: () => draftsRouter(),
     Scheduled: () => scheduledRouter(),
@@ -118,3 +133,22 @@ export const urlToAppRoute = parseUrlWithFallback(adminParser, AppRoute.NotFound
  *  client's to draw, and a mistyped admin path would boot the public Front. */
 export const isAdminPath = (pathname: string): boolean =>
   pathname === `/${adminRoot}` || pathname.startsWith(`/${adminRoot}/`)
+
+/** The Library route at a view, with the default (the table) named by
+ *  omission so a bare `/admin` stays the plain URL. */
+export const libraryRoute = (view?: LibraryView): AppRoute =>
+  AppRoute.Library({
+    view: view === undefined || view === 'list' ? Option.none() : Option.some(view),
+  })
+
+/** The Library's URL at a view. The same table that parsed the URL prints it,
+ *  so a link and the toggle cannot disagree about what a view is called. */
+export const libraryUrl = (view?: LibraryView): string => appRouteToUrl(libraryRoute(view))
+
+/** The view a route asks for. The route is the whole of a URL's meaning, so
+ *  this is where the view is read and nowhere else. A route that is not the
+ *  Library has no view, and the answer is the default — the table. */
+export const libraryViewOf = (route: AppRoute): LibraryView => {
+  if (route._tag !== 'Library') return 'list'
+  return Option.isSome(route.view) ? route.view.value : 'list'
+}

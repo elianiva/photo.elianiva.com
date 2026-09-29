@@ -2,9 +2,8 @@
  * Admin view root: the shell every route renders inside. Two columns — the
  * sidebar (brand, nav, tags, session footer) and the page column, which opens
  * with the Page Head and continues into the route's own page. The app-level
- * overlays (edit Sheet, upload Dialog, tag actions, confirm AlertDialog, toast
- * stack) plus the Library's lightbox sit on top of both. The page itself is
- * chosen by the route in `views/pages.ts`.
+ * overlays (upload Dialog, tag actions, confirm AlertDialog, toast stack) sit
+ * on top of both. The page itself is chosen by the route in `views/pages.ts`.
  *
  * The root element carries the theme scope, read off the route the Model
  * already holds. `data-theme="dark"` re-themes this whole subtree and nothing
@@ -28,8 +27,6 @@ import { scopeTheme, themeForRoute } from '@/lib/theme'
 
 import type { Model, Msg } from './model'
 import { editorDocument } from './views/editor'
-import { editSheet } from './views/edit-sheet'
-import { lightbox } from './views/lightbox'
 import { confirmDialog, toastStack } from './views/overlays'
 import { documentTitle, pageHead } from './views/page-head'
 import { routePage } from './views/pages'
@@ -55,11 +52,9 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
         ],
       ),
       tagActionsDialog(model, h),
-      editSheet(model, h),
       uploadDialog(model, h),
       confirmDialog(model, h),
       toastStack(model, h),
-      ...(model.selectedId !== null ? [lightbox(model, h)] : []),
     ],
   ),
 })

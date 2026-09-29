@@ -19,6 +19,7 @@
  *   `Update` exist as a pair.
  */
 
+import { Option } from 'effect'
 import { nearestRatio, ratioAspect } from '@photo/shared'
 import type { PhotoPresentation, PhotoRatio, PhotoWithTags } from '@photo/shared'
 
@@ -48,7 +49,7 @@ export const initEditorState = (): EditorState => ({
   saving: false,
   // A cold load of the Editor's URL was not opened from a list, so the honest
   // answer is the Library. `ChangedUrl` records the real one when there is one.
-  returnRoute: AppRoute.Library({}),
+  returnRoute: AppRoute.Library({ view: Option.none() }),
   leaveDialog: Dialog.init({ id: 'admin-editor-leave' }),
   leaveUrl: '',
 })
@@ -280,4 +281,4 @@ export const editorReturnUrl = (returnRoute: AppRoute): string =>
   returnRoute._tag === 'Uploads' ||
   returnRoute._tag === 'Trash'
     ? appRouteToUrl(returnRoute)
-    : libraryRouter()
+    : libraryRouter({ view: Option.none() })

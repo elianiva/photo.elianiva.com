@@ -70,11 +70,15 @@ Harness: `agent-browser` for every user path. No RPC probes — verify what the 
 UI handles that actually exist in this repo:
 
 - Gallery photos by title text or `photoWithTags.id` derived `aria-label`
-- Admin header: link `photo.elianiva.com`, button `Upload photos`, toggle buttons with `aria-label "2 columns"` through `"6 columns"` and `aria-pressed`
-- Tag filter: `TagManager` chips labeled by `tag.label`, token `activeSlug` selects one tag
-- Edit sheet: fields `title`, `slug`, `takenAt`, `caption`, `location`, `camera`, `lens` via draft combo `Multi` (Foldkit `defineMessageUnion`)
+- Admin header: link `Elianiva`, button `Upload`, search field by `aria-label "Search photographs"`
+- Library view toggle: buttons `List view` / `Grid view` with `aria-pressed`; the choice is URL state (`/admin?view=grid`)
+- Library controls: in grid view, density buttons `aria-label "2 columns"` through `"6 columns"` with `aria-pressed`
+- Library table: rows by `libraryRow` slots, pager `Next page` / `Previous page`; row `⋯` by `aria-label "More actions for <title>"`
+- Library grid: square tiles by `aria-label "Open <title>"`; hover overlay has `Edit` and `Delete`; a tile (or its `Edit`) opens the **Editor route** `/admin/photos/<id>`
+- Tag filter: `TagManager` chips labeled by `tag.label`
 - Upload dialog: `FileDrop` + `Multi` combo for tag ids + `takenAt` input, queue rows by `QueueItem.id` (`${name}:${size}`)
-- Lightbox: `selectedId` controls mount; keyboard `Escape`, `ArrowLeft`, `ArrowRight` via `admin/subscriptions.ts` while `selectedId !== null`
+- Editor route `/admin/photos/<id>`: Top Bar, Stage (`data-slot="mat"`), 360px Inspector; `← Library` returns to the view it was opened from
+- Lightbox (public gallery only): keyboard `Escape` dismisses it (`home/subscriptions.ts`); the Admin has no lightbox any more
 
 Generic recipes:
 
@@ -93,9 +97,11 @@ npx agent-browser press --key "Escape"
 ```bash
 BASE="${BASE:-http://localhost:5173}"
 npx agent-browser open "$BASE/admin"
-npx agent-browser click --role button --name "Upload photos"
+npx agent-browser click --role button --name "Upload"
 # tag chip toggle is via TagManager submodel — click chip by label
 npx agent-browser click --role button --name "Kyoto"
+# switch the Library to the tile grid; the URL becomes /admin?view=grid
+npx agent-browser click --role button --name "Grid view"
 # upload: pick files via FileDrop, set tags via combo, then Start uploads
 npx agent-browser click --role button --name "Start uploads"
 ```
@@ -114,8 +120,8 @@ Locations (proof survives cleanup):
 Standards:
 
 - UI proof: ARIA snapshot plus screenshot with app identity visible (`photo.elianiva.com` / `Elianiva` header). `npx agent-browser snapshot > .cursor/skills/verify-photo/artifacts/<id>/page.aria.txt` and `npx agent-browser screenshot .cursor/skills/verify-photo/artifacts/<id>/page.png`
-- Mutation proof: drive the write in the UI, then read back via a second UI view (re-open the sheet, reload the grid, or open the lightbox) — a toast alone is insufficient.
-- Image proof: open the photo's lightbox and assert the `<img src>` points at the API Worker's `/image/<r2Key>` and loads (alt text / network 200); the Worker's `cache-control: public, max-age=31536000, immutable` is what the response carries.
+- Mutation proof: drive the write in the UI, then read back via a second UI view (re-open the Editor, reload the Library, or reload the `/admin/photos/<id>` route) — a toast alone is insufficient.
+- Image proof (public gallery): open the photo's lightbox and assert the `<img src>` points at the API Worker's `/image/<r2Key>` and loads (alt text / network 200); the Worker's `cache-control: public, max-age=31536000, immutable` is what the response carries. The Admin's grid tiles assert their load against the same `/image/<r2Key>` URLs.
 - Never assert a skipped entry point as verified through a different path. Report unreachable with the attempted command and the missing precondition.
 
 ## Cleanup

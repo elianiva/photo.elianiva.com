@@ -1,12 +1,6 @@
 /**
  * Admin Subscriptions — app-lifecycle listeners declared on the Model.
  *
- * Two listeners, and neither of them is about the Model.
- *
- * The lightbox keys only run while the lightbox is open: Escape closes, ←/→
- * step through the loaded photos, and changing `selectedId` tears the listener
- * down (close) or brings it up (open).
- *
  * The Editor's two listeners run only while the Editor is on screen, and
  * `Escape` is answered only when nothing else is holding it — the leave guard
  * is a Dialog, and a Dialog's own Escape is a close. So the guard's own key
@@ -67,26 +61,6 @@ const focusSearch = (): void => {
 }
 
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
-  lightboxKeys: entry(
-    { selectedId: S.NullOr(S.String) },
-    {
-      modelToDependencies: (model) => ({ selectedId: model.selectedId }),
-      dependenciesToStream: ({ selectedId }) =>
-        Stream.when(
-          Subscription.fromEventFilterMap({
-            target: window,
-            type: 'keydown',
-            filterMapEvent: (event) => {
-              if (event.key === 'Escape') return Option.some(Message.CloseLightbox())
-              if (event.key === 'ArrowRight') return Option.some(Message.NextPhoto())
-              if (event.key === 'ArrowLeft') return Option.some(Message.PrevPhoto())
-              return Option.none()
-            },
-          }),
-          Effect.sync(() => selectedId !== null),
-        ),
-    },
-  ),
   // `Escape` leaves the Editor, through the same guard as `← Library` and a
   // Back press: ask when the draft is dirty, go when it is not. It names no
   // URL, because it has none of its own — the Model answers "back" with the
