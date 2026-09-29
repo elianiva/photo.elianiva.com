@@ -37,7 +37,7 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                   model.pendingConfirm === undefined
                     ? ''
                     : model.pendingConfirm.kind === 'photo'
-                      ? `“${model.pendingConfirm.label}” will be removed from storage permanently.`
+                      ? `“${model.pendingConfirm.label}” will be moved to Trash. You can restore it from there.`
                       : `Tag “${model.pendingConfirm.label}” will be deleted and detached from all photos.`,
                 ],
                 innerH,

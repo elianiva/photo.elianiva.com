@@ -62,10 +62,13 @@ SET mime = COALESCE(mime, 'image/jpeg');
 
 -- Photo Number: one site-wide serial, oldest photograph first, undated Photos
 -- last, ties broken by id so the assignment is deterministic. `number` stays
--- nullable because it is a stored serial rather than a row identity — a
--- Photo Number is assigned on insert and preserved through trash and purge,
--- which a NOT NULL column could not express without rebuilding the table.
--- #16 must keep the tolerance below in step with its `nearestRatio`.
+-- nullable because the unique index that makes it work is a partial one:
+-- `WHERE number IS NOT NULL` is what lets a row that has not been numbered yet
+-- exist at all, and SQLite cannot tighten a column without a table rebuild.
+-- Preservation through trash and purge — which the counter table in 0006
+-- carries, not this column — is not a reason for nullability. A NOT NULL
+-- column would make the index predicate dead. #16 assigns a number on every
+-- insert and the test asserts every legacy row ends up numbered.
 WITH ranked AS (
   SELECT id, ROW_NUMBER() OVER (ORDER BY takenAt IS NULL, takenAt, id) AS serial
   FROM photos
@@ -77,6 +80,11 @@ WHERE number IS NULL;
 -- Ratio: snap the measured frame to the nearest supported value within 0.02.
 -- A frame matching none of the six stays NULL — the author picks its Ratio in
 -- the Editor rather than have the migration invent one.
+--
+-- #16's `nearestRatio` is the TypeScript twin of this CASE. The tolerance and
+-- the six values are duplicated on purpose — the backfill has to be SQL — and
+-- `migrations.test.ts` runs both rules over one table of frames, so the two
+-- cannot drift apart silently.
 UPDATE photos
 SET ratio = CASE
   WHEN ABS(CAST(width AS REAL) / height - 1.5)        <= 0.02 THEN '3:2'

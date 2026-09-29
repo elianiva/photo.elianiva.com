@@ -29,6 +29,8 @@ export interface PhotoSeed {
   readonly metadata?: string
   readonly blurhash?: string
   readonly contentType?: string
+  readonly width?: number
+  readonly height?: number
   readonly tagIds?: ReadonlyArray<string>
 }
 
@@ -36,8 +38,8 @@ const toCreateInput = (seed: PhotoSeed): CreatePhotoInput => ({
   slug: seed.slug,
   title: seed.title,
   r2Key: seed.r2Key ?? `originals/${seed.slug}.jpg`,
-  width: 1200,
-  height: 800,
+  width: seed.width ?? 1200,
+  height: seed.height ?? 800,
   takenAt: seed.takenAt,
   aperture: seed.aperture,
   shutter: seed.shutter,

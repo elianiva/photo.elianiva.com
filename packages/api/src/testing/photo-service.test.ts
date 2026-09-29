@@ -1,15 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
-import { PhotoNotFound, SlugConflict, StorageError, formatExifLine } from '@photo/shared'
-import type { D1DatabaseLike } from '../gateway'
+import {
+  InvalidInput,
+  PhotoNotFound,
+  SlugConflict,
+  StorageError,
+  type PhotoStatus,
+  formatExifLine,
+} from '@photo/shared'
+import { Gateway, type D1DatabaseLike } from '../gateway'
+
 import {
   PhotoService,
   type PhotoListFilter,
   type PhotoListPage,
+  type PhotoSort,
   type PhotoUpdatePatch,
+  type StorageUsage,
 } from '../photo'
-import { createPhoto, createTag, fail, type PhotoSeed } from './fixtures'
+import { createPhoto, createTag, fail, JPEG_BYTES, type PhotoSeed } from './fixtures'
 import { makeTestHarness, withTestServices, type TestHarness } from './harness'
+
+const OLDEST_FIRST: PhotoSort = { key: 'takenAt', direction: 'asc' }
 
 const list = (harness: TestHarness, filter: PhotoListFilter) =>
   Effect.runPromise(
@@ -35,13 +47,65 @@ const update = (harness: TestHarness, id: string, patch: PhotoUpdatePatch) =>
     ),
   )
 
-const remove = (harness: TestHarness, id: string) =>
+const setStatus = (harness: TestHarness, id: string, status: PhotoStatus) =>
   Effect.runPromise(
     withTestServices(
-      PhotoService.use((service) => service.remove(id)),
+      PhotoService.use((service) => service.setStatus(id, status)),
       harness,
     ),
   )
+
+const trash = (harness: TestHarness, id: string) =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.trash(id)),
+      harness,
+    ),
+  )
+
+const restore = (harness: TestHarness, id: string) =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.restore(id)),
+      harness,
+    ),
+  )
+
+const purge = (harness: TestHarness, id: string) =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.purge(id)),
+      harness,
+    ),
+  )
+
+const counts = (harness: TestHarness) =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.counts()),
+      harness,
+    ),
+  )
+
+const storageUsage = (harness: TestHarness): Promise<StorageUsage> =>
+  Effect.runPromise(
+    withTestServices(
+      PhotoService.use((service) => service.storageUsage()),
+      harness,
+    ),
+  )
+
+/** A bucket whose `put` fails, to exercise the rollback `create` owes. */
+const withFailingPut = (harness: TestHarness): TestHarness => ({
+  ...harness,
+  gateway: Gateway.of({
+    db: harness.db,
+    photos: {
+      ...harness.photos,
+      put: () => Promise.reject(new Error('R2 is unreachable')),
+    },
+  }),
+})
 
 const slugsIn = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
   harness.db
@@ -49,11 +113,31 @@ const slugsIn = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
     .all<{ slug: string }>()
     .then((raw) => raw.results?.map((row) => row.slug) ?? [])
 
+const numbersIn = (harness: TestHarness): Promise<ReadonlyArray<number | null>> =>
+  harness.db
+    .prepare('SELECT number FROM photos ORDER BY number')
+    .all<{ number: number | null }>()
+    .then((raw) => raw.results?.map((row) => row.number) ?? [])
+
 const linkedPhotoIds = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
   harness.db
     .prepare('SELECT photoId FROM photo_tags ORDER BY photoId, tagId')
     .all<{ photoId: string }>()
     .then((raw) => raw.results?.map((row) => row.photoId) ?? [])
+
+const deletedAtOf = (harness: TestHarness, id: string): Promise<string | null> =>
+  harness.db
+    .prepare('SELECT deletedAt FROM photos WHERE id = ?')
+    .bind(id)
+    .first<{ deletedAt: string | null }>()
+    .then((row) => row?.deletedAt ?? null)
+
+/** The bytes behind an R2 key, or null when the key is empty. */
+const bytesAt = async (harness: TestHarness, key: string): Promise<Uint8Array | null> => {
+  const object = await harness.photos.get(key)
+  if (object === null || object.body === null) return null
+  return new Uint8Array(await new Response(object.body).arrayBuffer())
+}
 
 /** The service only omits `nextCursor` on a short page; a bare `?.` here would
  *  let a regression fall through as "page one again" and pass. */
@@ -70,25 +154,36 @@ interface PhotoRowSeed {
   readonly id: string
   readonly slug: string
   readonly takenAt?: string | null
+  readonly width?: number
+  readonly height?: number
+  readonly status?: PhotoStatus
+  readonly ratio?: string | null
+  readonly deletedAt?: string | null
+  readonly bytes?: number | null
 }
 
-/** Rows the service API cannot produce: a fixed id, or no `takenAt` at all. */
-const seedPhotoRow = async (db: D1DatabaseLike, row: PhotoRowSeed): Promise<void> => {
+/** Rows the service API cannot produce: a fixed id, an undated Photo, or a
+ *  trashed one. */
+const seedPhotoRow = async (db: TestHarness['db'], row: PhotoRowSeed): Promise<void> => {
   await db
     .prepare(
-      `INSERT INTO photos (id, slug, title, r2Key, width, height, takenAt, metadata, blurhash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO photos (id, slug, title, r2Key, width, height, status, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       row.id,
       row.slug,
       row.slug,
       `originals/${row.id}.jpg`,
-      1200,
-      800,
+      row.width ?? 1200,
+      row.height ?? 800,
+      row.status ?? 'published',
+      row.ratio === undefined ? '3:2' : row.ratio,
+      row.bytes ?? null,
       row.takenAt ?? null,
       '{}',
       null,
+      row.deletedAt ?? null,
     )
     .run()
 }
@@ -121,6 +216,17 @@ describe('PhotoService.list', () => {
     expect(page.items.map((item) => item.takenAt)).toEqual(['2024-02-02', undefined, undefined])
   })
 
+  it('sorts undated photos last ascending too, not first', async () => {
+    const harness = makeTestHarness()
+    await seedPhotoRow(harness.db, { id: 'photo_a', slug: 'a', takenAt: '2024-01-01' })
+    await seedPhotoRow(harness.db, { id: 'photo_b', slug: 'b', takenAt: '2024-05-01' })
+    await seedPhotoRow(harness.db, { id: 'photo_c', slug: 'c', takenAt: null })
+
+    const page = await list(harness, { sort: OLDEST_FIRST })
+
+    expect(page.items.map((item) => item.id)).toEqual(['photo_a', 'photo_b', 'photo_c'])
+  })
+
   it('attaches each photo tags ordered by label, not by slug', async () => {
     const harness = makeTestHarness()
     const film = await createTag(harness, 'aaa', 'Film')
@@ -144,33 +250,92 @@ describe('PhotoService.list', () => {
     expect(page.items[1]?.tags).toEqual([])
   })
 
-  it('narrows to photos carrying tagSlug', async () => {
+  it('narrows to the photos carrying any of the given tags', async () => {
     const harness = makeTestHarness()
     const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
     const film = await createTag(harness, 'film', 'Film')
+    const night = await createTag(harness, 'night', 'Night')
     const tagged = await seed(harness, {
       slug: 'temple',
       title: 'Temple',
+      takenAt: '2024-05-01',
       tagIds: [kyoto.id, film.id],
     })
-    await seed(harness, { slug: 'harbour', title: 'Harbour', tagIds: [film.id] })
-    await seed(harness, { slug: 'untagged', title: 'Untagged' })
+    await seed(harness, {
+      slug: 'harbour',
+      title: 'Harbour',
+      takenAt: '2024-04-01',
+      tagIds: [film.id],
+    })
+    const alsoTagged = await seed(harness, {
+      slug: 'alley',
+      title: 'Alley',
+      takenAt: '2024-03-01',
+      tagIds: [night.id],
+    })
+    await seed(harness, { slug: 'untagged', title: 'Untagged', takenAt: '2024-02-01' })
 
-    const page = await list(harness, { tagSlug: 'kyoto' })
-
-    expect(page.items.map((item) => item.id)).toEqual([tagged.id])
-    expect(page.items[0]?.tags?.map((tag) => tag.slug)).toEqual(['film', 'kyoto'])
+    expect((await list(harness, { tagIds: [kyoto.id] })).items.map((item) => item.id)).toEqual([
+      tagged.id,
+    ])
+    expect(
+      (await list(harness, { tagIds: [kyoto.id, night.id] })).items.map((item) => item.id),
+    ).toEqual([tagged.id, alsoTagged.id])
+    expect(
+      (await list(harness, { tagIds: [film.id] })).items[0]?.tags?.map((tag) => tag.slug),
+    ).toEqual(['film', 'kyoto'])
   })
 
-  it('returns nothing for a tagSlug nobody carries', async () => {
+  it('returns nothing for a tag nobody carries', async () => {
     const harness = makeTestHarness()
     const film = await createTag(harness, 'film', 'Film')
     await seed(harness, { slug: 'temple', title: 'Temple', tagIds: [film.id] })
 
-    const page = await list(harness, { tagSlug: 'nowhere' })
+    const page = await list(harness, { tagIds: ['tag_nowhere'] })
 
     expect(page.items).toEqual([])
     expect(page.nextCursor).toBeNull()
+  })
+
+  it('narrows to a status', async () => {
+    const harness = makeTestHarness()
+    const draft = await seed(harness, { slug: 'draft', title: 'Draft' })
+    const published = await seed(harness, { slug: 'published', title: 'Published' })
+    await setStatus(harness, draft.id, 'draft')
+    await setStatus(harness, published.id, 'failed')
+
+    expect((await list(harness, { status: 'draft' })).items.map((item) => item.id)).toEqual([
+      draft.id,
+    ])
+    expect((await list(harness, { status: 'failed' })).items.map((item) => item.id)).toEqual([
+      published.id,
+    ])
+    expect((await list(harness, { status: 'published' })).items).toEqual([])
+  })
+
+  it('narrows to a ratio', async () => {
+    const harness = makeTestHarness()
+    await seedPhotoRow(harness.db, { id: 'photo_tall', slug: 'tall', ratio: '2:3' })
+    await seedPhotoRow(harness.db, { id: 'photo_wide', slug: 'wide', ratio: '16:9' })
+    await seedPhotoRow(harness.db, { id: 'photo_unset', slug: 'unset', ratio: null })
+
+    expect((await list(harness, { ratio: '2:3' })).items.map((item) => item.id)).toEqual([
+      'photo_tall',
+    ])
+    expect((await list(harness, { ratio: '9:16' })).items).toEqual([])
+  })
+
+  it('combines a status, a ratio and a tag', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    const wanted = await seed(harness, { slug: 'wanted', title: 'Wanted', tagIds: [kyoto.id] })
+    await setStatus(harness, wanted.id, 'draft')
+    await seed(harness, { slug: 'other-status', title: 'Other', tagIds: [kyoto.id] })
+    await seed(harness, { slug: 'other-tag', title: 'Other tag', tagIds: [] })
+
+    const page = await list(harness, { status: 'draft', ratio: '3:2', tagIds: [kyoto.id] })
+
+    expect(page.items.map((item) => item.id)).toEqual([wanted.id])
   })
 
   it('matches q case-insensitively against title, slug and metadata', async () => {
@@ -197,6 +362,21 @@ describe('PhotoService.list', () => {
 
     const noMatch = await list(harness, { q: 'nothing here' })
     expect(noMatch.items).toEqual([])
+  })
+
+  it('reads LIKE wildcards in q as literal characters', async () => {
+    const harness = makeTestHarness()
+    const percent = await seed(harness, { slug: 'exposure', title: 'Exposure 100%' })
+    await seed(harness, { slug: 'long-exposure', title: 'Exposure 1000' })
+    const underscore = await seed(harness, { slug: 'street', title: 'A_B street' })
+    await seed(harness, { slug: 'alley', title: 'A X B street' })
+
+    // Unescaped, `%` matches the empty string after "100" and `A_B` matches
+    // "A X B", so both searches would return the rows they must not.
+    expect((await list(harness, { q: '100%' })).items.map((item) => item.id)).toEqual([percent.id])
+    expect((await list(harness, { q: 'a_b' })).items.map((item) => item.id)).toEqual([
+      underscore.id,
+    ])
   })
 
   it('walks the whole gallery by cursor without overlap', async () => {
@@ -237,6 +417,82 @@ describe('PhotoService.list', () => {
     expect(third.nextCursor).toBeNull()
   })
 
+  it('pages oldest first just as exactly', async () => {
+    const harness = makeTestHarness()
+    await seedPhotoRow(harness.db, { id: 'photo_1', slug: 'p1', takenAt: '2024-06-01' })
+    await seedPhotoRow(harness.db, { id: 'photo_2', slug: 'p2', takenAt: '2024-05-01' })
+    await seedPhotoRow(harness.db, { id: 'photo_3', slug: 'p3', takenAt: '2024-04-01' })
+    await seedPhotoRow(harness.db, { id: 'photo_4', slug: 'p4', takenAt: '2024-03-01' })
+    await seedPhotoRow(harness.db, { id: 'photo_5', slug: 'p5', takenAt: null })
+
+    const first = await list(harness, { limit: 2, sort: OLDEST_FIRST })
+    expect(first.items.map((item) => item.id)).toEqual(['photo_4', 'photo_3'])
+
+    const second = await list(harness, { limit: 2, sort: OLDEST_FIRST, cursor: cursorOf(first) })
+    expect(second.items.map((item) => item.id)).toEqual(['photo_2', 'photo_1'])
+
+    const third = await list(harness, { limit: 2, sort: OLDEST_FIRST, cursor: cursorOf(second) })
+    expect(third.items.map((item) => item.id)).toEqual(['photo_5'])
+    expect(third.nextCursor).toBeNull()
+  })
+
+  it('refuses a cursor cut under another sort', async () => {
+    const harness = makeTestHarness()
+    await seed(harness, { slug: 'one', title: 'One', takenAt: '2024-05-01' })
+    await seed(harness, { slug: 'two', title: 'Two', takenAt: '2024-04-01' })
+    const first = await list(harness, { limit: 1 })
+
+    const error = await fail(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.list({ limit: 1, sort: OLDEST_FIRST, cursor: cursorOf(first) }),
+        ),
+        harness,
+      ),
+    )
+
+    expect(error).toBeInstanceOf(InvalidInput)
+    expect(error.message).toContain('takenAt:desc')
+  })
+
+  it('refuses a cursor whose key is the wrong length', async () => {
+    const harness = makeTestHarness()
+    await seed(harness, { slug: 'one', title: 'One', takenAt: '2024-05-01' })
+    const short = btoa(JSON.stringify({ sort: 'takenAt:desc', key: ['2024-05-01'] }))
+
+    // Three sort levels, one value: binding it would fail inside the query and
+    // come back as a StorageError rather than as the caller mistake it is.
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.list({ limit: 1, cursor: short })),
+          harness,
+        ),
+      ),
+    ).toBeInstanceOf(InvalidInput)
+  })
+
+  it('treats a malformed cursor as no cursor at all', async () => {
+    const harness = makeTestHarness()
+    await seed(harness, { slug: 'one', title: 'One', takenAt: '2024-05-01' })
+
+    const page = await list(harness, { cursor: 'not-base64!' })
+
+    expect(page.items.map((item) => item.slug)).toEqual(['one'])
+  })
+
+  it('leaves a trashed photo out of every page', async () => {
+    const harness = makeTestHarness()
+    const kept = await seed(harness, { slug: 'kept', title: 'Kept', takenAt: '2024-05-01' })
+    const binned = await seed(harness, { slug: 'binned', title: 'Binned', takenAt: '2024-04-01' })
+    await trash(harness, binned.id)
+
+    const page = await list(harness, { limit: 10 })
+
+    expect(page.items.map((item) => item.id)).toEqual([kept.id])
+    expect(page.nextCursor).toBeNull()
+  })
+
   it('loads tags for a page wider than the chunked IN list', async () => {
     const harness = makeTestHarness()
     const film = await createTag(harness, 'film', 'Film')
@@ -256,7 +512,7 @@ describe('PhotoService.list', () => {
 })
 
 describe('PhotoService.get', () => {
-  it('returns the photo with its tags', async () => {
+  it('returns the photo with its tags and its lifecycle fields', async () => {
     const harness = makeTestHarness()
     const tag = await createTag(harness, 'kyoto', 'Kyoto')
     const created = await seed(harness, {
@@ -275,6 +531,10 @@ describe('PhotoService.get', () => {
       r2Key: 'originals/kyoto-1.jpg',
       width: 1200,
       height: 800,
+      status: 'published',
+      number: 1,
+      ratio: '3:2',
+      bytes: 4,
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour', location: 'Kyoto' },
       blurhash: null,
@@ -297,6 +557,21 @@ describe('PhotoService.get', () => {
     )
 
     expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
+  })
+
+  it('fails with PhotoNotFound for a trashed photo', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, created.id)
+
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.get(created.id)),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: created.id }))
   })
 })
 
@@ -335,6 +610,10 @@ describe('PhotoService.create', () => {
       r2Key: 'originals/kyoto-1.webp',
       width: 1200,
       height: 800,
+      status: 'published',
+      number: 1,
+      ratio: '3:2',
+      bytes: 4,
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour' },
       blurhash: 'LEHV6nWB2',
@@ -346,12 +625,100 @@ describe('PhotoService.create', () => {
     })
   })
 
+  it('numbers photos from one, in the order they arrive', async () => {
+    const harness = makeTestHarness()
+
+    await seed(harness, { slug: 'one', title: 'One' })
+    await seed(harness, { slug: 'two', title: 'Two' })
+    const third = await seed(harness, { slug: 'three', title: 'Three' })
+
+    expect((await get(harness, third.id)).number).toBe(3)
+    expect(await numbersIn(harness)).toEqual([1, 2, 3])
+  })
+
+  it('gives two concurrent uploads distinct numbers', async () => {
+    const harness = makeTestHarness()
+
+    // The counter is bumped and spent in one transaction, so the two inserts
+    // serialise. A read-then-write (SELECT MAX, then INSERT) is what this
+    // locks out: it interleaves at the read and both uploads get number 1.
+    await Promise.all([
+      seed(harness, { slug: 'one', title: 'One' }),
+      seed(harness, { slug: 'two', title: 'Two' }),
+      seed(harness, { slug: 'three', title: 'Three' }),
+    ])
+
+    expect(await numbersIn(harness)).toEqual([1, 2, 3])
+  })
+
+  it('never reuses a number, not after a trash and not after a purge', async () => {
+    const harness = makeTestHarness()
+    const first = await seed(harness, { slug: 'one', title: 'One' })
+    const second = await seed(harness, { slug: 'two', title: 'Two' })
+
+    await trash(harness, first.id)
+    const trashedButNumbered = await seed(harness, { slug: 'three', title: 'Three' })
+    expect((await get(harness, trashedButNumbered.id)).number).toBe(3)
+
+    // The row is gone now. MAX(number) would hand its serial to the next
+    // upload, and #20 serves `No. 004` by number.
+    await trash(harness, second.id)
+    await purge(harness, second.id)
+    const afterPurge = await seed(harness, { slug: 'four', title: 'Four' })
+
+    expect((await get(harness, afterPurge.id)).number).toBe(4)
+    expect(await numbersIn(harness)).toEqual([1, 3, 4])
+  })
+
+  it('snaps the ratio on the way in and records the bytes and mime', async () => {
+    const harness = makeTestHarness()
+
+    const landscape = await seed(harness, { slug: 'landscape', title: 'Landscape' })
+    expect((await get(harness, landscape.id)).ratio).toBe('3:2')
+
+    const portrait = await seed(harness, {
+      slug: 'portrait',
+      title: 'Portrait',
+      width: 4000,
+      height: 6000,
+    })
+    expect((await get(harness, portrait.id)).ratio).toBe('2:3')
+
+    const row = await harness.db
+      .prepare('SELECT ratio, bytes, mime FROM photos WHERE id = ?')
+      .bind(landscape.id)
+      .first<{ ratio: string | null; bytes: number | null; mime: string | null }>()
+    expect(row).toEqual({ ratio: '3:2', bytes: 4, mime: 'image/jpeg' })
+  })
+
+  it('leaves the ratio unset for a frame that matches none of the six', async () => {
+    const harness = makeTestHarness()
+
+    const square = await seed(harness, {
+      slug: 'square',
+      title: 'Square',
+      width: 3000,
+      height: 3000,
+    })
+
+    // Nothing is invented; the author picks a Ratio in the Editor.
+    expect((await get(harness, square.id)).ratio).toBeUndefined()
+    expect((await list(harness, { ratio: '3:2' })).items.map((item) => item.id)).not.toContain(
+      square.id,
+    )
+  })
+
   it('defaults the content type to image/jpeg when none is given', async () => {
     const harness = makeTestHarness()
 
     const created = await seed(harness, { slug: 'plain', title: 'Plain' })
 
     expect((await harness.photos.head(created.r2Key))?.httpMetadata?.contentType).toBe('image/jpeg')
+    const row = await harness.db
+      .prepare('SELECT mime FROM photos WHERE id = ?')
+      .bind(created.id)
+      .first<{ mime: string }>()
+    expect(row?.mime).toBe('image/jpeg')
   })
 
   it('stores the extracted EXIF facts and reads them back', async () => {
@@ -402,9 +769,22 @@ describe('PhotoService.create', () => {
     expect(await slugsIn(harness)).toHaveLength(2)
   })
 
-  it('fails with StorageError and leaves no orphan row when the r2Key is taken', async () => {
+  it('refuses a slug a trashed photo still holds', async () => {
+    const harness = makeTestHarness()
+    const binned = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, binned.id)
+
+    const second = await seed(harness, { slug: 'Sunset', title: 'Sunset again' })
+
+    // Not a reuse: restoring the trashed Photo would hand two Photos one slug.
+    expect(second.slug).not.toBe('sunset')
+    expect(second.slug).toMatch(/^sunset-[0-9a-f]{8}$/)
+  })
+
+  it('leaves the pre-existing original intact when the r2Key is taken', async () => {
     const harness = makeTestHarness()
     const first = await seed(harness, { slug: 'one', title: 'One', r2Key: 'shared.jpg' })
+    const original = await bytesAt(harness, 'shared.jpg')
 
     const error = await fail(
       withTestServices(
@@ -417,7 +797,7 @@ describe('PhotoService.create', () => {
             height: 800,
             metadata: '{}',
             contentType: 'image/jpeg',
-            bytes: new ArrayBuffer(4),
+            bytes: new Uint8Array([1, 2, 3, 4, 5, 6]).buffer,
             tagIds: [],
           }),
         ),
@@ -426,8 +806,73 @@ describe('PhotoService.create', () => {
     )
 
     expect(error).toEqual(new StorageError({ message: 'Failed to insert photo' }))
+    // The row is rejected by idx_photos_r2Key, and the bytes that were already
+    // at that key belong to the Photo that still points at them.
+    expect(await bytesAt(harness, 'shared.jpg')).toEqual(original)
+    expect((await get(harness, first.id)).r2Key).toBe('shared.jpg')
     expect(await slugsIn(harness)).toEqual(['one'])
-    expect((await get(harness, first.id)).slug).toBe('one')
+  })
+
+  it('inserts no row and no tags when the tag links fail', async () => {
+    const harness = makeTestHarness()
+
+    const error = await fail(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.create({
+            slug: 'one',
+            title: 'One',
+            r2Key: 'o/one.jpg',
+            width: 1200,
+            height: 800,
+            metadata: '{}',
+            contentType: 'image/jpeg',
+            bytes: JPEG_BYTES(),
+            // A tag that does not exist: the link cannot be written, so the
+            // transaction that would have carried the row goes with it.
+            tagIds: ['tag_missing'],
+          }),
+        ),
+        harness,
+      ),
+    )
+
+    expect(error).toEqual(new StorageError({ message: 'Failed to insert photo' }))
+    expect(await slugsIn(harness)).toEqual([])
+    expect(await linkedPhotoIds(harness)).toEqual([])
+    expect(await harness.photos.head('o/one.jpg')).toBeNull()
+    // The counter was bumped inside the failed transaction, so the serial it
+    // spent is gone rather than reissued.
+    expect(await numbersIn(harness)).toEqual([])
+  })
+
+  it('takes the row back down when the original cannot be stored', async () => {
+    const harness = makeTestHarness()
+    const failing = withFailingPut(harness)
+
+    const error = await fail(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.create({
+            slug: 'one',
+            title: 'One',
+            r2Key: 'o/one.jpg',
+            width: 1200,
+            height: 800,
+            metadata: '{}',
+            contentType: 'image/jpeg',
+            bytes: JPEG_BYTES(),
+            tagIds: [],
+          }),
+        ),
+        failing,
+      ),
+    )
+
+    expect(error).toBeInstanceOf(StorageError)
+    expect(error.message).toBe('Failed to store original in R2')
+    // No row may point at bytes that were never written.
+    expect(await slugsIn(harness)).toEqual([])
   })
 })
 
@@ -460,6 +905,10 @@ describe('PhotoService.update', () => {
       r2Key: 'originals/sunset.jpg',
       width: 1200,
       height: 800,
+      status: 'published',
+      number: 1,
+      ratio: '3:2',
+      bytes: 4,
       takenAt: '2024-07-04',
       metadata: { caption: 'new', camera: 'Ricoh GR III' },
       blurhash: null,
@@ -470,6 +919,25 @@ describe('PhotoService.update', () => {
       tags: [{ id: newTag.id, slug: 'kyoto', label: 'Kyoto', caption: null }],
     })
     expect(await linkedPhotoIds(harness)).toEqual([created.id])
+  })
+
+  it('leaves the photo untouched when the tag links fail', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+
+    const error = await fail(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.update(created.id, { title: 'Renamed', tagIds: ['tag_missing'] }),
+        ),
+        harness,
+      ),
+    )
+
+    expect(error).toEqual(new StorageError({ message: 'Failed to update photo' }))
+    // Columns and tag links are one transaction, so the title is not applied
+    // over links that could not be written.
+    expect((await get(harness, created.id)).title).toBe('Sunset')
   })
 
   it('turns an empty takenAt into an undated row that sorts last', async () => {
@@ -496,6 +964,10 @@ describe('PhotoService.update', () => {
       r2Key: 'originals/sunset.jpg',
       width: 1200,
       height: 800,
+      status: 'published',
+      number: 1,
+      ratio: '3:2',
+      bytes: 4,
       takenAt: '2024-01-01',
       metadata: {},
       blurhash: null,
@@ -505,6 +977,21 @@ describe('PhotoService.update', () => {
       focalLength: null,
       tags: [],
     })
+  })
+
+  it('clears every tag when the patch carries an empty list', async () => {
+    const harness = makeTestHarness()
+    const film = await createTag(harness, 'film', 'Film')
+    const created = await seed(harness, {
+      slug: 'sunset',
+      title: 'Sunset',
+      tagIds: [film.id],
+    })
+
+    const updated = await update(harness, created.id, { tagIds: [] })
+
+    expect(updated.tags).toEqual([])
+    expect(await linkedPhotoIds(harness)).toEqual([])
   })
 
   it('fails with SlugConflict when the slug belongs to another photo', async () => {
@@ -545,10 +1032,84 @@ describe('PhotoService.update', () => {
 
     expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
   })
+
+  it('fails with PhotoNotFound for a trashed photo', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, created.id)
+
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.update(created.id, { title: 'Renamed' })),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: created.id }))
+  })
 })
 
-describe('PhotoService.remove', () => {
-  it('deletes the row, the R2 object and the photo_tags links', async () => {
+describe('PhotoService.setStatus', () => {
+  it('unpublishes and republishes through the one call', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    expect((await get(harness, created.id)).status).toBe('published')
+
+    const draft = await setStatus(harness, created.id, 'draft')
+    expect(draft.status).toBe('draft')
+    expect(draft.number).toBe(1)
+
+    const failed = await setStatus(harness, created.id, 'failed')
+    expect(failed.status).toBe('failed')
+
+    const published = await setStatus(harness, created.id, 'published')
+    expect(published.status).toBe('published')
+  })
+
+  it('moves the photo between the status filter and the counts', async () => {
+    const harness = makeTestHarness()
+    const draft = await seed(harness, { slug: 'draft', title: 'Draft' })
+    await seed(harness, { slug: 'live', title: 'Live' })
+
+    await setStatus(harness, draft.id, 'draft')
+
+    expect((await list(harness, { status: 'draft' })).items.map((item) => item.id)).toEqual([
+      draft.id,
+    ])
+    expect((await counts(harness)).byStatus).toEqual({ draft: 1, published: 1, failed: 0 })
+  })
+
+  it('fails with PhotoNotFound for an unknown photo', async () => {
+    const harness = makeTestHarness()
+
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.setStatus('missing', 'draft')),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: 'missing' }))
+  })
+
+  it('fails with PhotoNotFound for a trashed photo', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, created.id)
+
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.setStatus(created.id, 'published')),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: created.id }))
+  })
+})
+
+describe('PhotoService.trash', () => {
+  it('stamps deletedAt, hides the photo and leaves R2 alone', async () => {
     const harness = makeTestHarness()
     const tag = await createTag(harness, 'kyoto', 'Kyoto')
     const created = await seed(harness, {
@@ -558,33 +1119,253 @@ describe('PhotoService.remove', () => {
       tagIds: [tag.id],
     })
 
-    expect(await remove(harness, created.id)).toBe(true)
+    await trash(harness, created.id)
 
-    expect(await slugsIn(harness)).toEqual([])
-    expect(await linkedPhotoIds(harness)).toEqual([])
-    expect(await harness.photos.head('originals/sunset.jpg')).toBeNull()
-    expect((await harness.photos.list()).objects).toEqual([])
+    expect(await deletedAtOf(harness, created.id)).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(await harness.photos.head('originals/sunset.jpg')).not.toBeNull()
+    // The row and its links stay: a restore is a date clear, not a re-upload.
+    expect(await slugsIn(harness)).toEqual(['sunset'])
+    expect(await linkedPhotoIds(harness)).toEqual([created.id])
     expect((await list(harness, {})).items).toEqual([])
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.get(created.id)),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: created.id }))
+  })
+
+  it('keeps the first date when a trashed photo is trashed again', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, created.id)
+    const first = await deletedAtOf(harness, created.id)
+
+    await trash(harness, created.id)
+
+    expect(await deletedAtOf(harness, created.id)).toBe(first)
   })
 
   it('fails with PhotoNotFound for an unknown photo', async () => {
     const harness = makeTestHarness()
 
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.trash('missing')),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: 'missing' }))
+  })
+})
+
+describe('PhotoService.restore', () => {
+  it('clears deletedAt and brings the photo back with its number', async () => {
+    const harness = makeTestHarness()
+    const tag = await createTag(harness, 'kyoto', 'Kyoto')
+    const created = await seed(harness, {
+      slug: 'sunset',
+      title: 'Sunset',
+      takenAt: '2024-01-01',
+      tagIds: [tag.id],
+    })
+    await trash(harness, created.id)
+
+    await restore(harness, created.id)
+
+    expect(await deletedAtOf(harness, created.id)).toBeNull()
+    expect((await get(harness, created.id)).number).toBe(1)
+    expect((await get(harness, created.id)).tags).toEqual([
+      { id: tag.id, slug: 'kyoto', label: 'Kyoto' },
+    ])
+    expect((await list(harness, {})).items.map((item) => item.id)).toEqual([created.id])
+  })
+
+  it('restores a photo that is not trashed without complaint', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+
+    await restore(harness, created.id)
+
+    expect(await deletedAtOf(harness, created.id)).toBeNull()
+  })
+
+  it('fails with PhotoNotFound for an unknown photo', async () => {
+    const harness = makeTestHarness()
+
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.restore('missing')),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: 'missing' }))
+  })
+})
+
+describe('PhotoService.purge', () => {
+  it('drops the row, its links and the R2 object, and nothing else', async () => {
+    const harness = makeTestHarness()
+    const tag = await createTag(harness, 'kyoto', 'Kyoto')
+    const kept = await seed(harness, { slug: 'kept', title: 'Kept', r2Key: 'o/kept.jpg' })
+    const binned = await seed(harness, {
+      slug: 'binned',
+      title: 'Binned',
+      r2Key: 'o/binned.jpg',
+      tagIds: [tag.id],
+    })
+    await trash(harness, binned.id)
+
+    await purge(harness, binned.id)
+
+    expect(await slugsIn(harness)).toEqual(['kept'])
+    expect((await get(harness, kept.id)).r2Key).toBe('o/kept.jpg')
+    expect(await linkedPhotoIds(harness)).toEqual([])
+    expect(await harness.photos.head('o/binned.jpg')).toBeNull()
+    expect((await harness.photos.list()).objects.map((object) => object.key)).toEqual([
+      'o/kept.jpg',
+    ])
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.get(binned.id)),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: binned.id }))
+  })
+
+  it('refuses to purge a photo that is not in the trash', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+
     const error = await fail(
       withTestServices(
-        PhotoService.use((service) => service.remove('missing')),
+        PhotoService.use((service) => service.purge(created.id)),
         harness,
       ),
     )
 
-    expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
+    // The Bulk Bar's Delete is a soft delete; only the Trash is irreversible.
+    expect(error).toBeInstanceOf(InvalidInput)
+    expect(await slugsIn(harness)).toEqual(['sunset'])
+    expect(await harness.photos.head(created.r2Key)).not.toBeNull()
+  })
+
+  it('fails with PhotoNotFound for an unknown photo', async () => {
+    const harness = makeTestHarness()
+
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((service) => service.purge('missing')),
+          harness,
+        ),
+      ),
+    ).toEqual(new PhotoNotFound({ id: 'missing' }))
+  })
+})
+
+describe('PhotoService.counts', () => {
+  it('counts every status, the grand total and each tag over live photos', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    const film = await createTag(harness, 'film', 'Film')
+    const published = await seed(harness, {
+      slug: 'temple',
+      title: 'Temple',
+      tagIds: [kyoto.id, film.id],
+    })
+    const draft = await seed(harness, { slug: 'alley', title: 'Alley', tagIds: [kyoto.id] })
+    const failed = await seed(harness, { slug: 'ruins', title: 'Ruins' })
+    await setStatus(harness, draft.id, 'draft')
+    await setStatus(harness, failed.id, 'failed')
+    const empty = await createTag(harness, 'unused', 'Unused')
+
+    expect(await counts(harness)).toEqual({
+      total: 3,
+      byStatus: { draft: 1, published: 1, failed: 1 },
+      byTag: [
+        { id: film.id, label: 'Film', count: 1 },
+        { id: kyoto.id, label: 'Kyoto', count: 2 },
+        { id: empty.id, label: 'Unused', count: 0 },
+      ],
+    })
+    // A trashed Photo leaves every count, the grand total included.
+    await trash(harness, published.id)
+    expect(await counts(harness)).toEqual({
+      total: 2,
+      byStatus: { draft: 1, published: 0, failed: 1 },
+      byTag: [
+        { id: film.id, label: 'Film', count: 0 },
+        { id: kyoto.id, label: 'Kyoto', count: 1 },
+        { id: empty.id, label: 'Unused', count: 0 },
+      ],
+    })
+  })
+
+  it('counts every status at zero for an empty library', async () => {
+    const harness = makeTestHarness()
+
+    expect(await counts(harness)).toEqual({
+      total: 0,
+      byStatus: { draft: 0, published: 0, failed: 0 },
+      byTag: [],
+    })
+  })
+
+  it('has no scheduled count, because scheduled is not a Status', async () => {
+    const harness = makeTestHarness()
+    await seed(harness, { slug: 'draft', title: 'Draft' })
+
+    const result = await counts(harness)
+
+    // `scheduled` is a display label over a draft (chain decision 3) and no
+    // column records a publish time, so there is no honest number to return.
+    expect(Object.keys(result.byStatus).sort()).toEqual(['draft', 'failed', 'published'])
+    expect('scheduled' in result.byStatus).toBe(false)
+  })
+
+  it('counts a photo carrying several tags once each', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    const film = await createTag(harness, 'film', 'Film')
+    await seed(harness, { slug: 'one', title: 'One', tagIds: [kyoto.id, film.id] })
+    await seed(harness, { slug: 'two', title: 'Two', tagIds: [kyoto.id] })
+
+    const result = await counts(harness)
+
+    expect(result.total).toBe(2)
+    // Ordered by label, and a Photo carrying two tags counts once in each.
+    expect(result.byTag).toEqual([
+      { id: film.id, label: 'Film', count: 1 },
+      { id: kyoto.id, label: 'Kyoto', count: 2 },
+    ])
+  })
+})
+
+describe('PhotoService.storageUsage', () => {
+  it('totals the live photos and their bytes', async () => {
+    const harness = makeTestHarness()
+    await seedPhotoRow(harness.db, { id: 'p1', slug: 'p1', bytes: 1024 })
+    await seedPhotoRow(harness.db, { id: 'p2', slug: 'p2', bytes: 2048 })
+    await seedPhotoRow(harness.db, { id: 'p3', slug: 'p3', bytes: 4096 })
+
+    expect(await storageUsage(harness)).toEqual({ photos: 3, bytes: 7168 })
+  })
+
+  it('leaves a trashed photo out of the meter', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, created.id)
+
+    expect(await storageUsage(harness)).toEqual({ photos: 0, bytes: 0 })
+  })
+
+  it('reads zero rather than null when no row records its size', async () => {
+    const harness = makeTestHarness()
+    await seedPhotoRow(harness.db, { id: 'legacy', slug: 'legacy', bytes: null })
+
+    expect(await storageUsage(harness)).toEqual({ photos: 1, bytes: 0 })
+  })
+
+  it('is zero for an empty library', async () => {
+    expect(await storageUsage(makeTestHarness())).toEqual({ photos: 0, bytes: 0 })
   })
 })

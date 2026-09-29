@@ -1,16 +1,19 @@
 /**
- * Migration 0004 against the F1 harness (`d1-fake`, ADR 0009): the schema it
- * adds, the backfill it writes, and the indexes the list queries depend on.
+ * The migrations that build the Photo lifecycle against the F1 harness (`d1-fake`,
+ * ADR 0009): the schema 0004 adds, the backfill it writes, the indexes the list
+ * queries depend on, and the Photo Number counter 0006 puts outside `photos`.
  */
 
 import { describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
+import { nearestRatio, type PhotoRatio } from '@photo/shared'
 import type { D1DatabaseLike } from '../gateway'
 import { applyMigrations, d1Over, makeD1Fake } from './d1-fake'
 import { makeTestHarness, migrationFiles, migrationsThrough, repoMigrations } from './harness'
 
 const THROUGH_0003 = '0003_blurhash.sql'
 const THROUGH_0004 = '0004_presentation.sql'
+const COUNTER = '0006_photo_number_counter.sql'
 
 interface LegacyPhoto {
   readonly id: string
@@ -222,6 +225,33 @@ describe('migration 0004', () => {
     )
   })
 
+  /**
+   * The drift lock #16 asked for. The backfill's SQL `CASE` and
+   * `nearestRatio` are two spellings of one rule, and this is the single
+   * assertion that runs both over the same eight frames — widen or narrow
+   * either tolerance, or retype either of the six values, and this goes red.
+   */
+  it('snaps the same frames the SQL CASE snaps', () => {
+    const cases: ReadonlyArray<readonly [number, number, PhotoRatio | null]> = [
+      [6000, 4000, '3:2'],
+      [4000, 6000, '2:3'],
+      [1024, 768, '4:3'],
+      [768, 1024, '3:4'],
+      [1920, 1080, '16:9'],
+      [1080, 1920, '9:16'],
+      [6016, 4000, '3:2'],
+      [3000, 3000, null],
+    ]
+    // The tolerance the SQL is written with, read out of the migration rather
+    // than restated here.
+    const sql = migrationSql(THROUGH_0004)
+    expect(sql).toMatch(/ABS\(CAST\(width AS REAL\) \/ height - 1\.5\)\s+<= 0\.02/)
+
+    expect(cases.map(([width, height]) => nearestRatio(width, height))).toEqual(
+      cases.map(([, , ratio]) => ratio),
+    )
+  })
+
   it('backfills a legacy row as a live published JPEG', async () => {
     const { engine, db } = at0003()
     await insertLegacy(db, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
@@ -380,6 +410,67 @@ describe('migration 0004', () => {
     await insertLegacy(db, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
     await expect(
       db.prepare(`UPDATE photos SET bytes = 'eighteen megabytes' WHERE id = 'p1'`).run(),
+    ).rejects.toThrow(/INT/i)
+  })
+})
+
+describe(`migration ${COUNTER}`, () => {
+  /** The counter reads `photos.number`, so 0004 has to be on first. */
+  const at0004 = (): { engine: DatabaseSync; db: D1DatabaseLike } => {
+    const { engine, db } = at0003()
+    apply0004(engine)
+    return { engine, db }
+  }
+
+  const applyCounter = (engine: DatabaseSync): void => {
+    engine.exec(migrationSql(COUNTER))
+  }
+
+  const counterValue = async (db: D1DatabaseLike): Promise<number | null> =>
+    (
+      await db
+        .prepare('SELECT value FROM photo_number_counter WHERE id = 1')
+        .first<{ value: number }>()
+    )?.value ?? null
+
+  it('starts above the highest serial 0004 already handed out', async () => {
+    const { engine, db } = at0003()
+    await insertLegacy(db, { id: 'a', takenAt: '2023-05-01', width: 6000, height: 4000 })
+    await insertLegacy(db, { id: 'b', takenAt: '2024-01-15', width: 6000, height: 4000 })
+    apply0004(engine)
+    expect(await numbersById(db)).toEqual({ a: 1, b: 2 })
+    applyCounter(engine)
+
+    expect(await counterValue(db)).toBe(2)
+  })
+
+  it('starts at zero for an empty table', async () => {
+    const { engine, db } = at0004()
+    applyCounter(engine)
+    expect(await counterValue(db)).toBe(0)
+  })
+
+  it('converges on a second run instead of rewinding the counter', async () => {
+    const { engine, db } = at0004()
+    applyCounter(engine)
+    await db.prepare('UPDATE photo_number_counter SET value = 41 WHERE id = 1').run()
+
+    applyCounter(engine)
+
+    expect(await counterValue(db)).toBe(41)
+  })
+
+  it('holds exactly one row', async () => {
+    const db = makeD1Fake(repoMigrations())
+    await expect(
+      db.prepare('INSERT INTO photo_number_counter (id, value) VALUES (2, 1)').run(),
+    ).rejects.toThrow(/CHECK constraint failed/i)
+  })
+
+  it('is STRICT, so the counter cannot hold a non-integer', async () => {
+    const db = makeD1Fake(repoMigrations())
+    await expect(
+      db.prepare(`UPDATE photo_number_counter SET value = 'forty one' WHERE id = 1`).run(),
     ).rejects.toThrow(/INT/i)
   })
 })
