@@ -12,6 +12,8 @@
 
 import { Schema as S } from 'effect'
 
+import { imagePreviewLongEdge, imagePreviewQuality } from '@/lib/design-tokens'
+
 // ---------------------------------------------------------------------------
 // plates
 // ---------------------------------------------------------------------------
@@ -33,7 +35,9 @@ export const RATIO_VALUE: Record<PlateRatio, number> = {
 }
 
 /** Long edge every plate is requested at; imgix crops it to the ratio. */
-const PLATE_WIDTH = 1200
+/** The preview rendition the design specifies: a 1200px long edge at quality 82. */
+const PLATE_WIDTH = imagePreviewLongEdge
+const PLATE_QUALITY = imagePreviewQuality
 
 // ---------------------------------------------------------------------------
 // content types
@@ -374,7 +378,7 @@ export const sectionCount = (section: EditionSection): string => {
  *  crop happens once, server-side, instead of in every reader's browser. */
 export const plateUrl = (figure: Figure): string => {
   const height = Math.round(PLATE_WIDTH / RATIO_VALUE[figure.ratio])
-  return `https://images.unsplash.com/photo-${figure.photoId}?w=${String(PLATE_WIDTH)}&h=${String(height)}&fit=crop&crop=entropy&q=80&auto=format`
+  return `https://images.unsplash.com/photo-${figure.photoId}?w=${String(PLATE_WIDTH)}&h=${String(height)}&fit=crop&crop=entropy&q=${String(PLATE_QUALITY)}&auto=format`
 }
 
 // ---------------------------------------------------------------------------

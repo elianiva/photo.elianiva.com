@@ -1,3 +1,12 @@
+/**
+ * Badge, broadsheet edition. The design's tag is `Ratio Tag`: a 1px
+ * `color.outline` box around 4/8 of padding, holding one `$typography.exif`
+ * label in `color.text.secondary`, with no corner radius and no fill.
+ *
+ * The three variants are the three role pairs the Desk reads a label in —
+ * a set value (`default`), a muted one (`secondary`), a failed one
+ * (`destructive`, on `color.accent`).
+ */
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 type Child = Html | string
@@ -5,29 +14,18 @@ type Child = Html | string
 import { cn } from '@/lib/utils'
 
 /** Badge variant keys — keep in sync with `badgeVariants`. */
-export const badgeVariantKeys = [
-  'default',
-  'secondary',
-  'destructive',
-  'outline',
-  'ghost',
-  'link',
-] as const
+export const badgeVariantKeys = ['default', 'secondary', 'destructive'] as const
 
 export const badgeVariants: Record<BadgeVariant, string> = {
-  default: 'bg-primary text-primary-foreground [a]:hover:bg-primary/80',
-  secondary: 'bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80',
-  destructive:
-    'bg-destructive/10 [a]:hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 text-destructive dark:bg-destructive/20',
-  outline: 'border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground',
-  ghost: 'hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50',
-  link: 'text-primary underline-offset-4 hover:underline',
+  default: 'border-role-outline text-role-text-primary',
+  secondary: 'border-role-hairline text-role-text-secondary',
+  destructive: 'border-role-accent text-role-accent',
 }
 
 export type BadgeVariant = (typeof badgeVariantKeys)[number]
 
 export const badgeClass =
-  'h-5 gap-1 rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium transition-all has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&>svg]:size-3! group/badge inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none'
+  'border bg-transparent px-(--spacing-sm) py-(--spacing-xs) type-exif whitespace-nowrap inline-flex w-fit shrink-0 items-center justify-center gap-1 transition-colors duration-(--motion-duration-fast) focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&>svg]:pointer-events-none [&>svg]:shrink-0'
 
 type StyleConfig = Readonly<{ className?: string; variant?: BadgeVariant }>
 

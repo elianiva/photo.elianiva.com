@@ -22,10 +22,10 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
         panelClass: 'w-full max-w-sm',
         content: (render, innerH) => [
           h.div(
-            [h.Class('p-4 flex flex-col gap-4')],
+            [h.Class('p-4 flex flex-col gap-(--spacing-lg)')],
             [
               h.div(
-                [h.Class('flex items-start justify-between gap-2')],
+                [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
                 [
                   Dialog.title({ attributes: render.title }, ['Are you sure?'], innerH),
                   Dialog.closeButton({ attributes: render.closeButton }, ['×'], innerH),
@@ -43,14 +43,14 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                 innerH,
               ),
               h.div(
-                [h.Class('flex justify-end gap-2')],
+                [h.Class('flex justify-end gap-(--spacing-sm)')],
                 [
                   Button.button(
                     {
                       onClick: M.GotConfirmMessage({
                         message: Dialog.Message.RequestedClose(),
                       }),
-                      variant: 'outline',
+                      variant: 'secondary',
                     },
                     'Cancel',
                     innerH,
@@ -81,11 +81,11 @@ export const toastStack = (model: Model, h: HtmlBuilder<Msg>): Child =>
       {
         position: 'BottomRight',
         toContent: (entry, innerH) => [
-          innerH.p([innerH.Class('text-sm font-medium leading-none')], [entry.payload.title]),
+          innerH.p([innerH.Class('type-ui')], [entry.payload.title]),
           ...(entry.payload.detail !== undefined
             ? [
                 innerH.p(
-                  [innerH.Class('text-sm text-role-text-secondary mt-1')],
+                  [innerH.Class('type-exif text-role-text-secondary mt-1')],
                   [entry.payload.detail],
                 ),
               ]

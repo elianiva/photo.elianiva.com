@@ -39,26 +39,29 @@ export const dialogClass = 'bg-transparent p-0 open:flex items-center justify-ce
 // leaving (never `data-state`). The sync script rewrites upstream's
 // `data-open:`/`data-closed:` animation utilities to these windows during token
 // sync; persistent `data-open:` styling passes through untouched.
+/** A Dialog is a `Panel` in the design's language: the panel sits on
+ *  `color.surface` inside a `color.hairline` box with no corner radius, and
+ *  the scrim is the design's own `color.shadow` rather than a black alpha. */
 export const dialogBackdropClass =
-  'data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50'
+  'data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 bg-role-shadow/40 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50'
 
 export const dialogPanelClass =
-  'bg-popover text-popover-foreground data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 ring-foreground/10 grid max-w-[calc(100%-2rem)] gap-4 rounded-xl p-4 text-sm ring-1 duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none'
+  'bg-role-surface text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 grid max-w-[calc(100%-2rem)] gap-(--spacing-lg) border border-role-hairline p-(--spacing-lg) type-ui duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none'
 
-/** Upstream renders its close control as `<Button variant="ghost" size="icon-sm"
- *  className="cn-dialog-close">`; compose the same tokens here. */
+/** Upstream renders its close control as a ghost button; the Desk's is the
+ * `Icon Button` ghost kind: 36px, round, an 18px mark. */
 export const dialogCloseButtonClass =
-  "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 border border-transparent bg-clip-padding text-sm font-medium focus-visible:ring-3 aria-invalid:ring-3 active:not-aria-[haspopup]:translate-y-px [&_svg:not([class*='size-'])]:size-4 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50 hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg absolute top-2 right-2"
+  'text-role-text-secondary absolute top-(--spacing-md) right-(--spacing-md) flex size-9 items-center justify-center rounded-full outline-none transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&_svg:not([class*="size-"])]:size-(--spacing-lg)'
 
-export const dialogTitleClass = 'text-base leading-none font-medium font-sans'
+export const dialogTitleClass = 'type-section text-role-text-primary'
 
 export const dialogDescriptionClass =
-  'text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3'
+  'type-caption text-role-text-secondary *:[a]:underline *:[a]:underline-offset-4 *:[a:hover]:text-role-text-primary'
 
-export const dialogHeaderClass = 'gap-2 flex flex-col'
+export const dialogHeaderClass = 'gap-(--spacing-sm) flex flex-col'
 
 export const dialogFooterClass =
-  'bg-muted/50 -mx-4 -mb-4 rounded-b-xl border-t p-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'
+  'border-role-hairline -mx-(--spacing-lg) -mb-(--spacing-lg) border-t p-(--spacing-lg) flex flex-col-reverse gap-(--spacing-sm) sm:flex-row sm:justify-end'
 
 // These abstract away element types, base classes, and attribute spreading.
 // Use inside `styledViewInputs` content callbacks:

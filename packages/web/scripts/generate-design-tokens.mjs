@@ -13,9 +13,17 @@
  * artifact carries an alias's value but not what it points at, and the dark
  * branch of an alias is the dark branch of its target.
  *
+ * It writes two artefacts from that one run, because one run reads the
+ * catalog once and the sha must mean the same thing in both:
+ *
+ *   src/tokens.css              the stylesheet half, every catalog token as CSS
+ *   src/lib/design-tokens.ts    the TypeScript half, for the numbers a
+ *                               stylesheet cannot carry into a Worker or a
+ *                               worker-safe module
+ *
  * Usage:
- *   node scripts/generate-design-tokens.mjs           write src/tokens.css
- *   node scripts/generate-design-tokens.mjs --check   fail if src/tokens.css is stale
+ *   node scripts/generate-design-tokens.mjs           write both artefacts
+ *   node scripts/generate-design-tokens.mjs --check   fail if either is stale
  */
 
 import { createHash } from 'node:crypto'
@@ -27,7 +35,23 @@ import { parse as parseYaml } from 'yaml'
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const designDir = join(packageRoot, 'design')
 const outputFile = join(packageRoot, 'src', 'tokens.css')
+const tsOutputFile = join(packageRoot, 'src', 'lib', 'design-tokens.ts')
 const checkOnly = process.argv.includes('--check')
+
+/**
+ * Where a theme is declared. Both branches name the same two selectors, so
+ * `data-theme` scopes a subtree (the dark Editor inside the light document)
+ * and `.dark` on the document root stays the whole-page spelling.
+ */
+const LIGHT_SCOPE = ":root,\n[data-theme='light']"
+const DARK_SCOPE = ".dark,\n[data-theme='dark']"
+
+/**
+ * Catalog groups exported to TypeScript as well. These stops have no
+ * stylesheet consumer, so the CSS half alone leaves them dead and the code
+ * that needs them re-states the same number by hand.
+ */
+const TS_GROUPS = ['grid', 'image']
 
 // ---------------------------------------------------------------------------
 // design-system vocabulary
@@ -121,6 +145,17 @@ const CONTRACT = [
   ['input', 'color.outline'],
   ['ring', 'color.focus'],
 ]
+
+/** `image.blurhash.x` -> `imageBlurhashX`. One rule, so the name is predictable. */
+const tsName = (key) => key.replace(/[._-]+(.)/g, (_, character) => character.toUpperCase())
+
+/** Every `TS_GROUPS` stop -> `[exportName, catalogKey, resolvedValue]`. */
+const tsStops = () =>
+  TS_GROUPS.flatMap((group) =>
+    [...semantics, ...primitives]
+      .filter(([key]) => key.startsWith(`${group}.`))
+      .map(([key, value]) => [tsName(key), key, value]),
+  )
 
 // ---------------------------------------------------------------------------
 // read the artifact
@@ -453,8 +488,11 @@ push(
   ' * `neutral.hint` takes the light value of `neutral.intense`, and so on. These',
   ' * are plain custom properties bridged into Tailwind with `@theme inline`,',
   ' * which is what makes the utility follow the active theme.',
+  ' *',
+  ' * Both branches name a scope rather than the document alone, so the dark',
+  ' * Editor can sit inside the light document as its own subtree.',
   ' * -------------------------------------------------------------------------- */',
-  ':root {',
+  `${LIGHT_SCOPE} {`,
 )
 for (const palette of paletteOrder) {
   for (const [role, value] of paletteRoles.get(palette) ?? []) {
@@ -465,7 +503,7 @@ push('', '  /* color.* roles */')
 for (const { key, value } of themedColorRoles) push(`  ${roleVar(key)}: ${value};`)
 push('', '  /* color.* roles the design system does not theme */')
 for (const { key, value } of flatColorRoles) push(`  ${roleVar(key)}: ${value};`)
-push('}', '', '.dark {')
+push('}', '', `${DARK_SCOPE} {`)
 for (const palette of paletteOrder) {
   for (const role of paletteRoles.get(palette)?.keys() ?? []) {
     push(`  --${palette}-${role}: ${darkRoleValue(palette, role)};`)
@@ -492,12 +530,21 @@ push(
   ' *',
   ' * `components/ui` is the vendored foldcn registry, so these names stay put.',
   ' * Each one is bound to a broadsheet role, which is why they re-tint with the',
-  ' * brand and flip under `.dark` without a second dark block here.',
+  ' * brand and flip with the theme.',
+  ' *',
+  ' * The block is emitted once per theme scope rather than once for the',
+  ' * document. A `var()` in a custom property is substituted where the property',
+  ' * is declared, so a contract declared only on `:root` would carry the root',
+  ' * branch down into a dark subtree and leave `bg-background` light under a',
+  ' * dark `bg-role-surface`. Declared in the scope, it resolves there.',
   ' * -------------------------------------------------------------------------- */',
-  ':root {',
 )
-for (const [name, role] of CONTRACT) push(`  --${name}: var(${roleVar(role)});`)
-push('}', '', '@theme inline {')
+for (const scope of [LIGHT_SCOPE, DARK_SCOPE]) {
+  push(`${scope} {`)
+  for (const [name, role] of CONTRACT) push(`  --${name}: var(${roleVar(role)});`)
+  push('}', '')
+}
+push('@theme inline {')
 for (const [name] of CONTRACT) push(`  --color-${name}: var(--${name});`)
 push('}', '')
 
@@ -547,38 +594,61 @@ if (unhandled.length > 0) {
 // --- assemble ---------------------------------------------------------------
 
 const paletteRoleCount = [...paletteRoles.values()].reduce((total, roles) => total + roles.size, 0)
-const header = [
-  '/**',
-  ' * GENERATED — DO NOT EDIT.',
-  ' *',
-  ' * The `broadsheet` design system of the Brilliant project `photo.elianiva.com`,',
-  ' * converted to Tailwind CSS v4. Edit `design/*` or the generator, never this file.',
-  ' *',
-  ` *   source   packages/web/design/broadsheet.gen.yaml  (sha256 ${resolvedHash.slice(0, 16)})`,
-  ' *   generate pnpm --filter @photo/web run tokens',
-  ' *',
-  ` * ${paletteOrder.length} palettes · ${paletteRoleCount} palette roles · ` +
-    `${themedColorRoles.length + flatColorRoles.length} color.* roles · ` +
-    `${composites.size} typography composites · ${shadowLayers.size} shadows`,
-  ' *',
-  ` * Hidden in Brilliant's picker (\`hide:\`): ${hiddenPalettes.join(', ')}`,
-  ` * Pinned in Brilliant's picker (\`pin:\`): ${pinnedTokens.length} tokens`,
-  ' */',
-  '',
-].join('\n')
+const headerFor = (artefact) =>
+  [
+    '/**',
+    ' * GENERATED — DO NOT EDIT.',
+    ' *',
+    ' * The `broadsheet` design system of the Brilliant project `photo.elianiva.com`,',
+    ` * converted to ${artefact === 'src/tokens.css' ? 'Tailwind CSS v4' : 'TypeScript'}.`,
+    ' * Edit `design/*` or the generator, never this file.',
+    ' *',
+    ` *   source   packages/web/design/broadsheet.gen.yaml  (sha256 ${resolvedHash.slice(0, 16)})`,
+    ' *   generate pnpm --filter @photo/web run tokens',
+    ' *',
+    ` * ${paletteOrder.length} palettes · ${paletteRoleCount} palette roles · ` +
+      `${themedColorRoles.length + flatColorRoles.length} color.* roles · ` +
+      `${composites.size} typography composites · ${shadowLayers.size} shadows`,
+    ' *',
+    ` * Hidden in Brilliant's picker (\`hide:\`): ${hiddenPalettes.join(', ')}`,
+    ` * Pinned in Brilliant's picker (\`pin:\`): ${pinnedTokens.length} tokens`,
+    ' */',
+    '',
+  ].join('\n')
+
+const header = headerFor('src/tokens.css')
 
 const output = `${header}${lines.join('\n')}\n`
 
+// --- the TypeScript half ----------------------------------------------------
+
+const tsStopsFound = tsStops()
+const tsLines = []
+for (const [name, key, value] of tsStopsFound) {
+  tsLines.push('', `/** \`${key}\` */`, `export const ${name} = ${JSON.stringify(value)}`)
+}
+const tsOutput = `${headerFor('src/lib/design-tokens.ts')}${tsLines.join('\n')}\n`
+
+// --- assemble --------------------------------------------------------------
+
 if (checkOnly) {
-  if (readFileSync(outputFile, 'utf8') !== output) {
-    console.error('src/tokens.css is stale — run `pnpm --filter @photo/web run tokens`')
+  const stale = [
+    [outputFile, output, 'src/tokens.css'],
+    [tsOutputFile, tsOutput, 'src/lib/design-tokens.ts'],
+  ].filter(([file, expected]) => readFileSync(file, 'utf8') !== expected)
+  if (stale.length > 0) {
+    for (const [, , name] of stale) {
+      console.error(`${name} is stale — run \`pnpm --filter @photo/web run tokens\``)
+    }
     process.exit(1)
   }
-  console.log('src/tokens.css is up to date')
+  console.log('src/tokens.css and src/lib/design-tokens.ts are up to date')
 } else {
   writeFileSync(outputFile, output)
+  writeFileSync(tsOutputFile, tsOutput)
   console.log(
     `wrote src/tokens.css — ${paletteOrder.length} palettes, ${paletteRoleCount} palette roles, ` +
-      `${composites.size} typography composites, ${output.split('\n').length} lines`,
+      `${composites.size} typography composites, ${output.split('\n').length} lines, ` +
+      `and src/lib/design-tokens.ts — ${tsStopsFound.length} constants`,
   )
 }

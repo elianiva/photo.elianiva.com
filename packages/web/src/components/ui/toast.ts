@@ -37,12 +37,12 @@ const isLeavingState = (
   state: 'Idle' | 'EnterStart' | 'EnterAnimating' | 'LeaveStart' | 'LeaveAnimating',
 ): boolean => state === 'LeaveStart' || state === 'LeaveAnimating'
 
-/** Accent for the per-variant icon. Only `Error` needs an explicit tint
- *  (`text-destructive`); the other variants inherit `currentColor` on the
- *  neutral popover surface, matching the reference `toast.tsx` where only
- *  the error icon is colored. */
+/** Accent for the per-variant icon. The design's `Status` reads a failed
+ *  entry in `color.accent`; the other variants inherit `currentColor` on the
+ *  neutral surface, matching the reference `toast.tsx` where only the error
+ *  icon is colored. */
 export const toastVariantClass = (variant: Variant): string =>
-  variant === 'Error' ? 'text-destructive' : ''
+  variant === 'Error' ? 'text-role-accent' : 'text-role-text-primary'
 
 /** Entry card. Geometry (transform/height) is applied inline per render;
  *  the `after:` bridge extends the hover zone `--gap` + 1px below the card
@@ -50,20 +50,20 @@ export const toastVariantClass = (variant: Variant): string =>
  *  exactly like the reference root class. Entries beyond `LIMIT` render with
  *  `data-limited` and are fully hidden until a slot frees up. */
 export const toastEntryClass =
-  'pointer-events-auto absolute right-0 bottom-0 w-80 origin-bottom rounded-lg border bg-popover text-popover-foreground shadow-lg [transform:translateZ(0)] [contain:layout] [backface-visibility:hidden] outline-none select-none after:absolute after:top-full after:left-0 after:h-[calc(0.75rem+1px)] after:w-full after:content-[""] [transition:transform_350ms_cubic-bezier(0.22,1,0.36,1),opacity_350ms] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[limited]:pointer-events-none data-[limited]:opacity-0'
+  'pointer-events-auto absolute right-0 bottom-0 w-80 origin-bottom border border-role-hairline bg-role-surface text-role-on-surface [transform:translateZ(0)] [contain:layout] [backface-visibility:hidden] outline-none select-none after:absolute after:top-full after:left-0 after:h-[calc(0.75rem+1px)] after:w-full after:content-[""] [transition:transform_350ms_cubic-bezier(0.22,1,0.36,1),opacity_350ms] focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 data-[limited]:pointer-events-none data-[limited]:opacity-0'
 
 /** Content row — the reference `ToastContent`: full card height, clipped,
  *  fading out while hidden behind the frontmost layer (`data-behind`) and
  *  back in when the stack expands (`data-expanded`). */
 export const toastContentClass =
-  'flex h-full w-full items-center gap-3 overflow-hidden p-4 transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] data-[behind]:opacity-0 data-[expanded]:opacity-100'
+  'flex h-full w-full items-center gap-(--spacing-sm) overflow-hidden p-(--spacing-lg) transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] data-[behind]:opacity-0 data-[expanded]:opacity-100'
 
-export const toastTitleClass = 'text-sm font-medium'
+export const toastTitleClass = 'type-ui text-role-text-primary'
 
-export const toastDescriptionClass = 'text-sm text-muted-foreground'
+export const toastDescriptionClass = 'type-exif text-role-text-secondary'
 
 export const toastDismissButtonClass =
-  "shrink-0 cursor-pointer rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 after:absolute after:-inset-2 after:content-['']"
+  "shrink-0 cursor-pointer p-(--spacing-xs) text-role-text-secondary opacity-70 transition-opacity hover:text-role-text-primary hover:opacity-100 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-role-focus/50 after:absolute after:-inset-2 after:content-['']"
 
 const variantIconNode = (variant: Variant) => {
   switch (variant) {

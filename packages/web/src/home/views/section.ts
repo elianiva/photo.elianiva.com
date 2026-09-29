@@ -8,12 +8,14 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 
+import { gridColumns } from '@/lib/design-tokens'
+
 import { flowColumns, sectionCount, type EditionSection, type Figure } from '../content'
 import { Message } from '../model'
 import { figure } from './figure'
 import { BAND, type Child } from './shared'
 
-const COLUMNS = 3
+const COLUMNS = gridColumns
 
 const sectionHead = (section: EditionSection, h: HtmlBuilder<Message>): Child =>
   h.div(

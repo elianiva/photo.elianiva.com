@@ -2,7 +2,8 @@
  * GENERATED — DO NOT EDIT.
  *
  * The `broadsheet` design system of the Brilliant project `photo.elianiva.com`,
- * converted to Tailwind CSS v4. Edit `design/*` or the generator, never this file.
+ * converted to Tailwind CSS v4.
+ * Edit `design/*` or the generator, never this file.
  *
  *   source   packages/web/design/broadsheet.gen.yaml  (sha256 2cf18cac146c76f6)
  *   generate pnpm --filter @photo/web run tokens
@@ -636,8 +637,12 @@
  * `neutral.hint` takes the light value of `neutral.intense`, and so on. These
  * are plain custom properties bridged into Tailwind with `@theme inline`,
  * which is what makes the utility follow the active theme.
+ *
+ * Both branches name a scope rather than the document alone, so the dark
+ * Editor can sit inside the light document as its own subtree.
  * -------------------------------------------------------------------------- */
-:root {
+:root,
+[data-theme='light'] {
   --red-bold: #980014;
   --red-faint: #FAE7E5;
   --red-firm: #C2001C;
@@ -938,7 +943,8 @@
   --role-shadow: #0F0E0D;
 }
 
-.dark {
+.dark,
+[data-theme='dark'] {
   --red-bold: #F7C9C4;
   --red-faint: #7B000E;
   --red-firm: #F9A8A0;
@@ -1528,9 +1534,39 @@
  *
  * `components/ui` is the vendored foldcn registry, so these names stay put.
  * Each one is bound to a broadsheet role, which is why they re-tint with the
- * brand and flip under `.dark` without a second dark block here.
+ * brand and flip with the theme.
+ *
+ * The block is emitted once per theme scope rather than once for the
+ * document. A `var()` in a custom property is substituted where the property
+ * is declared, so a contract declared only on `:root` would carry the root
+ * branch down into a dark subtree and leave `bg-background` light under a
+ * dark `bg-role-surface`. Declared in the scope, it resolves there.
  * -------------------------------------------------------------------------- */
-:root {
+:root,
+[data-theme='light'] {
+  --background: var(--role-surface);
+  --foreground: var(--role-text-primary);
+  --card: var(--role-surface-container);
+  --card-foreground: var(--role-on-surface);
+  --popover: var(--role-surface);
+  --popover-foreground: var(--role-on-surface);
+  --primary: var(--role-primary);
+  --primary-foreground: var(--role-on-primary);
+  --secondary: var(--role-surface-container);
+  --secondary-foreground: var(--role-on-surface);
+  --muted: var(--role-surface-container);
+  --muted-foreground: var(--role-text-secondary);
+  --accent: var(--role-surface-hover);
+  --accent-foreground: var(--role-on-surface);
+  --destructive: var(--role-error);
+  --destructive-foreground: var(--role-on-error);
+  --border: var(--role-outline);
+  --input: var(--role-outline);
+  --ring: var(--role-focus);
+}
+
+.dark,
+[data-theme='dark'] {
   --background: var(--role-surface);
   --foreground: var(--role-text-primary);
   --card: var(--role-surface-container);

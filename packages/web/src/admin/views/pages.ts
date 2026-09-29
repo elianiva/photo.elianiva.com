@@ -97,7 +97,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
           ? h.div(
               [
                 h.Class(
-                  'rounded-xl border border-role-error-container bg-role-error-container p-4 text-sm text-role-error',
+                  'border border-role-accent bg-role-error-container p-(--spacing-lg) type-ui text-role-error',
                 ),
               ],
               [
@@ -105,16 +105,15 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 Button.button(
                   {
                     onClick: M.RetryFetchPhoto(),
-                    variant: 'outline',
+                    variant: 'secondary',
                     className: 'mt-3',
-                    size: 'sm',
                   },
                   'Retry',
                   h,
                 ),
               ],
             )
-          : h.p([h.Class('text-sm text-role-text-secondary animate-pulse')], ['Loading photo…']),
+          : h.p([h.Class('type-exif text-role-text-secondary animate-pulse')], ['Loading photo…']),
       ],
     )
   }
@@ -138,7 +137,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
         [h.Class('m-0')],
         [
           h.img([
-            h.Class('max-h-[70vh] w-full rounded-xl bg-role-surface-container object-contain'),
+            h.Class('max-h-[70vh] w-full bg-role-surface-container object-contain'),
             h.Src(originalUrl(photo)),
             h.Alt(photo.title),
             h.Attribute('decoding', 'async'),
