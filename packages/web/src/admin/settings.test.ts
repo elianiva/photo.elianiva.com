@@ -78,7 +78,7 @@ const ROW: Settings = {
   ],
 }
 
-const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null })
+const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })
 
 /** A cold load of `/admin/settings` with the shell answered and the singleton
  *  in hand. The stamp's clock is the one the tests mean, so the header is

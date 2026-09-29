@@ -63,7 +63,7 @@ const COUNTS: Counts = {
  *  same read the sidebar's meter draws. */
 const STORAGE = { photos: 412, bytes: 7_900_000_000, capBytes: STORAGE_CAP_BYTES }
 
-const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null })
+const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })
 
 /** A cold load of `pathname` with the operator signed in and the library
  *  answered: the session claim, the counts, the storage aggregate, the tags
@@ -195,12 +195,12 @@ describe('the sidebar tags group', () => {
       Scene.click(tagRow('Kyoto 38')),
       Scene.Command.resolve(
         FetchPhotosCmd({ tagIds: ['kyoto'], q: '' }),
-        Message.SucceededFetchPhotos({ photos: [], nextCursor: null }),
+        Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
       Scene.click(tagRow('New York 52')),
       Scene.Command.resolve(
         FetchPhotosCmd({ tagIds: ['kyoto', 'nyc'], q: '' }),
-        Message.SucceededFetchPhotos({ photos: [], nextCursor: null }),
+        Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
       Scene.expect(tagRow('Kyoto 38')).toHaveAttr('aria-pressed', 'true'),
       Scene.expect(tagRow('New York 52')).toHaveAttr('aria-pressed', 'true'),
@@ -214,14 +214,14 @@ describe('the sidebar tags group', () => {
       Scene.click(tagRow('Kyoto 38')),
       Scene.Command.resolve(
         FetchPhotosCmd({ tagIds: ['kyoto'], q: '' }),
-        Message.SucceededFetchPhotos({ photos: [], nextCursor: null }),
+        Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
       Scene.type(searchField, 'istanbul'),
       Scene.expect(searchField).toHaveValue('istanbul'),
       Scene.submit(searchForm),
       Scene.Command.resolve(
         FetchPhotosCmd({ tagIds: ['kyoto'], q: 'istanbul' }),
-        Message.SucceededFetchPhotos({ photos: [], nextCursor: null }),
+        Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
     )
   })

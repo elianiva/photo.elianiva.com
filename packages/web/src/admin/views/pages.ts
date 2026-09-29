@@ -15,7 +15,7 @@ import * as SpecRow from '@/components/ui/spec-row'
 import { originalUrl } from '@/lib/image'
 
 import { atomsPage } from './atoms'
-import { grid } from './grid'
+import { libraryTable } from './library-table'
 import { settingsPage } from './settings'
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
@@ -109,7 +109,11 @@ const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child =>
     [
       h.div([h.Class('mt-(--spacing-lg) flex justify-end')], [colsToggle(model, h)]),
       filterBar(model, h),
-      grid(model, h),
+      // #25: the `Table Head` → `Library Row` × N → `Pager` the design draws.
+      // The tile grid this replaces is left on disk — `views/grid.ts` and the
+      // density toggle above are #27's to re-introduce as the grid view, and
+      // the table's error and empty-library states are the grid's own.
+      libraryTable(model, h),
     ],
   )
 

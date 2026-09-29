@@ -13,6 +13,14 @@
  * it is composed by the page that owns the Photo. The `NO.` line in particular
  * is the page's to compose from the Photo Number, the original filename and the
  * place (see #25).
+ *
+ * `onSelect` makes the whole row a selection target, the way the design's frame
+ * shows two rows ticked by clicking them. It rides a full-bleed button rather
+ * than a click handler on the row element: the select box, the pencil and the
+ * `⋯` all sit *inside* the row, and a bubbling click would run the row's
+ * toggle and the control's own in the same gesture — a tick on the box that
+ * visibly changes nothing, which is worse than no row click at all. The
+ * controls above the overlay are the two `z-10` cells.
  */
 import { MoreHorizontal, Pencil } from 'lucide'
 import type { Html, HtmlBuilder } from 'foldkit/html'
@@ -27,7 +35,10 @@ import type { StatusVariant } from './status'
 import { columnWidths, tableActionsWidthClass, tableCheckboxWidthClass } from './table-head'
 
 export const libraryRowClass =
-  'flex items-center gap-(--spacing-lg) border-b border-role-hairline px-(--spacing-md) py-(--spacing-md)'
+  'relative flex items-center gap-(--spacing-lg) border-b border-role-hairline px-(--spacing-md) py-(--spacing-md)'
+
+/** The two cells that sit above the row's selection overlay. */
+const overSelectionClass = 'relative z-10'
 
 export type LibraryRowInputs<M> = Readonly<{
   id: string
@@ -47,6 +58,9 @@ export type LibraryRowInputs<M> = Readonly<{
   status: StatusVariant
   onEdit?: M
   onMenu?: M
+  /** Dispatched when the row itself is clicked. Omit it and the row is not a
+   *  selection target and the design's selected state is unreachable by hand. */
+  onSelect?: M
   className?: string
 }>
 
@@ -65,6 +79,22 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
       h.DataAttribute('selected', String(inputs.isSelected)),
     ],
     [
+      ...(inputs.onSelect === undefined
+        ? []
+        : [
+            h.button(
+              [
+                h.Type('button'),
+                h.OnClick(inputs.onSelect),
+                h.AriaLabel(`Select ${inputs.title}`),
+                h.DataAttribute('slot', 'library-row-select'),
+                h.Class(
+                  'focus-visible:ring-role-focus/50 absolute inset-0 cursor-pointer focus-visible:ring-[3px] focus-visible:outline-none',
+                ),
+              ],
+              [],
+            ),
+          ]),
       checkbox(
         {
           id: `library-row-${inputs.id}`,
@@ -72,7 +102,7 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
           onToggle: () => inputs.onToggleSelection,
           label: inputs.thumb.alt,
           labelClass: 'sr-only',
-          wrapperClass: tableCheckboxWidthClass,
+          wrapperClass: cn(tableCheckboxWidthClass, overSelectionClass),
         },
         h,
       ),
@@ -136,7 +166,15 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
         [status({ variant: inputs.status }, h)],
       ),
       h.div(
-        [h.Class(cn('flex shrink-0 items-center justify-end', tableActionsWidthClass))],
+        [
+          h.Class(
+            cn(
+              'flex shrink-0 items-center justify-end',
+              tableActionsWidthClass,
+              overSelectionClass,
+            ),
+          ),
+        ],
         [
           ...(inputs.onEdit === undefined
             ? []

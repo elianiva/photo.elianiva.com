@@ -9,8 +9,27 @@ import * as Button from '@/components/ui/button'
 import * as Dialog from '@/components/ui/dialog'
 
 import { AdminToast, Message as M } from '../model'
-import type { Model, Msg } from '../model'
+import type { Model, Msg, PendingConfirm } from '../model'
 import type { Child } from './shared'
+
+/** What the confirm asks. A bulk delete is a soft delete, and the button says
+ *  what it does rather than calling a move to the Trash a delete — the
+ *  irreversible step is a purge, and that one lives in the Trash. */
+const confirmLabel = (pending: PendingConfirm | undefined): string =>
+  pending?.kind === 'bulk' ? 'Yes, move to Trash' : 'Yes, delete'
+
+const confirmCopy = (pending: PendingConfirm | undefined): string => {
+  if (pending === undefined) return ''
+  if (pending.kind === 'photo') {
+    return `“${pending.label}” will be moved to Trash. You can restore it from there.`
+  }
+  if (pending.kind === 'bulk') {
+    return `${String(pending.count)} photograph${
+      pending.count === 1 ? '' : 's'
+    } will be moved to Trash. You can restore them from the Trash; purging is the only irreversible step.`
+  }
+  return `Tag “${pending.label}” will be deleted and detached from all photos.`
+}
 
 export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.submodel({
@@ -33,13 +52,7 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
               ),
               Dialog.description(
                 { attributes: render.description },
-                [
-                  model.pendingConfirm === undefined
-                    ? ''
-                    : model.pendingConfirm.kind === 'photo'
-                      ? `“${model.pendingConfirm.label}” will be moved to Trash. You can restore it from there.`
-                      : `Tag “${model.pendingConfirm.label}” will be deleted and detached from all photos.`,
-                ],
+                [confirmCopy(model.pendingConfirm)],
                 innerH,
               ),
               h.div(
@@ -57,7 +70,7 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                   ),
                   Button.button(
                     { onClick: M.ConfirmPending(), variant: 'destructive' },
-                    'Yes, delete',
+                    confirmLabel(model.pendingConfirm),
                     innerH,
                   ),
                 ],

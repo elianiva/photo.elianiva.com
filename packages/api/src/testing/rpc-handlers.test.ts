@@ -614,6 +614,16 @@ describe('ListLibraryRows handler', () => {
     const byQ = await adminRpc(harness, (client) => client.ListLibraryRows({ q: 'temp' }))
     expect(byQ.items.map((item) => item.id)).toEqual([temple.id])
 
+    // The Pager's `OF 412` is the filtered total, and it is counted under the
+    // same predicate the rows are read under — so each of these narrows to the
+    // one Photo it returned, and the unfiltered read sees both.
+    expect(byStatus.total).toBe(1)
+    expect(byRatio.total).toBe(0)
+    expect(byTag.total).toBe(1)
+    expect(byQ.total).toBe(1)
+    const unfiltered = await adminRpc(harness, (client) => client.ListLibraryRows({}))
+    expect(unfiltered.total).toBe(2)
+
     expect(byStatus.nextCursor).toBeNull()
   })
 

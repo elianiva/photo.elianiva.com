@@ -124,8 +124,11 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
   // so the public contract stays small while the Library gets its Status,
   // Ratio and Tag filters.
   ListLibraryRows: (payload) =>
-    PhotoService.use((service) =>
-      service.list({
+    Effect.gen(function* () {
+      // The same filter object for both reads, so the page and the number it is
+      // paged over cannot be counted under different conditions. `count` drops
+      // the cursor on purpose: `1–7 OF 412` counts the filter, not the position.
+      const filter = {
         status: payload.status,
         ratio: payload.ratio,
         tagIds: payload.tagIds,
@@ -133,8 +136,13 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
         sort: payload.sort,
         cursor: payload.cursor,
         limit: payload.limit,
-      }),
-    ),
+      }
+      const [page, total] = yield* Effect.all([
+        PhotoService.use((service) => service.list(filter)),
+        PhotoService.use((service) => service.count(filter)),
+      ])
+      return { items: page.items, nextCursor: page.nextCursor, total }
+    }),
   SetPhotoStatus: (payload) =>
     PhotoService.use((service) => service.setStatus(payload.id, payload.status)),
   UpdatePhotoPresentation: (payload) =>

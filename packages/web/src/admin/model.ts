@@ -86,12 +86,41 @@ export const emptyDraft = (): DraftFields => ({
   lens: '',
 })
 
-/** The photo or tag awaiting destructive confirmation. */
+/** The photo, one tag, or the whole ticked selection awaiting destructive
+ *  confirmation. `bulk` carries a count because there is no single label to
+ *  name forty photographs by, and it is a soft delete like the single one. */
 export const PendingConfirm = S.Union([
   S.Struct({ kind: S.Literal('photo'), id: S.String, label: S.String }),
   S.Struct({ kind: S.Literal('tag'), id: S.String, label: S.String }),
+  S.Struct({ kind: S.Literal('bulk'), count: S.Number }),
 ])
 export type PendingConfirm = typeof PendingConfirm.Type
+
+/** The fields of one page of the Library table, declared once so the
+ *  `ListLibraryRows` success, the Model's own reads and every Message that
+ *  carries a refreshed page are the same shape: the rows, the cursor that would
+ *  follow them, and the filtered total behind them. A message union's variants
+ *  are field records rather than Structs, so the Messages spread this. */
+export const libraryPageFields = {
+  photos: S.Array(PhotoWithTags),
+  nextCursor: S.NullOr(S.String),
+  /** Rows in the whole filtered set, not on this page — the Pager's `OF 412`. */
+  total: S.Number,
+}
+export const LibraryPage = S.Struct(libraryPageFields)
+export type LibraryPage = typeof LibraryPage.Type
+
+/** Photos on one page of the Library table. The design draws seven and labels
+ *  the Pager `1–7 OF 412` in two separate frames, so the page size is the
+ *  canvas's number and this is the one place it is written down. */
+export const LIBRARY_PAGE_SIZE = 7
+
+/** The Mat the Bulk Bar's `Add border` puts on every ticked Photo. The design
+ *  draws one ghost button and no picker, so a bulk action that asked would be
+ *  scope the design does not have; the Editor's own defaults and the design's
+ *  `4%` slider are the one Mat, and the toast names it so the operator is never
+ *  guessing what just happened to forty photographs. */
+export const BULK_BORDER_MAT = { enabled: true, style: 'even', colour: 'paper', width: 4 } as const
 
 export const UPLOAD_LIMITS = {
   maxFiles: 50,
@@ -255,6 +284,29 @@ export const Model = S.Struct({
   settingsSaving: S.Boolean,
   /** The CSV index is being built and downloaded. */
   settingsIndexing: S.Boolean,
+
+  // ----- the Library table -----------------------------------------------------
+  /** The ticked Photos. A `Set<PhotoId>` in the design's terms, an array here:
+   *  the Model is compared structurally on every render, and an array is the
+   *  one shape two equal sets can be written the same way. It is the only copy
+   *  — there is no second list to fall out of step with it. */
+  selected: S.Array(S.String),
+  /** Zero-based page the table is showing. */
+  libraryPage: S.Number,
+  /** The cursor that opens each page, index-aligned with `libraryPage`. Page 0
+   *  is the empty string: the first page has no cursor. A keyset cursor only
+   *  goes forwards, so going back means re-reading a cursor already held. */
+  libraryCursors: S.Array(S.String),
+  /** Rows in the whole filtered set. The Pager's `OF 412`; the tri-state head
+   *  checkbox is deliberately *not* measured against this — it is over the
+   *  current page. */
+  libraryTotal: S.Number,
+  /** The Photo whose `⋯` menu is open, and the menu itself. */
+  rowMenuId: S.optional(S.String),
+  rowMenu: Dialog.Model,
+  /** The Bulk Bar's `Add tag` picker: the Dialog, and the Tags ticked in it. */
+  addTagDialog: Dialog.Model,
+  addTagIds: S.Array(S.String),
 })
 export type Model = typeof Model.Type
 
@@ -264,10 +316,7 @@ export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   // data
-  SucceededFetchPhotos: {
-    photos: S.Array(PhotoWithTags),
-    nextCursor: S.NullOr(S.String),
-  },
+  SucceededFetchPhotos: libraryPageFields,
   SucceededFetchTags: { tags: S.Array(Tag) },
   SucceededFetchPhoto: { id: PhotoId, photo: PhotoWithTags },
   FailedFetchPhoto: { id: PhotoId, message: S.String },
@@ -417,6 +466,43 @@ export const Message = defineMessageUnion({
   ExportCsvIndex: {},
   ExportedCsvIndex: { photos: S.Number },
   FailedExportCsvIndex: { message: S.String },
+
+  // ----- the Library table -----------------------------------------------------
+  /** Row click and the row's own box are the same gesture, so they are the same
+   *  message. */
+  ToggledRowSelection: { id: S.String },
+  /** The head's tri-state box. Off, some, or all *on this page* — a header box
+   *  on a paged table means the rows being held, and a selection that reached
+   *  past the page would tick rows the operator cannot see. */
+  ToggledPageSelection: {},
+  ClearedSelection: {},
+  SteppedLibraryPage: { delta: S.Literals([-1, 1]) },
+  OpenedRowMenu: { id: S.String },
+  GotRowMenuMessage: { message: Dialog.Message },
+  /** The `⋯` menu's publish toggle. A soft delete is the other row action and
+   *  goes through the shared confirm instead. */
+  SetRowStatus: { id: S.String, status: S.Literals(['draft', 'published']) },
+  SucceededSetRowStatus: {
+    status: S.Literals(['draft', 'published']),
+    ...libraryPageFields,
+  },
+  /** The `⋯` menu's destructive action. A soft delete like the Bulk Bar's, and
+   *  through the same confirm Dialog. */
+  RequestedRowTrash: { id: S.String, title: S.String },
+  OpenedAddTag: {},
+  GotAddTagDialogMessage: { message: Dialog.Message },
+  ToggledAddTag: { id: S.String },
+  ConfirmAddTag: {},
+  SucceededAddTag: { count: S.Number, ...libraryPageFields },
+  AddBorderToSelection: {},
+  SucceededAddBorder: { count: S.Number, ...libraryPageFields },
+  /** The Bulk Bar's `Delete`. A soft delete: it moves the selection to the
+   *  Trash, and the Trash is where the irreversible act lives. */
+  RequestBulkTrash: { count: S.Number },
+  SucceededBulkTrash: { count: S.Number, ...libraryPageFields },
+  /** The row's pencil. The Editor is the Photo route, so the row navigates
+   *  rather than opening the legacy edit Sheet. */
+  OpenedPhoto: { id: PhotoId },
 
   // routing — the runtime's own variants. `ClickedLink` is a clicked plain
   // anchor, `ChangedUrl` a popstate or a navigation the runtime performed.
