@@ -210,6 +210,13 @@ export const slugify = (input: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'untitled'
 
+/** Split an id list into bind-sized pieces. D1 caps a statement's bind list,
+ *  so every `IN (...)` over more than a handful of ids goes through this. */
+const chunkOf = (ids: ReadonlyArray<string>, size: number): ReadonlyArray<ReadonlyArray<string>> =>
+  Array.from({ length: Math.ceil(ids.length / size) }, (_unused, index) =>
+    ids.slice(index * size, (index + 1) * size),
+  )
+
 /**
  * Every read is scoped to live Photos. The lifecycle operations address a row
  * whatever its `deletedAt` and say so where they do it, so a trashed Photo can
@@ -366,9 +373,7 @@ export const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyA
     if (ids.length === 0) return new Map<string, ReadonlyArray<Tag>>()
 
     // Chunk IN lists to stay well under D1's ~100 bind limit
-    const chunkSize = 80
-    for (let offset = 0; offset < ids.length; offset += chunkSize) {
-      const chunk = ids.slice(offset, offset + chunkSize)
+    for (const chunk of chunkOf(ids, 80)) {
       const placeholders = chunk.map(() => '?').join(', ')
       const raw = yield* Effect.tryPromise({
         try: () =>
@@ -547,15 +552,11 @@ const presentationColumns = (
  *  the Photo ids it selects and the Tag id it links them to. */
 export const LINK_BIND_BUDGET = 80
 
-const chunkOf = (ids: ReadonlyArray<string>, size: number): ReadonlyArray<ReadonlyArray<string>> =>
-  Array.from({ length: Math.ceil(ids.length / size) }, (_unused, index) =>
-    ids.slice(index * size, (index + 1) * size),
-  )
-
 /** A link statement names one `tagId` and binds the Photo ids it selects, so
  *  the chunk size is the budget less the bind the tag takes. */
 const linkPhotoChunks = (photoIds: ReadonlyArray<string>): ReadonlyArray<ReadonlyArray<string>> =>
   chunkOf(photoIds, LINK_BIND_BUDGET - 1)
+
 /** An unknown id is a failure rather than a silent no-op, so a Bulk Bar move
  *  over a stale selection cannot report success for a Photo that is gone. */
 const assertLivePhotos = (db: (typeof Gateway.Service)['db'], photoIds: ReadonlyArray<string>) =>
