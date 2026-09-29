@@ -35,9 +35,6 @@ importers:
       oxlint:
         specifier: 1.85.0
         version: 1.85.0(oxlint-tsgolint@7.0.2002)(vite-plus@1.0.0-rc.0(@types/node@26.6.2)(@vitest/ui@5.0.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.1))
-      portless:
-        specifier: ^0.15.6
-        version: 0.15.6
       turbo:
         specifier: ^2.11.3
         version: 2.11.3
@@ -2459,12 +2456,6 @@ packages:
     resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
     engines: {node: '>=14.19.0'}
 
-  portless@0.15.6:
-    resolution: {integrity: sha512-uOAwWLF32rmyEGFASzSO0VOaqb/AQxFCCzyZbPGd82UNNOfIEvc09zy92nroNibE5HNfzV4oVB0ObKbPXgkM9A==}
-    engines: {node: '>=24'}
-    os: [darwin, linux, win32]
-    hasBin: true
-
   postcss@8.5.28:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
@@ -4696,8 +4687,6 @@ snapshots:
   picomatch@4.0.7: {}
 
   pngjs@7.0.0: {}
-
-  portless@0.15.6: {}
 
   postcss@8.5.28:
     dependencies:

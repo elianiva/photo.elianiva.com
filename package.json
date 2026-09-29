@@ -8,7 +8,6 @@
     "check": "vp check",
     "check:node": "node scripts/check-node-version.mjs",
     "dev": "alchemy dev --stage dev",
-    "dev:local": "portless",
     "fmt": "vp fmt",
     "lint": "vp lint",
     "db:seed": "tsx scripts/seed.ts",
@@ -26,7 +25,6 @@
     "@foldkit/oxlint-plugin": "^0.15.0",
     "agent-browser": "^0.38.1",
     "oxlint": "1.85.0",
-    "portless": "^0.15.6",
     "turbo": "^2.11.3",
     "typescript": "^7.0.2",
     "vite-plus": "^1.0.0-rc.0"

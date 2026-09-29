@@ -23,7 +23,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Capture the user action and the resulting state, not only the final screen.
 - UI proof includes an ARIA snapshot and a screenshot with the app identity (`Elianiva` / `photo.elianiva.com` header) visible.
 - Mutation proof includes a second UI view of the stored value (re-open the sheet, reload the grid, or open the lightbox) — a toast alone is insufficient.
-- Image proof is the lightbox `<img>` loading from `/api/image/<r2Key>` (visible pixels, alt text, no broken image).
+- Image proof is the lightbox `<img>` loading from the API Worker's `/image/<r2Key>` (visible pixels, alt text, no broken image).
 - Record the feature ID and entry point used with every artifact.
 - Report an unreachable path with the attempted command and the unmet precondition.
 - Do not report a skipped entry point as verified through a different path.

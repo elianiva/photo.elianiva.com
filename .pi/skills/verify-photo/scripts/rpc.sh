@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Resolve BASE via portless; override with BASE env var.
-PORTLESS_URL="$(portless get photo 2>/dev/null || echo https://photo.localhost)"
-BASE="${BASE:-$PORTLESS_URL}"
+# The RPC surface lives on the API Worker, an origin of its own (the site at
+# 5173 does not proxy it). Override with BASE env var.
+BASE="${BASE:-http://localhost:13371}"
 TAG="${1:-ListPhotos}"
 PAYLOAD="${2:-{}}"
 
@@ -14,9 +14,9 @@ for t in $ADMIN_TAGS; do
 done
 
 if [ "$is_admin" -eq 1 ]; then
-  URL="$BASE/api/admin/rpc"
+  URL="$BASE/admin/rpc"
 else
-  URL="$BASE/api/rpc"
+  URL="$BASE/rpc"
 fi
 
 python3 -c "
@@ -29,6 +29,6 @@ print(json.dumps(envelope))
 " "$TAG" "$PAYLOAD" > /tmp/verify-photo-rpc-$$.json
 
 echo "-> $URL _tag=$TAG payload=$PAYLOAD" >&2
-curl -k -s -X POST "$URL" -H 'content-type: application/json' --data-binary @/tmp/verify-photo-rpc-$$.json
+curl -s -X POST "$URL" -H 'content-type: application/json' --data-binary @/tmp/verify-photo-rpc-$$.json
 rm -f /tmp/verify-photo-rpc-$$.json
 echo >&2

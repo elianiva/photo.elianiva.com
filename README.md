@@ -12,12 +12,13 @@ Curated photography showcase — `photo.elianiva.com`.
 
 ```sh
 pnpm install
-pnpm dev          # alchemy dev — http://localhost:5173
-pnpm dev:local    # optional: portless HTTPS at https://photo.localhost
+pnpm dev          # alchemy dev — site on http://localhost:5173, API Worker on http://localhost:13371
 pnpm build
 pnpm typecheck
 pnpm lint
 ```
+
+The two dev servers have fixed ports (`dev.port` in `alchemy.run.ts`) and fail to start when either is taken, so run one instance at a time per machine. Keep `ACCESS_ALLOWED_EMAILS` in a local `.env` (see `.env.example`); it is required on every stage, `dev` included, although the admin gate stands down on `dev` before the allowlist is consulted.
 
 ## Deploy
 
