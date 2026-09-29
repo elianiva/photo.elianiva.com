@@ -11,8 +11,10 @@ import type { PhotoWithTags, Tag } from '@photo/shared'
 
 import * as Badge from '@/components/ui/badge'
 import * as Button from '@/components/ui/button'
+import * as SpecRow from '@/components/ui/spec-row'
 import { originalUrl } from '@/lib/image'
 
+import { atomsPage } from './atoms'
 import { grid } from './grid'
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
@@ -150,15 +152,17 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       ...(meta.location !== undefined || meta.camera !== undefined || meta.lens !== undefined
         ? [
             h.dl(
+              [h.Class('flex flex-col')],
               [
-                h.Class(
-                  'type-ui grid gap-x-(--spacing-xl) gap-y-1 text-role-text-secondary sm:grid-cols-3',
-                ),
-              ],
-              [
-                ...(meta.location !== undefined ? specRow('Where', meta.location, h) : []),
-                ...(meta.camera !== undefined ? specRow('Camera', meta.camera, h) : []),
-                ...(meta.lens !== undefined ? specRow('Lens', meta.lens, h) : []),
+                ...(meta.location !== undefined
+                  ? [SpecRow.specRow({ label: 'Where', value: meta.location }, h)]
+                  : []),
+                ...(meta.camera !== undefined
+                  ? [SpecRow.specRow({ label: 'Camera', value: meta.camera }, h)]
+                  : []),
+                ...(meta.lens !== undefined
+                  ? [SpecRow.specRow({ label: 'Lens', value: meta.lens }, h)]
+                  : []),
               ],
             ),
           ]
@@ -176,16 +180,6 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
     ],
   )
 }
-
-const specRow = (label: string, value: string, h: HtmlBuilder<Msg>): Child[] => [
-  h.div(
-    [h.Key(label), h.Class('flex gap-2')],
-    [
-      h.dt([h.Class('type-kicker text-role-text-disabled')], [label]),
-      h.dd([h.Class('type-ui text-role-text-primary')], [value]),
-    ],
-  ),
-]
 
 // ---------------------------------------------------------------------------
 // routes whose pages are still being built
@@ -232,6 +226,7 @@ const notFoundPage = (path: string, h: HtmlBuilder<Msg>): Child =>
 export const routePage = (model: Model, h: HtmlBuilder<Msg>): Child =>
   AppRoute.match(model.route, {
     Library: () => libraryPage(model, h),
+    Atoms: () => atomsPage(model, h),
     Drafts: () => forthcomingPage('Drafts', h),
     Settings: () => forthcomingPage('Settings', h),
     Photo: () => photoPage(model, h),

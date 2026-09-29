@@ -7,11 +7,12 @@
 import { Search } from 'lucide'
 import type { HtmlBuilder } from 'foldkit/html'
 
+import * as NavLink from '@/components/ui/nav-link'
+
 import { icon } from '@/lib/icons'
 
 import type { Edition } from '../content'
 import { Message } from '../model'
-import { navLink } from './nav-link'
 import { ruleStack } from './rules'
 import { BAND, type Child } from './shared'
 
@@ -80,7 +81,10 @@ const folio = (edition: Edition, h: HtmlBuilder<Message>): Child =>
           // The first link is the page the reader is already on, so it is the
           // one the rule marks.
           ...edition.folio.sections.map((link, index) =>
-            navLink(link.label, link.href, index === 0 ? 'active' : 'default', h),
+            NavLink.navLink(
+              { href: link.href, label: link.label, state: index === 0 ? 'active' : 'default' },
+              h,
+            ),
           ),
         ],
       ),
@@ -88,7 +92,7 @@ const folio = (edition: Edition, h: HtmlBuilder<Message>): Child =>
         [h.AriaLabel('Utility'), h.Class('flex items-center gap-(--spacing-xl)')],
         [
           h.span([h.Class('type-exif text-role-text-disabled')], [`${edition.issue} FRAMES`]),
-          navLink('RSS', edition.folio.rssHref, 'default', h),
+          NavLink.navLink({ href: edition.folio.rssHref, label: 'RSS', state: 'default' }, h),
           h.a(
             [h.Href(edition.folio.searchHref), h.AriaLabel('Search')],
             [icon(h, Search, 'size-3.5 text-role-text-primary')],

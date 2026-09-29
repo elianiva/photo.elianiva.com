@@ -6,11 +6,10 @@
  *            `color.text.primary` while the box is focused
  *   box      8px of vertical padding on a 1px `color.outline` bottom rule,
  *            thickening to 1.5px of `color.rule` on focus, no fill, no radius
- *   value    `$typography.exif`, the Desk's face for a value
- *
- * `input` carries the value classes; `textarea` is the same rule on a box that
- * grows with its content, set in `$typography.body` because a caption is
- * prose rather than a value.
+ *   value    `$typography.body` — the Field's value is prose (a title, a place,
+ *            a slug), which is what the design's `Field` master
+ *            (`cb46079a5eae06e4`) and its call sites set. `textarea` is the
+ *            same rule on a box that grows with its content.
  */
 import { Input as FoldkitInput } from '@foldkit/ui'
 import type { Html, HtmlBuilder } from 'foldkit/html'
@@ -18,7 +17,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import { cn } from '@/lib/utils'
 
 export const inputClass =
-  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled data-disabled:border-role-hairline data-disabled:text-role-text-disabled h-9 border-0 border-b border-role-outline bg-transparent px-0 pb-(--spacing-sm) pt-(--spacing-sm) type-exif w-full min-w-0 outline-none transition-colors duration-(--motion-duration-fast) disabled:pointer-events-none disabled:cursor-not-allowed'
+  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled data-disabled:border-role-hairline data-disabled:text-role-text-disabled h-9 border-0 border-b border-role-outline bg-transparent px-0 pb-(--spacing-sm) pt-(--spacing-sm) type-body w-full min-w-0 outline-none transition-colors duration-(--motion-duration-fast) disabled:pointer-events-none disabled:cursor-not-allowed'
 
 /** Same string as the `label` item's component classes (upstream label.tsx). */
 /** Upstream string re-keyed for foldkit: the label precedes the control, so

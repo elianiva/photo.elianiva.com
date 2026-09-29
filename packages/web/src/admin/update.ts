@@ -38,6 +38,7 @@ import {
   foldConfirm,
   foldDraftCombo,
   foldFileDrop,
+  foldSegmentGroup,
   foldSheet,
   foldToast,
   foldUploadCombo,
@@ -60,6 +61,7 @@ import type { Message as Msg, Model } from './model'
 import { isAdminPath, urlToAppRoute } from './route'
 import type { AppRoute } from './route'
 import * as TagManager from './tag-manager'
+import { initAtomsState, initSheetSegments, specimenRowIndexes } from './atoms-sheet'
 
 // ---------------------------------------------------------------------------
 // routing
@@ -84,6 +86,8 @@ const initialModel = (route: AppRoute): Model => ({
   nextCursor: null,
   loadingMore: false,
   cols: readStoredCols(),
+  segmentGroups: initSheetSegments(),
+  atoms: initAtomsState(),
   photoStatus: 'loading',
   selectedId: null,
   editSheet: Sheet.init({ id: 'admin-edit-sheet' }),
@@ -348,6 +352,60 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       commands: [PersistColsCmd({ cols })],
     }),
     CompletedPersistCols: () => ({ model }),
+
+    // ----- the atoms sheet -------------------------------------------------------
+    // Every handler here moves one of the sheet's own pieces of state. Nothing
+    // reaches the network: the sheet is a specimen, and the atoms behind it are
+    // the ones the product pages will drive.
+    SteppedAtomPage: ({ page }) => ({
+      // A selection made on one page must not silently apply to the next.
+      model: modifyFields(model, {
+        atoms: () => ({ ...model.atoms, page, selectedRowIndexes: [] }),
+      }),
+    }),
+    ToggledAtomSelection: () => {
+      const indexes = specimenRowIndexes(model.atoms.page)
+      const allSelected =
+        indexes.length > 0 &&
+        indexes.every((index) => model.atoms.selectedRowIndexes.includes(index))
+      return {
+        model: modifyFields(model, {
+          atoms: () => ({
+            ...model.atoms,
+            selectedRowIndexes: allSelected ? [] : indexes,
+          }),
+        }),
+      }
+    },
+    ToggledAtomRow: ({ index }) => {
+      const selected = model.atoms.selectedRowIndexes
+      return {
+        model: modifyFields(model, {
+          atoms: () => ({
+            ...model.atoms,
+            selectedRowIndexes: selected.includes(index)
+              ? selected.filter((picked) => picked !== index)
+              : [...selected, index],
+          }),
+        }),
+      }
+    },
+    ToggledAtomSwitch: ({ id, isChecked }) => ({
+      model: modifyFields(model, {
+        atoms: () => ({
+          ...model.atoms,
+          switches: { ...model.atoms.switches, [id]: isChecked },
+        }),
+      }),
+    }),
+    SetAtomInput: ({ id, value }) => ({
+      model: modifyFields(model, {
+        atoms: () => ({ ...model.atoms, inputs: { ...model.atoms.inputs, [id]: value } }),
+      }),
+    }),
+    PickedAtomMat: ({ colour }) => ({
+      model: modifyFields(model, { atoms: () => ({ ...model.atoms, matColour: colour }) }),
+    }),
 
     // ----- lightbox ---------------------------------------------------------------
     ClickedPhoto: ({ id }) => ({ model: modifyFields(model, { selectedId: () => id }) }),
@@ -671,6 +729,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     GotConfirmMessage: ({ message }) => foldConfirm(model, message),
     GotFileDropMessage: ({ message }) => foldFileDrop(model, message),
     GotToastMessage: ({ message }) => foldToast(model, message),
+    GotSegmentMessage: ({ groupId, message }) => foldSegmentGroup(groupId)(model, message),
 
     // Tag manager bar: keep the child's input state in sync, then act on
     // its intents — filter toggle and delete mirror existing handlers;
