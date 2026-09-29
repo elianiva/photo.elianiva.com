@@ -26,6 +26,12 @@ import {
 } from '@photo/shared'
 import { Gateway } from './gateway'
 
+// The bucket cap is a configured constant, not a Settings row, and it is
+// single-sourced in `@photo/shared` because the RPC contract and the view that
+// renders the meter both need it. It is re-exported here so the module that
+// measures storage usage is where anything reaching for the cap looks first.
+export { STORAGE_CAP_BYTES } from '@photo/shared'
+
 // ---------------------------------------------------------------------------
 // filters, sorts and results
 // ---------------------------------------------------------------------------
@@ -92,16 +98,18 @@ export interface PhotoUpdatePatch {
 
 /** The authored presentation, in the four groups the Editor edits it in. Every
  *  group is optional and only the supplied columns are written, so one group
- *  can be saved without restating the other three. */
+ *  can be saved without restating the other three. A `null` clears its column
+ *  — `level` and the three mat details are nullable, and null is un-levelled
+ *  rather than zero — where an absent key leaves the column alone. */
 export interface PhotoPresentationPatch {
   readonly crop?: { readonly x: number; readonly y: number; readonly scale: number } | undefined
-  readonly level?: number | undefined
+  readonly level?: number | null | undefined
   readonly mat?:
     | {
         readonly enabled: boolean
-        readonly style?: MatStyle | undefined
-        readonly colour?: MatColour | undefined
-        readonly width?: number | undefined
+        readonly style?: MatStyle | null | undefined
+        readonly colour?: MatColour | null | undefined
+        readonly width?: number | null | undefined
       }
     | undefined
   readonly export?:
@@ -182,16 +190,19 @@ export interface PhotoServiceContract {
     patch: PhotoPresentationPatch,
   ) => Effect.Effect<PhotoPresentation, StorageError | PhotoNotFound | InvalidInput>
   /** Link Tags to Photos. The one set-shaped write with no per-Photo rule, so
-   *  it is one statement rather than a fold over `update`. Idempotent. */
+   *  it is one statement rather than a fold over `update`. Idempotent. An id
+   *  that resolves to no live Photo is `PhotoNotFound`; a Tag id that resolves
+   *  to no Tag is `InvalidInput`. */
   readonly addTags: (
     photoIds: ReadonlyArray<string>,
     tagIds: ReadonlyArray<string>,
-  ) => Effect.Effect<void, StorageError | PhotoNotFound>
-  /** The counterpart, for a row's tags. Idempotent. */
+  ) => Effect.Effect<void, StorageError | PhotoNotFound | InvalidInput>
+  /** The counterpart, for a row's tags. Idempotent, and the same two id
+   *  checks. */
   readonly removeTags: (
     photoIds: ReadonlyArray<string>,
     tagIds: ReadonlyArray<string>,
-  ) => Effect.Effect<void, StorageError | PhotoNotFound>
+  ) => Effect.Effect<void, StorageError | PhotoNotFound | InvalidInput>
 }
 
 export class PhotoService extends Context.Service<PhotoService, PhotoServiceContract>()(
@@ -577,6 +588,34 @@ const assertLivePhotos = (db: (typeof Gateway.Service)['db'], photoIds: Readonly
     }
     const missing = photoIds.find((id) => !found.has(id))
     if (missing !== undefined) return yield* Effect.fail(new PhotoNotFound({ id: missing }))
+  })
+
+/** A Tag id nobody carries is `InvalidInput` rather than a storage failure.
+ *  `photo_tags.tagId` is a foreign key and `INSERT OR IGNORE` does not suppress
+ *  a foreign-key violation, so without this the batch dies on the stale id and
+ *  the operator is told D1 is broken. The whole set is one batch, so without
+ *  the check ahead of it a single stale Tag rolls back every good link in the
+ *  call. */
+const assertTagsExist = (db: (typeof Gateway.Service)['db'], tagIds: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const found = new Set<string>()
+    for (const chunk of chunkOf(tagIds, LINK_BIND_BUDGET)) {
+      const placeholders = chunk.map(() => '?').join(', ')
+      const raw = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .prepare(`SELECT id FROM tags WHERE id IN (${placeholders})`)
+            .bind(...chunk)
+            .all<{ id: string }>(),
+        catch: (cause) =>
+          new StorageError({ message: 'Failed to check tags', cause: describeCause(cause) }),
+      })
+      for (const row of raw.results ?? []) found.add(row.id)
+    }
+    const missing = tagIds.find((id) => !found.has(id))
+    if (missing !== undefined) {
+      return yield* Effect.fail(new InvalidInput({ message: `no tag with id ${missing}` }))
+    }
   })
 
 const selectPhotoRows = (
@@ -1013,6 +1052,15 @@ export const PhotoServiceLive = Layer.effect(
         if (fields.length === 0) {
           return yield* Effect.fail(new InvalidInput({ message: 'empty presentation patch' }))
         }
+        // The column carries no CHECK, and a crop scale of zero is not a tight
+        // crop, it is a divide by zero in the Rendition generator. Guarded here
+        // so a caller that is not the RPC boundary cannot write one.
+        if (patch.crop !== undefined && !(patch.crop.scale > 0)) {
+          return yield* Effect.fail(new InvalidInput({ message: 'crop scale must be positive' }))
+        }
+        if (patch.level !== undefined && patch.level !== null && !Number.isFinite(patch.level)) {
+          return yield* Effect.fail(new InvalidInput({ message: 'level must be a finite angle' }))
+        }
         yield* Effect.tryPromise({
           try: () =>
             db
@@ -1035,6 +1083,7 @@ export const PhotoServiceLive = Layer.effect(
     const addTags: PhotoServiceContract['addTags'] = (photoIds, tagIds) =>
       Effect.gen(function* () {
         yield* assertLivePhotos(db, photoIds)
+        yield* assertTagsExist(db, tagIds)
         // One statement per Tag over a chunk of Photos: a link names exactly
         // one `tagId`, so the Tag ids are the loop and the Photo ids are the
         // binds inside one statement.
@@ -1060,6 +1109,7 @@ export const PhotoServiceLive = Layer.effect(
     const removeTags: PhotoServiceContract['removeTags'] = (photoIds, tagIds) =>
       Effect.gen(function* () {
         yield* assertLivePhotos(db, photoIds)
+        yield* assertTagsExist(db, tagIds)
         const statements = tagIds.flatMap((tagId) =>
           linkPhotoChunks(photoIds).map((chunk) => {
             const placeholders = chunk.map(() => '?').join(', ')

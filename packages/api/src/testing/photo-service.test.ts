@@ -141,6 +141,15 @@ const linkedTagsOf = (harness: TestHarness, id: string): Promise<ReadonlyArray<s
     .all<{ slug: string }>()
     .then((raw) => raw.results?.map((row) => row.slug) ?? [])
 
+/** How many Photos carry a Tag. The chunk tests need the total, because a
+ *  per-row spot check cannot see a link that was written to the wrong id. */
+const countLinks = (harness: TestHarness, tagId: string): Promise<number> =>
+  harness.db
+    .prepare('SELECT COUNT(*) AS n FROM photo_tags WHERE tagId = ?')
+    .bind(tagId)
+    .first<{ n: number }>()
+    .then((row) => row?.n ?? 0)
+
 /** The crop and mat columns, straight off the row: the assertion that the
  *  second save really left them alone. */
 const presentationColumnsOf = (harness: TestHarness, id: string) =>
@@ -226,6 +235,7 @@ interface PhotoRowSeed {
   readonly ratio?: string | null
   readonly deletedAt?: string | null
   readonly bytes?: number | null
+  readonly tagIds?: ReadonlyArray<string>
 }
 
 /** Rows the service API cannot produce: a fixed id, an undated Photo, or a
@@ -252,6 +262,12 @@ const seedPhotoRow = async (db: TestHarness['db'], row: PhotoRowSeed): Promise<v
       row.deletedAt ?? null,
     )
     .run()
+  for (const tagId of row.tagIds ?? []) {
+    await db
+      .prepare('INSERT INTO photo_tags (photoId, tagId) VALUES (?, ?)')
+      .bind(row.id, tagId)
+      .run()
+  }
 }
 
 const seed = (harness: TestHarness, seedValue: PhotoSeed) => createPhoto(harness, seedValue)
@@ -1517,6 +1533,57 @@ describe('PhotoService.setPresentation', () => {
     expect(error).toBeInstanceOf(InvalidInput)
   })
 
+  it('clears the level and the mat detail with null, keeping the rest of the row', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await setPresentation(harness, created.id, {
+      crop: { x: 12.5, y: 4, scale: 1.8 },
+      level: -2.5,
+      mat: { enabled: true, style: 'gallery', colour: 'ink', width: 4 },
+    })
+
+    const cleared = await setPresentation(harness, created.id, {
+      level: null,
+      mat: { enabled: true, style: null, colour: null, width: null },
+    })
+
+    // Null is un-levelled, not zero, and the crop the patch did not name is
+    // still the crop.
+    expect(cleared.level).toBeNull()
+    expect(cleared.borderEnabled).toBe(true)
+    expect(await presentationColumnsOf(harness, created.id)).toEqual({
+      cropX: 12.5,
+      cropY: 4,
+      cropScale: 1.8,
+      level: null,
+      borderEnabled: 1,
+      borderStyle: null,
+      borderColour: null,
+      borderWidth: null,
+    })
+  })
+
+  it('refuses a crop scale of zero and a level that is not a number', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+
+    // The column carries no CHECK, and a zero scale is a divide by zero in
+    // the Rendition generator rather than a very tight crop.
+    for (const patch of [{ crop: { x: 0, y: 0, scale: 0 } }, { level: Number.NaN }]) {
+      const error = await fail(
+        withTestServices(
+          PhotoService.use((service) => service.setPresentation(created.id, patch)),
+          harness,
+        ),
+      )
+      expect(error).toBeInstanceOf(InvalidInput)
+    }
+    expect(await presentationColumnsOf(harness, created.id)).toMatchObject({
+      cropScale: 1,
+      level: null,
+    })
+  })
+
   it('fails with PhotoNotFound for an unknown photo', async () => {
     const harness = makeTestHarness()
 
@@ -1597,9 +1664,18 @@ describe('PhotoService.addTags', () => {
 
     await addTags(harness, ids, [kyoto.id])
 
-    for (const id of [ids[0]!, ids[ids.length - 2]!, ids[ids.length - 1]!]) {
-      expect(await linkedTagsOf(harness, id)).toEqual(['kyoto'])
+    // The first id of the SECOND chunk is the one a chunker that drops its
+    // head loses, and the last two are the only tail an off-by-one at the
+    // end shows up in. All three are asserted, and the count closes it.
+    for (const id of [
+      ids[0]!,
+      ids[LINK_BIND_BUDGET - 1]!,
+      ids[LINK_BIND_BUDGET]!,
+      ids[ids.length - 1]!,
+    ]) {
+      expect([id, await linkedTagsOf(harness, id)]).toEqual([id, ['kyoto']])
     }
+    expect(await countLinks(harness, kyoto.id)).toBe(ids.length)
   })
 
   it('fails with PhotoNotFound for an unknown photo', async () => {
@@ -1632,6 +1708,24 @@ describe('PhotoService.addTags', () => {
       ),
     ).toEqual(new PhotoNotFound({ id: created.id }))
   })
+
+  it('fails with InvalidInput for a tag id nobody carries, and links nothing', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    const created = await seed(harness, { slug: 'a', title: 'A' })
+
+    // `photo_tags.tagId` is a foreign key, so a stale id would otherwise die
+    // as a storage failure and take the good tag's link down with it.
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((s) => s.addTags([created.id], [kyoto.id, 'tag_missing'])),
+          harness,
+        ),
+      ),
+    ).toEqual(new InvalidInput({ message: 'no tag with id tag_missing' }))
+    expect(await linkedTagsOf(harness, created.id)).toEqual([])
+  })
 })
 
 describe('PhotoService.removeTags', () => {
@@ -1658,8 +1752,44 @@ describe('PhotoService.removeTags', () => {
     const created = await seed(harness, { slug: 'a', title: 'A' })
 
     await removeTags(harness, [created.id], [kyoto.id])
+    await removeTags(harness, [created.id], [kyoto.id])
 
+    // The second call has a real link to remove, so this is not a no-op twice.
     expect(await linkedTagsOf(harness, created.id)).toEqual([])
+  })
+
+  it('unlinks every photo past the bind chunk boundary', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    const ids: Array<string> = []
+    for (let index = 0; index < LINK_BIND_BUDGET + 6; index += 1) {
+      const id = `photo_${index}`
+      ids.push(id)
+      await seedPhotoRow(harness.db, { id, slug: id, tagIds: [kyoto.id] })
+    }
+
+    await removeTags(harness, ids, [kyoto.id])
+
+    expect(await countLinks(harness, kyoto.id)).toBe(0)
+    for (const id of [ids[0]!, ids[LINK_BIND_BUDGET]!, ids[ids.length - 1]!]) {
+      expect([id, await linkedTagsOf(harness, id)]).toEqual([id, []])
+    }
+  })
+
+  it('fails with InvalidInput for a tag id nobody carries', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    const created = await seed(harness, { slug: 'a', title: 'A', tagIds: [kyoto.id] })
+
+    expect(
+      await fail(
+        withTestServices(
+          PhotoService.use((s) => s.removeTags([created.id], ['tag_missing'])),
+          harness,
+        ),
+      ),
+    ).toEqual(new InvalidInput({ message: 'no tag with id tag_missing' }))
+    expect(await linkedTagsOf(harness, created.id)).toEqual(['kyoto'])
   })
 
   it('fails with PhotoNotFound for an unknown photo', async () => {

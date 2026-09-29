@@ -29,11 +29,15 @@ const jsonError = (message: string, status: number): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
-/** What the gate decided: the verified email the admin handlers get to read,
- *  or the response that answers the request instead. `email` is null on the
- *  `dev` stand-down and when the claim carries none. */
+/** What the gate decided: the verified claims the admin handlers get to read,
+ *  or the response that answers the request instead. `email` and `teamDomain`
+ *  are null on the `dev` stand-down and when the claim carries none. */
 export type AdminGate =
-  | { readonly ok: true; readonly email: string | null }
+  | {
+      readonly ok: true
+      readonly email: string | null
+      readonly teamDomain: string | null
+    }
   | { readonly ok: false; readonly response: Response }
 
 interface Jwk {
@@ -74,11 +78,14 @@ const fetchJwks = async (teamDomain: string): Promise<ReadonlyArray<Jwk>> => {
   return keys
 }
 
-/** Verify an Access JWT. Returns the subject email when valid. */
+/** Verify an Access JWT. Returns the claim's subject email and its issuer when
+ *  valid; the issuer is the team that vouched for the signature. */
 export const verifyAccessToken = async (
   token: string,
   teamDomain: string,
-): Promise<{ ok: true; email: string | undefined } | { ok: false; reason: string }> => {
+): Promise<
+  { ok: true; email: string | undefined; teamDomain: string } | { ok: false; reason: string }
+> => {
   const parts = token.split('.')
   if (
     parts.length !== 3 ||
@@ -129,12 +136,15 @@ export const verifyAccessToken = async (
   const signature = base64UrlDecodeToBuffer(parts[2])
   const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, data)
   if (!valid) return { ok: false, reason: 'bad signature' }
-  return { ok: true, email: payload.email }
+  // The issuer the claim names, which the check above already matched to the
+  // team domain; the configured value is the fallback for a claim carrying
+  // none, so the session is never a half-read claim.
+  return { ok: true, email: payload.email, teamDomain: payload.iss ?? teamDomain }
 }
 
 /**
- * The admin gate every Access-protected route runs. Returns the verified email
- * the handlers answer with, or the rejection response.
+ * The admin gate every Access-protected route runs. Returns the verified
+ * claims the handlers answer with, or the rejection response.
  *
  * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on `dev`, where
  * Alchemy skips the Access applications (ADR 0007). On any other stage a blank
@@ -145,7 +155,7 @@ export const verifyAccessToken = async (
 export const verifyAdminAccess = async (request: Request, env: AccessEnv): Promise<AdminGate> => {
   const teamDomain = (env.ACCESS_TEAM_DOMAIN ?? '').trim()
   if (teamDomain === '') {
-    if (env.STAGE === 'dev') return { ok: true, email: null }
+    if (env.STAGE === 'dev') return { ok: true, email: null, teamDomain: null }
     return { ok: false, response: jsonError('server misconfigured', 500) }
   }
   const token = request.headers.get('Cf-Access-Jwt-Assertion')
@@ -166,7 +176,7 @@ export const verifyAdminAccess = async (request: Request, env: AccessEnv): Promi
       return { ok: false, response: jsonError('access denied', 403) }
     }
   }
-  // The claim's own email, handed on as verified: the handlers read the
-  // session, they never recompute who the caller is.
-  return { ok: true, email: result.email ?? null }
+  // The claim's own email and issuer, handed on as verified: the handlers read
+  // the session, they never recompute who the caller is.
+  return { ok: true, email: result.email ?? null, teamDomain: result.teamDomain }
 }

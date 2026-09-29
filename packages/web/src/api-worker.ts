@@ -11,6 +11,7 @@ import {
   PhotoServiceLive,
   PublicRpcHandlersLive,
   TagServiceLive,
+  type AdminSessionValue,
 } from '@photo/api'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
 import { verifyAdminAccess } from './access'
@@ -238,17 +239,18 @@ const handleImageProxy = async (env: ApiEnv, request: Request): Promise<Response
   return new Response(object.body, { headers })
 }
 
-/** `email` is the address `verifyAdminAccess` just verified; it is provided
- *  into the admin handler layer per request, so a handler that reads the
- *  session reads the one the gate checked. */
+/** The claims `verifyAdminAccess` just verified, provided into the admin
+ *  handler layer per request, so a handler that reads the session reads the
+ *  one the gate checked. The public route has no gate, so it provides the
+ *  stand-down shape and the admin group is unreachable there. */
 const buildRpcHandler = (
   env: ApiEnv,
-  email: string | null,
+  session: AdminSessionValue,
 ): ((request: Request) => Promise<Response>) => {
   const routerLayer = HttpRouter.layer
   const handlersLayer = Layer.merge(
     PublicRpcHandlersLive,
-    Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, { email })),
+    Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, session)),
   ).pipe(
     Layer.provide(Layer.merge(PhotoServiceLive, TagServiceLive)),
     Layer.provide(gatewayLayer(env)),
@@ -338,7 +340,10 @@ export default {
       if (limited !== null) return respond(limited)
       const gate = await verifyAdminAccess(request, env)
       if (!gate.ok) return respond(gate.response)
-      const res = await buildRpcHandler(env, gate.email)(request)
+      const res = await buildRpcHandler(env, {
+        email: gate.email,
+        teamDomain: gate.teamDomain,
+      })(request)
       return respond(res)
     }
 
@@ -352,7 +357,7 @@ export default {
       if (limited !== null) return respond(limited)
       // The admin group is mounted on `/admin/rpc`, which this path never
       // matches, so the session it carries is unreachable from here.
-      const res = await buildRpcHandler(env, null)(request)
+      const res = await buildRpcHandler(env, { email: null, teamDomain: null })(request)
       return respond(res)
     }
 

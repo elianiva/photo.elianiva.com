@@ -131,9 +131,16 @@ export class DeleteTag extends Rpc.make('DeleteTag', {
 // Filter Bar, the Storage meter and the Library table.
 // ---------------------------------------------------------------------------
 
+/** Who the gate already proved, and the team that proved it. `email` and
+ *  `teamDomain` are null only on the `dev` stand-down, where the gate verifies
+ *  nothing because there is nothing to verify — that is not a signed-out
+ *  state, and there is no sign-in form (ADR 0007, ADR 0008).
+ *
+ *  `teamDomain` is the verified issuer, and it is what makes the sidebar's
+ *  `Sign out` a real link: the Access logout lives under it. */
 export class GetSession extends Rpc.make('GetSession', {
   payload: {},
-  success: S.Struct({ email: S.NullOr(S.String) }),
+  success: S.Struct({ email: S.NullOr(S.String), teamDomain: S.NullOr(S.String) }),
   error: S.Union([StorageError]),
 }) {}
 
@@ -149,9 +156,14 @@ export class GetCounts extends Rpc.make('GetCounts', {
   error: StorageError,
 }) {}
 
-/** The bucket cap. A configured constant, not a Settings row. The design disagrees
- *  with itself (the sidebar meter says 50 GB, the Settings Storage block says
- *  20 GB); one constant serves both, and 20 GB is the Storage block's number. */
+/** The bucket cap, single-sourced here because the contract and every reader
+ *  of it live in this package. A configured constant, not a Settings row.
+ *
+ *  The design disagrees with itself — the sidebar meter says `7.9 / 50 GB` and
+ *  the Settings Storage block says `4.2 GB OF 20 GB` — so one number serves
+ *  both, and 20 GiB is the Storage block's, which is the block that pairs the
+ *  count with the byte total `GetStorageUsage` returns (ADR 0008). Change this
+ *  one constant and #24's meter and #37's block follow. */
 export const STORAGE_CAP_BYTES = 20 * 1024 * 1024 * 1024
 
 export class GetStorageUsage extends Rpc.make('GetStorageUsage', {
@@ -197,7 +209,12 @@ export class SetPhotoStatus extends Rpc.make('SetPhotoStatus', {
 }) {}
 
 /** A crop edit is one thing, so it is one call: the crop, the level, the mat and
- *  the export overrides ride in one request rather than six. */
+ *  the export overrides ride in one request rather than six.
+ *
+ *  `level` and the three mat detail columns are nullable on the row, and the
+ *  read model says null is un-levelled rather than zero. So a null here clears
+ *  the column and an absent key leaves it alone, the way `UpdateTag`'s caption
+ *  does. */
 const PhotoCrop = S.Struct({
   x: S.Number,
   y: S.Number,
@@ -206,10 +223,10 @@ const PhotoCrop = S.Struct({
 
 const PhotoMat = S.Struct({
   enabled: S.Boolean,
-  style: S.optional(MatStyle),
-  colour: S.optional(MatColour),
+  style: S.optional(S.NullOr(MatStyle)),
+  colour: S.optional(S.NullOr(MatColour)),
   /** A percentage of the frame edge; the design's slider reads `4%`. */
-  width: S.optional(S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 100 })))),
+  width: S.optional(S.NullOr(S.Number.pipe(S.check(S.isBetween({ minimum: 0, maximum: 100 }))))),
 })
 
 const PhotoExportSettings = S.Struct({
@@ -225,7 +242,7 @@ export class UpdatePhotoPresentation extends Rpc.make('UpdatePhotoPresentation',
   payload: {
     id: S.String.pipe(S.check(S.isMaxLength(128))),
     crop: S.optional(PhotoCrop),
-    level: S.optional(S.Number),
+    level: S.optional(S.NullOr(S.Number)),
     mat: S.optional(PhotoMat),
     export: S.optional(PhotoExportSettings),
   },
@@ -234,8 +251,11 @@ export class UpdatePhotoPresentation extends Rpc.make('UpdatePhotoPresentation',
 }) {}
 
 /** The Bulk Bar is multi-select and the Trash has `Restore all`, so the
- *  lifecycle moves in arrays. A count in, a count out: the service
- *  operations are idempotent, so a Photo already in the target state counts. */
+ *  lifecycle moves in arrays. These answer `void` on purpose: the fold is
+ *  all-or-nothing — a Photo that must exist has to, and a Photo that must be
+ *  in the Trash has to be — so a partial count cannot happen, and a count the
+ *  handler read off its own payload would report nothing. The Bulk Bar knows
+ *  its selection; it re-reads the list and the counts after the call. */
 const PhotoIds = S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(
   S.check(S.isMinLength(1)),
   S.check(S.isMaxLength(100)),
@@ -243,19 +263,19 @@ const PhotoIds = S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(
 
 export class TrashPhotos extends Rpc.make('TrashPhotos', {
   payload: { ids: PhotoIds },
-  success: S.Number,
+  success: S.Void,
   error: S.Union([PhotoNotFound, StorageError]),
 }) {}
 
 export class RestorePhotos extends Rpc.make('RestorePhotos', {
   payload: { ids: PhotoIds },
-  success: S.Number,
+  success: S.Void,
   error: S.Union([PhotoNotFound, StorageError]),
 }) {}
 
 export class PurgePhotos extends Rpc.make('PurgePhotos', {
   payload: { ids: PhotoIds },
-  success: S.Number,
+  success: S.Void,
   error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
 }) {}
 
@@ -265,24 +285,28 @@ const TagIds = S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(
 )
 
 /** The Bulk Bar's `Move to series` slot, re-pointed: Series has no home
- *  (ADR 0008) and Tag is the grouping entity, so the slot is `Add tag`. */
+ *  (ADR 0008) and Tag is the grouping entity, so the slot is `Add tag`.
+ *
+ *  A Tag id nobody carries is `InvalidInput`, not a storage failure: a stale
+ *  multi-select is the operator's to fix, and there is no `TagNotFound` to
+ *  invent (ADR 0003 — one contract, existing errors). */
 export class BulkAddTags extends Rpc.make('BulkAddTags', {
   payload: { photoIds: PhotoIds, tagIds: TagIds },
-  success: S.Number,
-  error: S.Union([PhotoNotFound, StorageError]),
+  success: S.Void,
+  error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
 }) {}
 
 export class BulkRemoveTags extends Rpc.make('BulkRemoveTags', {
   payload: { photoIds: PhotoIds, tagIds: TagIds },
-  success: S.Number,
-  error: S.Union([PhotoNotFound, StorageError]),
+  success: S.Void,
+  error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
 }) {}
 
 /** `Add border` is the Bulk Bar's presentation move: one mat patch, every
  *  selected Photo. */
 export class AddBorderToPhotos extends Rpc.make('AddBorderToPhotos', {
   payload: { photoIds: PhotoIds, mat: PhotoMat },
-  success: S.Number,
+  success: S.Void,
   error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
 }) {}
 

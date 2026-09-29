@@ -65,8 +65,12 @@ The public chronological index of every published Photo at `/archive`, grouped b
 _Avoid_: Storage (that is the Admin's block), Library (that is the Admin's), Collection, Set
 
 **Storage**:
-The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content.
+The Admin Settings block reporting how full the bucket is and how long the Trash keeps. It shows the frame count, the byte total against the quota, the CSV index, and the RETAIN setting. A measurement and a retention policy, not a place and not an archive of content. The quota is the configured constant `STORAGE_CAP_BYTES` in `@photo/shared`, not a Settings row, so the sidebar's meter and this block cannot report different caps; the design contradicts itself on the number (the meter draws `50 GB`, this block draws `20 GB`) and one constant settles it at 20 GiB.
 _Avoid_: Archive (that is the public page), Library, Backup, Sync
+
+**Session**:
+The one operator, as the Cloudflare Access claim the Worker already verified — an `email` and the `teamDomain` that vouched for it, handed from `verifyAdminAccess` to the admin handlers as an `AdminSession` and read by `GetSession`. It is never recomputed from the request, and there is no signed-out state and no sign-in form: Access gates the route before any of this runs (ADR 0007), so a rejected `GetSession` is a session-expired affordance and nothing more. `teamDomain` is what makes the sidebar's `Sign out` a real link, because the Access logout lives under it. Both fields are null only on the `dev` stand-down, where the gate verifies nothing because there is nothing to verify.
+_Avoid_: Login, Auth, Sign-in state, Current user
 
 **Settings**:
 The Admin's single-row singleton, read by the Editor's export defaults, the public Masthead, the Folio nav and the Colophon. One row, `id` pinned to 1. Its `updatedAt` is what the Settings header's `SAVED 2 MINUTES AGO` reports.

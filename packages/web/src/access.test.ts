@@ -110,9 +110,9 @@ describe('admin access gate', () => {
       env({ STAGE: 'dev', ACCESS_TEAM_DOMAIN: '' }),
     )
     expect(outcome(gate)).toBe('allowed')
-    // The dev stand-down is the one admitted state with no email: there is no
-    // Access claim to read, and no signed-out state to report (ADR 0007).
-    expect(gate).toEqual({ ok: true, email: null })
+    // The dev stand-down is the one admitted state with no claims: there is no
+    // Access assertion to read, and no signed-out state to report (ADR 0007).
+    expect(gate).toEqual({ ok: true, email: null, teamDomain: null })
   })
 
   it('fails closed on a blank team domain off the dev stage', async () => {
@@ -153,8 +153,8 @@ describe('admin access gate', () => {
   })
 })
 
-describe('the email the gate hands back', () => {
-  it('carries the address from the assertion', async () => {
+describe('the claims the gate hands back', () => {
+  it('carries the address and the team that vouched for it', async () => {
     const key = await makeSigningKey()
     serveJwks(key)
     const valid = await signAssertion(key, {
@@ -168,7 +168,11 @@ describe('the email the gate hands back', () => {
       env({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
     )
 
-    expect(gate).toEqual({ ok: true, email: 'owner@photo.test' })
+    expect(gate).toEqual({
+      ok: true,
+      email: 'owner@photo.test',
+      teamDomain: key.teamDomain,
+    })
   })
 
   it('carries an allowlisted address, and withholds one that is not', async () => {
@@ -200,11 +204,11 @@ describe('the email the gate hands back', () => {
       team,
     )
 
-    expect(allowed).toEqual({ ok: true, email: 'second@photo.test' })
+    expect(allowed).toEqual({ ok: true, email: 'second@photo.test', teamDomain: key.teamDomain })
     expect(outcome(refused)).toBe(403)
   })
 
-  it('is null when the assertion carries no email', async () => {
+  it('reports no email when the assertion carries none, and still names the team', async () => {
     const key = await makeSigningKey()
     serveJwks(key)
     const valid = await signAssertion(key, { iss: key.teamDomain, exp: 4102444800 })
@@ -214,7 +218,23 @@ describe('the email the gate hands back', () => {
       env({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
     )
 
-    expect(gate).toEqual({ ok: true, email: null })
+    // The sidebar's `Sign out` row needs the team even with no address to
+    // print, so the two claims stand or fall apart.
+    expect(gate).toEqual({ ok: true, email: null, teamDomain: key.teamDomain })
+  })
+
+  it('falls back to the configured team when the assertion carries no issuer', async () => {
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const valid = await signAssertion(key, { exp: 4102444800, email: 'owner@photo.test' })
+
+    const gate = await verifyAdminAccess(
+      adminRequest(valid),
+      env({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
+    )
+
+    // An `iss` is optional in the verifier, and a session is never half-read.
+    expect(gate).toEqual({ ok: true, email: 'owner@photo.test', teamDomain: key.teamDomain })
   })
 })
 
@@ -230,7 +250,7 @@ describe('admin routes wired to the gate', () => {
     }
   })
 
-  it('answers a GetSession RPC with the email the gate verified', async () => {
+  it('answers a GetSession RPC with the claims the gate verified', async () => {
     const key = await makeSigningKey()
     serveJwks(key)
     const token = await signAssertion(key, {
@@ -265,7 +285,10 @@ describe('admin routes wired to the gate', () => {
       {
         _tag: 'Exit',
         requestId: 'req-1',
-        exit: { _tag: 'Success', value: { email: 'owner@photo.test' } },
+        exit: {
+          _tag: 'Success',
+          value: { email: 'owner@photo.test', teamDomain: key.teamDomain },
+        },
       },
     ])
   })

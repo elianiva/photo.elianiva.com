@@ -7,18 +7,24 @@
 import { describe, expect, it } from 'vitest'
 import { Effect, Layer } from 'effect'
 import {
+  InvalidInput,
   LibrarySort,
   PhotoAdminRpcs,
   PhotoNotFound,
   PhotoPublicRpcs,
-  STORAGE_CAP_BYTES,
   type PhotoPresentation,
 } from '@photo/shared'
 import { RpcClient, RpcTest } from 'effect/unstable/rpc'
 import { Gateway } from '../gateway'
 import { AdminRpcHandlersLive, PublicRpcHandlersLive } from '../rpc'
-import { DEFAULT_SORT, PHOTO_SORT_KEYS, PhotoServiceLive, type PhotoService } from '../photo'
-import { AdminSession } from '../session'
+import {
+  DEFAULT_SORT,
+  PHOTO_SORT_KEYS,
+  PhotoServiceLive,
+  STORAGE_CAP_BYTES,
+  type PhotoService,
+} from '../photo'
+import { AdminSession, type AdminSessionValue } from '../session'
 import { TagServiceLive, type TagService } from '../tag'
 import { createPhoto, createTag, setPhotoStatus, trashPhoto } from './fixtures'
 import { makeTestHarness, type TestHarness } from './harness'
@@ -57,6 +63,12 @@ const listPhotos = (harness: TestHarness, payload: ListPayload) =>
     ),
   )
 
+/** The verified claims, as the Worker's gate hands them over. */
+const VERIFIED_SESSION: AdminSessionValue = {
+  email: 'owner@photo.test',
+  teamDomain: 'https://team.test',
+}
+
 const deletePhoto = (harness: TestHarness, id: string) =>
   Effect.runPromise(
     Effect.provide(
@@ -66,7 +78,7 @@ const deletePhoto = (harness: TestHarness, id: string) =>
           return yield* client.DeletePhoto({ id })
         }),
       ),
-      adminStackOver(harness, 'owner@photo.test'),
+      adminStackOver(harness, VERIFIED_SESSION),
     ),
   )
 
@@ -80,7 +92,7 @@ const deletePhotoFailure = (harness: TestHarness, id: string) =>
             return yield* client.DeletePhoto({ id })
           }),
         ),
-        adminStackOver(harness, 'owner@photo.test'),
+        adminStackOver(harness, VERIFIED_SESSION),
       ),
     ),
   )
@@ -93,9 +105,9 @@ const makeAdminClient = RpcTest.makeClient(PhotoAdminRpcs)
 type AdminClient = RpcClient.FromGroup<typeof PhotoAdminRpcs>
 
 /** The admin group over the harness, with a session the way the Worker
- *  provides one: per request, from the email the Access gate verified. */
-const adminStackOver = (harness: TestHarness, email: string | null) =>
-  stackOver(harness, Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, { email })))
+ *  provides one: per request, from the claims the Access gate verified. */
+const adminStackOver = (harness: TestHarness, session: AdminSessionValue) =>
+  stackOver(harness, Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, session)))
 
 /** One admin call over a live client, so the payload schema, the handler and
  *  the success schema are all in the loop. A failing case passes `Effect.flip`
@@ -103,7 +115,7 @@ const adminStackOver = (harness: TestHarness, email: string | null) =>
 const adminRpc = <A, E>(
   harness: TestHarness,
   call: (client: AdminClient) => Effect.Effect<A, E>,
-  email: string | null = 'owner@photo.test',
+  session: AdminSessionValue = VERIFIED_SESSION,
 ): Promise<A> =>
   Effect.runPromise(
     Effect.provide(
@@ -113,7 +125,7 @@ const adminRpc = <A, E>(
           return yield* call(client)
         }),
       ),
-      adminStackOver(harness, email),
+      adminStackOver(harness, session),
     ),
   )
 
@@ -244,21 +256,35 @@ describe('DeletePhoto handler', () => {
 })
 
 describe('GetSession handler', () => {
-  it('hands back the email the gate verified', async () => {
+  it('hands back the claims the gate verified', async () => {
     const harness = makeTestHarness()
 
-    expect(await adminRpc(harness, (client) => client.GetSession({}), 'owner@photo.test')).toEqual({
-      email: 'owner@photo.test',
-    })
+    expect(await adminRpc(harness, (client) => client.GetSession({}))).toEqual(VERIFIED_SESSION)
   })
 
-  it('reports no email on the dev stand-down', async () => {
+  it('reports no claims on the dev stand-down', async () => {
     const harness = makeTestHarness()
 
-    // `null` is ADR 0007's dev gate standing down, not a signed-out state.
-    expect(await adminRpc(harness, (client) => client.GetSession({}), null)).toEqual({
-      email: null,
-    })
+    // Both null is ADR 0007's dev gate standing down, not a signed-out state.
+    expect(
+      await adminRpc(harness, (client) => client.GetSession({}), {
+        email: null,
+        teamDomain: null,
+      }),
+    ).toEqual({ email: null, teamDomain: null })
+  })
+
+  it('carries a team domain with no email, which is what signs the operator out', async () => {
+    const harness = makeTestHarness()
+
+    // The `Sign out` row in the sidebar footer needs the team the Access
+    // assertion came from even when the claim carries no address.
+    expect(
+      await adminRpc(harness, (client) => client.GetSession({}), {
+        email: null,
+        teamDomain: 'https://team.test',
+      }),
+    ).toEqual({ email: null, teamDomain: 'https://team.test' })
   })
 })
 
@@ -302,6 +328,10 @@ describe('GetStorageUsage handler', () => {
     // `photos`, not `frames`: ADR 0008, and the design prints `412 FRAMES`.
     expect(usage.photos).toBe(1)
     expect(usage.bytes).toBeGreaterThan(0)
+    // The cap is the constant, not a Settings row, and the constant is the
+    // 20 GiB the Settings Storage block draws (ADR 0008). #24's sidebar meter
+    // and #37's block both read this one number.
+    expect(usage.capBytes).toBe(20 * 1024 * 1024 * 1024)
     expect(usage.capBytes).toBe(STORAGE_CAP_BYTES)
   })
 })
@@ -477,10 +507,39 @@ describe('UpdatePhotoPresentation handler', () => {
 
     expect(error._tag).toBe('InvalidInput')
   })
+
+  it('clears the level and the mat detail with null, and leaves the rest alone', async () => {
+    const harness = makeTestHarness()
+    const created = await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })
+    await adminRpc(harness, (client) =>
+      client.UpdatePhotoPresentation({
+        id: created.id,
+        level: -2.5,
+        mat: { enabled: true, style: 'gallery', colour: 'ink', width: 4 },
+      }),
+    )
+
+    const cleared = await adminRpc(harness, (client) =>
+      client.UpdatePhotoPresentation({
+        id: created.id,
+        level: null,
+        mat: { enabled: true, style: null, colour: null, width: null },
+      }),
+    )
+
+    // Null is un-levelled, not zero, and a mat with no detail is un-set. The
+    // crop and the export overrides are not in the patch, so they keep the
+    // row's own values rather than being reset.
+    expect(cleared.level).toBeNull()
+    expect(cleared.borderStyle).toBeNull()
+    expect(cleared.borderColour).toBeNull()
+    expect(cleared.borderWidth).toBeNull()
+    expect(cleared).toEqual({ ...DEFAULT_PRESENTATION, borderEnabled: true })
+  })
 })
 
 describe('TrashPhotos, RestorePhotos and PurgePhotos handlers', () => {
-  it('takes arrays in and answers with the count acted on', async () => {
+  it('takes arrays in and moves every id in the set', async () => {
     const harness = makeTestHarness()
     const first = await createPhoto(harness, {
       slug: 'a',
@@ -502,27 +561,43 @@ describe('TrashPhotos, RestorePhotos and PurgePhotos handlers', () => {
 
     expect(
       await adminRpc(harness, (client) => client.TrashPhotos({ ids: [first.id, second.id] })),
-    ).toBe(2)
+    ).toBeUndefined()
     expect((await listPhotos(harness, { limit: 60 })).items.map((item) => item.id)).toEqual([
       third.id,
     ])
 
-    expect(await adminRpc(harness, (client) => client.RestorePhotos({ ids: [first.id] }))).toBe(1)
+    expect(
+      await adminRpc(harness, (client) => client.RestorePhotos({ ids: [first.id] })),
+    ).toBeUndefined()
     expect((await listPhotos(harness, { limit: 60 })).items.map((item) => item.id)).toEqual([
       first.id,
       third.id,
     ])
 
-    expect(await adminRpc(harness, (client) => client.PurgePhotos({ ids: [second.id] }))).toBe(1)
+    expect(
+      await adminRpc(harness, (client) => client.PurgePhotos({ ids: [second.id] })),
+    ).toBeUndefined()
     expect(await harness.photos.head('o/b.jpg')).toBeNull()
   })
 
-  it('counts a photo that is already in the target state', async () => {
+  it('leaves a photo already in the target state in it', async () => {
     const harness = makeTestHarness()
     const created = await createPhoto(harness, { slug: 'a', title: 'A' })
 
-    expect(await adminRpc(harness, (client) => client.TrashPhotos({ ids: [created.id] }))).toBe(1)
-    expect(await adminRpc(harness, (client) => client.TrashPhotos({ ids: [created.id] }))).toBe(1)
+    await adminRpc(harness, (client) => client.TrashPhotos({ ids: [created.id] }))
+    await adminRpc(harness, (client) => client.TrashPhotos({ ids: [created.id] }))
+
+    // Idempotent means still trashed, not "reported done again": the Photo
+    // stays out of the list and its original stays in R2.
+    expect(await listPhotos(harness, { limit: 60 })).toEqual({ items: [], nextCursor: null })
+    expect(await harness.photos.head('originals/a.jpg')).not.toBeNull()
+
+    await adminRpc(harness, (client) => client.RestorePhotos({ ids: [created.id] }))
+    await adminRpc(harness, (client) => client.RestorePhotos({ ids: [created.id] }))
+
+    expect((await listPhotos(harness, { limit: 60 })).items.map((item) => item.id)).toEqual([
+      created.id,
+    ])
   })
 
   it('refuses to purge a photo that is not in the trash', async () => {
@@ -569,7 +644,7 @@ describe('BulkAddTags and BulkRemoveTags handlers', () => {
       await adminRpc(harness, (client) =>
         client.BulkAddTags({ photoIds: [first.id, second.id], tagIds: [kyoto.id] }),
       ),
-    ).toBe(2)
+    ).toBeUndefined()
     const tagged = await adminRpc(harness, (client) => client.ListLibraryRows({}))
     expect(tagged.items.map((item) => item.tags?.map((tag) => tag.slug))).toEqual([
       ['film', 'kyoto'],
@@ -580,7 +655,7 @@ describe('BulkAddTags and BulkRemoveTags handlers', () => {
       await adminRpc(harness, (client) =>
         client.BulkRemoveTags({ photoIds: [first.id], tagIds: [kyoto.id] }),
       ),
-    ).toBe(1)
+    ).toBeUndefined()
     const untagged = await adminRpc(harness, (client) => client.ListLibraryRows({}))
     expect(untagged.items.map((item) => item.tags?.map((tag) => tag.slug))).toEqual([
       ['film'],
@@ -598,6 +673,24 @@ describe('BulkAddTags and BulkRemoveTags handlers', () => {
 
     expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
   })
+
+  it('reports a tag id nobody carries as InvalidInput, and links nothing', async () => {
+    const harness = makeTestHarness()
+    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
+    const created = await createPhoto(harness, { slug: 'a', title: 'A' })
+
+    // The good Tag is in the same call, so this also pins that a stale id
+    // rolls the batch back rather than linking half the set.
+    const error = await adminRpc(harness, (client) =>
+      client
+        .BulkAddTags({ photoIds: [created.id], tagIds: [kyoto.id, 'tag_missing'] })
+        .pipe(Effect.flip),
+    )
+
+    expect(error).toEqual(new InvalidInput({ message: 'no tag with id tag_missing' }))
+    const rows = await adminRpc(harness, (client) => client.ListLibraryRows({}))
+    expect(rows.items[0]?.tags).toEqual([])
+  })
 })
 
 describe('AddBorderToPhotos handler', () => {
@@ -614,7 +707,7 @@ describe('AddBorderToPhotos handler', () => {
           mat: { enabled: true, style: 'even', colour: 'paper', width: 4 },
         }),
       ),
-    ).toBe(2)
+    ).toBeUndefined()
 
     // Read the columns rather than a second presentation save, which would
     // write over the very row it is trying to report.

@@ -6,8 +6,8 @@
  */
 
 import { Effect } from 'effect'
-import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs, STORAGE_CAP_BYTES } from '@photo/shared'
-import { PhotoService, slugify, type PhotoListFilter } from './photo'
+import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
+import { PhotoService, STORAGE_CAP_BYTES, slugify, type PhotoListFilter } from './photo'
 import { AdminSession } from './session'
 import { TagService } from './tag'
 
@@ -98,9 +98,13 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
       )
     }),
   DeleteTag: (payload) => TagService.use((service) => service.remove(payload.id)),
-  // The email the gate already verified, read and never recomputed. `null` is
-  // the dev stand-down (ADR 0007), not a signed-out state.
-  GetSession: () => AdminSession.use((session) => Effect.succeed({ email: session.email })),
+  // The claims the gate already verified, read and never recomputed. A null is
+  // the dev stand-down (ADR 0007), not a signed-out state: there is no sign-in
+  // form to show and no session to end.
+  GetSession: () =>
+    AdminSession.use((session) =>
+      Effect.succeed({ email: session.email, teamDomain: session.teamDomain }),
+    ),
   GetCounts: () => PhotoService.use((service) => service.counts()),
   GetStorageUsage: () =>
     Effect.map(
@@ -136,39 +140,22 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
         export: payload.export,
       }),
     ),
-  // Count in, count out: the service operations are idempotent, so a Photo
-  // already in the target state counts as acted on.
+  // `void` on purpose: the fold is all-or-nothing, so there is no partial
+  // count to report, and a number read off the payload would report the
+  // request back to the client. The Bulk Bar re-reads the list and the counts.
   TrashPhotos: (payload) =>
-    Effect.as(
-      PhotoService.use((service) => foldOver(payload.ids, (id) => service.trash(id))),
-      payload.ids.length,
-    ),
+    PhotoService.use((service) => foldOver(payload.ids, (id) => service.trash(id))),
   RestorePhotos: (payload) =>
-    Effect.as(
-      PhotoService.use((service) => foldOver(payload.ids, (id) => service.restore(id))),
-      payload.ids.length,
-    ),
+    PhotoService.use((service) => foldOver(payload.ids, (id) => service.restore(id))),
   PurgePhotos: (payload) =>
-    Effect.as(
-      PhotoService.use((service) => foldOver(payload.ids, (id) => service.purge(id))),
-      payload.ids.length,
-    ),
+    PhotoService.use((service) => foldOver(payload.ids, (id) => service.purge(id))),
   BulkAddTags: (payload) =>
-    Effect.as(
-      PhotoService.use((service) => service.addTags(payload.photoIds, payload.tagIds)),
-      payload.photoIds.length,
-    ),
+    PhotoService.use((service) => service.addTags(payload.photoIds, payload.tagIds)),
   BulkRemoveTags: (payload) =>
-    Effect.as(
-      PhotoService.use((service) => service.removeTags(payload.photoIds, payload.tagIds)),
-      payload.photoIds.length,
-    ),
+    PhotoService.use((service) => service.removeTags(payload.photoIds, payload.tagIds)),
   AddBorderToPhotos: (payload) =>
-    Effect.as(
-      PhotoService.use((service) =>
-        foldOver(payload.photoIds, (id) => service.setPresentation(id, { mat: payload.mat })),
-      ),
-      payload.photoIds.length,
+    PhotoService.use((service) =>
+      foldOver(payload.photoIds, (id) => service.setPresentation(id, { mat: payload.mat })),
     ),
   UpdateTag: (payload) =>
     Effect.gen(function* () {
