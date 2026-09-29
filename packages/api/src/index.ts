@@ -1,5 +1,6 @@
 export * from './gateway'
 export * from './photo'
+export * from './public-photo'
 export * from './tag'
 export * from './settings'
 export * from './rpc'

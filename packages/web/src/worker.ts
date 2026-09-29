@@ -5,6 +5,7 @@ import { isAdminPath } from './admin/route'
 import { Model as HomeModel } from './home/model'
 import { init as homeInit } from './home/update'
 import { view as homeView } from './home/view'
+import { renderSitemap } from './lib/public-site'
 import { themeDocument, themeForUrl } from './lib/theme'
 
 type WorkerEnvWithAssets = WebsiteEnv & {
@@ -70,36 +71,6 @@ const renderHomeSsr = async (
   } catch {
     return null
   }
-}
-
-const escapeXml = (input: string): string =>
-  input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-
-const renderSitemap = async (env: WorkerEnvWithAssets): Promise<Response> => {
-  let lastmod = ''
-  try {
-    const raw = await env.DB.prepare(
-      `SELECT takenAt FROM photos ORDER BY takenAt DESC LIMIT 1`,
-    ).all<{
-      takenAt: string | null
-    }>()
-    const latest = raw.results?.[0]?.takenAt
-    if (typeof latest === 'string' && latest !== '') lastmod = latest.slice(0, 10)
-  } catch {
-    lastmod = ''
-  }
-  const url = 'https://photo.elianiva.com/'
-  const body =
-    `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    `  <url><loc>${url}</loc>${lastmod !== '' ? `<lastmod>${escapeXml(lastmod)}</lastmod>` : ''}</url>\n` +
-    `</urlset>\n`
-  return new Response(body, {
-    headers: {
-      'content-type': 'application/xml; charset=utf-8',
-      'cache-control': 'public, max-age=3600',
-    },
-  })
 }
 
 const withSecurityHeaders = (response: Response): Response => {
