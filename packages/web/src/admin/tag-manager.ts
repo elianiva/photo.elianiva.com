@@ -78,10 +78,10 @@ export interface ViewInputs {
 
 const chipClass = (isActive: boolean): string =>
   cn(
-    'group inline-flex max-w-full items-center overflow-hidden rounded-full border transition-colors duration-(--motion-duration-fast)',
+    'group inline-flex max-w-full items-center border transition-colors duration-(--motion-duration-fast)',
     isActive
-      ? 'border-role-primary bg-role-primary text-role-on-primary shadow-sm'
-      : 'border-role-outline-variant bg-role-surface text-role-text-primary hover:border-role-outline hover:bg-role-surface-hover',
+      ? 'border-role-primary bg-role-primary text-role-on-primary'
+      : 'border-role-outline text-role-text-primary hover:bg-role-surface-hover',
   )
 
 const countBadge = (
@@ -95,10 +95,8 @@ const countBadge = (
         [
           h.Class(
             cn(
-              'rounded-full px-1.5 py-px type-exif tabular-nums',
-              isActive
-                ? 'bg-role-on-primary/20 text-role-on-primary/80'
-                : 'bg-role-surface-container text-role-text-secondary',
+              'pl-1.5 type-exif tabular-nums',
+              isActive ? 'text-role-on-primary/70' : 'text-role-text-secondary',
             ),
           ),
         ],
@@ -113,7 +111,7 @@ const deleteButton = (tag: Tag, h: HtmlBuilder<Message>): Html =>
       h.Title(`Delete tag “${tag.label}”`),
       h.Class(
         cn(
-          'mr-1.5 shrink-0 rounded-full p-0.5 transition-opacity',
+          'mr-(--spacing-xs) shrink-0 p-(--spacing-xs) transition-opacity',
           'opacity-0 group-hover:opacity-50 hover:!opacity-100 focus-visible:opacity-100',
           'hover:text-role-error',
         ),
@@ -149,7 +147,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
                 h.Placeholder('New tag…'),
                 h.AriaLabel('New tag name'),
                 h.Class(
-                  'h-8 w-44 rounded-full border border-role-outline-variant bg-role-surface pr-8 pl-3.5 text-xs shadow-xs placeholder:text-role-text-disabled focus:border-role-focus focus:outline-none focus:ring-2 focus:ring-role-outline-variant',
+                  'h-9 w-44 border-0 border-b border-role-outline bg-transparent pr-(--spacing-xl) type-exif placeholder:text-role-text-disabled focus:border-role-rule focus:outline-none',
                 ),
               ]),
               h.button(
@@ -161,7 +159,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
                   ),
                   h.Class(
                     cn(
-                      'absolute top-1/2 right-1 -translate-y-1/2 rounded-full p-1 text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary focus-visible:outline-none',
+                      'absolute top-1/2 right-0 -translate-y-1/2 p-(--spacing-xs) text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary focus-visible:outline-none',
                       model.inputValue.trim() === '' && 'opacity-40',
                     ),
                   ),
@@ -175,13 +173,13 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
       ...(inputs.tags.length === 0
         ? [
             h.p(
-              [h.Class('mt-3 text-sm text-role-text-secondary')],
+              [h.Class('mt-3 type-caption text-role-text-secondary')],
               ['No tags yet — type a name above to create the first one.'],
             ),
           ]
         : [
             h.div(
-              [h.Class('mt-3 flex flex-wrap gap-1.5')],
+              [h.Class('mt-3 flex flex-wrap gap-(--spacing-xs)')],
               [
                 ...inputs.tags.map((tag) => {
                   const isActive = inputs.activeSlug === tag.slug
@@ -195,10 +193,12 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
                             isActive ? `Clear filter ${tag.label}` : `Filter by ${tag.label}`,
                           ),
                           h.AriaPressed(String(isActive)),
-                          h.Class('flex min-w-0 items-center gap-1.5 py-1 pl-3'),
+                          h.Class(
+                            'flex min-w-0 items-center gap-1.5 py-(--spacing-xs) pr-(--spacing-xs) pl-(--spacing-sm)',
+                          ),
                         ],
                         [
-                          h.span([h.Class('truncate text-xs font-medium')], [tag.label]),
+                          h.span([h.Class('truncate type-exif')], [tag.label]),
                           countBadge(inputs.countFor?.(tag), isActive, h),
                         ],
                       ),
@@ -209,7 +209,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): H
               ],
             ),
           ]),
-      h.p([h.Class('mt-3 text-xs text-role-text-secondary')], [inputs.resultText]),
+      h.p([h.Class('mt-3 type-exif text-role-text-secondary')], [inputs.resultText]),
     ],
   ),
 )

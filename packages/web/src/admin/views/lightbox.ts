@@ -60,7 +60,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.button(
         [
           h.Class(
-            'absolute top-(--spacing-xl) right-(--spacing-xl) rounded-full px-(--spacing-md) py-(--spacing-xs) text-xs font-medium text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
+            'absolute top-(--spacing-xl) right-(--spacing-xl) px-(--spacing-md) py-(--spacing-xs) type-kicker text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
           ),
           h.OnClick(M.CloseLightbox()),
           h.AriaLabel('Close'),
@@ -72,7 +72,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
             h.button(
               [
                 h.Class(
-                  'absolute left-(--spacing-lg) top-1/2 -translate-y-1/2 flex size-10 items-center justify-center rounded-full text-2xl text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
+                  'absolute left-(--spacing-lg) top-1/2 -translate-y-1/2 flex size-10 items-center justify-center text-2xl text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
                 ),
                 h.OnClick(M.PrevPhoto()),
                 h.AriaLabel('Previous photo'),
@@ -82,7 +82,7 @@ export const lightbox = (model: Model, h: HtmlBuilder<Msg>): Child => {
             h.button(
               [
                 h.Class(
-                  'absolute right-(--spacing-lg) top-1/2 -translate-y-1/2 flex size-10 items-center justify-center rounded-full text-2xl text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
+                  'absolute right-(--spacing-lg) top-1/2 -translate-y-1/2 flex size-10 items-center justify-center text-2xl text-role-glow/80 hover:bg-role-glow/10 hover:text-role-glow transition-colors duration-(--motion-duration-fast)',
                 ),
                 h.OnClick(M.NextPhoto()),
                 h.AriaLabel('Next photo'),

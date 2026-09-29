@@ -5,6 +5,7 @@ import { isAdminPath } from './admin/route'
 import { Model as HomeModel } from './home/model'
 import { init as homeInit } from './home/update'
 import { view as homeView } from './home/view'
+import { themeDocument, themeForUrl } from './lib/theme'
 
 type WorkerEnvWithAssets = WebsiteEnv & {
   ASSETS: { fetch: typeof fetch }
@@ -142,10 +143,19 @@ const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Respons
 
   // Admin: SPA shell for every path in the Admin's URL space, so a deep route
   // boots the app. The client parses the route and draws NotFound for a path
-  // that names none.
+  // that names none. The shell is the same `index.html` the Front gets, with
+  // one difference: the theme branch is named on `<html>`, because the Editor
+  // is dark and the first paint happens before any of this app has run. The
+  // dev mirror of that string edit is `entry.server.ts`'s `clientShell`.
   if (isAdminPath(url.pathname)) {
     if (request.method === 'GET') {
-      return env.ASSETS.fetch(new Request(new URL('/index.html', request.url).toString()))
+      const shell = await env.ASSETS.fetch(
+        new Request(new URL('/index.html', request.url).toString()),
+      )
+      if (!shell.ok) return new Response('Not found', { status: 404 })
+      const headers = new Headers(shell.headers)
+      headers.set('content-type', 'text/html; charset=utf-8')
+      return new Response(themeDocument(await shell.text(), themeForUrl(request.url)), { headers })
     }
     return new Response('Not found', { status: 404 })
   }

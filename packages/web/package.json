@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tokens": "node scripts/generate-design-tokens.mjs",
     "tokens:check": "node scripts/generate-design-tokens.mjs --check",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/generate-design-tokens.mjs --check && tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

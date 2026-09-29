@@ -1,10 +1,24 @@
+/**
+ * Field, broadsheet edition. The design's `Field` is a kicker label over an
+ * underlined box:
+ *
+ *   label    `$typography.kicker` in `color.text.secondary`, lifting to
+ *            `color.text.primary` while the box is focused
+ *   box      8px of vertical padding on a 1px `color.outline` bottom rule,
+ *            thickening to 1.5px of `color.rule` on focus, no fill, no radius
+ *   value    `$typography.exif`, the Desk's face for a value
+ *
+ * `input` carries the value classes; `textarea` is the same rule on a box that
+ * grows with its content, set in `$typography.body` because a caption is
+ * prose rather than a value.
+ */
 import { Input as FoldkitInput } from '@foldkit/ui'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { cn } from '@/lib/utils'
 
 export const inputClass =
-  'dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 disabled:bg-input/50 dark:disabled:bg-input/80 h-8 rounded-lg border bg-transparent px-2.5 py-1 text-base transition-colors file:h-6 file:text-sm file:font-medium focus-visible:ring-3 aria-invalid:ring-3 md:text-sm w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50'
+  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled data-disabled:border-role-hairline data-disabled:text-role-text-disabled h-9 border-0 border-b border-role-outline bg-transparent px-0 pb-(--spacing-sm) pt-(--spacing-sm) type-exif w-full min-w-0 outline-none transition-colors duration-(--motion-duration-fast) disabled:pointer-events-none disabled:cursor-not-allowed'
 
 /** Same string as the `label` item's component classes (upstream label.tsx). */
 /** Upstream string re-keyed for foldkit: the label precedes the control, so
@@ -12,11 +26,11 @@ export const inputClass =
  *  state flows from the wrapper (group/field + data-disabled, mirroring
  *  switch.ts). */
 export const inputLabelClass =
-  'gap-2 text-sm leading-none font-medium group-data-[disabled]:opacity-50 flex items-center select-none group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50'
+  'type-kicker text-role-text-secondary transition-colors duration-(--motion-duration-fast) flex items-center select-none group-data-[disabled]:opacity-50 group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50 group-focus-within/field:text-role-text-primary'
 
-export const inputDescriptionClass = 'text-sm text-muted-foreground'
+export const inputDescriptionClass = 'type-exif text-role-text-disabled'
 
-export const inputWrapperClass = 'group/field flex flex-col gap-1.5 w-full'
+export const inputWrapperClass = 'group/field flex flex-col gap-(--spacing-xs) w-full'
 
 export type InputConfig<M> = Readonly<{
   id: string

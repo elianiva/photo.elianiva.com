@@ -4,29 +4,33 @@ type Child = Html | string
 
 import { cn } from '@/lib/utils'
 
+/** The design has no empty-state frame yet; the Desk reads one as a dashed
+ *  `color.outline` well holding a `color.text.disabled` mark, a
+ *  `$typography.section` line and a `$typography.caption` in
+ *  `color.text.secondary`. */
 export const emptyClass =
-  'gap-4 rounded-xl border-dashed p-6 flex w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance'
+  'gap-(--spacing-lg) border border-dashed border-role-outline p-(--spacing-3xl) flex w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance'
 
-export const emptyHeaderClass = 'gap-2 flex max-w-sm flex-col items-center'
+export const emptyHeaderClass = 'gap-(--spacing-sm) flex max-w-sm flex-col items-center'
 
 export const emptyMediaVariantKeys = ['default', 'icon'] as const
 export type EmptyMediaVariant = (typeof emptyMediaVariantKeys)[number]
 
 export const emptyMediaClass =
-  'mb-2 flex shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0'
+  'mb-(--spacing-xs) flex shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0'
 
 export const emptyMediaVariants: Record<EmptyMediaVariant, string> = {
   default: 'bg-transparent',
-  icon: "bg-muted text-foreground flex size-8 shrink-0 items-center justify-center rounded-lg [&_svg:not([class*='size-'])]:size-4",
+  icon: 'flex size-(--spacing-3xl) shrink-0 items-center justify-center text-role-text-disabled [&_svg:not([class*="size-"])]:size-(--spacing-2xl)',
 }
 
-export const emptyTitleClass = 'text-sm font-medium tracking-tight font-sans'
+export const emptyTitleClass = 'type-section text-role-text-primary'
 
 export const emptyDescriptionClass =
-  'text-sm/relaxed text-muted-foreground [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary'
+  'type-caption text-role-text-secondary [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-role-text-primary'
 
 export const emptyContentClass =
-  'gap-2.5 text-sm flex w-full max-w-sm min-w-0 flex-col items-center text-balance'
+  'gap-(--spacing-sm) type-caption flex w-full max-w-sm min-w-0 flex-col items-center text-balance'
 
 type StyleConfig = Readonly<{ className?: string }>
 

@@ -68,6 +68,10 @@ _Avoid_: Config, Preferences, Options, Site settings (the row and the page are t
 One entry in the public Folio nav, authored as an ordered list in Settings. A Section is `{ label, kind, target }`: `kind` is `all` (the Front itself, and the only kind with no `target`), `tag` or `series` (a Tag's slug — a Series page _is_ a Tag page, see ADR 0008), or `page` (a page name). Stored as a JSON array on the Settings row; there is no sections table. The design draws `SECTIONS` as one `ALL · STREET · LANDSCAPE · SERIES · ABOUT` string, which cannot be routed, so the Settings UI is an ordered repeater instead — a deliberate, recorded deviation.
 _Avoid_: Nav item, menu, link, category
 
+**Route**:
+What a URL in the Admin's address space means — `Library`, `Drafts`, `Settings`, `Photo`, or `NotFound` — declared once in `admin/route.ts`. The route is the whole of a URL's meaning in the Admin, so anything a URL decides (which page is drawn, which branch of the broadsheet it is drawn in) is read off the route and never off a second copy of the path.
+_Avoid_: path prefix, pathname matching outside the route table, screen
+
 **Collection** _(deferred)_:
 Previously: a curated group of Photos (e.g., "Kyoto 2024"). Replaced by flat list + Tags for v1. Kept as a deferred term; reintroduce only if you need ordered, titled groupings with a cover.
 _Avoid_: Album, Gallery, Series, Set
@@ -75,3 +79,38 @@ _Avoid_: Album, Gallery, Series, Set
 **Cover Photo** _(deferred)_:
 Previously: the representative Photo of a Collection. Deferred with Collection.
 _Avoid_: Hero image, featured image
+
+## Design language
+
+**Broadsheet**:
+The visual system the whole site is drawn in, vendored as
+`packages/web/design/broadsheet.gen.yaml` and emitted as tokens by
+`packages/web/scripts/generate-design-tokens.mjs`. Paper, ink, hairline rules,
+a kicker/exif/deck type hierarchy, and no rounded corners on the Desk's
+controls. It ships as tokens, never as values in a component.
+_Avoid_: shadcn defaults, pill buttons, card shadows
+
+**Role token**:
+A colour in the broadsheet, named by what it does rather than what it looks
+like — `color.surface`, `color.hairline`, `color.text.secondary`. Reached in
+CSS as a `role-*` custom property (`bg-role-surface`), and in TypeScript where
+a stylesheet cannot reach, through the generated `lib/design-tokens.ts`. Every
+colour on the site is a role token; a hex literal in Desk code is a defect and
+`design-tokens.test.ts` fails the build on one.
+_Avoid_: palette colour (`neutral-500`), shadcn name (`--muted-foreground`) in Desk code
+
+**Contract name**:
+A shadcn semantic name (`--background`, `--muted-foreground`, `--ring`) bound
+to a broadsheet role. It exists so the vendored foldcn registry keeps its
+vocabulary; Desk code says the role, not the contract name.
+_Avoid_: extending the contract with a name broadsheet does not have
+
+**Theme scope**:
+The element a broadsheet branch is named on: `data-theme="light" | "dark"`,
+with `.dark` on the document root the same generated block spelled as a class.
+The branch is a function of the Admin's **Route** and of nothing else, so the
+view names it on the app root and the HTML shell names it on `<html>` — the
+only element there is before the app has run. The Library (`/admin`) is light;
+the Editor (`/admin/photos/:id`) is dark in the same document.
+_Avoid_: a path prefix for the Editor, toggling the theme after mount, a second
+hand-written dark palette
