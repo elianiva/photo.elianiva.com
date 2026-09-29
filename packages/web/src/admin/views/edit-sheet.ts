@@ -8,6 +8,7 @@ import type { HtmlBuilder } from 'foldkit/html'
 import * as Button from '@/components/ui/button'
 import * as Input from '@/components/ui/input'
 import * as Sheet from '@/components/ui/sheet'
+import * as Textarea from '@/components/ui/textarea'
 import { cardSizes, srcSet, thumbUrl } from '@/lib/image'
 
 import { Message as M } from '../model'
@@ -21,19 +22,14 @@ const draftFieldInput = (
   h: HtmlBuilder<Msg>,
 ): Child =>
   field === 'caption'
-    ? h.div(
-        [h.Class('flex flex-col gap-1.5 w-full')],
-        [
-          h.label([h.For('draft-caption'), h.Class('text-sm font-medium')], ['Caption']),
-          h.textarea([
-            h.Id('draft-caption'),
-            h.Value(model.draft.caption),
-            h.OnInput((value) => M.SetDraftField({ field: 'caption', value })),
-            h.Class(
-              'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
-            ),
-          ]),
-        ],
+    ? Textarea.textarea(
+        {
+          id: 'draft-caption',
+          label,
+          value: model.draft.caption,
+          onInput: (value) => M.SetDraftField({ field, value }),
+        },
+        h,
       )
     : Input.input(
         {
@@ -70,7 +66,7 @@ const editSheetContent = (
         ),
         editing !== undefined
           ? h.img([
-              h.Class('w-full rounded-lg bg-role-surface-container max-h-72 object-contain'),
+              h.Class('w-full bg-role-surface-container max-h-72 object-contain'),
               h.Src(thumbUrl(editing)),
               h.Attribute('srcset', srcSet(editing)),
               h.Attribute('sizes', cardSizes),
@@ -85,8 +81,11 @@ const editSheetContent = (
         draftFieldInput(model, 'lens', 'Lens', h),
         draftFieldInput(model, 'caption', 'Caption', h),
         h.div(
-          [h.Class('flex flex-col gap-1.5')],
-          [h.span([h.Class('text-sm font-medium')], ['Tags']), embedCombo(model, 'draft', h)],
+          [h.Class('flex flex-col gap-(--spacing-xs)')],
+          [
+            h.span([h.Class('type-kicker text-role-text-secondary')], ['Tags']),
+            embedCombo(model, 'draft', h),
+          ],
         ),
       ],
     ),

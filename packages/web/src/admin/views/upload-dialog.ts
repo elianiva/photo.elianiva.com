@@ -42,10 +42,10 @@ const statusBadge = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
   }
   const map: Record<
     Exclude<QueueItem['status'], 'uploading'>,
-    { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+    { label: string; variant: Badge.BadgeVariant }
   > = {
     pending: { label: 'Queued', variant: 'secondary' },
-    done: { label: 'Done', variant: 'outline' },
+    done: { label: 'Done', variant: 'default' },
     failed: { label: 'Failed', variant: 'destructive' },
   }
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- narrowing from QueueStatus union
@@ -60,7 +60,7 @@ const queueThumbnail = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
       h.Src(preview),
       h.Alt(''),
       h.Class(
-        'size-10 shrink-0 rounded-md border border-role-outline-variant bg-role-surface-container object-cover',
+        'size-10 shrink-0 border border-role-outline-variant bg-role-surface-container object-cover',
       ),
     ])
   }
@@ -68,7 +68,7 @@ const queueThumbnail = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
   return h.div(
     [
       h.Class(
-        'flex size-10 shrink-0 items-center justify-center rounded-md border border-role-outline-variant bg-role-surface-container text-role-text-disabled',
+        'flex size-10 shrink-0 items-center justify-center border border-role-outline-variant bg-role-surface-container text-role-text-disabled',
       ),
     ],
     [icon(h, ImageIcon, 'size-4')],
@@ -79,16 +79,18 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
   h.li(
     [
       h.Key(item.id),
-      h.Class('flex items-center gap-3 rounded-lg border border-role-outline-variant px-3 py-2'),
+      h.Class(
+        'flex items-center gap-(--spacing-sm) border-b border-role-hairline py-(--spacing-sm)',
+      ),
     ],
     [
       queueThumbnail(item, h),
       h.div(
         [h.Class('min-w-0 flex-1')],
         [
-          h.p([h.Class('truncate text-sm font-medium')], [item.name]),
+          h.p([h.Class('truncate type-exif text-role-text-primary')], [item.name]),
           h.p(
-            [h.Class('truncate text-xs text-role-text-secondary')],
+            [h.Class('truncate type-exif text-role-text-secondary')],
             [
               item.error !== undefined
                 ? `${formatBytes(item.size)} — ${item.error}`
@@ -104,7 +106,6 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
               {
                 onClick: M.RetryUpload({ id: item.id }),
                 variant: 'ghost',
-                size: 'sm',
                 attributes: [h.AriaLabel(`Retry ${item.name}`)],
               },
               'Retry',
@@ -118,7 +119,6 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
               {
                 onClick: M.RemoveQueueItem({ id: item.id }),
                 variant: 'ghost',
-                size: 'sm',
                 attributes: [h.AriaLabel(`Remove ${item.name}`)],
               },
               icon(h, X, 'size-4'),
@@ -135,14 +135,14 @@ const dropZoneContent = (hasQueue: boolean, h: HtmlBuilder<Msg>): ReadonlyArray<
   const limits = `up to ${String(UPLOAD_LIMITS.maxFiles)} files · ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB each`
   if (hasQueue) {
     return [
-      h.span([h.Class('text-sm font-medium')], ['Add more images']),
-      h.span([h.Class('text-xs text-muted-foreground')], [`drag here or click · ${limits}`]),
+      h.span([h.Class('type-caption text-role-text-primary')], ['Add more images']),
+      h.span([h.Class('type-exif text-role-text-disabled')], [`drag here or click · ${limits}`]),
     ]
   }
   return [
     h.p([h.Class('text-base font-medium')], ['Drag & drop images here']),
     h.p(
-      [h.Class('mt-1 text-sm text-muted-foreground')],
+      [h.Class('mt-1 type-exif text-role-text-disabled')],
       [`or click to browse · JPEG, PNG, WebP, GIF, AVIF · ${limits}`],
     ),
   ]
@@ -168,7 +168,7 @@ const uploadDialogContent = (
       [h.Class('flex flex-col gap-4')],
       [
         h.div(
-          [h.Class('flex items-start justify-between gap-2')],
+          [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
           [
             Dialog.title({ attributes: render.title }, ['Upload photos'], h),
             Dialog.closeButton({ attributes: render.closeButton }, [icon(h, X)], h),
@@ -201,15 +201,15 @@ const uploadDialogContent = (
               h.div(
                 [h.Class('flex items-center justify-between')],
                 [
-                  h.span([h.Class('text-sm font-medium')], ['Queue']),
+                  h.span([h.Class('type-kicker text-role-text-secondary')], ['Queue']),
                   h.span(
-                    [h.Class('text-xs tabular-nums text-role-text-secondary')],
+                    [h.Class('type-exif tabular-nums text-role-text-secondary')],
                     [`${String(model.queue.length)}/${String(UPLOAD_LIMITS.maxFiles)} files`],
                   ),
                 ],
               ),
               h.ul(
-                [h.Class('flex flex-col gap-2')],
+                [h.Class('flex flex-col gap-(--spacing-sm)')],
                 [...model.queue.map((item) => queueRow(item, h))],
               ),
               Input.input(
@@ -226,7 +226,10 @@ const uploadDialogContent = (
               h.div(
                 [h.Class('flex flex-col gap-1.5')],
                 [
-                  h.span([h.Class('text-sm font-medium')], ['Tags for this batch']),
+                  h.span(
+                    [h.Class('type-kicker text-role-text-secondary')],
+                    ['Tags for this batch'],
+                  ),
                   embedCombo(model, 'upload', h),
                 ],
               ),
@@ -243,9 +246,7 @@ const uploadDialogContent = (
                       [
                         h.div(
                           [
-                            h.Class(
-                              'h-1.5 flex-1 overflow-hidden rounded-full bg-role-surface-container-high',
-                            ),
+                            h.Class('h-1.5 flex-1 overflow-hidden bg-role-surface-container-high'),
                             h.Role('progressbar'),
                             h.AriaLabel('Upload progress'),
                             h.AriaValuemin(0),
@@ -256,7 +257,7 @@ const uploadDialogContent = (
                             h.div(
                               [
                                 h.Class(
-                                  'h-full rounded-full bg-primary transition-all duration-(--motion-duration-slow)',
+                                  'h-full bg-role-primary transition-all duration-(--motion-duration-slow)',
                                 ),
                                 h.Style({ width: `${String(progressPercent)}%` }),
                               ],
@@ -265,7 +266,7 @@ const uploadDialogContent = (
                           ],
                         ),
                         h.span(
-                          [h.Class('shrink-0 text-xs tabular-nums text-role-text-secondary')],
+                          [h.Class('shrink-0 type-exif tabular-nums text-role-text-secondary')],
                           [`${String(doneCount)}/${String(model.batchTotal)}`],
                         ),
                       ],
@@ -273,16 +274,15 @@ const uploadDialogContent = (
                   ]
                 : []),
               h.div(
-                [h.Class('flex items-center justify-between gap-2 flex-wrap')],
+                [h.Class('flex flex-wrap items-center justify-between gap-(--spacing-sm)')],
                 [
                   h.div(
-                    [h.Class('flex items-center gap-2')],
+                    [h.Class('flex items-center gap-(--spacing-sm)')],
                     [
                       Button.button(
                         {
                           onClick: M.ClearFinishedItems(),
                           variant: 'ghost',
-                          size: 'sm',
                           isDisabled: !model.queue.some((item) => item.status === 'done'),
                         },
                         'Clear finished',
@@ -293,8 +293,7 @@ const uploadDialogContent = (
                             Button.button(
                               {
                                 onClick: M.RetryAllFailed(),
-                                variant: 'outline',
-                                size: 'sm',
+                                variant: 'secondary',
                               },
                               `Retry all (${String(failedCount)})`,
                               h,
@@ -308,7 +307,7 @@ const uploadDialogContent = (
                         Button.button(
                           {
                             onClick: M.CancelUploads(),
-                            variant: 'outline',
+                            variant: 'secondary',
                           },
                           'Stop',
                           h,

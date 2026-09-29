@@ -1,3 +1,13 @@
+/**
+ * FileDrop, broadsheet edition. The design's `Drop Zone` is a 1px dashed
+ * `color.outline` box with no fill and no corner radius, 16px of padding
+ * around 12px of gap: a 16px `color.text.secondary` upload mark, an
+ * `$typography.caption` italic line in `color.text.primary`, and the
+ * `$typography.exif` constraints in `color.text.disabled`.
+ *
+ * The queued file row is the same language at row scale: a `color.hairline`
+ * box, `$typography.exif` for the name, `color.text.disabled` for the size.
+ */
 import { FileDrop as FoldkitFileDrop } from '@foldkit/ui'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
@@ -22,21 +32,21 @@ export type ViewInputs = FoldkitFileDrop.ViewInputs
 export type FileDropAttributes = FoldkitFileDrop.FileDropAttributes
 
 export const fileDropClass =
-  'group/file-drop flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card px-6 py-10 text-center text-card-foreground outline-none transition-colors hover:border-primary/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[drag-over]:border-primary data-[drag-over]:bg-accent data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50'
+  'group/file-drop flex cursor-pointer flex-col items-center justify-center gap-(--spacing-md) border border-dashed border-role-outline bg-transparent px-(--spacing-lg) py-(--spacing-lg) text-center text-role-text-primary outline-none transition-colors duration-(--motion-duration-fast) hover:border-role-rule focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 data-[drag-over]:border-role-rule data-[drag-over]:bg-role-surface-container data-[disabled]:cursor-not-allowed data-[disabled]:text-role-text-disabled'
 
-export const fileDropPrimaryTextClass = 'text-base font-medium'
+export const fileDropPrimaryTextClass = 'type-caption text-role-text-primary'
 
-export const fileDropSecondaryTextClass = 'text-sm text-muted-foreground'
+export const fileDropSecondaryTextClass = 'type-exif text-role-text-disabled'
 
 export const fileRowClass =
-  'group/file-row flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2'
+  'group/file-row flex items-center justify-between gap-(--spacing-sm) border-b border-role-hairline px-0 py-(--spacing-sm)'
 
-export const fileNameClass = 'truncate text-sm font-medium'
+export const fileNameClass = 'truncate type-exif text-role-text-primary'
 
-export const fileSizeClass = 'text-xs text-muted-foreground'
+export const fileSizeClass = 'type-exif text-role-text-disabled'
 
 export const fileRemoveButtonClass =
-  'inline-flex items-center justify-center rounded-md text-sm text-muted-foreground outline-none transition-colors hover:text-destructive focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0'
+  'inline-flex items-center justify-center text-role-text-disabled outline-none transition-colors duration-(--motion-duration-fast) hover:text-role-accent focus-visible:ring-[3px] focus-visible:ring-role-focus/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0'
 
 export type StyledViewInputs = Readonly<{
   multiple?: boolean

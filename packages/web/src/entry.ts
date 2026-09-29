@@ -14,7 +14,10 @@ if (isAdmin) {
   void import('./admin/entry').then((admin: typeof AdminApp) => {
     const program = Runtime.makeApplication({
       Model: admin.Model,
-      init: admin.init,
+      // The theme is resolved from the path here, at the boundary that
+      // actually knows it, so the mount carries the same scope the server
+      // render did and the first paint cannot flash the other branch.
+      init: () => admin.init(window.location.pathname),
       update: admin.update,
       view: admin.view,
       subscriptions: admin.subscriptions,

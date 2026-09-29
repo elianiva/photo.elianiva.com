@@ -4,6 +4,10 @@
  * (justified day-grouped grid, lightbox, edit Sheet, upload Dialog, confirm
  * AlertDialog, toast stack). Header and content share one max-width
  * container so their edges align.
+ *
+ * The root element carries the theme scope. `data-theme="dark"` re-themes
+ * this whole subtree and nothing above it, which is how the Editor sits dark
+ * inside a document the public front page shares — see `lib/theme.ts`.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
@@ -11,6 +15,8 @@ import type { Tag } from '@photo/shared'
 
 import * as Button from '@/components/ui/button'
 import * as Spinner from '@/components/ui/spinner'
+
+import { scopeTheme } from '@/lib/theme'
 
 import { Message as M } from './model'
 import type { Model, Msg } from './model'
@@ -32,23 +38,22 @@ const COL_CHOICES = [2, 3, 4, 5, 6] as const
 const GUTTER =
   'mx-auto w-full max-w-(--layout-content-max) px-(--layout-margin-mobile) sm:px-(--layout-margin)'
 
+/** The design's `Segment`: 28px of 4/12 padding, `$typography.exif`, no
+ *  container box and no corner radius. The chosen step fills with
+ *  `color.primary` and reads in `color.on-primary`. */
 const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [
-      h.Class(
-        'flex items-center gap-1 rounded-full bg-role-surface-container p-1 ring-1 ring-role-outline-variant',
-      ),
-    ],
+    [h.Class('flex items-center'), h.Role('group'), h.AriaLabel('Grid density')],
     COL_CHOICES.map((cols) =>
       h.button(
         [
           h.OnClick(M.SelectedCols({ cols })),
-          h.Attribute('aria-label', `${String(cols)} columns`),
+          h.AriaLabel(`${String(cols)} columns`),
           h.AriaPressed(String(cols === model.cols)),
           h.Class(
             cols === model.cols
-              ? 'rounded-full bg-role-surface px-2.5 py-1 text-xs font-medium text-role-text-primary shadow-sm ring-1 ring-role-outline-variant'
-              : 'rounded-full px-2.5 py-1 text-xs font-medium text-role-text-secondary hover:text-role-text-primary',
+              ? 'bg-role-primary px-(--spacing-md) py-(--spacing-xs) type-exif text-role-on-primary'
+              : 'px-(--spacing-md) py-(--spacing-xs) type-exif text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary',
           ),
         ],
         [String(cols)],
@@ -66,16 +71,20 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
     [h.Class('sticky top-0 z-20 border-b border-role-hairline bg-role-surface/85 backdrop-blur')],
     [
       h.div(
-        [h.Class(`${GUTTER} flex flex-wrap items-center gap-x-6 gap-y-3 py-3`)],
+        [
+          h.Class(
+            `${GUTTER} flex flex-wrap items-center gap-x-(--spacing-lg) gap-y-(--spacing-sm) py-(--spacing-sm)`,
+          ),
+        ],
         [
           h.div(
-            [h.Class('mr-auto flex items-center gap-4')],
+            [h.Class('mr-auto flex items-center gap-(--spacing-sm)')],
             [
               h.a(
                 [
                   h.Href('/'),
                   h.Class(
-                    'type-ui font-firm text-role-text-primary hover:text-role-text-secondary transition-colors duration-(--motion-duration-fast)',
+                    'type-ui text-role-text-primary hover:text-role-text-secondary transition-colors duration-(--motion-duration-fast)',
                   ),
                 ],
                 ['photo.elianiva.com'],
@@ -91,8 +100,7 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
                 Button.button(
                   {
                     onClick: M.OpenUpload(),
-                    variant: 'outline',
-                    size: 'sm',
+                    variant: 'secondary',
                   },
                   h.span(
                     [h.Class('inline-flex items-center gap-1.5')],
@@ -105,7 +113,7 @@ const header = (model: Model, h: HtmlBuilder<Msg>): Child =>
                 ),
               ]
             : []),
-          Button.button({ onClick: M.OpenUpload(), size: 'sm' }, 'Upload photos', h),
+          Button.button({ onClick: M.OpenUpload() }, 'Upload photos', h),
         ],
       ),
     ],
@@ -150,7 +158,7 @@ const filterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
 export const view = (model: Model, h: HtmlBuilder<Msg>): Document => ({
   title: 'Admin — photo.elianiva.com',
   body: h.div(
-    [h.Class('min-h-screen bg-role-surface text-role-text-primary')],
+    [scopeTheme(model.theme, h), h.Class('min-h-screen bg-role-surface text-role-text-primary')],
     [
       header(model, h),
       h.main(

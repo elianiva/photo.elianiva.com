@@ -49,7 +49,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
       h.div(
         [
           h.Class(
-            'aspect-square w-full cursor-pointer overflow-hidden rounded-xl bg-role-surface-container bg-cover bg-center',
+            'aspect-square w-full cursor-pointer overflow-hidden bg-role-surface-container bg-cover bg-center',
           ),
           h.Style({
             // The decoded blurhash paints the box until thumbnail bytes
@@ -76,7 +76,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
       h.div(
         [
           h.Class(
-            'pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 rounded-b-xl bg-gradient-to-t from-role-shadow/60 to-transparent p-2.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
+            'pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-(--spacing-sm) bg-gradient-to-t from-role-shadow/60 to-transparent p-(--spacing-sm) opacity-0 transition-opacity duration-(--motion-duration-fast) group-hover:opacity-100 group-focus-within:opacity-100',
           ),
         ],
         [
@@ -92,8 +92,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
               Button.button(
                 {
                   onClick: M.OpenEdit({ photo }),
-                  variant: 'outline',
-                  size: 'sm',
+                  variant: 'secondary',
                   className: 'bg-role-mat-white/90 backdrop-blur',
                 },
                 'Edit',
@@ -103,7 +102,6 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
                 {
                   onClick: M.RequestDeletePhoto({ id: photo.id, label: photo.title }),
                   variant: 'destructive',
-                  size: 'sm',
                 },
                 'Delete',
                 h,
@@ -122,7 +120,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
 
 const loadingState = (h: HtmlBuilder<Msg>): Child =>
   h.p(
-    [h.Class('mt-(--spacing-3xl) text-sm text-role-text-secondary animate-pulse')],
+    [h.Class('mt-(--spacing-3xl) type-exif text-role-text-secondary animate-pulse')],
     ['Loading photos…'],
   )
 
@@ -130,13 +128,13 @@ const errorState = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [
       h.Class(
-        'mt-(--spacing-3xl) rounded-xl border border-role-error-container bg-role-error-container p-4 text-sm text-role-error',
+        'mt-(--spacing-3xl) border border-role-accent bg-role-error-container p-(--spacing-lg) type-ui text-role-error',
       ),
     ],
     [
       h.p([], [model.error ?? 'Failed to load photos']),
       Button.button(
-        { onClick: M.RetryFetch(), variant: 'outline', className: 'mt-3', size: 'sm' },
+        { onClick: M.RetryFetch(), variant: 'secondary', className: 'mt-3' },
         'Retry',
         h,
       ),
@@ -148,7 +146,7 @@ const noPhotosState = (h: HtmlBuilder<Msg>): Child =>
     [h.Class('mt-(--spacing-3xl)')],
     [
       Empty(
-        { className: 'border border-dashed border-role-outline-variant p-(--spacing-3xl)' },
+        { className: 'border border-dashed border-role-outline p-(--spacing-3xl)' },
         [
           Empty.header({}, [], h),
           Empty.title({}, ['No photos yet'], h),
@@ -164,7 +162,7 @@ const noMatchState = (activeLabel: string, h: HtmlBuilder<Msg>): Child =>
     [h.Class('mt-(--spacing-3xl)')],
     [
       Empty(
-        { className: 'border border-dashed border-role-outline-variant p-(--spacing-3xl)' },
+        { className: 'border border-dashed border-role-outline p-(--spacing-3xl)' },
         [
           Empty.header({}, [], h),
           Empty.title({}, [`Nothing tagged “${activeLabel}”`], h),
@@ -175,7 +173,7 @@ const noMatchState = (activeLabel: string, h: HtmlBuilder<Msg>): Child =>
               h.button(
                 [
                   h.OnClick(M.FilterByTag({ slug: '' })),
-                  h.Class('underline underline-offset-4 hover:text-role-text-primary'),
+                  h.Class('type-caption underline underline-offset-4 hover:text-role-text-primary'),
                 ],
                 ['Clear the filter'],
               ),
@@ -217,7 +215,7 @@ export const grid = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 Button.button(
                   {
                     onClick: M.LoadMore(),
-                    variant: 'outline',
+                    variant: 'secondary',
                     isDisabled: model.loadingMore,
                   },
                   model.loadingMore ? 'Loading…' : 'Load more',

@@ -2,14 +2,20 @@
  * Blurhash helpers — encode in the Admin (browser can decode pixels; the
  * Worker cannot), decode in the Admin grid for placeholder tiles.
  *
- * Matches len's parameters: 4×3 components from a ≤32px sample.
+ * The component count is the design's (`image.blurhash.x` / `.y`), read from
+ * the generated token module rather than restated here.
  */
 
 import { decode, encode } from 'blurhash'
 
+import { imageBlurhashX, imageBlurhashY } from './design-tokens'
+
+/** The long edge the encoder samples down to. A local constant, not a
+ *  catalog token: the design fixes the component count (`4 × 3 · 31 chars`)
+ *  and says nothing about the sample, so there is nothing to bind to. */
 const SAMPLE_SIZE = 32
-const COMPONENTS_X = 4
-const COMPONENTS_Y = 3
+const COMPONENTS_X = imageBlurhashX
+const COMPONENTS_Y = imageBlurhashY
 
 /** Encode a File/ImageBitmapSource to a blurhash string. Resolves to null
  *  when the browser cannot decode the bytes or canvas is unavailable —

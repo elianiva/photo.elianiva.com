@@ -30,4 +30,29 @@ _Avoid_: Album, Gallery, Series, Set
 
 **Cover Photo** _(deferred)_:
 Previously: the representative Photo of a Collection. Deferred with Collection.
+
+## Design language
+
+**Broadsheet**:
+The visual system the whole site is drawn in. Paper, ink, hairline rules, a
+kicker/exif/deck hierarchy, and no rounded corners on the Desk. It ships as
+tokens, never as values in a component.
+_Avoid_: shadcn defaults, pill buttons, card shadows
+
+**Role token**:
+A colour in the broadsheet, named by what it does rather than what it looks
+like — `color.surface`, `color.hairline`, `color.text.secondary`. Reached in
+CSS as a `role-*` custom property (`bg-role-surface`) and in TypeScript,
+where a stylesheet cannot reach, through the generated token module. Every
+colour on the site is a role token; a hex literal in Desk code is a defect,
+and the design-token test fails the build on one.
+_Avoid_: palette colour (`neutral-500`), shadcn name (`--muted-foreground`) in Desk code
+
+**Theme scope**:
+The element a broadsheet branch is named on. `data-theme="light" | "dark"`,
+set by the view on the app root from the path, so the branch is in the first
+paint rather than applied after mount. The Desk Library is light; the Editor
+(`/admin/photo/*`) is dark in the same document. `.dark` on the document root
+is the same generated block spelled as a class.
+_Avoid_: toggling the theme after mount, a second hand-written dark palette
 _Avoid_: Hero image, featured image

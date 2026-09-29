@@ -12,6 +12,7 @@ import * as Update from 'foldkit/update'
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Sheet from '@/components/ui/sheet'
+import { themeForPath } from '@/lib/theme'
 
 import {
   CreateTagCmd,
@@ -54,9 +55,10 @@ import * as TagManager from './tag-manager'
 // init
 // ---------------------------------------------------------------------------
 
-export const init = (): Update.Return<Model, Msg> => ({
+export const init = (pathname: string): Update.Return<Model, Msg> => ({
   model: {
     status: 'loading',
+    theme: themeForPath(pathname),
     photos: [],
     tags: [],
     nextCursor: null,

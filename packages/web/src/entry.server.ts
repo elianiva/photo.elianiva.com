@@ -15,7 +15,9 @@ export const renderPage = async (request: Request): Promise<Server.EntryResult> 
   if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
     const config = {
       Model: AdminModel,
-      init: adminInit,
+      // The request path is known here, so the theme the view names on its
+      // root element is in the first paint rather than applied after mount.
+      init: () => adminInit(url.pathname),
       view: adminView,
     }
     const rendered = await Effect.runPromise(

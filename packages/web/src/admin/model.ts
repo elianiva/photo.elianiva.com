@@ -13,6 +13,7 @@ import * as Dialog from '@/components/ui/dialog'
 import * as Sheet from '@/components/ui/sheet'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Toast from '@/components/ui/toast'
+import { Theme } from '@/lib/theme'
 
 import * as TagManager from './tag-manager'
 
@@ -99,6 +100,10 @@ export const previewStore = new Map<string, string>()
 
 export const Model = S.Struct({
   status: S.Literals(['loading', 'ready', 'error']),
+
+  /** The broadsheet branch this subtree is drawn in, resolved from the path
+   *  at init and named on the view's root element — see `lib/theme.ts`. */
+  theme: Theme,
   error: S.optional(S.String),
   photos: S.Array(PhotoWithTags),
   tags: S.Array(Tag),

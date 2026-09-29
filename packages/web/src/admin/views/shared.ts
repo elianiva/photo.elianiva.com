@@ -48,7 +48,7 @@ export const CREATE_PREFIX = 'create:'
  *  foldkit calls itemToConfig. */
 const tagRow = (label: string, isSelected: boolean): Html =>
   inertHtml.span(
-    [inertHtml.Class('flex w-full items-center gap-2 truncate')],
+    [inertHtml.Class('flex w-full items-center gap-(--spacing-sm) truncate')],
     [
       inertHtml.span([inertHtml.Class('truncate')], [label]),
       ...(isSelected ? [Combobox.comboboxCheck(inertHtml)] : []),
@@ -59,7 +59,11 @@ const tagRow = (label: string, isSelected: boolean): Html =>
  *  as a distinct action rather than a regular option. */
 const createRow = (label: string): Html =>
   inertHtml.span(
-    [inertHtml.Class('flex w-full items-center gap-2 text-role-text-secondary')],
+    [
+      inertHtml.Class(
+        'flex w-full items-center gap-(--spacing-sm) type-exif text-role-text-secondary',
+      ),
+    ],
     [
       icon(inertHtml, Plus, 'size-3.5 shrink-0'),
       inertHtml.span([inertHtml.Class('truncate')], [`Create “${label}”`]),
@@ -107,7 +111,7 @@ const pickedChip = (label: string, onRemove: Msg, h: HtmlBuilder<Msg>): Child =>
   h.span(
     [
       h.Class(
-        'inline-flex max-w-full items-center gap-0.5 rounded-full border border-role-outline-variant bg-role-surface-container py-0.5 pr-1 pl-2.5 text-xs font-medium text-role-text-primary',
+        'inline-flex max-w-full items-center gap-0.5 border border-role-outline bg-transparent py-(--spacing-xs) pr-(--spacing-xs) pl-(--spacing-sm) type-exif text-role-text-primary',
       ),
     ],
     [
@@ -118,7 +122,7 @@ const pickedChip = (label: string, onRemove: Msg, h: HtmlBuilder<Msg>): Child =>
           h.AriaLabel(`Remove tag ${label}`),
           h.Title(`Remove tag “${label}”`),
           h.Class(
-            'shrink-0 rounded-full p-0.5 text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:outline-none',
+            'shrink-0 p-(--spacing-xs) text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:outline-none',
           ),
         ],
         [icon(h, X, 'size-3')],
@@ -131,7 +135,7 @@ export const embedCombo = (model: Model, which: 'draft' | 'upload', h: HtmlBuild
   const onRemove = (id: string): Msg =>
     which === 'draft' ? M.RemoveDraftTag({ id }) : M.RemoveUploadTag({ id })
   return h.div(
-    [h.Class('flex flex-col gap-2')],
+    [h.Class('flex flex-col gap-(--spacing-sm)')],
     [
       h.submodel({
         slotId: `${which}-tag-combo`,
@@ -153,7 +157,11 @@ export const embedCombo = (model: Model, which: 'draft' | 'upload', h: HtmlBuild
       ...(selectedIds.length > 0
         ? [
             h.div(
-              [h.Class('flex flex-wrap gap-1.5'), h.Role('list'), h.AriaLabel('Selected tags')],
+              [
+                h.Class('flex flex-wrap gap-(--spacing-xs)'),
+                h.Role('list'),
+                h.AriaLabel('Selected tags'),
+              ],
               selectedIds.map((id) => pickedChip(labelOf(model.tags, id), onRemove(id), h)),
             ),
           ]

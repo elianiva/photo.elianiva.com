@@ -36,26 +36,28 @@ export type GroupHeading = FoldkitCombobox.GroupHeading
 // UI for multi-select, no clear button, no Empty row; filtering is
 // parent-owned.
 
-/** foldcn renders a bare input (upstream wraps one in an InputGroup inside
- *  the popup for chips mode); keep the input token string. */
+/** The `Select` atom, wide: the same kicker label and 1px `color.outline`
+ *  bottom rule as `Field`, the value in `$typography.exif`, and a 14px caret
+ *  in `color.text.secondary`. The listbox is that box lifted onto a
+ *  `color.hairline` surface, its active row in `color.surface.hover`. */
 export const comboboxInputClass =
-  'dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 disabled:bg-input/50 dark:disabled:bg-input/80 h-8 border bg-transparent px-2.5 py-1 text-base transition-colors file:h-6 file:text-sm file:font-medium focus-visible:ring-3 aria-invalid:ring-3 md:text-sm w-full min-w-0 rounded-md pr-9 outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50'
+  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled h-9 w-full min-w-0 border-0 border-b border-role-outline bg-transparent py-(--spacing-sm) pr-(--spacing-xl) type-exif outline-none transition-colors duration-(--motion-duration-fast) disabled:cursor-not-allowed'
 
 export const comboboxButtonClass =
-  'absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4'
+  'absolute inset-y-0 right-0 flex items-center pr-(--spacing-sm) text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-3.5'
 
 export const comboboxItemsClass =
-  'bg-popover text-popover-foreground data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 *:data-[slot=input-group]:bg-input/30 *:data-[slot=input-group]:border-input/30 max-h-72 rounded-lg shadow-md ring-1 duration-100 *:data-[slot=input-group]:m-1 *:data-[slot=input-group]:mb-0 *:data-[slot=input-group]:h-8 *:data-[slot=input-group]:shadow-none z-50 min-w-56 overflow-hidden outline-hidden'
+  'bg-role-surface-container text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 max-h-72 border border-role-hairline p-(--spacing-sm) z-50 min-w-56 outline-hidden'
 
 export const comboboxItemsAnimatedClass = comboboxItemsClass
 
 export const comboboxItemClass =
-  "data-highlighted:bg-accent data-highlighted:text-accent-foreground not-data-[variant=destructive]:data-highlighted:**:text-accent-foreground gap-2 rounded-md py-1 pr-8 pl-1.5 text-sm [&_svg:not([class*='size-'])]:size-4 relative flex w-full cursor-default select-none outline-hidden data-active:bg-accent data-active:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 data-selected:font-medium data-readonly:pointer-events-none"
+  'data-active:bg-role-surface-hover data-active:text-role-on-surface gap-(--spacing-sm) py-(--spacing-xs) pr-(--spacing-lg) pl-(--spacing-xs) type-exif flex w-full cursor-default select-none outline-hidden data-disabled:pointer-events-none data-disabled:text-role-text-disabled data-selected:text-role-text-primary'
 
 export const comboboxGroupHeadingClass =
-  'data-inset:pl-7 px-2 py-1.5 text-xs font-medium text-muted-foreground'
+  'type-kicker text-role-text-secondary px-(--spacing-sm) py-(--spacing-xs)'
 
-export const comboboxSeparatorClass = 'bg-border -mx-1 my-1 h-px'
+export const comboboxSeparatorClass = 'bg-role-hairline -mx-1 my-1 h-px'
 
 export const comboboxItemsScrollClass = 'no-scrollbar max-h-72 scroll-py-1 overflow-y-auto p-1'
 
@@ -77,10 +79,13 @@ export const COMBOBOX_ANCHOR: AnchorConfig = {
 }
 
 export const comboboxChevron = <M>(h: HtmlBuilder<M>): Html =>
-  h.span([h.Class('shrink-0 text-muted-foreground')], [icon(h, ChevronDown, 'size-4')])
+  h.span([h.Class('shrink-0 text-role-text-secondary')], [icon(h, ChevronDown, 'size-3.5')])
 
 export const comboboxCheck = <M>(h: HtmlBuilder<M>): Html =>
-  h.span([h.Class('absolute right-2 flex size-4 items-center justify-center')], [icon(h, Check)])
+  h.span(
+    [h.Class('absolute right-(--spacing-sm) flex size-4 items-center justify-center')],
+    [icon(h, Check, 'size-3.5 text-role-text-primary')],
+  )
 
 type CommonConfig<Item extends string> = Readonly<{
   items: ReadonlyArray<Item>
