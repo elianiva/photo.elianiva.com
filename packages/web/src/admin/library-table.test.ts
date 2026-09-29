@@ -23,7 +23,7 @@ import { AcquireResources, ShowDialog } from '@foldkit/ui/dialog'
 
 import * as Dialog from '@/components/ui/dialog'
 
-import { FetchPhotosCmd, NavigateCmd } from './commands'
+import { FetchPhotosCmd, NavigateCmd, ReplaceUrlCmd } from './commands'
 import { Message, UPLOAD_LIMITS } from './model'
 import type { Counts, Model } from './model'
 import { init, update } from './update'
@@ -300,6 +300,7 @@ describe('selection', () => {
       Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).toExist(),
       Scene.click(Scene.role('button', { name: 'Kyoto 38' })),
       Scene.Command.resolve(FetchPhotosCmd({ tagIds: ['kyoto'], q: '' }), listed([], 0, null)),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
       Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).not.toExist(),
     )
   })
@@ -547,6 +548,7 @@ describe('paging', () => {
         FetchPhotosCmd({ tagIds: [], q: '', cursor: NEXT_CURSOR }),
         listed(SECOND, 412, 'cursor-after-page-two'),
       ),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
       Scene.expect(Scene.text('8–14 OF 412')).toExist(),
     )
   })
@@ -576,6 +578,7 @@ describe('paging', () => {
       Scene.given(onSecond.model),
       Scene.click(Scene.role('button', { name: 'Previous page' })),
       Scene.Command.resolve(FetchPhotosCmd({ tagIds: [], q: '', cursor: '' }), listed()),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
       Scene.expect(Scene.text('1–7 OF 412')).toExist(),
     )
   })
@@ -612,6 +615,7 @@ describe('the states that are not rows', () => {
       Scene.expect(Scene.text('No frames yet')).not.toExist(),
       Scene.click(Scene.role('button', { name: 'Clear the Tag filter' })),
       Scene.Command.resolve(FetchPhotosCmd({ tagIds: [], q: '' }), listed([], 0, null)),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
     )
   })
 

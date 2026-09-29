@@ -68,6 +68,13 @@ export type TableHeadConfig<M> = Readonly<{
   }>
   /** Column key the result is ordered by, if any. */
   sortedBy?: string
+  /** Which way the sorted column orders. `desc` prints `↓` — the design's own
+   *  `TAKEN ↓` — and `asc` prints `↑`. Defaults to `desc`. */
+  sortDirection?: 'asc' | 'desc'
+  /** Turns the sorted column's label into a button that flips the direction.
+   *  Omit it and the head is a label: a header that looks clickable and does
+   *  nothing is worse than one that does not. */
+  onToggleSort?: M
   className?: string
 }>
 
@@ -95,22 +102,30 @@ export const tableHead = <M>(config: TableHeadConfig<M>, h: HtmlBuilder<M>): Htm
           ]),
       ...tableColumns.map((column) => {
         const isSorted = column.key === config.sortedBy
+        // The design sets the sort mark in the same text run as the label —
+        // `TAKEN ↓`, not a glyph beside it. The direction is the SORT select's
+        // own fact; the head reflects it and, when the caller wires the
+        // toggle, flips it.
+        const mark = isSorted ? (config.sortDirection === 'asc' ? '↑' : '↓') : ''
+        const text = mark === '' ? column.label : `${column.label} ${mark}`
+        const labelClass = cn(
+          'type-kicker',
+          isSorted ? 'text-role-text-primary' : 'text-role-text-secondary',
+        )
         return h.div(
           [h.Key(column.key), h.Class(cn('flex shrink-0 items-center', columnWidths[column.key]))],
           [
-            h.span(
-              [
-                h.Class(
-                  cn(
-                    'type-kicker',
-                    isSorted ? 'text-role-text-primary' : 'text-role-text-secondary',
-                  ),
-                ),
-              ],
-              // The design sets the sort mark in the same text run as the
-              // label — `TAKEN ↓`, not a glyph beside it.
-              [isSorted ? `${column.label} ↓` : column.label],
-            ),
+            isSorted && config.onToggleSort !== undefined
+              ? h.button(
+                  [
+                    h.Type('button'),
+                    h.OnClick(config.onToggleSort),
+                    h.AriaLabel(`Sort by ${column.label}`),
+                    h.Class(cn(labelClass, 'cursor-pointer')),
+                  ],
+                  [text],
+                )
+              : h.span([h.Class(labelClass)], [text]),
           ],
         )
       }),

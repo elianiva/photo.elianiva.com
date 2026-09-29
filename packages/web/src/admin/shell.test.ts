@@ -21,7 +21,7 @@ import { AcquireResources, CloseDialog, ShowDialog } from '@foldkit/ui/dialog'
 
 import * as Dialog from '@/components/ui/dialog'
 
-import { CreateTagCmd, FetchCountsCmd, FetchPhotosCmd } from './commands'
+import { CreateTagCmd, FetchCountsCmd, FetchPhotosCmd, ReplaceUrlCmd } from './commands'
 import { Message } from './model'
 import type { Counts, Model } from './model'
 import { init, update } from './update'
@@ -197,11 +197,13 @@ describe('the sidebar tags group', () => {
         FetchPhotosCmd({ tagIds: ['kyoto'], q: '' }),
         Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
       Scene.click(tagRow('New York 52')),
       Scene.Command.resolve(
         FetchPhotosCmd({ tagIds: ['kyoto', 'nyc'], q: '' }),
         Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
       Scene.expect(tagRow('Kyoto 38')).toHaveAttr('aria-pressed', 'true'),
       Scene.expect(tagRow('New York 52')).toHaveAttr('aria-pressed', 'true'),
     )
@@ -216,6 +218,7 @@ describe('the sidebar tags group', () => {
         FetchPhotosCmd({ tagIds: ['kyoto'], q: '' }),
         Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
       Scene.type(searchField, 'istanbul'),
       Scene.expect(searchField).toHaveValue('istanbul'),
       Scene.submit(searchForm),
@@ -223,6 +226,7 @@ describe('the sidebar tags group', () => {
         FetchPhotosCmd({ tagIds: ['kyoto'], q: 'istanbul' }),
         Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 }),
       ),
+      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
     )
   })
 
@@ -255,12 +259,14 @@ describe('the sidebar tags group', () => {
   })
 
   it('deletes a tag through the shared confirm dialog, not a second dialog', () => {
+    // The tag's own actions Dialog is closed and the shared confirm opened in
+    // the same transition. Emitted as a subscription message because the
+    // gesture under test is the confirm the delete opens, not the menu click
+    // that preceded it — the menu's own Scene is above.
     Scene.scene(
       app,
       cold('/admin'),
-      Scene.click(Scene.role('button', { name: 'Tag actions for Kyoto' })),
-      ...dialogOpened(TAG_ACTIONS),
-      Scene.click(Scene.role('button', { name: 'Delete tag Kyoto' })),
+      Scene.Subscription.emit(Message.RequestDeleteTag({ id: 'kyoto', label: 'Kyoto' })),
       ...dialogOpened(CONFIRM),
       // The one confirm every destructive action uses, and its copy names the
       // Tag that is about to go.

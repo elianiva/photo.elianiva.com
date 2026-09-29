@@ -12,6 +12,7 @@ import { Effect, Schema as S } from 'effect'
 import * as Command from 'foldkit/command'
 import { load, pushUrl, replaceUrl, back } from 'foldkit/navigation'
 import { PhotoId, PhotoPresentation, SettingsInput } from '@photo/shared'
+import { LibrarySort, PhotoRatio, PhotoStatus } from '@photo/shared'
 import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
 
 import { apiUrl } from '@/lib/api'
@@ -19,6 +20,8 @@ import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { encodeBlurhash } from '@/lib/blurhash'
 
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
+import { librarySortOf } from './route'
+import type { LibraryFilters } from './route'
 import {
   BULK_BORDER_MAT,
   GridCols,
@@ -91,23 +94,61 @@ export const FetchStorageCmd = Command.define('FetchStorage', {
 // grid density persistence
 // ---------------------------------------------------------------------------
 
+/** The RPC's list args for a filter. `status` and `ratio` are not stored
+ *  values; the same function decides that as the URL does, so no caller can
+ *  send the client's `all` to a column that only knows `draft`. */
+export const listArgsOf = (filters: LibraryFilters): PhotoListArgs => {
+  const status: PhotoStatus | undefined =
+    filters.status === 'all' || filters.status === 'scheduled' ? undefined : filters.status
+  const ratio: PhotoRatio | undefined = filters.ratio === 'any' ? undefined : filters.ratio
+  return {
+    ...(status === undefined ? {} : { status }),
+    ...(ratio === undefined ? {} : { ratio }),
+    tagIds: [...filters.tagIds],
+    q: filters.q,
+    ...(filters.sort === 'newest' ? {} : { sort: librarySortOf(filters.sort) }),
+  }
+}
+
 /** Where the table is reading: its filter, and the keyset position of the page.
- *  The empty string is the first page, which is the only page with no cursor. */
-export const PageArgs = S.Struct({
+ *  The empty string is the first page, which is the only page with no cursor.
+ *
+ *  The four optional keys are the Filter Bar's: Status, Ratio and Sort are
+ *  omitted when they are the default, so an unfiltered read asks for exactly
+ *  what it asked for before they existed. */
+const photoListFields = {
+  status: S.optional(PhotoStatus),
+  ratio: S.optional(PhotoRatio),
   tagIds: S.Array(S.String),
   q: S.String,
-  cursor: S.String,
-})
+  sort: S.optional(LibrarySort),
+  cursor: S.optional(S.String),
+}
+export const PhotoListArgs = S.Struct(photoListFields)
+export type PhotoListArgs = typeof PhotoListArgs.Type
+
+/** A list read that is not the first page: the cursor is the position. */
+export const PageArgs = S.Struct({ ...photoListFields, cursor: S.String })
 export type PageArgs = typeof PageArgs.Type
 
 /** One `ListLibraryRows` read. Every list read in the Admin goes through here,
  *  so a page of rows and the number it is paged over are never fetched under
  *  two different filters. */
-const listPayload = (args: { tagIds: readonly string[]; q: string; cursor?: string }) =>
+const listPayload = (args: {
+  tagIds: readonly string[]
+  q: string
+  cursor?: string | undefined
+  status?: PhotoStatus | undefined
+  ratio?: PhotoRatio | undefined
+  sort?: typeof LibrarySort.Type | undefined
+}) =>
   rpcAdmin<PhotoPage>('ListLibraryRows', {
     ...(args.tagIds.length > 0 ? { tagIds: [...args.tagIds] } : {}),
     ...(args.q === '' ? {} : { q: args.q }),
-    ...(args.cursor === '' ? {} : { cursor: args.cursor }),
+    ...(args.cursor === undefined || args.cursor === '' ? {} : { cursor: args.cursor }),
+    ...(args.status === undefined ? {} : { status: args.status }),
+    ...(args.ratio === undefined ? {} : { ratio: args.ratio }),
+    ...(args.sort === undefined ? {} : { sort: args.sort }),
     limit: LIBRARY_PAGE_SIZE,
   })
 
@@ -231,12 +272,41 @@ export const PersistColsCmd = Command.define('PersistCols', {
  *  `cursor` is the keyset position of the page being read. The empty string is
  *  the first page, which is the only page with no cursor. */
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
-  args: { tagIds: S.Array(S.String), q: S.String, cursor: S.optional(S.String) },
+  args: photoListFields,
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ tagIds, q, cursor }) =>
-    Effect.map(listPayload({ tagIds, q, ...(cursor === undefined ? {} : { cursor }) }), (page) =>
-      Message.SucceededFetchPhotos(toLibraryPage(page)),
+  execute: ({ tagIds, q, cursor, status, ratio, sort }) =>
+    Effect.map(
+      listPayload({ tagIds, q, ...(cursor === undefined ? {} : { cursor }), status, ratio, sort }),
+      (page) => Message.SucceededFetchPhotos(toLibraryPage(page)),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** A cold load (or a Back press) whose `page` has no cursor in the Model. A
+ *  keyset cursor only goes forwards, so the page the URL names is reached by
+ *  reading from the first page and keeping each step's `nextCursor`; the chain
+ *  rides back in the success message so Previous works afterwards. */
+export const FetchLibraryPageCmd = Command.define('FetchLibraryPage', {
+  args: { ...photoListFields, page: S.Number },
+  messages: [Message.SucceededFetchLibraryPage, Message.FailedRpc],
+  execute: ({ page, ...filters }) =>
+    Effect.gen(function* () {
+      let cursor = ''
+      const cursors: Array<string> = ['']
+      for (let step = 0; step < page; step += 1) {
+        const probe = yield* listPayload({ ...filters, cursor })
+        if (probe.nextCursor === null) break
+        cursor = probe.nextCursor
+        cursors.push(cursor)
+      }
+      const target = yield* listPayload({ ...filters, cursor })
+      return Message.SucceededFetchLibraryPage({
+        page: cursors.length - 1,
+        cursors,
+        photos: [...target.items],
+        nextCursor: target.nextCursor,
+        total: target.total,
+      })
+    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 export const FetchTagsCmd = Command.define('FetchTags', {
@@ -405,22 +475,18 @@ export const LoadCmd = Command.define('Load', {
 })
 
 export const DeletePhotoCmd = Command.define('DeletePhoto', {
-  args: { id: S.String },
+  args: { id: S.String, page: PageArgs },
   messages: [Message.DeletedPhoto, Message.FailedRpc],
-  execute: ({ id }) =>
-    Effect.map(
-      Effect.andThen(
-        rpcAdmin('DeletePhoto', { id }),
-        rpcAdmin<PhotoPage>('ListLibraryRows', { limit: 60 }),
-      ),
-      (page) => Message.DeletedPhoto({ id, photos: [...page.items] }),
+  execute: ({ id, page }) =>
+    Effect.map(Effect.andThen(rpcAdmin('DeletePhoto', { id }), listPayload(page)), (fresh) =>
+      Message.DeletedPhoto({ id, ...toLibraryPage(fresh) }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 export const DeleteTagCmd = Command.define('DeleteTag', {
-  args: { id: S.String, tagIds: S.Array(S.String) },
+  args: { id: S.String, page: PageArgs },
   messages: [Message.DeletedTag, Message.FailedRpc],
-  execute: ({ id, tagIds }) =>
+  execute: ({ id, page }) =>
     Effect.map(
       Effect.andThen(
         rpcAdmin('DeleteTag', { id }),
@@ -429,18 +495,15 @@ export const DeleteTagCmd = Command.define('DeleteTag', {
         // a filtered view stays filtered after the delete.
         Effect.all({
           tags: rpcPublic<ReadonlyArray<Tag>>('ListTags', {}),
-          page: rpcAdmin<PhotoPage>('ListLibraryRows', {
-            ...(tagIds.length > 0 ? { tagIds: [...tagIds] } : {}),
-            limit: 60,
-          }),
+          page: listPayload(page),
         }),
       ),
-      ({ tags, page }) => Message.DeletedTag({ tags: [...tags], photos: [...page.items] }),
+      ({ tags, page: fresh }) => Message.DeletedTag({ tags: [...tags], ...toLibraryPage(fresh) }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 export const CreateTagCmd = Command.define('CreateTag', {
-  args: { source: S.Literals(['upload', 'manager', 'sidebar']), label: S.String },
+  args: { source: S.Literals(['upload', 'sidebar']), label: S.String },
   messages: [Message.SucceededCreateTag, Message.FailedRpc],
   execute: ({ source, label }) =>
     Effect.map(rpcAdmin<Tag>('CreateTag', { slug: label, label }), (tag) =>
