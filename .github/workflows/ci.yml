@@ -30,10 +30,15 @@ jobs:
         run: pnpm typecheck
       - name: Test
         run: pnpm test
-      # Must stay `pnpm build`. It runs scripts/build-website.mjs, which is the
-      # same Alchemy `viteBuild` call `pnpm infra:deploy` makes, with the options
-      # in website.config.mjs. A client-only `vite build` here is the gate hole
-      # #67 closed: the deploy artifact goes unbuilt, and a green CI ships a red
-      # Deploy for as long as nobody watches it.
+      # `pnpm build` builds the Worker `pnpm infra:deploy` uploads: its entry
+      # environment is declared in packages/web/vite.config.ts, and app mode
+      # makes the package's plain `vite build` build it alongside the client.
+      # CI used to build a client-only bundle nobody deploys (#67).
       - name: Build (the artifact Deploy ships)
         run: pnpm build
+      # The deploy reads that bundle by path, so assert it is there. Without
+      # this, deleting `environments.ssr` from vite.config.ts would leave
+      # `pnpm build` green while the deploy fails — the shape of the 28 red
+      # deploys behind #67.
+      - name: Assert the deployed Worker bundle exists
+        run: test -f packages/web/dist/ssr/worker.js

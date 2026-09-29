@@ -3,7 +3,6 @@ import { Stage } from 'alchemy'
 import * as Cloudflare from 'alchemy/Cloudflare'
 import * as Config from 'effect/Config'
 import * as Effect from 'effect/Effect'
-import { websiteWorker } from './website.config.mjs'
 
 const PhotoBucket = Cloudflare.R2.Bucket('photo-originals', {
   name: 'photo-elianiva-originals',
@@ -80,27 +79,22 @@ export default Alchemy.Stack(
       sessionDuration: '24h',
     })
 
-    // The website's build contract is shared with `scripts/build-website.mjs`
-    // (`website.config.mjs`) so `pnpm build` gates the artifact `pnpm
-    // infra:deploy` ships, instead of a bundle that is not the one deployed.
+    // The Worker's build is described in `packages/web/vite.config.ts`
+    // (`environments.ssr`): `src/worker.ts` as the entry of the environment
+    // Alchemy treats as the Worker, built to `dist/ssr/worker.js`. A plain
+    // `vite build` of that config builds the same environment, which is what
+    // makes `pnpm build` a gate on the artifact `pnpm infra:deploy` uploads
+    // instead of on a client-only bundle nobody deploys (#67).
     //
-    // `viteEnvironments.entry` names the environment that holds the Worker's
-    // server bundle: the `ssr` one the Foldkit plugin's server side expects. A
-    // different name leaves that environment behind with no build input of its
-    // own, and the build falls back to the root `index.html` as an SSR entry —
-    // invisible to a client-only `vite build`, fatal at deploy time (#65, #67).
-    // `main` is what decides what the Worker exports: `src/worker.ts`, which
-    // renders the Front through `foldkit/experimental/server` itself.
+    // Nothing here names the entry, on purpose: `main` or a `viteEnvironments`
+    // entry would be a second description of that build, and a wrong one is
+    // invisible to `pnpm build` and fatal at deploy time — the shape of the 28
+    // red deploys behind #67.
     class Website extends Cloudflare.Website.Vite<Website>()('photo', {
-      rootDir: websiteWorker.rootDir,
-      main: websiteWorker.main,
-      viteEnvironments: websiteWorker.viteEnvironments,
+      rootDir: 'packages/web',
       assets: { notFoundHandling: 'none' },
       domain: 'photo.elianiva.com',
-      compatibility: {
-        flags: [...websiteWorker.compatibility.flags],
-        date: websiteWorker.compatibility.date,
-      },
+      compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
       dev: { port: 5173, strictPort: true },
       env: {
         PHOTOS: PhotoBucket,
