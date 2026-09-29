@@ -1,6 +1,7 @@
 /**
  * Image metadata extraction (server-side, per the Admin design): width,
- * height, capture date, and camera/lens straight from the uploaded bytes.
+ * height, capture date, camera/lens, and the four EXIF facts the public Exif
+ * line prints, straight from the uploaded bytes.
  *
  * `exifr` and `image-size` are pure JS and Worker-safe — no native deps.
  * Resizing stays with the Cloudflare Images binding at delivery time
@@ -19,7 +20,21 @@ export interface ImageMeta {
   readonly takenAt?: string | undefined
   readonly camera?: string | undefined
   readonly lens?: string | undefined
+  /** f-number, as written on the barrel: 8, 5.6, 1.8. */
+  readonly aperture?: number | undefined
+  /** ExposureTime in seconds, as the file states it: 0.001, 1/60 as 0.0166. */
+  readonly shutter?: number | undefined
+  readonly iso?: number | undefined
+  /** Focal length in millimetres, not the 35mm-equivalent. */
+  readonly focalLength?: number | undefined
 }
+
+/** EXIF coverage in consumer JPEGs is patchy and a stripped tag reads as 0 or
+ *  as a nonsense string. Only a positive finite number is a fact worth storing;
+ *  anything else stays out of the column so the Exif line can omit it rather
+ *  than print `F/0`. */
+const exifNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 
 /** EXIF timestamps → YYYY-MM-DD via the effect DateTime module. */
 const isoDayOf = (input: Date | string): string | undefined => {
@@ -45,7 +60,15 @@ export const extractImageMeta = (bytes: ArrayBuffer): Effect.Effect<ImageMeta, S
     const exif = yield* Effect.tryPromise({
       try: async () => {
         const parsed: Record<string, unknown> | undefined = await exifr.parse(bytes, {
-          pick: ['DateTimeOriginal', 'Model', 'LensModel'],
+          pick: [
+            'DateTimeOriginal',
+            'Model',
+            'LensModel',
+            'FNumber',
+            'ExposureTime',
+            'ISO',
+            'FocalLength',
+          ],
           tiff: true,
           exif: true,
           translateValues: false,
@@ -63,11 +86,20 @@ export const extractImageMeta = (bytes: ArrayBuffer): Effect.Effect<ImageMeta, S
           ? isoDayOf(takenAtRaw)
           : undefined
 
+    const aperture = exifNumber(exif?.['FNumber'])
+    const shutter = exifNumber(exif?.['ExposureTime'])
+    const iso = exifNumber(exif?.['ISO'])
+    const focalLength = exifNumber(exif?.['FocalLength'])
+
     return {
       width: dimensions.width,
       height: dimensions.height,
       ...(takenAt !== undefined && { takenAt }),
       ...(typeof exif?.['Model'] === 'string' && { camera: exif['Model'] }),
       ...(typeof exif?.['LensModel'] === 'string' && { lens: exif['LensModel'] }),
+      ...(aperture !== undefined && { aperture }),
+      ...(shutter !== undefined && { shutter }),
+      ...(iso !== undefined && { iso }),
+      ...(focalLength !== undefined && { focalLength }),
     }
   })

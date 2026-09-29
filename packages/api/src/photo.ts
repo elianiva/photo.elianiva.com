@@ -43,6 +43,11 @@ export interface CreatePhotoInput {
   readonly width: number
   readonly height: number
   readonly takenAt?: string | undefined
+  /** The four EXIF facts extracted from the original's bytes. */
+  readonly aperture?: number | undefined
+  readonly shutter?: number | undefined
+  readonly iso?: number | undefined
+  readonly focalLength?: number | undefined
   readonly metadata: string
   /** Client-encoded placeholder hash; null for legacy uploads. */
   readonly blurhash?: string | undefined
@@ -130,6 +135,11 @@ const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<st
     return map as Map<string, ReadonlyArray<Tag>>
   })
 
+/** One column list for every Photo read, so a column added to `DbPhotoRow`
+ *  cannot be read on one query and missing on another. */
+const PHOTO_COLUMNS =
+  'id, slug, title, r2Key, width, height, takenAt, aperture, shutter, iso, focalLength, metadata, blurhash'
+
 const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTags => ({
   id: row.id,
   slug: row.slug,
@@ -138,6 +148,10 @@ const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): PhotoWithTa
   width: row.width,
   height: row.height,
   takenAt: row.takenAt ?? undefined,
+  aperture: row.aperture,
+  shutter: row.shutter,
+  iso: row.iso,
+  focalLength: row.focalLength,
   metadata: parseMetadataObject(row.metadata),
   blurhash: row.blurhash ?? null,
   tags: [...tags],
@@ -209,7 +223,7 @@ const selectPhotoRows = (
       binds.push(cursor.takenAt ?? '', cursor.takenAt ?? '', cursor.id)
     }
 
-    const sql = `SELECT id, slug, title, r2Key, width, height, takenAt, metadata, blurhash FROM photos${
+    const sql = `SELECT ${PHOTO_COLUMNS} FROM photos${
       where.length ? ` WHERE ${where.join(' AND ')}` : ''
     } ORDER BY COALESCE(takenAt,'') DESC, id DESC LIMIT ?`
     const raw = yield* Effect.tryPromise({
@@ -230,12 +244,7 @@ const getRow = (db: (typeof Gateway.Service)['db'], id: string) =>
   Effect.gen(function* () {
     const raw = yield* Effect.tryPromise({
       try: () =>
-        db
-          .prepare(
-            `SELECT id, slug, title, r2Key, width, height, takenAt, metadata, blurhash FROM photos WHERE id = ?`,
-          )
-          .bind(id)
-          .first<DbPhotoRow>(),
+        db.prepare(`SELECT ${PHOTO_COLUMNS} FROM photos WHERE id = ?`).bind(id).first<DbPhotoRow>(),
       catch: (cause) =>
         new StorageError({ message: `Failed to get photo ${id}`, cause: describeCause(cause) }),
     })
@@ -329,7 +338,7 @@ export const PhotoServiceLive = Layer.effect(
           try: () =>
             db
               .prepare(
-                `INSERT INTO photos (id, slug, title, r2Key, width, height, takenAt, metadata, blurhash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO photos (id, slug, title, r2Key, width, height, takenAt, aperture, shutter, iso, focalLength, metadata, blurhash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               )
               .bind(
                 id,
@@ -339,6 +348,10 @@ export const PhotoServiceLive = Layer.effect(
                 input.width,
                 input.height,
                 input.takenAt ?? null,
+                input.aperture ?? null,
+                input.shutter ?? null,
+                input.iso ?? null,
+                input.focalLength ?? null,
                 input.metadata,
                 input.blurhash ?? null,
               )

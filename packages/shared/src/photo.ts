@@ -28,6 +28,11 @@ export const PhotoMetadata = S.Struct({
 })
 export type PhotoMetadata = typeof PhotoMetadata.Type
 
+/** The four EXIF facts the public Exif line prints. Nullable columns, not
+ *  blob entries: a formatted number is checkable at the boundary. A Photo
+ *  without one omits the segment rather than inventing a value. */
+const ExifColumn = S.optional(S.NullOr(S.Number))
+
 export const PhotoWithTags = S.Struct({
   id: PhotoId,
   slug: S.String,
@@ -36,6 +41,10 @@ export const PhotoWithTags = S.Struct({
   width: S.Number,
   height: S.Number,
   takenAt: S.optional(S.String),
+  aperture: ExifColumn,
+  shutter: ExifColumn,
+  iso: ExifColumn,
+  focalLength: ExifColumn,
   metadata: S.optional(PhotoMetadata),
   /** Client-decoded placeholder source. Absent for Photos uploaded before
    *  blurhash existed — views fall back to a plain background. */
@@ -53,6 +62,10 @@ export const DbPhotoRow = S.Struct({
   width: S.Number,
   height: S.Number,
   takenAt: S.NullOr(S.String),
+  aperture: S.NullOr(S.Number),
+  shutter: S.NullOr(S.Number),
+  iso: S.NullOr(S.Number),
+  focalLength: S.NullOr(S.Number),
   metadata: S.String,
   blurhash: S.NullOr(S.String),
 })
