@@ -11,13 +11,14 @@
 import { Effect, Schema as S } from 'effect'
 import * as Command from 'foldkit/command'
 import { load, pushUrl, back } from 'foldkit/navigation'
-import { PhotoId, PhotoPresentation } from '@photo/shared'
-import type { PhotoWithTags, Tag } from '@photo/shared'
+import { PhotoId, PhotoPresentation, SettingsInput } from '@photo/shared'
+import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
 
 import { apiUrl } from '@/lib/api'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { encodeBlurhash } from '@/lib/blurhash'
 
+import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
 import { DraftFields, GridCols, Message, Storage, abortStore, fileStore } from './model'
 import type { Counts as CountsType, GridCols as GridColsType } from './model'
 
@@ -33,10 +34,9 @@ interface Session {
   readonly teamDomain: string | null
 }
 
-/** The `GetStorageUsage` success, as the wire delivers it. */
-interface StorageUsage extends Storage {
-  readonly photos: number
-}
+/** The sidebar meter's aggregate, whole: the Storage block's frame count and
+ *  the sidebar's byte fraction are the same payload. */
+type StorageUsage = Storage
 
 /** Narrow on purpose: widening this to the whole Message union would leak
  *  every variant into each command's success channel. */
@@ -66,13 +66,13 @@ export const FetchCountsCmd = Command.define('FetchCounts', {
   ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetCounts({})))),
 })
 
-/** The sidebar meter's aggregate. `photos` rides in the same payload and
- *  belongs to the Settings Storage block (#37), so the Model keeps the byte
- *  fraction the sidebar actually draws. */
+/** The Storage meter's aggregate. `photos` rides in the same payload and the
+ *  Storage block (#37) draws it beside the byte total, so the Model keeps the
+ *  whole read rather than the half the sidebar happens to use. */
 export const FetchStorageCmd = Command.define('FetchStorage', {
   messages: [Message.SucceededGetStorage, Message.FailedGetStorage],
-  execute: Effect.map(rpcAdmin<StorageUsage>('GetStorageUsage', {}), ({ bytes, capBytes }) =>
-    Message.SucceededGetStorage({ bytes, capBytes }),
+  execute: Effect.map(rpcAdmin<StorageUsage>('GetStorageUsage', {}), (usage) =>
+    Message.SucceededGetStorage(usage),
   ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetStorage({})))),
 })
 
@@ -164,6 +164,7 @@ export const FetchPhotoCmd = Command.define('FetchPhoto', {
 })
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // the Editor
 // ---------------------------------------------------------------------------
 
@@ -217,6 +218,50 @@ export const UpdateEditorCmd = Command.define('UpdateEditor', {
       }),
       (stored) => Message.UpdatedEditor({ id: PhotoId.make(id), presentation: stored }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+// ---------------------------------------------------------------------------
+// the Settings page
+// ---------------------------------------------------------------------------
+
+/** The Settings singleton. Fetched on entering the route like every other
+ *  route-driven read, and never cached across a navigation: a save elsewhere
+ *  moves `updatedAt`, and a page whose stamp is older than the row behind it is
+ *  claiming something untrue. */
+export const FetchSettingsCmd = Command.define('FetchSettings', {
+  messages: [Message.SucceededGetSettings, Message.FailedGetSettings],
+  execute: Effect.map(rpcAdmin<Settings>('GetSettings', {}), (settings) =>
+    Message.SucceededGetSettings({ settings }),
+  ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetSettings({})))),
+})
+
+/** One save is one call over the whole row. The answer is the stored row, so
+ *  the draft the page keeps afterwards is what the database holds rather than
+ *  what the operator typed. */
+export const SaveSettingsCmd = Command.define('SaveSettings', {
+  args: { input: SettingsInput },
+  messages: [Message.SavedSettings, Message.FailedRpc],
+  execute: ({ input }) =>
+    Effect.map(rpcAdmin<Settings>('UpdateSettings', input), (settings) =>
+      Message.SavedSettings({ settings }),
+    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** The Storage block's CSV index. The rows are the API's, the document is the
+ *  browser's, and the download is a browser fact the Model never has to hold —
+ *  so a 400-row index costs one message with a count rather than 400 rows of
+ *  state. */
+export const ExportCsvIndexCmd = Command.define('ExportCsvIndex', {
+  messages: [Message.ExportedCsvIndex, Message.FailedExportCsvIndex],
+  execute: Effect.gen(function* () {
+    const { items } = yield* rpcAdmin<{ items: ReadonlyArray<PhotoIndexRow> }>('ListPhotoIndex', {})
+    yield* Effect.sync(() => downloadCsv(CSV_INDEX_FILENAME, csvIndex(items)))
+    return Message.ExportedCsvIndex({ photos: items.length })
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.succeed(Message.FailedExportCsvIndex({ message: error.message })),
+    ),
+  ),
 })
 
 // ---------------------------------------------------------------------------

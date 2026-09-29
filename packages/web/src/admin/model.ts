@@ -8,7 +8,16 @@ import { Schema as S } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 import { UrlRequest } from 'foldkit/navigation'
 import { Url } from 'foldkit/url'
-import { PhotoId, PhotoPresentation, PhotoWithTags, Tag, TagId } from '@photo/shared'
+import {
+  PhotoId,
+  PhotoPresentation,
+  PhotoWithTags,
+  RenditionFormat,
+  Settings,
+  Tag,
+  TagId,
+  WatermarkPosition,
+} from '@photo/shared'
 
 import { Multi } from '@foldkit/ui/combobox'
 import * as Dialog from '@/components/ui/dialog'
@@ -19,6 +28,7 @@ import * as Swatch from '@/components/ui/swatch'
 import * as Toast from '@/components/ui/toast'
 
 import { AppRoute } from './route'
+import { SectionEdit, SettingsDraft } from './settings-draft'
 import * as TagManager from './tag-manager'
 
 // ---------------------------------------------------------------------------
@@ -126,10 +136,13 @@ const countsFields = {
 export const Counts = S.Struct(countsFields)
 export type Counts = typeof Counts.Type
 
-/** The sidebar meter's aggregate, from `GetStorageUsage`. Only the byte
- *  fraction is kept: the same payload's Photo count belongs to #37's Storage
- *  block, and carrying it here would be a field the sidebar never reads. */
+/** The sidebar meter's aggregate, from `GetStorageUsage`. `photos` rides in
+ *  the same payload and is drawn by #37's Storage block; the sidebar reads the
+ *  byte fraction and leaves the count to the block that prints it beside the
+ *  byte total. One payload, one Model field, so the frame count the block
+ *  reports and the fraction the meter draws cannot come from two reads. */
 const storageFields = {
+  photos: S.Number,
   bytes: S.Number,
   capBytes: S.Number,
 }
@@ -272,6 +285,18 @@ export const Model = S.Struct({
 
   // toasts
   toast: AdminToast.Model,
+
+  // the Settings page: the singleton as the API read it, and the working copy
+  // the form edits. `settingsDraft` is what every control draws and writes, and
+  // the row beside it is what "unsaved" is measured against — which is why
+  // there is no `dirty` field: it is the two disagreeing, not a flag to forget
+  // to set.
+  settings: S.optional(Settings),
+  settingsStatus: S.Literals(['loading', 'ready', 'error']),
+  settingsDraft: SettingsDraft,
+  settingsSaving: S.Boolean,
+  /** The CSV index is being built and downloaded. */
+  settingsIndexing: S.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -398,6 +423,42 @@ export const Message = defineMessageUnion({
 
   // toasts
   GotToastMessage: { message: AdminToast.Message },
+
+  // the Settings page
+  SucceededGetSettings: { settings: Settings },
+  /** The singleton could not be read. The page says so rather than drawing
+   *  controls over the column defaults and inviting a save that would overwrite
+   *  a row nobody managed to read. */
+  FailedGetSettings: {},
+  RetryFetchSettings: {},
+  /** A number the operator typed or stepped. */
+  SetSettingsNumber: {
+    field: S.Literals(['defaultPreviewLongEdge', 'defaultPreviewQuality', 'defaultFullQuality']),
+    value: S.Number,
+  },
+  /** A free-text column. */
+  SetSettingsText: { field: S.Literals(['copyright', 'motto', 'aboutCopy']), value: S.String },
+  /** One of the two EXIF policies. The watermark's own switch is its own
+   *  message, because it is a different kind of fact about a Rendition. */
+  SetMetadataPolicy: {
+    field: S.Literals(['defaultKeepExif', 'defaultRemoveGps']),
+    isChecked: S.Boolean,
+  },
+  SetPreviewFormat: { value: RenditionFormat },
+  SetWatermarkEnabled: { isChecked: S.Boolean },
+  SetWatermarkColour: { colour: MatColour },
+  SetWatermarkPosition: { value: WatermarkPosition },
+  /** Retention is display-only — nothing purges on a timer — so this is one
+   *  boolean and the page offers no other value. */
+  SetRetention: { forever: S.Boolean },
+  /** The nav repeater, as the one edit union `applySectionEdit` reduces. */
+  EditedSection: { edit: SectionEdit },
+  SaveSettings: {},
+  SavedSettings: { settings: Settings },
+  DiscardSettings: {},
+  ExportCsvIndex: {},
+  ExportedCsvIndex: { photos: S.Number },
+  FailedExportCsvIndex: { message: S.String },
 
   // routing — the runtime's own variants. `ClickedLink` is a clicked plain
   // anchor, `ChangedUrl` a popstate or a navigation the runtime performed.

@@ -160,7 +160,16 @@ describe('a cold load', () => {
 
   it('fetches the shell but no list on a cold load of a route with no data behind it yet', () => {
     expect(commandNames(init(at('/admin/drafts')).commands)).toEqual(SHELL_READS)
-    expect(commandNames(init(at('/admin/settings')).commands)).toEqual(SHELL_READS)
+    expect(commandNames(init(at('/admin/photos/abc/edit')).commands)).toEqual(SHELL_READS)
+  })
+
+  it('fetches the shell and the singleton on a cold load of the Settings page', () => {
+    // Settings is the one route that is neither the Library's list nor a Photo:
+    // it is a form over a row, and a form over a row needs that row.
+    expect(commandNames(init(at('/admin/settings')).commands)).toEqual([
+      ...SHELL_READS,
+      'FetchSettings',
+    ])
   })
 
   it('fetches the shell but no list on a URL no route names, and lands on NotFound', () => {

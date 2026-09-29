@@ -27,6 +27,7 @@ import {
 } from '../photo'
 import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
 import { AdminSession, type AdminSessionValue } from '../session'
+import { SettingsServiceLive, type SettingsService } from '../settings'
 import { TagServiceLive, type TagService } from '../tag'
 import { createPhoto, createTag, setPhotoStatus, trashPhoto } from './fixtures'
 import { makeTestHarness, type TestHarness } from './harness'
@@ -38,9 +39,18 @@ import { makeTestHarness, type TestHarness } from './harness'
  */
 const stackOver = <ROut>(
   harness: TestHarness,
-  handlers: Layer.Layer<ROut, never, PhotoService | PublicPhotoService | TagService>,
+  handlers: Layer.Layer<
+    ROut,
+    never,
+    PhotoService | PublicPhotoService | SettingsService | TagService
+  >,
 ) => {
-  const services = Layer.mergeAll(PhotoServiceLive, PublicPhotoServiceLive, TagServiceLive)
+  const services = Layer.mergeAll(
+    PhotoServiceLive,
+    PublicPhotoServiceLive,
+    SettingsServiceLive,
+    TagServiceLive,
+  )
   return Layer.mergeAll(services, Layer.provide(handlers, services)).pipe(
     Layer.provide(Layer.succeed(Gateway, harness.gateway)),
   )

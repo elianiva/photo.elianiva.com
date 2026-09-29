@@ -11,6 +11,7 @@ import {
   MatColour,
   MatStyle,
   PHOTO_STATUSES,
+  PhotoIndexRow,
   PhotoNotFound,
   PhotoPresentation,
   RenditionFormat,
@@ -19,7 +20,7 @@ import {
   TagId,
   describeCause,
   nearestRatio,
-  type PhotoRatio,
+  PhotoRatio,
   type PhotoStatus,
   type PhotoWithTags,
   type Tag,
@@ -183,6 +184,9 @@ export interface PhotoServiceContract {
   readonly purge: (id: string) => Effect.Effect<void, StorageError | PhotoNotFound | InvalidInput>
   /** Per Status, per Tag, grand total and trashed total, in one read. */
   readonly counts: () => Effect.Effect<PhotoCounts, StorageError>
+  /** Every live Photo as the Storage block's CSV index reads it: Photo Number
+   *  order, tags resolved, place out of the metadata blob. */
+  readonly index: () => Effect.Effect<ReadonlyArray<PhotoIndexRow>, StorageError>
   /** The load-bearing aggregate: the frame count and byte total behind the
    *  sidebar meter, the Archive bar and the SIZE column. */
   readonly storageUsage: () => Effect.Effect<StorageUsage, StorageError>
@@ -804,6 +808,24 @@ const COUNTS_SQL = `
    GROUP BY t.id, t.label
    ORDER BY t.label`
 
+/** The row the CSV index reads, plus the two columns it needs but does not
+ *  name: `id` keys the tag join, and the place is in the metadata blob. */
+interface DbPhotoIndexRow {
+  readonly id: string
+  readonly number: number | null
+  readonly title: string
+  readonly slug: string
+  readonly ratio: string | null
+  readonly takenAt: string | null
+  readonly bytes: number | null
+  readonly metadata: string | null
+}
+
+/** Photo Number is the site's serial, so the index is a serial-ordered list and
+ *  a Photo nobody numbered sorts last rather than first. `id` closes the order
+ *  the way it closes every other sort here. */
+const INDEX_ORDER = '(number IS NULL) ASC, number ASC, id ASC'
+
 /** Every Status is present even with no Photos in it: a count of 0 is what the
  *  Filter Bar's segments are for, and an absent key would be a missing fact. */
 const NO_STATUSES: Record<PhotoStatus, number> = { draft: 0, published: 0, failed: 0 }
@@ -1065,6 +1087,42 @@ export const PhotoServiceLive = Layer.effect(
         return { total, trashed, byStatus, byTag }
       })
 
+    const index: PhotoServiceContract['index'] = () =>
+      Effect.gen(function* () {
+        const raw = yield* Effect.tryPromise({
+          try: () =>
+            db
+              .prepare(
+                `SELECT id, number, title, slug, ratio, takenAt, bytes, metadata
+                   FROM photos WHERE ${LIVE} ORDER BY ${INDEX_ORDER}`,
+              )
+              .all<DbPhotoIndexRow>(),
+          catch: (cause) =>
+            new StorageError({
+              message: 'Failed to read the photo index',
+              cause: describeCause(cause),
+            }),
+        })
+        const rows = raw.results ?? []
+        const tagMap = yield* tagsForPhotos(
+          db,
+          rows.map((row) => row.id),
+        )
+        return rows.map((row) => {
+          const location = parseMetadataObject(row.metadata)?.['location']
+          return {
+            number: row.number,
+            title: row.title,
+            slug: row.slug,
+            ratio: row.ratio === null ? null : S.decodeUnknownSync(PhotoRatio)(row.ratio),
+            takenAt: row.takenAt,
+            place: typeof location === 'string' ? location : null,
+            tags: (tagMap.get(row.id) ?? []).map((tag) => tag.label),
+            bytes: row.bytes,
+          }
+        })
+      })
+
     const storageUsage: PhotoServiceContract['storageUsage'] = () =>
       Effect.tryPromise({
         try: () =>
@@ -1183,6 +1241,7 @@ export const PhotoServiceLive = Layer.effect(
       restore,
       purge,
       counts,
+      index,
       storageUsage,
       presentation,
       setPresentation,

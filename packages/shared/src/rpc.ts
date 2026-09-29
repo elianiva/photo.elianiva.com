@@ -12,7 +12,7 @@ import {
   Tag,
   TagId,
 } from './photo'
-import { SiteSection } from './settings'
+import { PhotoIndexRow, Settings, SettingsInput, SiteSection } from './settings'
 
 // ---------------------------------------------------------------------------
 // Shared domain errors — part of the RPC contract so both sides typecheck
@@ -430,6 +430,35 @@ export class UpdateTag extends Rpc.make('UpdateTag', {
   error: S.Union([InvalidInput, StorageError]),
 }) {}
 
+/** The Settings singleton, whole. The Desk's Settings page has no rows and no
+ *  counts: it draws one form over one row, and this is that row as the wire
+ *  sees it. */
+export class GetSettings extends Rpc.make('GetSettings', {
+  payload: {},
+  success: Settings,
+  error: S.Union([InvalidInput, StorageError]),
+}) {}
+
+/** One save is one call, because the row is a singleton: a half-saved Settings
+ *  page is not a state anyone can describe. The answer is the stored row rather
+ *  than the request echoed back, the way `setPresentation` answers, so a client
+ *  never has to guess what the write actually kept. */
+export class UpdateSettings extends Rpc.make('UpdateSettings', {
+  payload: SettingsInput,
+  success: Settings,
+  error: S.Union([InvalidInput, StorageError]),
+}) {}
+
+/** Every non-trashed Photo as the Storage block's CSV index names it, in Photo
+ *  Number order. The rows, not the document: the quoting, the header and the
+ *  download are the page's business, and a column added to the index then costs
+ *  one schema rather than a migration. */
+export class ListPhotoIndex extends Rpc.make('ListPhotoIndex', {
+  payload: {},
+  success: S.Struct({ items: S.Array(PhotoIndexRow) }),
+  error: S.Union([InvalidInput, StorageError]),
+}) {}
+
 export const PhotoAdminRpcs = RpcGroup.make(
   GetPhoto,
   GetPhotoPresentation,
@@ -450,4 +479,7 @@ export const PhotoAdminRpcs = RpcGroup.make(
   BulkRemoveTags,
   AddBorderToPhotos,
   UpdateTag,
+  GetSettings,
+  UpdateSettings,
+  ListPhotoIndex,
 )

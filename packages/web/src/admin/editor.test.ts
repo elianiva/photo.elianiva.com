@@ -97,7 +97,7 @@ const shellReads: ReadonlyArray<Message> = [
     byStatus: { draft: 7, published: 402, failed: 1 },
     byTag: [],
   }),
-  Message.SucceededGetStorage({ bytes: 0, capBytes: 0 }),
+  Message.SucceededGetStorage({ photos: 0, bytes: 0, capBytes: 0 }),
 ]
 
 const foldIn = (model: Model, messages: ReadonlyArray<Message>): Model =>

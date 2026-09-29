@@ -82,7 +82,14 @@ export default Alchemy.Stack(
     class Website extends Cloudflare.Website.Vite<Website>()('photo', {
       rootDir: 'packages/web',
       main: 'src/worker.ts',
-      viteEnvironments: { entry: 'worker' },
+      viteEnvironments: { entry: 'ssr' },
+      // The Worker runs in the `ssr` entry environment, which is the one the
+      // foldkit plugin's server build already claims. A `worker` entry left that
+      // environment behind with no build input of its own, so the app build
+      // fell back to the root `index.html` as an SSR entry and every `master`
+      // deploy has died on that since the foldkit 0.163 bump. `main` is what
+      // decides what the Worker exports: `src/worker.ts`, which renders the
+      // Front through `foldkit/experimental/server` itself.
       assets: { notFoundHandling: 'none' },
       domain: 'photo.elianiva.com',
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
