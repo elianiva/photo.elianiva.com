@@ -12,15 +12,23 @@ import type { HtmlBuilder } from 'foldkit/html'
 import * as Button from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
 
-import { Message as M } from '../model'
+import { Message as M, libraryFiltersOfModel } from '../model'
 import type { Model, Msg } from '../model'
 import type { Child } from './shared'
 
-/** Whether anything narrows the list. #26 owns the whole filter state and the
- *  URL it will live in; the two filters the Admin has today are the sidebar's
- *  Tags and the Page Head's search. */
-export const libraryHasFilter = (model: Model): boolean =>
-  model.activeTagIds.length > 0 || model.searchQuery.trim() !== ''
+/** Whether anything narrows the list. The sidebar's Tag set and the Page
+ *  Head's committed search are two of them; the Filter Bar's Status and Ratio
+ *  are the rest. Sort is not here: it orders the list rather than selecting
+ *  none of it, so it cannot be why a row is missing. */
+export const libraryHasFilter = (model: Model): boolean => {
+  const filters = libraryFiltersOfModel(model)
+  return (
+    filters.status !== 'all' ||
+    filters.ratio !== 'any' ||
+    filters.tagIds.length > 0 ||
+    filters.q.trim() !== ''
+  )
+}
 
 /** A Library with no Photographs at all: nothing narrows the list and the
  *  filtered total — which, with no filter, *is* the Library — is zero. Not the

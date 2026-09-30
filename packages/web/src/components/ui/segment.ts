@@ -17,7 +17,7 @@
  * rather than being declared here.
  */
 import { Schema as S } from 'effect'
-import type { Html } from 'foldkit/html'
+import type { Html, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineView } from 'foldkit/submodel'
 import * as Update from 'foldkit/update'
@@ -77,9 +77,9 @@ export const writeGroup = (groups: Groups, id: string, next: Model): Groups => (
 // view
 // ---------------------------------------------------------------------------
 
-export interface SegmentOption {
+export interface SegmentOption<V extends string = string> {
   /** The value the parent acts on — a Ratio, a status, a mat style. */
-  value: string
+  value: V
   /** What the option prints. A filter prints its count (`ALL 412`); a mat
    *  style prints its name. */
   label: string
@@ -108,8 +108,8 @@ const optionClasses = (isSelected: boolean): string =>
       : 'text-role-text-secondary hover:text-role-text-primary',
   )
 
-export interface ViewInputs {
-  options: ReadonlyArray<SegmentOption>
+export interface ViewInputs<V extends string = string> {
+  options: ReadonlyArray<SegmentOption<V>>
   /** Names the group for assistive technology — `RATIO`, `FORMAT`, `Status`. */
   ariaLabel: string
   /** Which 1px box the group wears. Defaults to `outline`. */
@@ -118,27 +118,52 @@ export interface ViewInputs {
   optionClass?: string
 }
 
-/** One single-select group. */
-export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): Html =>
+/** Everything one group draws, plus the pick it is showing. The submodel's
+ *  `ViewInputs` carry no selection because the child Model owns it; the
+ *  stateless group below takes it, for a caller that owns it instead (the
+ *  Library's filters, whose answer the URL carries). */
+export interface GroupInputs<V extends string = string> extends ViewInputs<V> {
+  selected: V
+  /** The group's slot id, when it has one. */
+  id?: string
+}
+
+/** One group of buttons, with the selection passed in rather than owned.
+ *  `view` delegates here, so the stateful and stateless callers draw the same
+ *  thing. The value type is the option set's own, so a pick arrives typed as
+ *  the union the caller declared rather than as a bare string. */
+export const segmentGroup = <M, V extends string>(
+  inputs: GroupInputs<V>,
+  onPick: (value: V) => M,
+  h: HtmlBuilder<M>,
+): Html =>
   h.div(
     [
       h.Role('group'),
       h.AriaLabel(inputs.ariaLabel),
       h.Class(cn(segmentGroupClass, frameClasses[inputs.frame ?? 'outline'], inputs.className)),
       h.DataAttribute('slot', 'segment'),
-      h.DataAttribute('id', model.id),
+      ...(inputs.id === undefined ? [] : [h.DataAttribute('id', inputs.id)]),
     ],
     inputs.options.map((option) =>
       h.button(
         [
           h.Key(option.value),
           h.Type('button'),
-          h.AriaPressed(String(option.value === model.selected)),
-          h.OnClick(Message.Picked({ value: option.value })),
-          h.Class(cn(optionClasses(option.value === model.selected), inputs.optionClass)),
+          h.AriaPressed(String(option.value === inputs.selected)),
+          h.OnClick(onPick(option.value)),
+          h.Class(cn(optionClasses(option.value === inputs.selected), inputs.optionClass)),
         ],
         [option.label],
       ),
     ),
+  )
+
+/** One single-select group that owns its own selection. */
+export const view = defineView<Model, Message, ViewInputs>((model, inputs, h): Html =>
+  segmentGroup(
+    { ...inputs, selected: model.selected, id: model.id },
+    (value) => Message.Picked({ value }),
+    h,
   ),
 )

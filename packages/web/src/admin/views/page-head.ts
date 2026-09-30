@@ -77,8 +77,7 @@ export const pageHeadOf = (model: Model): PageHead =>
 /** The search field, inside a form so Enter submits and the browser wires the
  *  label for free. The keycap is the shortcut this document owns, and it is
  *  the one the `subscriptions` listener answers to. The form carries a slot so
- *  a submit can name it: the Library page holds the TagManager's own create
- *  form and the upload dialog holds another. */
+ *  a submit can name it: the search form is the page's own. */
 const searchField = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.form(
     [

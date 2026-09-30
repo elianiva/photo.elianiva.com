@@ -398,6 +398,8 @@ export const libraryTable = (model: Model, h: HtmlBuilder<Msg>): Child => {
                   {
                     selection: headSelection(model),
                     sortedBy: 'taken',
+                    sortDirection: model.sortFilter === 'oldest' ? 'asc' : 'desc',
+                    onToggleSort: M.ToggledSort(),
                   },
                   h,
                 ),

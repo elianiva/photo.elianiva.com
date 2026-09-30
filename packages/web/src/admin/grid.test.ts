@@ -20,6 +20,7 @@ import type { PhotoWithTags, Tag } from '@photo/shared'
 import { NavigateCmd, ReplaceUrlCmd } from './commands'
 import { Message } from './model'
 import type { Model } from './model'
+import { defaultLibraryFilters, libraryRoute } from './route'
 import { init, update } from './update'
 import { view } from './view'
 
@@ -83,13 +84,13 @@ const cold = (view: 'list' | 'grid'): Model => {
 describe('the Library view toggle', () => {
   it('writes the route and replaces the URL, so the view is URL state', () => {
     const grid = update(cold('list'), Message.SelectedView({ view: 'grid' }))
-    expect(grid.model.route).toEqual({ _tag: 'Library', view: Option.some('grid') })
+    expect(grid.model.route).toEqual(libraryRoute({ ...defaultLibraryFilters, view: 'grid' }))
     expect(grid.commands?.map((command) => ({ name: command.name, args: command.args }))).toEqual([
       { name: 'ReplaceUrl', args: { url: '/admin?view=grid' } },
     ])
 
     const list = update(cold('grid'), Message.SelectedView({ view: 'list' }))
-    expect(list.model.route).toEqual({ _tag: 'Library', view: Option.none() })
+    expect(list.model.route).toEqual(libraryRoute())
     // The default view is named by omission, so a bare `/admin` is the list.
     expect(list.commands?.[0]?.args).toEqual({ url: '/admin' })
   })

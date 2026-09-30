@@ -28,6 +28,7 @@ import {
   DeleteTagCmd,
   ExportCsvIndexCmd,
   FetchCountsCmd,
+  FetchLibraryPageCmd,
   FetchPhotoCmd,
   FetchPhotosCmd,
   FetchPresentationCmd,
@@ -43,6 +44,7 @@ import {
   SetRowStatusCmd,
   UpdateEditorCmd,
   UploadItemCmd,
+  listArgsOf,
   readStoredCols,
 } from './commands'
 import {
@@ -70,10 +72,19 @@ import {
   type Commands,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, BULK_BORDER_MAT, abortStore, Message } from './model'
+import { AdminToast, BULK_BORDER_MAT, abortStore, libraryFiltersOfModel, Message } from './model'
 import type { LibraryPage, Message as Msg, Model } from './model'
-import { appRouteToUrl, isAdminPath, libraryRoute, urlToAppRoute } from './route'
-import type { AppRoute } from './route'
+import {
+  appRouteToUrl,
+  isAdminPath,
+  libraryFiltersOf,
+  libraryRoute,
+  libraryUrl,
+  sameLibraryFilterSet,
+  sameLibraryFilters,
+  urlToAppRoute,
+} from './route'
+import type { AppRoute, LibraryFilters } from './route'
 import {
   editorReturnUrl,
   initEditorSegments,
@@ -89,7 +100,6 @@ import {
   toSettingsDraft,
   type SettingsDraft,
 } from './settings-draft'
-import * as TagManager from './tag-manager'
 import { initAtomsState, initSheetSegments, specimenRowIndexes } from './atoms-sheet'
 
 // ---------------------------------------------------------------------------
@@ -107,53 +117,59 @@ export type AdminTransition = Transition.Transition<AppRoute>
 // init
 // ---------------------------------------------------------------------------
 
-const initialModel = (route: AppRoute): Model => ({
-  route,
-  status: 'loading',
-  photos: [],
-  tags: [],
-  nextCursor: null,
-  loadingMore: false,
-  session: { status: 'loading', email: null, teamDomain: null },
-  counts: { total: 0, trashed: 0, byStatus: { draft: 0, published: 0, failed: 0 }, byTag: [] },
-  storage: { photos: 0, bytes: 0, capBytes: 0 },
-  searchQuery: '',
-  activeTagIds: [],
-  cols: readStoredCols(),
-  segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
-  atoms: initAtomsState(),
-  photoStatus: 'loading',
-  editor: initEditorState(),
-  // filter bar (chips + inline create)
-  tagManager: TagManager.init({ id: 'admin-tag-manager' }),
+const initialModel = (route: AppRoute): Model => {
+  const filters = libraryFiltersOf(route)
+  return {
+    route,
+    status: 'loading',
+    photos: [],
+    tags: [],
+    nextCursor: null,
+    loadingMore: false,
+    session: { status: 'loading', email: null, teamDomain: null },
+    counts: { total: 0, trashed: 0, byStatus: { draft: 0, published: 0, failed: 0 }, byTag: [] },
+    storage: { photos: 0, bytes: 0, capBytes: 0 },
+    searchQuery: filters.q,
+    // The committed search, which is the URL's `q` as of the last load.
+    appliedQuery: filters.q,
+    statusFilter: filters.status,
+    ratioFilter: filters.ratio,
+    sortFilter: filters.sort,
+    activeTagIds: [...filters.tagIds],
+    cols: readStoredCols(),
+    segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
+    atoms: initAtomsState(),
+    photoStatus: 'loading',
+    editor: initEditorState(),
 
-  tagActions: Dialog.init({ id: 'admin-tag-actions' }),
-  tagActionLabel: '',
+    tagActions: Dialog.init({ id: 'admin-tag-actions' }),
+    tagActionLabel: '',
 
-  uploadDialog: Dialog.init({ id: 'admin-upload-dialog' }),
-  fileDrop: FileDrop.init({ id: 'admin-file-drop' }),
-  queue: [],
-  batchTotal: 0,
-  uploadTagIds: [],
-  uploadCombo: Multi.init({ id: 'admin-upload-combo' }),
-  uploadTakenAt: '',
-  uploading: false,
-  confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
-  toast: AdminToast.init({ id: 'admin-toasts' }),
-  settings: undefined,
-  settingsStatus: 'loading',
-  settingsDraft: emptySettingsDraft,
-  settingsSaving: false,
-  settingsIndexing: false,
+    uploadDialog: Dialog.init({ id: 'admin-upload-dialog' }),
+    fileDrop: FileDrop.init({ id: 'admin-file-drop' }),
+    queue: [],
+    batchTotal: 0,
+    uploadTagIds: [],
+    uploadCombo: Multi.init({ id: 'admin-upload-combo' }),
+    uploadTakenAt: '',
+    uploading: false,
+    confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
+    toast: AdminToast.init({ id: 'admin-toasts' }),
+    settings: undefined,
+    settingsStatus: 'loading',
+    settingsDraft: emptySettingsDraft,
+    settingsSaving: false,
+    settingsIndexing: false,
 
-  selected: [],
-  libraryPage: 0,
-  libraryCursors: [''],
-  libraryTotal: 0,
-  rowMenu: Dialog.init({ id: 'admin-row-menu' }),
-  addTagDialog: Dialog.init({ id: 'admin-add-tag-dialog' }),
-  addTagIds: [],
-})
+    selected: [],
+    libraryPage: filters.page,
+    libraryCursors: [''],
+    libraryTotal: 0,
+    rowMenu: Dialog.init({ id: 'admin-row-menu' }),
+    addTagDialog: Dialog.init({ id: 'admin-add-tag-dialog' }),
+    addTagIds: [],
+  }
+}
 
 /** Every route-driven command, in one place, so the two paths that resolve a
  *  URL into a route cannot disagree: `init` calls this with the cold-load
@@ -165,12 +181,8 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   // session can expire between two pages, and a count is a fact about the
   // moment it was read, not about the moment the Admin booted.
   const shellCommands: Commands = [FetchSessionCmd(), FetchCountsCmd(), FetchStorageCmd()]
-  // Entering the Library loads it; staying within it (a reload, a back button)
-  // does not re-read what is already in the Model.
   const enteringLibrary = Transition.isEntering(transition, 'Library')
-  const libraryCommands: Commands = enteringLibrary
-    ? [FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery }), FetchTagsCmd()]
-    : []
+  const nextRoute = transition.nextRoute
   // The Settings page is a form over a row, and a form over a row is only
   // truthful if the row behind it is current. Fetched on entering, never
   // cached across a navigation, exactly like the Library's first page.
@@ -215,20 +227,78 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
         },
       })
     : model
+  // The Library is loaded from the route's own filter, on every genuine route
+  // change: a cold load, a click and a Back/Forward press all arrive here. A
+  // filter change that only moved the URL is caught in `ChangedUrl` and never
+  // reaches this, so this is the one place a page read is issued from a route.
+  //
   // The table's paging and selection are claims about the rows being looked at.
-  // Entering the Library from another route starts at page one with nothing
-  // ticked: a selection carried in from the Trash names rows this table is not
-  // showing, and applying it to whatever loads would be a bulk operation the
-  // operator never chose.
-  const next = enteringLibrary
-    ? modifyFields(withPhoto, {
-        libraryPage: () => 0,
-        libraryCursors: () => [''],
-        selected: () => [],
-      })
-    : withPhoto
+  // A filter change replaces those rows, so the selection goes with them and
+  // the page number starts over; a page move keeps both, which is why the
+  // cursors only reset when the filter set itself changed.
+  let next = withPhoto
+  const libraryCommands: Array<Commands[number]> = []
+  if (nextRoute._tag === 'Library') {
+    const filters = libraryFiltersOf(nextRoute)
+    const previous = Option.getOrUndefined(Transition.stayed(transition, 'Library'))?.previousRoute
+    const previousFilters = previous === undefined ? undefined : libraryFiltersOf(previous)
+    const filterSetChanged =
+      previousFilters === undefined || !sameLibraryFilterSet(filters, previousFilters)
+    // A Back press to the page the Model already holds needs no re-read; a page
+    // the Model has never seen does.
+    const pageChanged = previousFilters !== undefined && previousFilters.page !== filters.page
+    next = withLibraryFilters(withPhoto, filters, filterSetChanged)
+    if (filterSetChanged) {
+      next = modifyFields(next, { selected: () => [], libraryCursors: () => [''] })
+    }
+    if (filterSetChanged || pageChanged) {
+      if (filters.status === 'scheduled') {
+        // The segment selects drafts flagged for a publication nothing records:
+        // there is no query to send, and the honest answer is no rows.
+        next = modifyFields(next, {
+          photos: () => [],
+          nextCursor: () => null,
+          libraryTotal: () => 0,
+          loadingMore: () => false,
+          status: () => 'ready',
+          error: () => undefined,
+        })
+      } else {
+        libraryCommands.push(...libraryLoadCommand(next, filters))
+      }
+    }
+    if (enteringLibrary) libraryCommands.push(FetchTagsCmd())
+  }
   const commands = [...shellCommands, ...libraryCommands, ...settingsCommands, ...photoCommands]
   return commands.length > 0 ? { model: next, commands } : { model: next }
+}
+
+/** The filter as the Model holds it, for a route that carries it. `resetCursors`
+ *  is true when the filter set changed: the old cursors are positions under a
+ *  query that no longer applies. */
+const withLibraryFilters = (model: Model, filters: LibraryFilters, resetCursors: boolean): Model =>
+  modifyFields(model, {
+    statusFilter: () => filters.status,
+    ratioFilter: () => filters.ratio,
+    sortFilter: () => filters.sort,
+    appliedQuery: () => filters.q,
+    searchQuery: () => filters.q,
+    activeTagIds: () => [...filters.tagIds],
+    libraryPage: () => filters.page,
+    ...(resetCursors ? { libraryCursors: () => [''] } : {}),
+  })
+
+/** The read a Library route needs. The page the URL names is fetched with a
+ *  cursor the Model already holds when it can be — an in-session page step and
+ *  a Back press to a visited page both have one — and by walking the keyset
+ *  when it cannot, which is a cold load that deep-linked into a page. */
+const libraryLoadCommand = (model: Model, filters: LibraryFilters): Commands => {
+  const args = listArgsOf(filters)
+  const cursor = model.libraryCursors[filters.page]
+  if (cursor === undefined) return [FetchLibraryPageCmd({ ...args, page: filters.page })]
+  // The first page has no cursor to name, and naming an empty one would put a
+  // key in the request that means nothing.
+  return cursor === '' ? [FetchPhotosCmd(args)] : [FetchPhotosCmd({ ...args, cursor })]
 }
 
 export const init: Runtime.RoutingApplicationInit<Model, Message> = (url: Url) => {
@@ -328,10 +398,10 @@ const markItem = (
 
 /** Where the table is reading, as the args every refresh-after-a-write takes.
  *  Read from the Model at dispatch, so a command can never refetch page one by
- *  accident while the operator is looking at page three. */
+ *  accident while the operator is looking at page three, nor drop a filter the
+ *  operator put on. */
 const currentPage = (model: Model) => ({
-  tagIds: [...model.activeTagIds],
-  q: model.searchQuery,
+  ...listArgsOf(libraryFiltersOfModel(model)),
   cursor: model.libraryCursors[model.libraryPage] ?? '',
 })
 
@@ -381,23 +451,73 @@ function step(current: Model, message: Msg, prior: Commands = []): UpdateReturn 
   return commands.length > 0 ? { model: result.model, commands } : { model: result.model }
 }
 
-/** Add or remove one Tag from the multi-select filter: refetch the first page
- *  through the surviving ids and forget a selection the filtered list can no
- *  longer back. Shared by the sidebar rows and the TagManager bar's chips,
- *  which are the same filter in two places. */
-const toggleTagFilter = (model: Model, id: string): UpdateReturn => {
-  const next = toggleIn(model.activeTagIds, id)
-  return {
-    model: clearSelection(modifyFields(model, { activeTagIds: () => next })),
-    commands: [FetchPhotosCmd({ tagIds: [...next], q: model.searchQuery })],
+/** The one shape every Library filter change takes: the Model holds the new
+ *  filter, the address bar is replaced (never pushed — a filter is not a
+ *  destination the back button should walk through), and the rows are re-read
+ *  unless the change is only a view. `refetchRows` is false for the list/grid
+ *  toggle, whose rows are exactly the rows already on screen. */
+const libraryFilterChange = (
+  model: Model,
+  filters: LibraryFilters,
+  refetchRows: boolean,
+): UpdateReturn => {
+  const emptied =
+    filters.status === 'scheduled'
+      ? modifyFields(clearSelection(model), {
+          photos: () => [],
+          nextCursor: () => null,
+          libraryTotal: () => 0,
+          loadingMore: () => false,
+          status: () => 'ready',
+          error: () => undefined,
+        })
+      : clearSelection(model)
+  const next = modifyFields(emptied, {
+    statusFilter: () => filters.status,
+    ratioFilter: () => filters.ratio,
+    sortFilter: () => filters.sort,
+    appliedQuery: () => filters.q,
+    activeTagIds: () => [...filters.tagIds],
+    libraryPage: () => 0,
+    libraryCursors: () => [''],
+  })
+  const commands: Array<Commands[number]> = [ReplaceUrlCmd({ url: libraryUrl(filters) })]
+  // On the Library the rows are re-read here; on any other route the tag row
+  // is a way in, and the navigation's own load (via `ChangedUrl`) reads them.
+  const onLibrary = model.route._tag === 'Library'
+  if (refetchRows && onLibrary && filters.status !== 'scheduled') {
+    commands.unshift(FetchPhotosCmd(listArgsOf(filters)))
   }
+  return { model: next, commands }
 }
+
+/** Add or remove one Tag from the multi-select filter: refetch the first page
+ *  through the surviving ids and drop a selection the filtered list can no
+ *  longer back. */
+const toggleTagFilter = (model: Model, id: string): UpdateReturn =>
+  libraryFilterChange(
+    model,
+    { ...libraryFiltersOfModel(model), tagIds: toggleIn(model.activeTagIds, id), page: 0 },
+    true,
+  )
 
 const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     // ----- data ---------------------------------------------------------------
     SucceededFetchPhotos: ({ photos, nextCursor, total }) => ({
       model: modifyFields(model, {
+        photos: () => [...photos],
+        nextCursor: () => nextCursor ?? null,
+        libraryTotal: () => total,
+        loadingMore: () => false,
+        status: () => 'ready',
+        error: () => undefined,
+      }),
+    }),
+    SucceededFetchLibraryPage: ({ page, cursors, photos, nextCursor, total }) => ({
+      model: modifyFields(model, {
+        libraryPage: () => page,
+        libraryCursors: () => [...cursors],
         photos: () => [...photos],
         nextCursor: () => nextCursor ?? null,
         libraryTotal: () => total,
@@ -463,18 +583,49 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     FailedGetStorage: () => ({ model }),
 
     // ----- filter bar -----------------------------------------------------------
-    RetryFetch: () => ({
-      model,
-      commands: [FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery })],
-    }),
+    RetryFetch: () => {
+      const filters = libraryFiltersOfModel(model)
+      return filters.status === 'scheduled'
+        ? { model }
+        : { model, commands: libraryLoadCommand(model, filters) }
+    },
     ToggledTagFilter: ({ id }) => toggleTagFilter(model, id),
+    SelectedStatusFilter: ({ value }) =>
+      libraryFilterChange(model, { ...libraryFiltersOfModel(model), status: value, page: 0 }, true),
+    SelectedRatioFilter: ({ value }) =>
+      libraryFilterChange(model, { ...libraryFiltersOfModel(model), ratio: value, page: 0 }, true),
+    SelectedSortFilter: ({ value }) =>
+      libraryFilterChange(model, { ...libraryFiltersOfModel(model), sort: value, page: 0 }, true),
+    // The Table Head's `TAKEN` and the SORT select are one fact in two places.
+    ToggledSort: () =>
+      libraryFilterChange(
+        model,
+        {
+          ...libraryFiltersOfModel(model),
+          sort: model.sortFilter === 'newest' ? 'oldest' : 'newest',
+          page: 0,
+        },
+        true,
+      ),
+    // A view is not a query: the rows are the rows already on screen, so this
+    // replaces the URL and moves nothing else. The rest of the filter rides in
+    // the new route, so switching to the grid on a filtered Library keeps it.
+    SelectedView: ({ view }) => {
+      const nextRoute = libraryRoute({ ...libraryFiltersOfModel(model), view })
+      return {
+        model: modifyFields(model, { route: () => nextRoute }),
+        commands: [ReplaceUrlCmd({ url: appRouteToUrl(nextRoute) })],
+      }
+    },
 
     // ----- the Page Head's search -----------------------------------------------
     SetSearchQuery: ({ value }) => ({ model: modifyFields(model, { searchQuery: () => value }) }),
-    SubmittedSearch: () => ({
-      model: clearSelection(modifyFields(model, { status: () => 'loading' })),
-      commands: [FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery.trim() })],
-    }),
+    SubmittedSearch: () =>
+      libraryFilterChange(
+        model,
+        { ...libraryFiltersOfModel(model), q: model.searchQuery.trim(), page: 0 },
+        true,
+      ),
 
     // ----- the sidebar's per-tag actions -----------------------------------------
     OpenedTagActions: ({ id }) => {
@@ -501,22 +652,11 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       return transition(model, Message.CreateTagRequested({ source: 'sidebar', label }))
     },
 
-    // ----- grid density and view ---------------------------------------------------
+    // ----- grid density -----------------------------------------------------------
     SelectedCols: ({ cols }) => ({
       model: modifyFields(model, { cols: () => cols }),
       commands: [PersistColsCmd({ cols })],
     }),
-    // The route is the state, so this writes the route and replaces the URL in
-    // the same step; `ChangedUrl` reads it back through the one route table.
-    // `replaceUrl` rather than `pushUrl` (#26's rule): the back button must not
-    // walk through every view the operator clicked through.
-    SelectedView: ({ view }) => {
-      const nextRoute = libraryRoute(view)
-      return {
-        model: modifyFields(model, { route: () => nextRoute }),
-        commands: [ReplaceUrlCmd({ url: appRouteToUrl(nextRoute) })],
-      }
-    },
     CompletedPersistCols: () => ({ model }),
 
     // ----- the atoms sheet -------------------------------------------------------
@@ -740,14 +880,17 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       })
       const command =
         pending.kind === 'photo'
-          ? DeletePhotoCmd({ id: pending.id })
+          ? DeletePhotoCmd({ id: pending.id, page: currentPage(model) })
           : pending.kind === 'bulk'
             ? BulkTrashCmd({ ids: selectedIds(model), page: currentPage(model) })
             : DeleteTagCmd({
                 id: pending.id,
                 // If the dying tag IS one of the active filters, drop it; the
                 // refetch then runs against the filters that survive.
-                tagIds: model.activeTagIds.filter((candidate) => candidate !== pending.id),
+                page: {
+                  ...currentPage(model),
+                  tagIds: model.activeTagIds.filter((candidate) => candidate !== pending.id),
+                },
               })
       return {
         model: cleared,
@@ -759,25 +902,27 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         ],
       }
     },
-    DeletedPhoto: ({ photos }) => {
+    DeletedPhoto: ({ photos, nextCursor, total }) => {
       // A Photo left every list, so the Library total, its Status and every Tag
       // it carried all just moved.
       const refreshed = modifyFields(model, {
         photos: () => [...photos],
-        nextCursor: () => null,
+        nextCursor: () => nextCursor ?? null,
+        libraryTotal: () => total,
         loadingMore: () => false,
       })
       return showToast(refreshed, 'Deleted', 'Success', undefined, [FetchCountsCmd()])
     },
-    DeletedTag: ({ tags, photos }) => {
+    DeletedTag: ({ tags, photos, nextCursor, total }) => {
       // If the deleted tag was one of the active filters, drop it — the
       // refetch already came back without it (ConfirmPending removed it from
-      // the ids it passed to DeleteTagCmd).
+      // the filters it passed to DeleteTagCmd).
       const activeTagIds = model.activeTagIds.filter((id) => tags.some((tag) => tag.id === id))
       const settled = modifyFields(model, {
         tags: () => tags ?? [],
         photos: () => [...photos],
-        nextCursor: () => null,
+        nextCursor: () => nextCursor ?? null,
+        libraryTotal: () => total,
         loadingMore: () => false,
         activeTagIds: () => activeTagIds,
       })
@@ -1003,6 +1148,9 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         delta > 0
           ? [...model.libraryCursors.slice(0, target), cursor]
           : model.libraryCursors.slice(0, target + 1)
+      // The page number is part of the URL, but the position is the cursor: a
+      // reload has no cursor chain, so it walks the keyset to this number.
+      const filters = { ...libraryFiltersOfModel(model), page: target }
       return {
         model: modifyFields(model, {
           libraryPage: () => target,
@@ -1010,7 +1158,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           status: () => 'loading',
         }),
         commands: [
-          FetchPhotosCmd({ tagIds: [...model.activeTagIds], q: model.searchQuery, cursor }),
+          FetchPhotosCmd({ ...listArgsOf(filters), cursor }),
+          ReplaceUrlCmd({ url: libraryUrl(filters) }),
         ],
       }
     },
@@ -1181,6 +1330,27 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         const guard = withLeaveGuard(model, editorReturnUrl(model.editor.returnRoute))
         return { model: guard.model, commands: [BackCmd(), ...(guard.commands ?? [])] }
       }
+      // A filter change moves the URL and the Model together and then the
+      // runtime reports the new URL back. When the Model already holds exactly
+      // what the route names — and the route the Model last saw names
+      // something else — the change was ours: adopt the route and stop, so
+      // clicking a filter costs one page read rather than two and does not
+      // re-run the shell's three reads. A URL that changed while the route did
+      // not is a real navigation and falls through to `applyRoute`.
+      const nextFilters = nextRoute._tag === 'Library' ? libraryFiltersOf(nextRoute) : undefined
+      const routeFilters = libraryFiltersOf(model.route)
+      const routeUnchanged =
+        nextFilters !== undefined &&
+        model.route._tag === 'Library' &&
+        sameLibraryFilters(nextFilters, routeFilters)
+      if (
+        !routeUnchanged &&
+        nextFilters !== undefined &&
+        model.route._tag === 'Library' &&
+        sameLibraryFilters(nextFilters, libraryFiltersOfModel(model))
+      ) {
+        return { model: modifyFields(model, { route: () => nextRoute }) }
+      }
       // `← Library` goes back to the route the Editor was opened from, so a
       // Photo reached from Drafts returns to Drafts. Recorded here rather than
       // in `applyRoute`, which is handed the model with the route already
@@ -1207,24 +1377,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     GotSegmentMessage: ({ groupId, message }) => foldSegmentGroup(groupId)(model, message),
     GotTagActionsMessage: ({ message }) => foldTagActions(model, message),
     GotEditorLeaveMessage: ({ message }) => foldEditorLeave(model, message),
-
-    // Tag manager bar: keep the child's input state in sync, then act on
-    // its intents — filter toggle and delete mirror existing handlers;
-    // create reuses CreateTagCmd via CreateTagRequested.
-    GotTagManagerMessage: ({ message }) => {
-      const tagManagerUpdate = TagManager.update(model.tagManager, message)
-      const synced = modifyFields(model, { tagManager: () => tagManagerUpdate.model })
-      return TagManager.Message.match<UpdateReturn>(message, {
-        SetInput: () => ({ model: synced }),
-        SubmitCreate: () => {
-          const label = model.tagManager.inputValue.trim()
-          if (label === '') return { model }
-          return transition(synced, Message.CreateTagRequested({ source: 'manager', label }))
-        },
-        ToggledFilter: ({ id }) => toggleTagFilter(synced, id),
-        RequestedDelete: ({ id, label }) => openConfirm(synced, { kind: 'tag', id, label }),
-      })
-    },
 
     // SAFETY: the carrier is S.Unknown because the multi-combobox child
     // message schema is not part of @foldkit/ui's public surface; these
