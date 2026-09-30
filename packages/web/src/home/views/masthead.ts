@@ -131,9 +131,10 @@ const folio = (edition: Edition, h: HtmlBuilder<Message>): Child =>
               h.Class('hidden items-center gap-(--spacing-xl) desktop:flex'),
             ],
             [
-              h.span([h.Class('type-exif text-role-text-disabled')], [
-                `${mastheadCount(edition).issue} FRAMES`,
-              ]),
+              h.span(
+                [h.Class('type-exif text-role-text-disabled')],
+                [`${mastheadCount(edition).issue} FRAMES`],
+              ),
               NavLink.navLink({ href: edition.folio.rssHref, label: 'RSS', state: 'default' }, h),
             ],
           ),

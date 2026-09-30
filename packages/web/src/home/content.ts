@@ -183,7 +183,8 @@ const copy = {
   deck: 'Nineteen frames from July and August, made on foot with one camera and one lens.',
   /** Printed when the site has no published photograph to count. */
   emptyHeadline: 'Nothing published yet.',
-  emptyDeck: 'The first photograph is on its way. Everything below the masthead is the front page waiting for it.',
+  emptyDeck:
+    'The first photograph is on its way. Everything below the masthead is the front page waiting for it.',
   emptyMarker: 'NO FRAMES YET',
   emptyNote: 'The first photograph will open the next edition.',
   colophon: {
@@ -307,9 +308,7 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
 /** A Section's plates, in the order the read returned them, minus any Photo
  *  that cannot be drawn. A Section left with none is dropped with it. */
 const sectionOf = (section: PublicSection): EditionSection | null => {
-  const figures = section.photos
-    .map(figureOf)
-    .filter((figure): figure is Figure => figure !== null)
+  const figures = section.photos.map(figureOf).filter((figure): figure is Figure => figure !== null)
   if (figures.length === 0) return null
   return {
     id: section.month,
@@ -327,9 +326,7 @@ const sectionOf = (section: PublicSection): EditionSection | null => {
  * maps each appended read the same way. A Section whose photographs are all
  * undrawable is dropped here rather than rendered as an empty heading.
  */
-export const sectionsOf = (
-  sections: ReadonlyArray<PublicSection>,
-): ReadonlyArray<EditionSection> =>
+export const sectionsOf = (sections: ReadonlyArray<PublicSection>): ReadonlyArray<EditionSection> =>
   sections.map(sectionOf).filter((section): section is EditionSection => section !== null)
 
 /**
@@ -392,7 +389,9 @@ const folioDate = (takenAt: string | null): { long: string; short: string } => {
  * again. One function that turns numbers into this masthead's three lines is
  * the only place that wording exists.
  */
-export const mastheadCount = (edition: Edition): {
+export const mastheadCount = (
+  edition: Edition,
+): {
   volume: string
   volumeMobile: string
   issue: string

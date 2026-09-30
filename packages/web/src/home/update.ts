@@ -44,8 +44,7 @@ const figuresOf = (edition: Edition): ReadonlyArray<Figure> => [
 const isNewSection = (
   sections: ReadonlyArray<EditionSection>,
   existing: ReadonlyArray<EditionSection>,
-): boolean =>
-  sections.every((section) => !existing.some((have) => have.id === section.id))
+): boolean => sections.every((section) => !existing.some((have) => have.id === section.id))
 
 /**
  * The masthead's counters after older Sections are appended.
@@ -67,10 +66,7 @@ const withCounters = (
 // update
 // ---------------------------------------------------------------------------
 
-export const update = (
-  model: Model,
-  message: Message,
-): Update.Return<Model, Message> =>
+export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
   Message.match<Update.Return<Model, Message>>(message, {
     // An id the current edition no longer carries opens nothing; re-rendering
     // with the same model is cheaper than pretending the click missed.

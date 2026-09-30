@@ -4,7 +4,7 @@
 
 Accepted
 
-> **Correction (2026-08, #13; superseded 2026-09).** The three *layers* below
+> **Correction (2026-08, #13; superseded 2026-09).** The three _layers_ below
 > stand and are still the whole story: edge, route split, in-Worker JWT. What did
 > not survive is the shape of layer 1. Three Access applications across two
 > hostnames turned out to make the Admin unusable, and the reason is recorded in

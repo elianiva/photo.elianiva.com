@@ -99,9 +99,7 @@ describe('frameCount', () => {
 
 describe('sectionCount', () => {
   it('counts frames and spans the section indices', () => {
-    const two = sectionsOf([
-      section('2025-08', [photo({ number: 16 }), photo({ number: 23 })]),
-    ])[0]!
+    const two = sectionsOf([section('2025-08', [photo({ number: 16 }), photo({ number: 23 })])])[0]!
     expect(sectionCount(two)).toBe('02 FRAMES · NO. 016–023')
   })
 

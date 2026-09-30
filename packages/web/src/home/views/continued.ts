@@ -76,10 +76,7 @@ export const continued = (
     [h.Class('mx-auto flex max-w-[560px] items-center gap-(--spacing-lg) py-(--spacing-xl)')],
     [
       hairline(h),
-      h.div(
-        [h.Class('flex items-center gap-(--spacing-md)')],
-        tailBody(tail, loading, error, h),
-      ),
+      h.div([h.Class('flex items-center gap-(--spacing-md)')], tailBody(tail, loading, error, h)),
       hairline(h),
     ],
   )

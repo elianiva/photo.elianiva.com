@@ -15,20 +15,20 @@
 > **Route map as shipped** — one hostname, two Workers behind it. The website
 > Worker owns the custom domain; the API Worker owns the `/api/*` route on it,
 > which is the more specific match and therefore wins for its own paths. In
-> development the API Worker is on its own port and the pair *is* cross-origin,
+> development the API Worker is on its own port and the pair _is_ cross-origin,
 > which is the only reason CORS exists at all.
 >
-> | Path                    | Worker            | Purpose                                                             | Gated                  |
-> | ----------------------- | ----------------- | ------------------------------------------------------------------- | ---------------------- |
-> | `POST /api/upload`      | api               | multipart upload → R2 + D1                                          | Access + in-Worker JWT |
-> | `POST /api/admin/rpc`   | api               | all reads and writes the Admin needs                                | Access + in-Worker JWT |
-> | `POST /api/rpc`         | api               | public reads (`ListPhotos`, `GetPhoto`, `ListTags`, `GetFrontPage`) | open                   |
-> | `GET /api/image/<r2Key>` | api              | binary R2 proxy, serving the original's bytes                        | open                   |
-> | `GET /api/health`       | api               | D1 probe                                                            | open                   |
-> | `/admin*`               | website           | the Admin SPA                                                       | Access                 |
-> | `/`                     | website           | the public Front, server-rendered from D1                            | open                   |
-> | `/sitemap.xml`          | website           | the crawler route                                                   | open                   |
-> | everything else         | website           | static assets                                                       | open                   |
+> | Path                     | Worker  | Purpose                                                             | Gated                  |
+> | ------------------------ | ------- | ------------------------------------------------------------------- | ---------------------- |
+> | `POST /api/upload`       | api     | multipart upload → R2 + D1                                          | Access + in-Worker JWT |
+> | `POST /api/admin/rpc`    | api     | all reads and writes the Admin needs                                | Access + in-Worker JWT |
+> | `POST /api/rpc`          | api     | public reads (`ListPhotos`, `GetPhoto`, `ListTags`, `GetFrontPage`) | open                   |
+> | `GET /api/image/<r2Key>` | api     | binary R2 proxy, serving the original's bytes                       | open                   |
+> | `GET /api/health`        | api     | D1 probe                                                            | open                   |
+> | `/admin*`                | website | the Admin SPA                                                       | Access                 |
+> | `/`                      | website | the public Front, server-rendered from D1                           | open                   |
+> | `/sitemap.xml`           | website | the crawler route                                                   | open                   |
+> | everything else          | website | static assets                                                       | open                   |
 >
 > All three Host names are `photo.elianiva.com`. One Cloudflare Access
 > application covers `/admin`, `/api/admin/rpc` and `/api/upload`; that is one

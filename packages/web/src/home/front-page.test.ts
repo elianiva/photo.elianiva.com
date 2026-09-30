@@ -111,9 +111,7 @@ const read = (over: Partial<FrontRead> = {}): FrontRead => ({
 const config = { Model, Flags, init, view }
 
 const renderApplication = (front: FrontRead) =>
-  Effect.runPromise(
-    Server.renderToString(config, { buildId: 'test', flags: frontFlags(front) }),
-  )
+  Effect.runPromise(Server.renderToString(config, { buildId: 'test', flags: frontFlags(front) }))
 
 const render = async (front: FrontRead): Promise<string> => (await renderApplication(front)).html
 
@@ -129,9 +127,7 @@ const stampedFlags = (document: string): typeof Flags.Type => {
   // The payload is the body of the JSON script tag, not the attribute — the
   // attribute only pairs the payload with the runtime id on the app root.
   const body = document.match(
-    new RegExp(
-      `<script[^>]*${Server.FOLDKIT_FLAGS_ATTRIBUTE}="[^"]*"[^>]*>([\\s\\S]*?)</script>`,
-    ),
+    new RegExp(`<script[^>]*${Server.FOLDKIT_FLAGS_ATTRIBUTE}="[^"]*"[^>]*>([\\s\\S]*?)</script>`),
   )?.[1]
   if (body === undefined) throw new Error('no flags payload in the rendered document')
   return S.decodeUnknownSync(Flags)(JSON.parse(body))

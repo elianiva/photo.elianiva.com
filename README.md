@@ -30,7 +30,7 @@ pnpm infra:deploy  # alchemy deploy --stage prod
 
 Images live in R2 (`photo-elianiva-originals`) and metadata in D1 (`photo-elianiva`). The Admin at `/admin` is a single-operator surface behind Cloudflare Access.
 
-**One hostname, one login.** The API is a Worker of its own but answers on the *site's* hostname behind a route (`photo.elianiva.com/api/*`), so the Admin and everything it calls are same-origin. That is what makes the Access login work: Access issues an application token per application, and a cross-origin call to a second hostname could neither send the cookie (a browser sends none on a preflight) nor complete the interactive login. In development the two are on separate ports and CORS is answered for the localhost pair alone.
+**One hostname, one login.** The API is a Worker of its own but answers on the _site's_ hostname behind a route (`photo.elianiva.com/api/*`), so the Admin and everything it calls are same-origin. That is what makes the Access login work: Access issues an application token per application, and a cross-origin call to a second hostname could neither send the cookie (a browser sends none on a preflight) nor complete the interactive login. In development the two are on separate ports and CORS is answered for the localhost pair alone.
 
 **Delivery is the original's bytes.** Every image is served from R2 through the Worker's own `/api/image/<key>` proxy. The zone is on the Free plan, where Cloudflare Image Resizing is plan-gated (`image_resizing` reports `editable: false`), so `/cdn-cgi/image` answers 404 for every request and no URL builder for it ships. Stored Renditions (CONTEXT.md) are the designed answer; see `docs/adr/0008`.
 
