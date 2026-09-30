@@ -3,7 +3,7 @@ import { defineConfig } from 'vite-plus'
 export default defineConfig({
   fmt: {
     ignorePatterns: [
-      '.cursor/**',
+      '.agents/**',
       '.turbo/**',
       'dist/**',
       '**/*.d.ts',
@@ -22,7 +22,7 @@ export default defineConfig({
   },
   lint: {
     ignorePatterns: [
-      '.cursor/**',
+      '.agents/**',
       '.turbo/**',
       'dist/**',
       '**/*.d.ts',
