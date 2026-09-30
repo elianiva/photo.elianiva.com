@@ -13,7 +13,7 @@ import { FetchHttpClient } from 'effect/unstable/http'
 import { RpcSerialization } from 'effect/unstable/rpc'
 import { layerProtocolHttp, make as makeRpcClient } from 'effect/unstable/rpc/RpcClient'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
-import { apiOrigin } from './api'
+import { ADMIN_RPC_PATH, RPC_PATH, apiOrigin } from './api'
 
 export class RpcFailure extends Data.TaggedError('RpcFailure')<{
   readonly message: string
@@ -128,11 +128,16 @@ const rpcCaller = (group: unknown, url: string) => {
     })
 }
 
-/** Calls on the public group (`/rpc`) — the ungated surface, and the one
+/** Calls on the public group (`/api/rpc`) — the ungated surface, and the one
  *  `PublicPhotoService` keeps to published, non-trashed Photos. The Admin does
  *  not read Photos through it: it needs Drafts, so it uses the admin group. */
-export const rpcPublic = rpcCaller(PhotoPublicRpcs, `${apiOrigin()}/rpc`)
+export const rpcPublic = rpcCaller(PhotoPublicRpcs, `${apiOrigin()}${RPC_PATH}`)
 
-/** Calls on the admin group (`/admin/rpc`) — update/delete photos,
- *  create/delete tags. Edge-gated + JWT-verified server-side (ADR 0007). */
-export const rpcAdmin = rpcCaller(PhotoAdminRpcs, `${apiOrigin()}/admin/rpc`)
+/** Calls on the admin group (`/api/admin/rpc`) — update/delete photos,
+ *  create/delete tags. Edge-gated + JWT-verified server-side (ADR 0007).
+ *
+ *  Same-origin in production, so the browser sends the Access cookie with
+ *  `credentials: same-origin` and there is no preflight to fail. No
+ *  `credentials: 'include'` is set anywhere: on the dev port pair the gate
+ *  stands down by design, so there is no cookie to carry. */
+export const rpcAdmin = rpcCaller(PhotoAdminRpcs, `${apiOrigin()}${ADMIN_RPC_PATH}`)

@@ -3,27 +3,36 @@
 > **Status (2026-08): DONE, with evolutions.** The single-user admin shipped as a
 > Foldkit SPA over Effect RPC over HTTP (see `docs/adr/0006-effect-rpc-over-http.md`
 > and `docs/adr/0007-split-rpc-authz-edge-plus-jwt.md`) instead of REST endpoints,
-> and Tags replaced Collections as the grouping model. The API also moved to its
-> own Worker on its own hostname, `photo-api.elianiva.com`, so the site and the
-> API deploy and scale separately. Uploads go through `/upload` (multipart →
-> R2 + D1); everything else rides the two RPC groups (`/rpc` public, `/admin/rpc`
-> Access-gated), with `/image/*` serving originals. The phases below are kept
-> for context; details that changed are marked by the ADRs.
+> and Tags replaced Collections as the grouping model. The API is a Worker of its
+> own but no longer a hostname of its own: it answers on the site's hostname
+> behind a route, because Access issues an application token per application and a
+> cross-origin call to a second hostname could neither send the cookie nor
+> complete the interactive login (ADR 0007). Uploads go through `/api/upload`
+> (multipart → R2 + D1); everything else rides the two RPC groups (`/api/rpc`
+> public, `/api/admin/rpc` Access-gated), with `/api/image/*` serving originals.
+> The public Front is server-rendered from the same D1 read the public RPC serves.
 >
-> **Route map as shipped** — the API runs on its own Worker and hostname, so
-> the `/api/*` paths drafted below were never the ones that shipped. This table
-> is the current truth, and it is what the rest of the document has been
-> corrected to:
+> **Route map as shipped** — one hostname, two Workers behind it. The website
+> Worker owns the custom domain; the API Worker owns the `/api/*` route on it,
+> which is the more specific match and therefore wins for its own paths. In
+> development the API Worker is on its own port and the pair _is_ cross-origin,
+> which is the only reason CORS exists at all.
 >
-> | Path                 | Host                     | Purpose                                                             | Gated                  |
-> | -------------------- | ------------------------ | ------------------------------------------------------------------- | ---------------------- |
-> | `POST /upload`       | `photo-api.elianiva.com` | multipart upload → R2 + D1                                          | Access + in-Worker JWT |
-> | `POST /admin/rpc`    | `photo-api.elianiva.com` | all writes (`UpdatePhoto`, `DeletePhoto`, `CreateTag`, `DeleteTag`) | Access + in-Worker JWT |
-> | `POST /rpc`          | `photo-api.elianiva.com` | public reads (`ListPhotos`, `GetPhoto`, `ListTags`)                 | open                   |
-> | `GET /image/<r2Key>` | `photo-api.elianiva.com` | binary R2 proxy, resizable via `/cdn-cgi/image`                     | open                   |
-> | `GET /health`        | `photo-api.elianiva.com` | D1 probe                                                            | open                   |
-> | `/admin*`            | `photo.elianiva.com`     | the Admin SPA                                                       | Access                 |
-> | everything else      | `photo.elianiva.com`     | the public site                                                     | open                   |
+> | Path                     | Worker  | Purpose                                                             | Gated                  |
+> | ------------------------ | ------- | ------------------------------------------------------------------- | ---------------------- |
+> | `POST /api/upload`       | api     | multipart upload → R2 + D1                                          | Access + in-Worker JWT |
+> | `POST /api/admin/rpc`    | api     | all reads and writes the Admin needs                                | Access + in-Worker JWT |
+> | `POST /api/rpc`          | api     | public reads (`ListPhotos`, `GetPhoto`, `ListTags`, `GetFrontPage`) | open                   |
+> | `GET /api/image/<r2Key>` | api     | binary R2 proxy, serving the original's bytes                       | open                   |
+> | `GET /api/health`        | api     | D1 probe                                                            | open                   |
+> | `/admin*`                | website | the Admin SPA                                                       | Access                 |
+> | `/`                      | website | the public Front, server-rendered from D1                           | open                   |
+> | `/sitemap.xml`           | website | the crawler route                                                   | open                   |
+> | everything else          | website | static assets                                                       | open                   |
+>
+> All three Host names are `photo.elianiva.com`. One Cloudflare Access
+> application covers `/admin`, `/api/admin/rpc` and `/api/upload`; that is one
+> login, one application token and one first-party cookie.
 >
 > Scaffold is live at https://photo.elianiva.com (Alchemy `photo` Website.Vite, SSR with cache headers). This plan is for the next iteration: replace mock Photo/Collection with a self-hosted admin that manages files + metadata in one place.
 
@@ -34,17 +43,26 @@ Build a **single-user admin** inside the same monorepo instead of adopting Sanit
 ## 1) Architecture
 
 ```
-[Browser /admin]  —Cloudflare Access gate→  Worker (photo-api.elianiva.com)
-                                       ├─ POST /upload          (multipart → R2 + D1)
-                                       ├─ POST /admin/rpc       (all writes, Access + JWT)
-                                       ├─ POST /rpc             (public reads)
-                                       └─ GET  /image/<r2Key>   (binary R2 proxy)
-
-[Browser /]       —open→  Worker (photo.elianiva.com) — SSR pages, the Admin SPA
+[Browser]  ── photo.elianiva.com ──────────────────────────────────────────
+  │
+  ├─ /admin*          —Cloudflare Access gate→  website Worker
+  │                                          ├─ the Admin SPA
+  │                                          └─ / (SSR from D1), /sitemap.xml
+  │
+  └─ /api/*           —Cloudflare Access gate→  API Worker  (route, not a hostname)
+                                             ├─ POST /api/upload       (multipart → R2 + D1)
+                                             ├─ POST /api/admin/rpc    (Admin reads + writes, Access + JWT)
+                                             ├─ POST /api/rpc          (public reads)
+                                             ├─ GET  /api/image/<key>  (binary R2 proxy)
+                                             └─ GET  /api/health       (D1 probe)
 
 R2 Bucket  "photo-originals"   (adopt: false, new)
 D1 Database "photo"            (adopt: false, new — Photo + Tag tables)
-Image resizing                 (zone `/cdn-cgi/image` URL rewrite, no binding — ADR 0008)
+Image resizing                 (NONE — the zone is on the Free plan, where
+                                `image_resizing` is not editable, so every
+                                `/cdn-cgi/image` request 404s. Every image is
+                                the original's bytes through the R2 proxy;
+                                stored Renditions replace that — ADR 0008)
 KV Namespace (optional cache)  (if D1 latency ~5ms matters; defer)
 ```
 
@@ -59,9 +77,10 @@ class Website extends Cloudflare.Website.Vite('photo', {
   bindings: { PHOTOS: PhotosBucket, DB: PhotoDb }
 ```
 
-No `IMAGES` binding. Resizing rides the zone's `/cdn-cgi/image` URL rewrite on
-`photo-api.elianiva.com`, and the redesign replaces it with stored Renditions
-(ADR 0008).
+No `IMAGES` binding, and no resizing at all: Image Resizing is plan-gated and
+this zone is on the Free plan, so the `/cdn-cgi/image` rewrite answers 404 for
+every request. Images are served as the originals they are, and stored
+Renditions (ADR 0008) are what replaces that.
 
 Static domain (fixed ZoneError: previous `Alchemy.Stack.useSync(stage === 'prod' ? ... : undefined)` evaluated to `undefined` outside stack context — Vite Website class options run at import time. Use `domain: ['photo.elianiva.com']` like `elianiva.com`).
 
@@ -94,7 +113,7 @@ Clients are `RpcClient`s of the same groups, not hand-written `fetch` calls.
 
 SSR `entry.server.ts` switches from `flagsForRequest()` mock to `Effect` fetch from `DB` (via `PhotoDb` binding passed as Effect Layer).
 
-Images delivery: public pages render `srcset` via the zone's `/cdn-cgi/image` URL pattern — e.g. `/cdn-cgi/image/width=800,format=auto,quality=75/image/<r2Key>`. No binding, and no build-time Sharp.
+Image delivery: every plate and every Admin thumbnail is the Photo's original, served from R2 through the Worker's `/api/image/<r2Key>` proxy. No zone resizer (plan-gated off) and no build-time Sharp; the plate's own `aspect-ratio` box crops it to the Ratio for display.
 
 ## 4) Admin UI (`packages/web` new route `/admin`)
 
@@ -122,7 +141,7 @@ No pagination needed at <500 photos; add `?limit=60&cursor=` later.
 
 **Phase 2 — read path (half day):**
 
-- SSR `entry.server.ts` fetches from D1 (via API layer), public `/` renders the broadsheet front page with `srcset` via `/cdn-cgi/image`.
+- SSR `entry.server.ts` reads the Front from D1 through `PublicPhotoService` and renders the broadsheet front page; plates carry each Photo's R2 key. In development that read goes over HTTP to the API Worker's port, and in production straight to the bindings.
 
 **Phase 3 — admin CRUD (1 day):**
 
@@ -140,7 +159,7 @@ Draft/publish, versioning, multi-user RBAC, full-text search, analytics — woul
 
 - `pnpm typecheck && pnpm build` green (already)
 - `pnpm infra:deploy --stage prod` green (fixed ZoneError, live at https://photo.elianiva.com)
-- Phase 1+: `curl -X POST https://photo-api.elianiva.com/rpc` with a `ListPhotos` envelope, or a scripted `RpcClient` (ADR 0006 replaced raw curl with the typed client) + manual upload of 5 JPEGs + check `srcset` renders.
+- Phase 1+: `curl -X POST https://photo.elianiva.com/api/rpc` with a `ListPhotos` envelope, or a scripted `RpcClient` (ADR 0006 replaced raw curl with the typed client) + manual upload of 5 JPEGs + check the plate images load from `/api/image/*`.
 
 ## 8) Risks
 

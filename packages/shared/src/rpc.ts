@@ -104,8 +104,12 @@ export const FRONT_SECTION_COUNT = 2
 /** One Edition Section: a month of published Photos and the numbers it spans
  *  (CONTEXT.md). `year` and `label` are the Section Head's two halves —
  *  `August` over `2025` — read off the key rather than reformatted from a day,
- *  so the heading never depends on a Worker's locale or zone. */
-const PublicSection = S.Struct({
+ *  so the heading never depends on a Worker's locale or zone.
+ *
+ *  Exported because the Front reads this shape in two places — the Worker that
+ *  renders it, and the dev server that fetches it over HTTP — and a second,
+ *  hand-written copy of it is a contract that can drift. */
+export const PublicSection = S.Struct({
   /** `2025-08`, and the cursor that resumes below it. */
   month: S.String,
   year: S.String,
@@ -115,12 +119,15 @@ const PublicSection = S.Struct({
   numberTo: S.NullOr(S.Number),
   photos: S.Array(PhotoWithTags),
 })
+export type PublicSection = typeof PublicSection.Type
 
 /** The Masthead's `VOL. V — NO. 412`, the Folio's `412 FRAMES`, the lede's
  *  edition line and the Colophon's copy, in one read. `number` is the site's
  *  own counter read as the last photograph a visitor can see, so it moves back
- *  when the highest-numbered Photo is trashed (CONTEXT.md, Photo Number). */
-const FrontStats = S.Struct({
+ *  when the highest-numbered Photo is trashed (CONTEXT.md, Photo Number).
+ *
+ *  Exported with {@link PublicSection} and for the same reason. */
+export const FrontStats = S.Struct({
   number: S.NullOr(S.Number),
   total: S.Number,
   latestTakenAt: S.NullOr(S.String),
@@ -128,6 +135,18 @@ const FrontStats = S.Struct({
   motto: S.NullOr(S.String),
   siteSections: S.Array(SiteSection),
   aboutCopy: S.NullOr(S.String),
+})
+export type FrontStats = typeof FrontStats.Type
+
+/** The Front's one read, as a Schema.
+ *
+ *  Named rather than inlined in {@link GetFrontPage} so a caller that reads the
+ *  Front over HTTP — the dev server, which has no D1 binding of its own — can
+ *  decode against the very contract the RPC declares. */
+export const FrontPageResult = S.Struct({
+  sections: S.Array(PublicSection),
+  nextSectionCursor: S.NullOr(S.String),
+  stats: FrontStats,
 })
 
 /** The Front's one read. The cursor is a month, not a Photo: the page walks
@@ -140,11 +159,7 @@ export class GetFrontPage extends Rpc.make('GetFrontPage', {
     sectionCursor: S.optional(S.String.pipe(S.check(S.isMaxLength(16)))),
     sectionCount: S.optional(S.Number),
   },
-  success: S.Struct({
-    sections: S.Array(PublicSection),
-    nextSectionCursor: S.NullOr(S.String),
-    stats: FrontStats,
-  }),
+  success: FrontPageResult,
   error: S.Union([InvalidInput, StorageError]),
 }) {}
 

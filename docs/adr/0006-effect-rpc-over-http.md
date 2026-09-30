@@ -4,13 +4,15 @@
 
 Accepted
 
-> **Correction (2026-08, #13).** The decision below stands. The concrete paths
-> have since moved with the API onto its own Worker and hostname, so they are
-> now `photo-api.elianiva.com` with `/upload`, `/rpc`, `/admin/rpc` and
-> `/image/*` rather than `photo.elianiva.com` with `/api/*`. The routing and
-> protocol decisions — one typed RPC group per audience, no REST router, and
-> multipart staying out of the JSON envelope — are unchanged. The current table
-> lives in `docs/plan.md`.
+> **Correction (2026-08, #13; superseded 2026-09).** The decision below stands.
+> The concrete paths first moved with the API onto its own Worker _and hostname_,
+> then came back to this document's own shape: the API Worker is mounted on a
+> route of the site's hostname, so the paths are `photo.elianiva.com` with
+> `/api/upload`, `/api/rpc`, `/api/admin/rpc` and `/api/image/*` — the `/api/*`
+> this ADR originally chose. The hostname is the only thing that did not survive,
+> and the reason is in ADR 0007. The routing and protocol decisions — one typed
+> RPC group per audience, no REST router, and multipart staying out of the JSON
+> envelope — are unchanged. The current table lives in `docs/plan.md`.
 
 ## Context
 

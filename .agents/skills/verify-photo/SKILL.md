@@ -5,7 +5,7 @@ description: Drive photo.elianiva.com the way a visitor and the owner do — pub
 
 # Verify photo.elianiva.com
 
-Scripted way to launch this repo, drive it as a visitor and as the single admin in the browser, and capture proof. No mocks — the real gallery, upload, and edit flows against the shared remote D1/R2. External boundaries already isolated in prod: Cloudflare Access on `photo.elianiva.com/admin`, `photo-api.elianiva.com/admin/rpc` and `/upload`, plus in-worker JWT verification (ADR 0007). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
+Scripted way to launch this repo, drive it as a visitor and as the single admin in the browser, and capture proof. No mocks — the real gallery, upload, and edit flows against the shared remote D1/R2. In prod everything is on ONE hostname: the API Worker is a route at `photo.elianiva.com/api/*` and one Cloudflare Access application covers `/admin`, `/api/admin/rpc` and `/api/upload` (ADR 0007). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
 
 ## Launch
 
@@ -22,7 +22,7 @@ curl -sSf http://localhost:5173/ | head -n 5
 Ready when:
 
 - `GET /` on `http://localhost:5173` returns 200 with `<!doctype html>` containing the Foldkit app shell (`data-foldkit-app`)
-- `GET /health` on `http://localhost:13371` returns 200
+- `GET /api/health` on `http://localhost:13371` returns 200
 
 Teardown is killing the single `pnpm dev` process you started. Never `pkill -f vite` by name breadth — kill the PID you recorded.
 
@@ -45,8 +45,10 @@ All three run via turbo (`build` depends on `^build`). `pnpm build` emits `packa
 Ports and env:
 
 - Site `http://localhost:5173` and API Worker `http://localhost:13371` are `dev.port` in `alchemy.run.ts`, both `strictPort: true`. `packages/web/src/lib/api.ts` names the same API origin for the browser (`devApiOrigin`), so a change to either port is two edits in lockstep.
-- Nothing proxies between the two origins. The admin served at 5173 calls the Worker cross-origin, which is why `api-worker.ts` allows `http://localhost:5173` and why dev exercises CORS.
-- Reach the API directly at `http://localhost:13371`: `/rpc`, `/admin/rpc`, `/upload`, `/image/<r2Key>`, `/health`.
+- Nothing proxies between the two origins. The admin served at 5173 calls the Worker cross-origin, which is why `api-worker.ts` allows `http://localhost:5173` and why dev is the only stage that exercises CORS — in prod the API is a route on the site's own hostname and nothing is cross-origin.
+- Reach the API directly at `http://localhost:13371`: `/api/rpc`, `/api/admin/rpc`, `/api/upload`, `/api/image/<r2Key>`, `/api/health`.
+- `packages/web/src/lib/api.ts` is the one table of those paths; change it there, never at a call site.
+- Images are the originals out of R2 through `/api/image/<r2Key>`. There is no zone resizer (Free plan, not editable), so no `srcset` and no `thumbUrl` — a plate that 404s is a bad R2 key, not a missing transform.
 - There is no per-clone dev hostname. One instance per machine; a second one fails to bind rather than misrouting.
 - Local dev needs no `ACCESS_TEAM_DOMAIN` — blank means unauthenticated, and `alchemy dev --stage dev` defaults it to blank so the admin surface runs ungated by design. Non-dev stages require it and fail closed without it.
 - `ACCESS_ALLOWED_EMAILS` is read up front on every stage, `dev` included, so a `.env` carrying it (see `.env.example`) is required for local verification. It is dead weight locally — the gate stands down before the allowlist is consulted.
@@ -134,7 +136,7 @@ Standards:
 
 - UI proof: ARIA snapshot plus screenshot with app identity visible (`photo.elianiva.com` / `Elianiva` header). `npx agent-browser snapshot > .pi/skills/verify-photo/artifacts/<id>/page.aria.txt` and `npx agent-browser screenshot .pi/skills/verify-photo/artifacts/<id>/page.png`
 - Mutation proof: drive the write in the UI, then read back via a second UI view (re-open the Editor, reload the Library, or reload the `/admin/photos/<id>` route) — a toast alone is insufficient.
-- Image proof (public gallery): open the photo's lightbox and assert the `<img src>` points at the API Worker's `/image/<r2Key>` and loads (alt text / network 200); the Worker's `cache-control: public, max-age=31536000, immutable` is what the response carries. The Admin's grid tiles assert their load against the same `/image/<r2Key>` URLs.
+- Image proof (public gallery): open the photo's lightbox and assert the `<img src>` points at the API Worker's `/api/image/<r2Key>` and loads (alt text / network 200); the Worker's `cache-control: public, max-age=31536000, immutable` is what the response carries. The Admin's grid tiles assert their load against the same `/api/image/<r2Key>` URLs.
 - Never assert a skipped entry point as verified through a different path. Report unreachable with the attempted command and the missing precondition.
 
 ## Cleanup

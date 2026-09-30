@@ -80,6 +80,17 @@ export const figure = (plate: Plate, variant: 'page' | 'column', h: HtmlBuilder<
       // The exposure line runs the full measure below the caption, not beside
       // the frame number: at column width it is one line, and tucked into the
       // caption row it wraps. The mobile Figure master omits it entirely.
-      h.span([h.Class('hidden type-exif text-role-text-disabled desktop:block')], [plate.exif]),
+      //
+      // A Photo carrying none of the facts an Exif line is made of has no line
+      // at all (CONTEXT.md), so the element is left out rather than rendered
+      // empty — an empty line under a plate reads as a bug in the photograph.
+      ...(plate.exif === null
+        ? []
+        : [
+            h.span(
+              [h.Class('hidden type-exif text-role-text-disabled desktop:block')],
+              [plate.exif],
+            ),
+          ]),
     ],
   )

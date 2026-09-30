@@ -23,7 +23,7 @@ import type { PhotoWithTags } from '@photo/shared'
 import * as Badge from '@/components/ui/badge'
 import * as Button from '@/components/ui/button'
 import { placeholderDataUrl } from '@/lib/blurhash'
-import { srcSet, thumbUrl } from '@/lib/image'
+import { originalUrl } from '@/lib/image'
 
 import { Message as M } from '../model'
 import type { GridCols, Model, Msg } from '../model'
@@ -88,8 +88,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
         [
           h.img([
             h.Class('h-full w-full object-cover'),
-            h.Src(thumbUrl(photo)),
-            h.Attribute('srcset', srcSet(photo)),
+            h.Src(originalUrl(photo)),
             h.Attribute('sizes', sizes),
             h.Alt(''),
             h.Attribute('loading', 'lazy'),

@@ -17,6 +17,19 @@ const OtpIdp = Cloudflare.Access.IdentityProvider('otp', {
   type: 'onetimepin',
 })
 
+/** The one hostname the whole site answers on. The website Worker owns it as a
+ *  custom domain; the API Worker is mounted underneath it at `API_ROUTE_PREFIX`
+ *  as a route, which is a more specific match and therefore wins for its own
+ *  paths. See the Access application below for why that matters. */
+const SITE_DOMAIN = 'photo.elianiva.com'
+
+const SITE_ZONE = 'elianiva.com'
+
+/** Everything the API Worker answers lives under here. A path outside the
+ *  prefix belongs to the website Worker, so the two can never both claim a
+ *  URL. Mirrored by `API_PREFIX` in `packages/web/src/lib/api.ts`. */
+const API_ROUTE_PREFIX = '/api'
+
 export default Alchemy.Stack(
   'photo-elianiva-com',
   {
@@ -58,26 +71,43 @@ export default Alchemy.Stack(
       },
     ]
 
-    const AdminApp = Cloudflare.Access.Application('photo-admin', {
-      type: 'self_hosted',
-      domain: 'photo.elianiva.com/admin',
-      policies: AccessPolicies,
-      sessionDuration: '24h',
-    })
+    // ONE Access application for the whole Admin — the pages, the RPC and the
+    // upload — rather than one per hostname and per path.
+    //
+    // Access issues an *application token per application* and evaluates a
+    // request at the edge before the Worker runs. Splitting the Admin across
+    // several applications on several hostnames meant the operator's login on
+    // the site granted nothing on the API hostname, and a cross-origin call
+    // could not complete the interactive login that would have fixed it: the
+    // browser's preflight carries no cookies, so Cloudflare answered the
+    // preflight with a bare 403 before the Worker was ever reached. One
+    // application with three destinations on one hostname gives one login, one
+    // app token and one same-origin cookie, and no preflight to fail.
+    //
+    // `destinations` is the field to reach for; `domain` is only the primary
+    // one and is what the App Launcher shows.
+    //
+    // Built here rather than at the top of the block because it names the
+    // identity provider by the uuid Cloudflare assigned it, and that is only
+    // known once the IdP has been created.
+    const ADMIN_API_PREFIX = `${API_ROUTE_PREFIX}/admin`
 
-    const AdminApiApp = Cloudflare.Access.Application('photo-admin-api', {
-      type: 'self_hosted',
-      domain: 'photo-api.elianiva.com/admin/rpc',
-      policies: AccessPolicies,
-      sessionDuration: '24h',
-    })
-
-    const UploadApp = Cloudflare.Access.Application('photo-admin-upload', {
-      type: 'self_hosted',
-      domain: 'photo-api.elianiva.com/upload',
-      policies: AccessPolicies,
-      sessionDuration: '24h',
-    })
+    const adminApp = (identityProviderId: string) =>
+      Cloudflare.Access.Application('photo-admin', {
+        type: 'self_hosted',
+        domain: `${SITE_DOMAIN}/admin`,
+        destinations: [
+          { type: 'public', uri: `${SITE_DOMAIN}/admin` },
+          { type: 'public', uri: `${SITE_DOMAIN}${ADMIN_API_PREFIX}/rpc` },
+          { type: 'public', uri: `${SITE_DOMAIN}${API_ROUTE_PREFIX}/upload` },
+        ],
+        policies: AccessPolicies,
+        sessionDuration: '24h',
+        // Exactly one IdP is declared, so the login can skip the provider
+        // picker and go straight to the one-time PIN box.
+        allowedIdps: [identityProviderId],
+        autoRedirectToIdentity: true,
+      })
 
     // The Worker's build is described in `packages/web/vite.config.ts`
     // (`environments.ssr`): `src/worker.ts` as the entry of the environment
@@ -93,21 +123,27 @@ export default Alchemy.Stack(
     class Website extends Cloudflare.Website.Vite<Website>()('photo', {
       rootDir: 'packages/web',
       assets: { notFoundHandling: 'none' },
-      domain: 'photo.elianiva.com',
+      domain: SITE_DOMAIN,
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
       dev: { port: 5173, strictPort: true },
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
+        STAGE: stage,
         ACCESS_TEAM_DOMAIN: teamDomain,
         ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },
     }) {}
 
+    // A Worker of its own, on the site's hostname rather than one of its own.
+    // Two Workers stay two Workers because `alchemy dev` binds real D1/R2 to a
+    // Worker resource and foldkit's dev server has no bindings at all — but in
+    // production they share an origin, which is what the Access application
+    // above needs. `dev.port` is the one place they are still cross-origin.
     const ApiWorker = Cloudflare.Worker('photo-api', {
       main: 'packages/web/src/api-worker.ts',
       compatibility: { date: '2025-09-01', flags: ['nodejs_compat'] },
-      domain: 'photo-api.elianiva.com',
+      routes: [{ pattern: `${SITE_DOMAIN}${API_ROUTE_PREFIX}/*`, zoneName: SITE_ZONE }],
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
@@ -121,11 +157,13 @@ export default Alchemy.Stack(
     // Edge gating is a production concern — skip Access resources entirely
     // on local dev so the stack boots without touching Cloudflare Access.
     if (!isLocalDev) {
-      // Ensure Access resources are created before the site
-      yield* OtpIdp
-      yield* AdminApp
-      yield* AdminApiApp
-      yield* UploadApp
+      // The IdP first: the application names it in `allowedIdps`, and only
+      // Cloudflare knows the uuid it assigned. An Alchemy `Output` is a lazy
+      // handle resolved when the stack plans, so the id is read out of it here
+      // rather than being a string the file could have guessed.
+      const otpIdp = yield* OtpIdp
+      const identityProviderId = yield* otpIdp.identityProviderId.asEffect().pipe(Effect.flatten)
+      yield* adminApp(identityProviderId)
     }
     // Data resources always converge the real cloud, even during `alchemy
     // dev` — Alchemy.remote() opts them out of local emulation so local dev
@@ -134,11 +172,14 @@ export default Alchemy.Stack(
     yield* PhotoDb.pipe(Alchemy.remote())
 
     const website = yield* Website
-    const api = yield* ApiWorker
+    yield* ApiWorker
 
     return {
       url: website.url,
-      apiUrl: api.url,
+      // Same-origin, so this is a path on the site rather than a second
+      // hostname. Spelled from the constant rather than from `website.url`,
+      // which is a resource reference and not a string.
+      apiUrl: `https://${SITE_DOMAIN}${API_ROUTE_PREFIX}`,
       bucketName: (yield* PhotoBucket).bucketName,
       databaseName: (yield* PhotoDb).databaseName,
     }
@@ -172,6 +213,7 @@ export type WebsiteEnv = {
     }
     batch(statements: ReadonlyArray<unknown>): Promise<ReadonlyArray<unknown>>
   }
+  readonly STAGE: string
   readonly ACCESS_TEAM_DOMAIN: string
   readonly ACCESS_ALLOWED_EMAILS?: string
 }

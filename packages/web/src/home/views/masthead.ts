@@ -18,7 +18,7 @@ import * as NavLink from '@/components/ui/nav-link'
 
 import { icon } from '@/lib/icons'
 
-import type { Edition } from '../content'
+import { mastheadCount, type Edition } from '../content'
 import { Message } from '../model'
 import { mastheadRules } from './rules'
 import { BAND, type Child } from './shared'
@@ -40,8 +40,8 @@ const earsStrip = (edition: Edition, h: HtmlBuilder<Message>): Child =>
       h.span(
         [h.Class('type-kicker text-left text-role-text-secondary')],
         [
-          h.span([h.Class('desktop:hidden')], [edition.volumeMobile]),
-          h.span([h.Class('hidden desktop:inline')], [edition.volume]),
+          h.span([h.Class('desktop:hidden')], [mastheadCount(edition).volumeMobile]),
+          h.span([h.Class('hidden desktop:inline')], [mastheadCount(edition).volume]),
         ],
       ),
       h.span(
@@ -131,7 +131,10 @@ const folio = (edition: Edition, h: HtmlBuilder<Message>): Child =>
               h.Class('hidden items-center gap-(--spacing-xl) desktop:flex'),
             ],
             [
-              h.span([h.Class('type-exif text-role-text-disabled')], [`${edition.issue} FRAMES`]),
+              h.span(
+                [h.Class('type-exif text-role-text-disabled')],
+                [`${mastheadCount(edition).issue} FRAMES`],
+              ),
               NavLink.navLink({ href: edition.folio.rssHref, label: 'RSS', state: 'default' }, h),
             ],
           ),

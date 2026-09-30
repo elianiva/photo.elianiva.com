@@ -25,7 +25,7 @@ import { Effect, Option, Queue, Schema as S, Stream } from 'effect'
 import { Subscription } from 'foldkit'
 import { PhotoId, formatMeasuredRatio, nearestRatio } from '@photo/shared'
 
-import { apiUrl } from '@/lib/api'
+import { UPLOAD_PATH, apiUrl } from '@/lib/api'
 import { compositionSource, encodeBlurhash, encodeCompositionBlurhash } from '@/lib/blurhash'
 import type { CompositionSpec } from '@/lib/blurhash'
 import { originalUrl } from '@/lib/image'
@@ -160,7 +160,10 @@ const uploadStream = (
           if (options.takenAt !== '') form.set('takenAt', options.takenAt)
 
           const xhr = new XMLHttpRequest()
-          xhr.open('POST', apiUrl('/upload'))
+          xhr.open('POST', apiUrl(UPLOAD_PATH))
+          // Harmless in production, where this is a same-origin POST the
+          // browser sends the Access cookie with either way. It earns its place
+          // on the dev port pair, which is cross-origin.
           xhr.withCredentials = true
           xhr.upload.onprogress = (event): void => {
             // `event.loaded` counts the multipart body, not just the file, so it

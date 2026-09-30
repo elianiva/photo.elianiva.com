@@ -4,16 +4,25 @@
  * the `edition` out of the Model and nothing in `home/` reaches for another
  * source of content.
  *
+ * Half of the Edition is **copy** and half is **the photographs**, and the two
+ * have different sources. The copy — the headline, the deck, the colophon, the
+ * tagline — is the broadsheet's own text and lives in {@link copy} below; it
+ * is authored, not read. The photographs come out of D1 on every request, via
+ * {@link editionOf}, which turns the public read model into this shape. A
+ * Photo that is not published is not here, so an Edition with nothing published
+ * yet is a real state with real empty copy rather than a placeholder list.
+ *
  * The content types are Effect Schemas rather than bare interfaces because
  * the Model carries the Edition: it is server-rendered into the hydration
  * stamp and decoded again on the client, so the framework needs a codec. The
  * Type side is what the views read.
  */
 
-import { Schema as S } from 'effect'
-import { PHOTO_RATIOS } from '@photo/shared'
+import { DateTime, Option, Schema as S } from 'effect'
+import { PHOTO_RATIOS, formatExifLine, nearestRatio } from '@photo/shared'
+import type { FrontStats, PhotoWithTags, PublicSection } from '@photo/shared'
 
-import { imagePreviewLongEdge, imagePreviewQuality } from '@/lib/design-tokens'
+import { imageUrl } from '@/lib/image'
 
 // ---------------------------------------------------------------------------
 // plates
@@ -36,31 +45,27 @@ export const RATIO_VALUE: Record<PlateRatio, number> = {
   '9:16': 9 / 16,
 }
 
-/** Long edge every plate is requested at; imgix crops it to the ratio. */
-/** The preview rendition the design specifies: a 1200px long edge at quality 82. */
-const PLATE_WIDTH = imagePreviewLongEdge
-const PLATE_QUALITY = imagePreviewQuality
-
 // ---------------------------------------------------------------------------
 // content types
 // ---------------------------------------------------------------------------
 
 export const FigureSchema = S.Struct({
-  /** Stable key. Section-scoped: a frame number is not unique across the
-   *  issue, and the lightbox resolves a click through this id. */
+  /** The Photo's own id, which the lightbox resolves a click through. */
   id: S.String,
-  /** 24 -> "No. 024" */
+  /** 24 -> "No. 024". The Photo Number, not a position in this Edition. */
   index: S.Number,
   title: S.String,
   ratio: PlateRatioSchema,
-  /** 'X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 31 AUG' */
-  exif: S.String,
-  /** Unsplash photo id — the plate's bytes. */
-  photoId: S.String,
+  /** 'X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 31 AUG', or null when the Photo
+   *  carries none of the facts the line is made of. */
+  exif: S.NullOr(S.String),
+  /** The original's key in R2 — the plate's bytes. */
+  r2Key: S.String,
 })
 export type Figure = typeof FigureSchema.Type
 
 export const EditionSectionSchema = S.Struct({
+  /** The month key, `2025-08`, and the cursor that resumes below it. */
   id: S.String,
   /** 'August' */
   month: S.String,
@@ -70,10 +75,16 @@ export const EditionSectionSchema = S.Struct({
 })
 export type EditionSection = typeof EditionSectionSchema.Type
 
-/** 'more' | 'loading' | 'end' — the three states of the Continued component. */
+/**
+ * 'more' | 'end' — the two states of the Continued row.
+ *
+ * There is no third 'loading' state: a read in flight is a fact about the
+ * request, not about the Edition, so it is the Model's `loadingSections` flag
+ * and the spinner it drives. Keeping both would be two answers to "is a Section
+ * on its way", and the Edition is not where that answer lives.
+ */
 export const TailSchema = S.Union([
   S.Struct({ state: S.Literal('more'), label: S.String }),
-  S.Struct({ state: S.Literal('loading'), label: S.String }),
   S.Struct({ state: S.Literal('end'), marker: S.String, note: S.String }),
 ])
 export type Tail = typeof TailSchema.Type
@@ -114,12 +125,14 @@ export const FolioSchema = S.Struct({
 export type Folio = typeof FolioSchema.Type
 
 export const EditionSchema = S.Struct({
-  /** 'VOL. V — NO. 412' */
+  /** The volume numeral, `settings.volume` — 'V'. Raw, because it is the
+   *  masthead's *input*, not its wording. */
   volume: S.String,
-  /** 'NO. 412' — the mobile Ears Strip has no room for the volume numeral. */
-  volumeMobile: S.String,
-  /** '412' — the folio's "412 FRAMES" */
-  issue: S.String,
+  /** The site's highest published Photo Number, or null when none is numbered.
+   *  Raw for the same reason; `mastheadCount` words it. */
+  number: S.NullOr(S.Number),
+  /** Every published photograph, the folio's `412 FRAMES`. */
+  total: S.Number,
   /** 'SUNDAY, 31 AUGUST 2025' */
   folioDate: S.String,
   /** '31 AUG 2025' — the mobile Ears Strip's shorter date. */
@@ -138,8 +151,8 @@ export const EditionSchema = S.Struct({
   kickerMobile: S.String,
   headline: S.String,
   deck: S.String,
-  /** The Page One figure. */
-  lead: FigureSchema,
+  /** The Page One plate, or null when this Edition opens with no photograph. */
+  lead: S.NullOr(FigureSchema),
   sections: S.Array(EditionSectionSchema),
   tail: TailSchema,
   colophon: ColophonSchema,
@@ -148,193 +161,32 @@ export const EditionSchema = S.Struct({
 export type Edition = typeof EditionSchema.Type
 
 // ---------------------------------------------------------------------------
-// the dummy edition
+// the copy
 // ---------------------------------------------------------------------------
 
-export const edition: Edition = {
-  volume: 'VOL. V — NO. 412',
-  volumeMobile: 'NO. 412',
-  issue: '412',
-  folioDate: 'SUNDAY, 31 AUGUST 2025',
-  folioDateMobile: '31 AUG 2025',
+/**
+ * The broadsheet's own text: the masthead's strapline, the lede's headline and
+ * deck, the colophon, the folio nav. None of it is in the database, and none of
+ * it should be — a masthead is not a record, it is the publication's voice, and
+ * it changes when the publication's voice does rather than when a photograph
+ * is uploaded. What *is* in the database is the count, the date and the plates,
+ * and {@link editionOf} mixes the two.
+ */
+const copy = {
   origin: 'FROM JAKARTA',
   motto: 'photo.elianiva.com',
   tagline: 'Street, mostly. Landscape, sometimes.',
   archiveLabel: 'THE ARCHIVE',
   archiveLine: 'Jakarta, Istanbul, Tokyo and New York, since 2021.',
-  kicker: 'THIS EDITION · JULY AND AUGUST 2025',
   kickerMobile: 'THIS EDITION',
   headline: 'A summer in New York, a night in Istanbul, then home to Jakarta.',
   deck: 'Nineteen frames from July and August, made on foot with one camera and one lens.',
-  lead: {
-    id: 'no-024',
-    index: 24,
-    title: 'Jakarta, the last of the sun on Jalan Pintu Besar.',
-    ratio: '3:2',
-    exif: 'X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 31 AUG',
-    photoId: '1493976040374-85c8e12f0c0e',
-  },
-  sections: [
-    {
-      id: 'august-2025',
-      month: 'August',
-      year: '2025',
-      figures: [
-        {
-          id: 'august-2025-no-023',
-          index: 23,
-          title: 'Rush hour on Jalan Sudirman, from a footbridge.',
-          ratio: '2:3',
-          exif: 'X-T20 · 25MM · F/5.6 · 1/500 · ISO 200 · 27 AUG',
-          photoId: '1518548419970-58e3b4079ab2',
-        },
-        {
-          id: 'august-2025-no-017',
-          index: 17,
-          title: 'A paper lantern on St. Marks Place, lit before dark.',
-          ratio: '16:9',
-          exif: 'X-T20 · 25MM · F/2 · 1/250 · ISO 400 · 01 AUG',
-          photoId: '1555899434-94d1368aa7af',
-        },
-        {
-          id: 'august-2025-no-016',
-          index: 16,
-          title: 'The Empire State Building, early, from 34th Street.',
-          ratio: '4:3',
-          exif: 'X-T20 · 25MM · F/2 · 1/250 · ISO 200 · 31 AUG',
-          photoId: '1524492412937-b28074a5d7da',
-        },
-        {
-          id: 'august-2025-no-022',
-          index: 22,
-          title: 'Istanbul, the red tram on İstiklal Avenue.',
-          ratio: '2:3',
-          exif: 'X-T20 · 25MM · F/1.8 · 1/250 · ISO 800 · 14 AUG',
-          photoId: '1470004914212-05527e49370b',
-        },
-        {
-          id: 'august-2025-no-021',
-          index: 21,
-          title: 'New York, fire escapes on East 7th Street.',
-          ratio: '3:4',
-          exif: 'X-T20 · 25MM · F/5.6 · 1/250 · ISO 800 · 16 AUG',
-          photoId: '1444723121867-7a241cacace9',
-        },
-        {
-          id: 'august-2025-no-018',
-          index: 18,
-          title: 'Two years of salakade, thinning in the middle.',
-          ratio: '3:2',
-          exif: 'X-T20 · 25MM · F/2 · 1/1000 · ISO 200 · 10 AUG',
-          photoId: '1514565131-fce0801e5785',
-        },
-        {
-          id: 'august-2025-no-020',
-          index: 20,
-          title: 'Mother and son, Water Street, Dumbo.',
-          ratio: '4:3',
-          exif: 'X-T20 · 25MM · F/2 · 1/2000 · ISO 200 · 09 AUG',
-          photoId: '1519501025264-65ba15a82390',
-        },
-        {
-          id: 'august-2025-no-019',
-          index: 19,
-          title: 'Rooftop sport, out of the jersey at dusk.',
-          ratio: '4:3',
-          exif: 'X-T20 · 25MM · F/2 · 1/2000 · ISO 200 · 09 AUG',
-          photoId: '1516483638261-f4dbaf036963',
-        },
-      ],
-    },
-    {
-      id: 'july-2025',
-      month: 'July',
-      year: '2025',
-      figures: [
-        {
-          id: 'july-2025-no-015',
-          index: 15,
-          title: 'Storm King, one car between the long lawns.',
-          ratio: '9:16',
-          exif: 'X-T20 · 25MM · F/8 · 1/500 · ISO 200 · 30 JUL',
-          photoId: '1493246507139-91e8fad9978e',
-        },
-        {
-          id: 'july-2025-no-012',
-          index: 12,
-          title: 'Prospect Park, a hood among the dahlias.',
-          ratio: '3:2',
-          exif: 'X-T20 · 25MM · F/8 · 1/1000 · ISO 200 · 31 JUL',
-          photoId: '1534430480872-3498386e7856',
-        },
-        {
-          id: 'july-2025-no-009',
-          index: 9,
-          title: 'A country road, apricots, late light.',
-          ratio: '2:3',
-          exif: 'X-T20 · 25MM · F/2 · 1/1000 · ISO 400 · 03 AUG',
-          photoId: '1518391846015-55a9cc003b25',
-        },
-        {
-          id: 'july-2025-no-014',
-          index: 14,
-          title: 'Larches in the evening mist.',
-          ratio: '2:3',
-          exif: 'X-T20 · 25MM · F/5.6 · 1/500 · ISO 200 · 27 JUL',
-          photoId: '1449824913935-59a10b8d2000',
-        },
-        {
-          id: 'july-2025-no-013',
-          index: 13,
-          title: 'A goat on the scree, above the treeline.',
-          ratio: '16:9',
-          exif: 'X-T20 · 25MM · F/2 · 1/2000 · ISO 200 · 09 AUG',
-          photoId: '1506905925346-21bda4d32df4',
-        },
-        {
-          id: 'july-2025-no-011',
-          index: 11,
-          title: 'Melbourne, from Forty floors up.',
-          ratio: '4:3',
-          exif: 'X-T20 · 25MM · F/2 · 1/2000 · ISO 200 · 09 AUG',
-          photoId: '1480714378408-67cf0d13bc1b',
-        },
-        {
-          id: 'july-2025-no-010',
-          index: 10,
-          title: 'Manhattan under haze, from the Pulaski.',
-          ratio: '16:9',
-          exif: 'X-T20 · 25MM · F/2 · 1/2000 · ISO 200 · 31 JUL',
-          photoId: '1470071459604-3b5ec3a7fe05',
-        },
-        {
-          id: 'july-2025-no-006',
-          index: 6,
-          title: 'Fifth Avenue after dark, out of focus on purpose.',
-          ratio: '16:9',
-          exif: 'X-T20 · 25MM · F/1.4 · 1/1250 · ISO 200 · 31 AUG',
-          photoId: '1501785888041-af3ef285b470',
-        },
-        {
-          id: 'july-2025-no-008',
-          index: 8,
-          title: 'The Financial District, looking straight up.',
-          ratio: '3:4',
-          exif: 'X-T20 · 25MM · F/1.4 · 1/1000 · ISO 200 · 31 JUL',
-          photoId: '1476514525535-07fb3b4ae5f1',
-        },
-        {
-          id: 'july-2025-no-007',
-          index: 7,
-          title: 'Riverside Drive, streetlights through the fog.',
-          ratio: '3:2',
-          exif: 'X-T20 · 25MM · F/2 · 1/2000 · ISO 200 · 31 AUG',
-          photoId: '1486299267070-83823f5448dd',
-        },
-      ],
-    },
-  ],
-  tail: { state: 'loading', label: 'LOADING JUNE 2025' },
+  /** Printed when the site has no published photograph to count. */
+  emptyHeadline: 'Nothing published yet.',
+  emptyDeck:
+    'The first photograph is on its way. Everything below the masthead is the front page waiting for it.',
+  emptyMarker: 'NO FRAMES YET',
+  emptyNote: 'The first photograph will open the next edition.',
   colophon: {
     blurb: 'Photographs made on foot, mostly in Jakarta, usually around golden hour.',
     columns: [
@@ -375,6 +227,224 @@ export const edition: Edition = {
     searchHref: '/search',
     rssHref: '/rss.xml',
   },
+} as const satisfies {
+  readonly origin: string
+  readonly motto: string
+  readonly tagline: string
+  readonly archiveLabel: string
+  readonly archiveLine: string
+  readonly kickerMobile: string
+  readonly headline: string
+  readonly deck: string
+  readonly emptyHeadline: string
+  readonly emptyDeck: string
+  readonly emptyMarker: string
+  readonly emptyNote: string
+  readonly colophon: Colophon
+  readonly folio: Folio
+}
+
+// ---------------------------------------------------------------------------
+// the read model → the Edition
+// ---------------------------------------------------------------------------
+
+/** The public read of the Front: the Sections it groups, the cursor below
+ *  them, and the site's counters. One value, so the Edition is built from a
+ *  single consistent snapshot rather than from two reads that could disagree. */
+export interface FrontRead {
+  readonly sections: ReadonlyArray<PublicSection>
+  readonly nextSectionCursor: string | null
+  readonly stats: FrontStats
+}
+
+/** `2025-08` -> `August`. The Section's own heading name, off the key so it
+ *  never depends on a Worker's locale or zone. */
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const
+
+const monthName = (month: string): string => MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? month
+
+/**
+ * One Photo as one plate.
+ *
+ * Three facts need deciding here rather than in the view, because a view can
+ * only render what it is handed:
+ *
+ * - **Ratio.** A Photo whose Ratio nobody has set still has measured
+ *   dimensions, and `nearestRatio` is the one function that knows which of the
+ *   six supported Ratios a frame snaps to. A Photo that matches none is
+ *   refused at upload, so a null here means a frame nothing could describe;
+ *   it is dropped rather than drawn in a Ratio it is not.
+ * - **Exif.** `formatExifLine` returns null for a Photo carrying no facts, and
+ *   null means the view omits the element rather than printing an empty line.
+ * - **Number.** The Photo Number is a column, but a legacy row can carry none,
+ *   and `0` is the placard of a Photo that has not been numbered.
+ */
+const figureOf = (photo: PhotoWithTags): Figure | null => {
+  const ratio = photo.ratio ?? nearestRatio(photo.width, photo.height)
+  if (ratio === null || ratio === undefined) return null
+  return {
+    id: photo.id,
+    index: photo.number ?? 0,
+    title: photo.title,
+    ratio,
+    exif: formatExifLine(photo),
+    r2Key: photo.r2Key,
+  }
+}
+
+/** A Section's plates, in the order the read returned them, minus any Photo
+ *  that cannot be drawn. A Section left with none is dropped with it. */
+const sectionOf = (section: PublicSection): EditionSection | null => {
+  const figures = section.photos.map(figureOf).filter((figure): figure is Figure => figure !== null)
+  if (figures.length === 0) return null
+  return {
+    id: section.month,
+    month: monthName(section.month),
+    year: section.year,
+    figures,
+  }
+}
+
+/**
+ * The Sections a read returned, as the Front draws them.
+ *
+ * Exported because the Front maps its Sections in two places and they must
+ * agree: the Worker maps the first read before it renders, and the browser
+ * maps each appended read the same way. A Section whose photographs are all
+ * undrawable is dropped here rather than rendered as an empty heading.
+ */
+export const sectionsOf = (sections: ReadonlyArray<PublicSection>): ReadonlyArray<EditionSection> =>
+  sections.map(sectionOf).filter((section): section is EditionSection => section !== null)
+
+/**
+ * The kicker's month range: `THIS EDITION · JUNE 2026 AND MAY 2026`, or
+ * `THIS EDITION · JUNE 2026` when the Edition is one month long.
+ *
+ * The sections arrive newest first, so the *last* one is the oldest month in
+ * the Edition and the range reads oldest-to-newest — the same order a reader
+ * meets them scrolling back up the page.
+ */
+const kickerOf = (sections: ReadonlyArray<EditionSection>): string => {
+  const newest = sections.at(0)
+  const oldest = sections.at(-1)
+  if (newest === undefined || oldest === undefined) return 'THIS EDITION'
+  const name = (id: string): string => `${monthName(id).toUpperCase()} ${id.slice(0, 4)}`
+  if (newest.id === oldest.id) return `THIS EDITION · ${name(newest.id)}`
+  return `THIS EDITION · ${name(oldest.id)} AND ${name(newest.id)}`
+}
+
+/** The folio's date is the day the newest published photograph was taken, and
+ *  a site with no published photograph has no date to print.
+ *
+ *  `takenAt` is stored as the day a photograph was made, optionally with the
+ *  time it was made (`2026-06-11`, `2026-06-11T14:27`), so only the date part
+ *  is read. The weekday comes from the same UTC parse `formatExifLine` uses,
+ *  and a calendar-invalid day is dropped rather than rolled forward — the same
+ *  rule, so the Exif line and the folio date can never disagree about a date. */
+const folioDate = (takenAt: string | null): { long: string; short: string } => {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(takenAt?.trim() ?? '')
+  if (parts === null) return { long: '', short: '' }
+  const [, year, month, day] = parts
+  if (year === undefined || month === undefined || day === undefined) return { long: '', short: '' }
+  const stated = `${year}-${month}-${day}`
+  const parsed = DateTime.make(stated)
+  if (Option.isNone(parsed)) return { long: '', short: '' }
+  if (DateTime.formatIsoDateUtc(parsed.value) !== stated) return { long: '', short: '' }
+  return {
+    long: DateTime.formatUtc(parsed.value, {
+      locale: 'en-GB',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).toUpperCase(),
+    short: DateTime.formatUtc(parsed.value, {
+      locale: 'en-GB',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).toUpperCase(),
+  }
+}
+
+/**
+ * The masthead's wording for the site's counters, from the raw values.
+ *
+ * The counters are kept raw on the Edition and worded here because appending an
+ * older Section changes them: the reader has to see the count rise, and a
+ * worded string cannot be re-worded without parsing the wording back out
+ * again. One function that turns numbers into this masthead's three lines is
+ * the only place that wording exists.
+ */
+export const mastheadCount = (
+  edition: Edition,
+): {
+  volume: string
+  volumeMobile: string
+  issue: string
+} => {
+  const issue = String(edition.total)
+  const number = String(edition.number ?? 0).padStart(3, '0')
+  return {
+    volume: `VOL. ${edition.volume} — NO. ${number}`,
+    // The mobile Ears Strip has no room for the volume numeral.
+    volumeMobile: `NO. ${number}`,
+    issue,
+  }
+}
+
+/**
+ * The Edition, from the public read and the copy.
+ *
+ * A site with nothing published is a state this returns honestly rather than a
+ * crash or a placeholder: no lead, no Sections, a count of zero, a kicker with
+ * no month range in it, and a Continued row that says the issue is empty. The
+ * Front draws that; it does not need a photograph to be a page.
+ */
+export const editionOf = (read: FrontRead): Edition => {
+  const sections = sectionsOf(read.sections)
+  const { number, total, volume, latestTakenAt } = read.stats
+  const dates = folioDate(latestTakenAt)
+  const isEmpty = sections.length === 0
+  // The Page One plate is the newest photograph in the newest Section, which
+  // is also the first plate of that Section's flow.
+  const lead = sections.at(0)?.figures.at(0) ?? null
+  return {
+    volume,
+    number,
+    total,
+    folioDate: dates.long,
+    folioDateMobile: dates.short,
+    origin: copy.origin,
+    motto: copy.motto,
+    tagline: copy.tagline,
+    archiveLabel: copy.archiveLabel,
+    archiveLine: copy.archiveLine,
+    kicker: isEmpty ? 'THIS EDITION' : kickerOf(sections),
+    kickerMobile: copy.kickerMobile,
+    headline: isEmpty ? copy.emptyHeadline : copy.headline,
+    deck: isEmpty ? copy.emptyDeck : copy.deck,
+    lead,
+    sections,
+    tail: isEmpty
+      ? { state: 'end', marker: copy.emptyMarker, note: copy.emptyNote }
+      : { state: 'more', label: 'LOAD THE EARLIER EDITIONS' },
+    colophon: copy.colophon,
+    folio: copy.folio,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -393,8 +463,11 @@ export const frameNoShort = (index: number): string => pad(index, 3)
 export const frameCount = (count: number): string =>
   `${pad(count, 2)} ${count === 1 ? 'FRAME' : 'FRAMES'}`
 
-/** The section head's right-hand line, e.g. '08 FRAMES · NO. 016–023'. */
+/** The section head's right-hand line, e.g. '08 FRAMES · NO. 016–023'. A
+ *  Section with no plate carries no number range, so it prints the count
+ *  alone rather than a range over nothing. */
 export const sectionCount = (section: EditionSection): string => {
+  if (section.figures.length === 0) return frameCount(0)
   const indices = section.figures.map((figure) => figure.index)
   const first = Math.min(...indices)
   const last = Math.max(...indices)
@@ -402,12 +475,10 @@ export const sectionCount = (section: EditionSection): string => {
   return `${pad(section.figures.length, 2)} ${noun} · NO. ${pad(first, 3)}–${pad(last, 3)}`
 }
 
-/** The plate image, cropped by imgix to the Figure's declared ratio so the
- *  crop happens once, server-side, instead of in every reader's browser. */
-export const plateUrl = (figure: Figure): string => {
-  const height = Math.round(PLATE_WIDTH / RATIO_VALUE[figure.ratio])
-  return `https://images.unsplash.com/photo-${figure.photoId}?w=${String(PLATE_WIDTH)}&h=${String(height)}&fit=crop&crop=entropy&q=${String(PLATE_QUALITY)}&auto=format`
-}
+/** The plate's bytes: the Photo's original in R2, served through the Worker's
+ *  proxy. The frame is cropped to the Ratio by the plate's own `aspect-ratio`
+ *  box, so no resizing happens on the way out. */
+export const plateUrl = (figure: Figure): string => imageUrl(figure.r2Key)
 
 // ---------------------------------------------------------------------------
 // plate → columns

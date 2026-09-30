@@ -21,10 +21,10 @@ else
 fi
 
 # The API Worker is a second origin, not a path proxied by the site.
-if curl -sSf "$API_BASE/health" >/dev/null 2>&1; then
-  ok "GET /health on the API Worker"
+if curl -sSf "$API_BASE/api/health" >/dev/null 2>&1; then
+  ok "GET /api/health on the API Worker"
 else
-  fail "GET /health missing on the API Worker (dev.port 13371)"
+  fail "GET /api/health missing on the API Worker (dev.port 13371)"
 fi
 
 if [ "$FAIL" -eq 0 ]; then

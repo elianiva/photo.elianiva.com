@@ -71,7 +71,7 @@ const serveJwks = (key: SigningKey): void => {
 }
 
 const adminRequest = (token?: string): Request =>
-  new Request('https://photo-api.test/admin/rpc', {
+  new Request('https://photo-api.test/api/admin/rpc', {
     method: 'POST',
     ...(token === undefined ? {} : { headers: { 'Cf-Access-Jwt-Assertion': token } }),
   })
@@ -240,7 +240,7 @@ describe('the claims the gate hands back', () => {
 
 describe('admin routes wired to the gate', () => {
   it('answer 500 for a blank team domain off the dev stage', async () => {
-    for (const path of ['/admin/rpc', '/upload']) {
+    for (const path of ['/api/admin/rpc', '/api/upload']) {
       const response = await worker.fetch(
         new Request(`https://photo-api.test${path}`, { method: 'POST' }),
         workerEnv({ STAGE: 'prod', ACCESS_TEAM_DOMAIN: '' }),
@@ -262,7 +262,7 @@ describe('admin routes wired to the gate', () => {
     // `GetSession` reads no binding, so the unbound env stands: a handler that
     // reached for D1 on this path would throw rather than answer.
     const response = await worker.fetch(
-      new Request('https://photo-api.test/admin/rpc', {
+      new Request('https://photo-api.test/api/admin/rpc', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'Cf-Access-Jwt-Assertion': token },
         body: JSON.stringify({
@@ -296,8 +296,8 @@ describe('admin routes wired to the gate', () => {
 
 describe('the paths the app asks for', () => {
   // Effect's HTTP RPC client appends a slash to the URL it is given, so both
-  // groups are addressed with one: `prependUrl('/rpc')` plus a request path of
-  // `''` joins into `/rpc/`. The Worker matches each path by hand, so a
+  // groups are addressed with one: `prependUrl('/api/rpc')` plus a request path
+  // of `''` joins into `/api/rpc/`. The Worker matches each path by hand, so a
   // trailing slash it does not account for is the Not found at the bottom of
   // `fetch` — from the site's own reads, not from a stranger's.
   it('serves the admin group with and without the trailing slash', async () => {
@@ -309,7 +309,7 @@ describe('the paths the app asks for', () => {
       email: 'owner@photo.test',
     })
 
-    for (const path of ['/admin/rpc', '/admin/rpc/']) {
+    for (const path of ['/api/admin/rpc', '/api/admin/rpc/']) {
       const response = await worker.fetch(
         new Request(`https://photo-api.test${path}`, {
           method: 'POST',
@@ -352,8 +352,8 @@ describe('the paths the app asks for', () => {
       return { status: response.status, body: await response.json() }
     }
 
-    const plain = await ask('/rpc')
-    const slashed = await ask('/rpc/')
+    const plain = await ask('/api/rpc')
+    const slashed = await ask('/api/rpc/')
 
     expect(plain.status).toBe(200)
     expect(slashed.status).toBe(200)
@@ -369,7 +369,13 @@ describe('CORS for the two dev origins', () => {
   // The site's dev server (5173) and the API Worker (13371) are separate
   // origins, so the browser preflights the admin group's POST before it is
   // sent — the dev pair is a real CORS client, not a same-origin one.
-  const preflight = (origin: string, path = '/admin/rpc'): Request =>
+  //
+  // In production they are the same origin, so CORS is a development-only
+  // concern and this list is the whole of it. That narrowing is the fix for the
+  // Admin's login rather than a tidy-up: a cross-origin preflight carries no
+  // cookies by design, so Cloudflare Access answered it with a bare 403 before
+  // the Worker was reached, and the Admin could never read anything.
+  const preflight = (origin: string, path = '/api/admin/rpc'): Request =>
     new Request(`https://photo-api.test${path}`, {
       method: 'OPTIONS',
       headers: { origin, 'access-control-request-method': 'POST' },
@@ -398,6 +404,16 @@ describe('CORS for the two dev origins', () => {
 
   it('refuses a preflight from an origin outside the list', async () => {
     const response = await worker.fetch(preflight('https://not-photo.test'), workerEnv({}), {})
+    expect(response.status).toBe(403)
+    expect(response.headers.get('access-control-allow-origin')).toBeNull()
+  })
+
+  it('emits nothing for the site itself, which is same-origin and needs none', async () => {
+    // The site hostname used to be on this list. It is not any more: with the
+    // API mounted on a route of the site's own hostname there is no cross-origin
+    // exchange in production, and a CORS header here would only be a second
+    // description of a topology that no longer exists.
+    const response = await worker.fetch(preflight('https://photo.elianiva.com'), workerEnv({}), {})
     expect(response.status).toBe(403)
     expect(response.headers.get('access-control-allow-origin')).toBeNull()
   })

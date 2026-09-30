@@ -24,12 +24,14 @@ import {
   isJpegUpload,
 } from '@photo/shared'
 import { verifyAdminAccess } from './access'
+import { ADMIN_RPC_PATH, HEALTH_PATH, IMAGE_PATH, RPC_PATH, UPLOAD_PATH } from './lib/api'
 import { clientKey, createRateLimiter, type RateLimiter } from './rate-limit'
 
 // The stage arrives as a binding because the admin gate is stage-dependent:
 // blank `ACCESS_TEAM_DOMAIN` means unauthenticated on `dev` and a hard failure
-// anywhere else. See `verifyAdminAccess` in ./access.
-type ApiEnv = WebsiteEnv & { readonly STAGE: string }
+// anywhere else. See `verifyAdminAccess` in ./access. Both Workers take the
+// same bindings, so they share one env type rather than declaring it twice.
+type ApiEnv = WebsiteEnv
 
 const slugify = (input: string): string =>
   input
@@ -267,7 +269,7 @@ const gatewayLayer = (env: ApiEnv) => {
 
 const handleImageProxy = async (env: ApiEnv, request: Request): Promise<Response> => {
   const url = new URL(request.url)
-  const r2Key = decodeURIComponent(url.pathname.slice('/image/'.length))
+  const r2Key = decodeURIComponent(url.pathname.slice(IMAGE_PATH.length + 1))
   if (
     r2Key === '' ||
     r2Key.length > 256 ||
@@ -303,12 +305,14 @@ const buildRpcHandler = (
     ),
     Layer.provide(gatewayLayer(env)),
   )
+  // The two groups are mounted on the same paths the hand-written matcher below
+  // compares against, so the router and the matcher cannot name different URLs.
   const appLayer = Layer.mergeAll(
-    RpcServer.layerHttp({ group: PhotoPublicRpcs, path: '/rpc', protocol: 'http' }).pipe(
+    RpcServer.layerHttp({ group: PhotoPublicRpcs, path: RPC_PATH, protocol: 'http' }).pipe(
       Layer.provide(routerLayer),
       Layer.provide(RpcSerialization.layerJson),
     ),
-    RpcServer.layerHttp({ group: PhotoAdminRpcs, path: '/admin/rpc', protocol: 'http' }).pipe(
+    RpcServer.layerHttp({ group: PhotoAdminRpcs, path: ADMIN_RPC_PATH, protocol: 'http' }).pipe(
       Layer.provide(routerLayer),
       Layer.provide(RpcSerialization.layerJson),
     ),
@@ -320,18 +324,19 @@ const buildRpcHandler = (
   return handler
 }
 
-const ALLOWED_ORIGINS = new Set([
-  'https://photo.elianiva.com',
-  'https://photo-api.elianiva.com',
-  // The dev pair: the site's Vite dev server and this Worker's `dev.port`.
-  'http://localhost:5173',
-  'http://localhost:13371',
-])
+/**
+ * The only origins that get CORS headers: the two localhost ports the dev
+ * server runs on. In production the Admin and the API share a hostname, so
+ * nothing is cross-origin and this list is never consulted — which is the
+ * point, because a cross-origin preflight is exactly what Cloudflare Access
+ * used to answer with a bare 403. See `./lib/api` for the whole story.
+ */
+const DEV_ORIGINS = new Set(['http://localhost:5173', 'http://localhost:13371'])
 
 const corsHeaders = (request: Request): Record<string, string> => {
   const origin = request.headers.get('origin')
   if (origin === null) return {}
-  if (!ALLOWED_ORIGINS.has(origin)) return {}
+  if (!DEV_ORIGINS.has(origin)) return {}
   return {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, OPTIONS',
@@ -363,13 +368,13 @@ export default {
 
     const url = new URL(request.url)
     // Effect's HTTP RPC client appends a slash to the URL it is given, so the
-    // app itself asks for `/rpc/` and `/admin/rpc/`. Every path below is
+    // app itself asks for `/api/rpc/` and `/api/admin/rpc/`. Every path below is
     // matched by hand against this string, so the trailing slash is dropped
     // once here instead of being spelled into each comparison — otherwise the
     // site's own client gets the Not found below from every read.
     const pathname = url.pathname.replace(/\/+$/, '')
 
-    if (pathname === '/health') {
+    if (pathname === HEALTH_PATH) {
       try {
         const row = await env.DB.prepare('SELECT 1 as ok').first<{ ok: number }>()
         if (row === null) throw new Error('db probe failed')
@@ -379,7 +384,7 @@ export default {
       }
     }
 
-    if (pathname === '/upload' && request.method === 'POST') {
+    if (pathname === UPLOAD_PATH && request.method === 'POST') {
       const limited = rateLimited(uploadLimiter, request)
       if (limited !== null) return respond(limited)
       // The upload is edge-gated, not identified: nothing it writes carries
@@ -390,7 +395,7 @@ export default {
       return respond(res)
     }
 
-    if (pathname === '/admin/rpc') {
+    if (pathname === ADMIN_RPC_PATH) {
       const limited = rateLimited(adminRpcLimiter, request)
       if (limited !== null) return respond(limited)
       const gate = await verifyAdminAccess(request, env)
@@ -402,12 +407,12 @@ export default {
       return respond(res)
     }
 
-    if (url.pathname.startsWith('/image/')) {
+    if (url.pathname.startsWith(`${IMAGE_PATH}/`)) {
       const res = await handleImageProxy(env, request)
       return respond(res)
     }
 
-    if (pathname === '/rpc') {
+    if (pathname === RPC_PATH) {
       const limited = rateLimited(publicRpcLimiter, request)
       if (limited !== null) return respond(limited)
       // The admin group is mounted on `/admin/rpc`, which this path never
