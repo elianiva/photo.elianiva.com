@@ -1,0 +1,42 @@
+- banner
+  - link "Library" [ref=e2]
+  - StaticText "NO. 024"
+  - heading "Jakarta, the last of the sun on Jalan Pintu Besar" [level=1, ref=e3]
+  - StaticText "PUBLISHED"
+  - button "Discard" [disabled, ref=e4]
+  - button "Update" [disabled, ref=e5]
+- image "Jakarta, the last of the sun on Jalan Pintu Besar"
+- group "Zoom"
+  - button "FIT" [ref=e6]
+  - button "50%" [ref=e7]
+  - button "100%" [ref=e8]
+  - button "200%" [ref=e9]
+- group "Compare"
+  - button "ORIGINAL" [ref=e10]
+  - button "SPLIT" [ref=e11]
+  - button "EXPORT" [ref=e12]
+- tablist "Editor sections"
+  - tab "EDIT" [selected, ref=e13]
+  - tab "DETAILS" [ref=e14]
+- tabpanel "EDIT"
+  - generic
+    - heading "CROP" [level=2, ref=e15]
+    - StaticText "3:2 · AS SHOT"
+    - group "Ratio"
+      - button "3:2" [ref=e21]
+      - button "2:3" [ref=e22]
+      - button "4:3" [ref=e23]
+      - button "3:4" [ref=e24]
+      - button "16:9" [ref=e25]
+      - button "9:16" [ref=e26]
+    - button "Straighten counter-clockwise" [ref=e16]
+    - button "Straighten clockwise" [ref=e17]
+    - button "Flip horizontally" [ref=e18]
+    - StaticText "LEVEL 0.0°"
+  - generic
+    - heading "BORDER" [level=2, ref=e19]
+    - StaticText "Mat"
+    - switch "Mat" [checked=true, ref=e20]
+    - LabelText
+      - StaticText "Mat"
+- region "Notifications" [ref=e1]

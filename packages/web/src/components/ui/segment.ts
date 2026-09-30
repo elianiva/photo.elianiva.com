@@ -114,6 +114,10 @@ export interface ViewInputs<V extends string = string> {
   ariaLabel: string
   /** Which 1px box the group wears. Defaults to `outline`. */
   frame?: SegmentFrame
+  /** A group with nothing to pick from yet — the Editor's Ratio segment while
+   *  the Photo is still loading. Renders every option disabled rather than
+   *  offering a pick that cannot be applied. */
+  isDisabled?: boolean
   className?: string
   optionClass?: string
 }
@@ -152,7 +156,14 @@ export const segmentGroup = <M, V extends string>(
           h.Type('button'),
           h.AriaPressed(String(option.value === inputs.selected)),
           h.OnClick(onPick(option.value)),
-          h.Class(cn(optionClasses(option.value === inputs.selected), inputs.optionClass)),
+          ...(inputs.isDisabled === true ? [h.Disabled(true)] : []),
+          h.Class(
+            cn(
+              optionClasses(option.value === inputs.selected),
+              inputs.isDisabled === true && 'cursor-not-allowed opacity-50',
+              inputs.optionClass,
+            ),
+          ),
         ],
         [option.label],
       ),

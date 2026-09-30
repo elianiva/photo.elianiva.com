@@ -17,6 +17,7 @@ import type { Url } from 'foldkit/url'
 
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
+import * as Segment from '@/components/ui/segment'
 
 import {
   AddBorderCmd,
@@ -89,7 +90,16 @@ import {
   initEditorSegments,
   initEditorState,
   isEditorDirty,
+  isPhotoRatio,
+  isPresentationDirty,
+  withCropDragEnd,
+  withCropDragStart,
+  withEditorFlip,
+  withEditorLevel,
   withEditorMat,
+  withEditorPan,
+  withEditorRatio,
+  withEditorZoom,
 } from './editor'
 import {
   applySectionEdit,
@@ -223,6 +233,8 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
           ...model.editor,
           snapshot: undefined,
           draft: undefined,
+          ratio: undefined,
+          cropDrag: undefined,
           saving: false,
           leaveUrl: '',
         },
@@ -974,7 +986,14 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // nothing it could be asked.
       return {
         model: withOptional(model, {
-          editor: { ...model.editor, snapshot: undefined, draft: undefined, saving: false },
+          editor: {
+            ...model.editor,
+            snapshot: undefined,
+            draft: undefined,
+            ratio: undefined,
+            cropDrag: undefined,
+            saving: false,
+          },
           photoStatus: 'error',
         }),
       }
@@ -982,28 +1001,65 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     ToggledEditorMat: ({ enabled }) => ({
       model: modifyFields(model, { editor: () => withEditorMat(model.editor, enabled) }),
     }),
+    SteppedEditorLevel: ({ direction }) => ({
+      model: modifyFields(model, { editor: () => withEditorLevel(model.editor, direction) }),
+    }),
+    ToggledEditorFlip: () => ({
+      model: modifyFields(model, { editor: () => withEditorFlip(model.editor) }),
+    }),
+    StartedEditorCropDrag: ({ x, y, width, height }) => ({
+      model: modifyFields(model, {
+        editor: () => withCropDragStart(model.editor, { x, y, width, height }),
+      }),
+    }),
+    DraggedEditorCrop: ({ x, y }) => ({
+      model: modifyFields(model, { editor: () => withEditorPan(model.editor, x, y) }),
+    }),
+    EndedEditorCropDrag: () => ({
+      model: modifyFields(model, { editor: () => withCropDragEnd(model.editor) }),
+    }),
+    ZoomedEditorCrop: ({ deltaY }) => ({
+      model: modifyFields(model, { editor: () => withEditorZoom(model.editor, deltaY) }),
+    }),
     SubmitEditorUpdate: () => {
       if (model.route._tag !== 'Photo') return { model }
-      const { draft, saving } = model.editor
+      const { draft, ratio, saving } = model.editor
       if (draft === undefined || saving || !isEditorDirty(model.editor)) return { model }
       return {
         model: modifyFields(model, { editor: () => ({ ...model.editor, saving: true }) }),
-        commands: [UpdateEditorCmd({ id: model.route.id, presentation: draft })],
+        commands: [
+          UpdateEditorCmd({
+            id: model.route.id,
+            presentation: draft,
+            // Spread rather than `ratio: undefined`: a Command instance matches
+            // by structural args equality in a scene test, and an absent key
+            // and a present-but-undefined one are not the same object.
+            ...(ratio === undefined ? {} : { ratio }),
+            savePresentation: isPresentationDirty(model.editor),
+          }),
+        ],
       }
     },
-    UpdatedEditor: ({ id, presentation }) => {
+    UpdatedEditor: ({ id, presentation, ratio }) => {
       if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
       // The snapshot becomes what the database holds, not what was sent, so a
       // value the service changed comes back as what it stored rather than as
-      // still-dirty. No toast: the unsaved dot going out and `Update` going
-      // quiet are the design's own confirmation, and this is the one place in
-      // the Admin where the operator is already looking at the answer.
+      // still-dirty. The Ratio override is spent either way: a save that wrote
+      // one stored it, and a save that did not had none to spend. No toast: the
+      // unsaved dot going out and `Update` going quiet are the design's own
+      // confirmation, and this is the one place in the Admin where the operator
+      // is already looking at the answer.
+      const photo =
+        ratio === undefined || model.photo === undefined ? model.photo : { ...model.photo, ratio }
       return {
         model: withOptional(model, {
+          photo,
           editor: {
             ...model.editor,
             snapshot: presentation,
             draft: { ...presentation },
+            ratio: undefined,
+            cropDrag: undefined,
             saving: false,
           },
         }),
@@ -1014,7 +1070,17 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       if (snapshot === undefined || draft === undefined) return { model }
       return {
         model: modifyFields(model, {
-          editor: () => ({ ...model.editor, snapshot, draft: { ...snapshot }, saving: false }),
+          // The Ratio override and any pan in flight go back with the draft:
+          // `Discard` is "put the snapshot back", and a half-dragged crop is
+          // not something the operator asked to keep.
+          editor: () => ({
+            ...model.editor,
+            snapshot,
+            draft: { ...snapshot },
+            ratio: undefined,
+            cropDrag: undefined,
+            saving: false,
+          }),
         }),
       }
     },
@@ -1396,6 +1462,20 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       withUploadDialogOpen(foldFileDrop(model, message)),
     GotToastMessage: ({ message }) => foldToast(model, message),
     GotSegmentMessage: ({ groupId, message }) => foldSegmentGroup(groupId)(model, message),
+    // The Crop Ratio `Segment` is authored rather than stored child state: its
+    // pick moves the Editor's Ratio override, and the next render reads the
+    // selection back off the override, so there is no second copy to sync.
+    GotCropRatioMessage: ({ message }) =>
+      Segment.Message.match<UpdateReturn>(message, {
+        Picked: ({ value }) =>
+          isPhotoRatio(value)
+            ? {
+                model: modifyFields(model, {
+                  editor: () => withEditorRatio(model.editor, model.photo, value),
+                }),
+              }
+            : { model },
+      }),
     GotTagActionsMessage: ({ message }) => foldTagActions(model, message),
     GotEditorLeaveMessage: ({ message }) => foldEditorLeave(model, message),
 

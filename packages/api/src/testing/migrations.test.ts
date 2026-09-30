@@ -269,7 +269,7 @@ describe('migration 0004', () => {
     await insertLegacy(db, { id: 'fresh', takenAt: '2025-01-01', width: 6000, height: 4000 })
     const row = await db
       .prepare(
-        `SELECT status, deletedAt, number, cropX, cropY, cropScale, level,
+        `SELECT status, deletedAt, number, cropX, cropY, cropScale, cropFlip, level,
                 borderEnabled, borderStyle, borderColour, borderWidth,
                 aperture, shutter, iso, focalLength,
                 previewLongEdge, previewFormat, previewQuality, fullQuality,
@@ -285,6 +285,7 @@ describe('migration 0004', () => {
       cropX: 0,
       cropY: 0,
       cropScale: 1,
+      cropFlip: 0,
       level: null,
       borderEnabled: 0,
       borderStyle: null,
@@ -472,5 +473,32 @@ describe(`migration ${COUNTER}`, () => {
     await expect(
       db.prepare(`UPDATE photo_number_counter SET value = 'forty one' WHERE id = 1`).run(),
     ).rejects.toThrow(/INT/i)
+  })
+})
+
+describe('migration 0007_crop_flip.sql', () => {
+  const CROP_FLIP = '0007_crop_flip.sql'
+
+  it('defaults every pre-existing row to un-flipped', async () => {
+    const engine = new DatabaseSync(':memory:')
+    applyMigrations(engine, migrationsThrough(COUNTER))
+    const db = d1Over(engine)
+    await insertLegacy(db, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
+
+    engine.exec(migrationSql(CROP_FLIP))
+
+    const row = await db
+      .prepare('SELECT cropFlip FROM photos WHERE id = ?')
+      .bind('p1')
+      .first<{ cropFlip: number }>()
+    expect(row?.cropFlip).toBe(0)
+  })
+
+  it('is NOT NULL, so a crop cannot have an unknown mirror', async () => {
+    const db = makeD1Fake(repoMigrations())
+    await insertLegacy(db, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
+    await expect(
+      db.prepare(`UPDATE photos SET cropFlip = NULL WHERE id = 'p1'`).run(),
+    ).rejects.toThrow(/NOT NULL/i)
   })
 })

@@ -185,6 +185,10 @@ export class UpdatePhoto extends Rpc.make('UpdatePhoto', {
     slug: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200)))),
     takenAt: S.optional(S.String.pipe(S.check(S.isMaxLength(64)))),
     metadata: S.optional(PhotoMetadata),
+    /** The frame proportion, one of six. A Photo column rather than a
+     *  Presentation field, so it rides on this call and not on
+     *  `UpdatePhotoPresentation`. */
+    ratio: S.optional(PhotoRatio),
     tagIds: S.optional(
       S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(S.check(S.isMaxLength(32))),
     ),
@@ -341,6 +345,9 @@ const PhotoCrop = S.Struct({
   x: S.Number,
   y: S.Number,
   scale: S.Number.pipe(S.check(S.isGreaterThan(0))),
+  /** Migration 0007's mirror. Optional so a caller that only moves the pan or
+   *  the zoom leaves the stored flip alone, the way the mat details do. */
+  flipX: S.optional(S.Boolean),
 })
 
 const PhotoMat = S.Struct({

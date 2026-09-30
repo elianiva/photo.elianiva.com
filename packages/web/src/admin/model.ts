@@ -12,6 +12,7 @@ import { Url } from 'foldkit/url'
 import {
   PhotoId,
   PhotoPresentation,
+  PhotoRatio,
   PhotoWithTags,
   RenditionFormat,
   Settings,
@@ -213,6 +214,20 @@ export type AtomsState = typeof AtomsState.Type
 export const EditorTab = S.Literals(['edit', 'details'])
 export type EditorTab = typeof EditorTab.Type
 
+/** A pan in flight. The pointer's origin and the frame's own box, in client
+ *  coordinates, plus the crop the drag started from — a drag is measured
+ *  against its origin rather than accumulated, so a pointer that wanders back
+ *  returns the pan to where it began instead of drifting. */
+export const EditorCropDrag = S.Struct({
+  x: S.Number,
+  y: S.Number,
+  width: S.Number,
+  height: S.Number,
+  startX: S.Number,
+  startY: S.Number,
+})
+export type EditorCropDrag = typeof EditorCropDrag.Type
+
 export const EditorState = S.Struct({
   /** Which Inspector tab is open. `EDIT` is the design's default; `DETAILS`
    *  is the record. `HISTORY` is deferred (decision 8) and no third value
@@ -226,6 +241,14 @@ export const EditorState = S.Struct({
    *  rather than a set of touched fields, so `Discard` needs no bookkeeping
    *  beyond "put the snapshot back". */
   draft: S.optional(PhotoPresentation),
+  /** The Ratio the operator picked, and only while it differs from the Photo's
+   *  stored one. Ratio is a Photo column rather than a Presentation field, so
+   *  it is an override beside the draft instead of a field inside it: `Discard`
+   *  is clearing the field, and a pick that lands back on the stored Ratio is
+   *  no change at all. */
+  ratio: S.optional(PhotoRatio),
+  /** The pan in flight, or absent. View state, never saved. */
+  cropDrag: S.optional(EditorCropDrag),
   saving: S.Boolean,
   /** The route the Editor was opened from, so `← Library` returns to the list
    *  the operator was reading rather than to `/admin` whatever it was. */
@@ -479,6 +502,11 @@ export const Message = defineMessageUnion({
 
   // Desk atom submodels
   GotSegmentMessage: { groupId: S.String, message: Segment.Message },
+  /** A pick from the Crop section's Ratio `Segment`. Its own variant rather than
+   *  a `GotSegmentMessage`, because the Ratio is authored data instead of a
+   *  Stage Bar view mode: it is not stored in `segmentGroups` at all, and its
+   *  selection is read back off the draft on every render. */
+  GotCropRatioMessage: { message: Segment.Message },
 
   // the atoms sheet
   SteppedAtomPage: { page: S.Number },
@@ -580,14 +608,27 @@ export const Message = defineMessageUnion({
    *  Mat is the one thing the Stage draws out of the stored Presentation;
    *  #32 adds its colour, style and width beside this toggle. */
   ToggledEditorMat: { enabled: S.Boolean },
+  /** One straighten step. `-1` turns the frame counter-clockwise, `1` with it. */
+  SteppedEditorLevel: { direction: S.Literals([-1, 1]) },
+  /** The mirror beside the two straighten buttons. */
+  ToggledEditorFlip: {},
+  /** A pan started on the photograph: the pointer's client position and the
+   *  frame box it started in. */
+  StartedEditorCropDrag: { x: S.Number, y: S.Number, width: S.Number, height: S.Number },
+  DraggedEditorCrop: { x: S.Number, y: S.Number },
+  EndedEditorCropDrag: {},
+  /** A wheel notch over the photograph. The sign of `deltaY` is the direction;
+   *  the magnitude is the browser's, so one notch is one step. */
+  ZoomedEditorCrop: { deltaY: S.Number },
   /** Send the draft as one Presentation — the crop, the level, the mat and the
    *  export overrides ride in a single call because the Presentation is one
    *  fact (CONTEXT.md). */
   SubmitEditorUpdate: {},
   /** The stored truth the save answered with, which becomes the new snapshot
    *  and the new draft in one step, so the indicator clears off the server's
-   *  answer rather than off the request. */
-  UpdatedEditor: { id: PhotoId, presentation: PhotoPresentation },
+   *  answer rather than off the request. `ratio` is present only when the save
+   *  wrote one. */
+  UpdatedEditor: { id: PhotoId, presentation: PhotoPresentation, ratio: S.optional(PhotoRatio) },
   /** Put the snapshot back. No RPC: the loaded value is the truth the Editor
    *  started from, so reverting is a copy, not a write. */
   DiscardEditor: {},

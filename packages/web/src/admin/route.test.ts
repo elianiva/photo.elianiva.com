@@ -62,6 +62,7 @@ const PRESENTATION = {
   cropX: 0,
   cropY: 0,
   cropScale: 1,
+  cropFlipX: false,
   level: null,
   borderEnabled: true,
   borderStyle: 'gallery',
