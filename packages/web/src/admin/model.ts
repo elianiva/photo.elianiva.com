@@ -27,9 +27,16 @@ import * as Segment from '@/components/ui/segment'
 import * as Swatch from '@/components/ui/swatch'
 import * as Toast from '@/components/ui/toast'
 
-import { AppRoute, LibraryView } from './route'
+import {
+  AppRoute,
+  LibraryRatioFilter,
+  LibrarySortFilter,
+  LibraryStatusFilter,
+  LibraryView,
+  libraryViewOf,
+} from './route'
+import type { LibraryFilters } from './route'
 import { SectionEdit, SettingsDraft } from './settings-draft'
-import * as TagManager from './tag-manager'
 
 // ---------------------------------------------------------------------------
 // Submodel bundles
@@ -252,17 +259,24 @@ export const Model = S.Struct({
   session: Session,
   counts: Counts,
   storage: Storage,
-  /** The Page Head search's text. Submitted into the list by
-   *  `SubmittedSearch`; #26 moves it into the URL. */
+  /** The Page Head search's text. A keystroke moves it; `SubmittedSearch`
+   *  commits it into the URL's `q`, which is what the fetch reads. */
   searchQuery: S.String,
+  /** The committed search, read from the URL's `q`. A half-typed query is not
+   *  a filter, so a status click sends this rather than what is in the box. */
+  appliedQuery: S.String,
+  /** The Library filter's single-selects, read off the URL. Status is one of
+   *  the design's five segments; ratio is `any` or one of the six; sort is the
+   *  two orderings. The view is route state (`libraryViewOf`), and the sidebar
+   *  owns the tag set (`activeTagIds`). */
+  statusFilter: LibraryStatusFilter,
+  ratioFilter: LibraryRatioFilter,
+  sortFilter: LibrarySortFilter,
 
   // tag filter, as Tag ids. A set, not one slug: the sidebar's tag filter is
   // multi-select, and a second pick narrows the list rather than replacing the
   // first. Empty means every Photo.
   activeTagIds: S.Array(S.String),
-
-  // tag manager bar (chips + inline create)
-  tagManager: TagManager.Model,
 
   // the sidebar's per-tag actions: create a Tag, delete this one
   tagActions: Dialog.Model,
@@ -372,7 +386,25 @@ export const Message = defineMessageUnion({
   // filter bar
   /** Add or remove one Tag from the multi-select filter. */
   ToggledTagFilter: { id: S.String },
+  /** One of the status filter's five segments. `scheduled` is not a stored
+   *  Status; the filter selects nothing for it (see `route.ts`). */
+  SelectedStatusFilter: { value: LibraryStatusFilter },
+  /** One of the six Ratios, or `any` to clear it. */
+  SelectedRatioFilter: { value: LibraryRatioFilter },
+  /** `newest` or `oldest` — the SORT select and the Table Head's arrow are the
+   *  same fact in two places. */
+  SelectedSortFilter: { value: LibrarySortFilter },
+  /** Flip the sort between newest and oldest, from the Table Head's `TAKEN`. */
+  ToggledSort: {},
   RetryFetch: {},
+  /** A cold load (or a Back press) whose page number has no cursor in the
+   *  Model: the command walks the keyset from the first page to the one the
+   *  URL names, and answers with the chain so Previous keeps working. */
+  SucceededFetchLibraryPage: {
+    page: S.Number,
+    cursors: S.Array(S.String),
+    ...libraryPageFields,
+  },
 
   // the Page Head's search
   SetSearchQuery: { value: S.String },
@@ -395,7 +427,7 @@ export const Message = defineMessageUnion({
   // create tag inline (from either combo, the tag manager bar, or the
   // sidebar's per-row actions)
   CreateTagRequested: {
-    source: S.Literals(['upload', 'manager', 'sidebar']),
+    source: S.Literals(['upload', 'sidebar']),
     label: S.String,
   },
 
@@ -403,7 +435,7 @@ export const Message = defineMessageUnion({
   RemoveUploadTag: { id: S.String },
 
   SucceededCreateTag: {
-    source: S.Literals(['upload', 'manager', 'sidebar']),
+    source: S.Literals(['upload', 'sidebar']),
     tag: Tag,
   },
 
@@ -441,12 +473,9 @@ export const Message = defineMessageUnion({
   RequestDeletePhoto: { id: S.String, label: S.String },
   RequestDeleteTag: { id: S.String, label: S.String },
   ConfirmPending: {},
-  DeletedPhoto: { id: S.String, photos: S.Array(PhotoWithTags) },
-  DeletedTag: { tags: S.Array(Tag), photos: S.Array(PhotoWithTags) },
+  DeletedPhoto: { id: S.String, ...libraryPageFields },
+  DeletedTag: { tags: S.Array(Tag), ...libraryPageFields },
   GotConfirmMessage: { message: Dialog.Message },
-
-  // tag manager bar
-  GotTagManagerMessage: { message: TagManager.Message },
 
   // Desk atom submodels
   GotSegmentMessage: { groupId: S.String, message: Segment.Message },
@@ -579,3 +608,16 @@ export type Msg = Message
 /** Uploaded bytes are not part of the serializable Model; they live here,
  *  keyed by queue-item id (`${name}:${size}`), until their upload completes. */
 export const fileStore = new Map<string, File>()
+
+/** The Library filter as the Model holds it, in the shape the URL and the
+ *  commands speak. The route carries the same value in its query; this is the
+ *  Model's half, and `sameLibraryFilters` is what keeps the two in step. */
+export const libraryFiltersOfModel = (model: Model): LibraryFilters => ({
+  status: model.statusFilter,
+  ratio: model.ratioFilter,
+  tagIds: [...model.activeTagIds],
+  sort: model.sortFilter,
+  q: model.appliedQuery,
+  page: model.libraryPage,
+  view: libraryViewOf(model.route),
+})

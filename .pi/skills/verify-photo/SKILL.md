@@ -86,7 +86,9 @@ UI handles that actually exist in this repo:
 - Library controls: in grid view, density buttons `aria-label "2 columns"` through `"6 columns"` with `aria-pressed`
 - Library table: rows by `libraryRow` slots, pager `Next page` / `Previous page`; row `⋯` by `aria-label "More actions for <title>"`
 - Library grid: square tiles by `aria-label "Open <title>"`; hover overlay has `Edit` and `Delete`; a tile (or its `Edit`) opens the **Editor route** `/admin/photos/<id>`
-- Tag filter: `TagManager` chips labeled by `tag.label`
+- Library Filter Bar: status segments `ALL 412` / `PUBLISHED 402` / `DRAFTS 7` / `SCHEDULED` / `FAILED 1`, ratio segments `ANY` / `3:2` / …, a `combobox` named `SORT` (`NEWEST FIRST` / `OLDEST FIRST`), next to the `List view` / `Grid view` toggle
+- Table Head: the sorted column is a button `Sort by TAKEN` whose label reads `TAKEN ↓` or `TAKEN ↑`
+- Tag filter (sidebar): one row per tag labeled `tag.label` with its count and `aria-pressed`; the row toggles the filter in place
 - Upload dialog: `FileDrop` + `Multi` combo for tag ids + `takenAt` input, queue rows by `QueueItem.id` (`${name}:${size}`)
 - Editor route `/admin/photos/<id>`: Top Bar, Stage (`data-slot="mat"`), 360px Inspector; `← Library` returns to the view it was opened from
 - Lightbox (public gallery only): keyboard `Escape` dismisses it (`home/subscriptions.ts`); the Admin has no lightbox any more
@@ -109,8 +111,8 @@ npx agent-browser press --key "Escape"
 BASE="${BASE:-http://localhost:5173}"
 npx agent-browser open "$BASE/admin"
 npx agent-browser click --role button --name "Upload"
-# tag chip toggle is via TagManager submodel — click chip by label
-npx agent-browser click --role button --name "Kyoto"
+# the tag filter is the sidebar rows; the Library Filter Bar carries Status / Ratio / SORT / View
+npx agent-browser click --role button --name "Kyoto 38"
 # switch the Library to the tile grid; the URL becomes /admin?view=grid
 npx agent-browser click --role button --name "Grid view"
 # upload: pick files via FileDrop, set tags via combo, then Add N to drafts
