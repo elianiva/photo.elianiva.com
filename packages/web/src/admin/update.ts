@@ -42,6 +42,7 @@ import {
   PersistColsCmd,
   ReplaceUrlCmd,
   SaveSettingsCmd,
+  SetEditorStatusCmd,
   SetRowStatusCmd,
   UpdateEditorCmd,
   listArgsOf,
@@ -86,19 +87,26 @@ import {
 } from './route'
 import type { AppRoute, LibraryFilters } from './route'
 import {
+  EDITOR_STATUS_SEGMENT,
+  detailsOfPhoto,
   editorReturnUrl,
   initEditorSegments,
   initEditorState,
+  isDetailsDirty,
   isEditorDirty,
   isPhotoRatio,
+  isPhotoStatus,
   isPresentationDirty,
+  metadataWithLocation,
   withCropDragEnd,
   withCropDragStart,
+  withEditorDetails,
   withEditorFlip,
   withEditorLevel,
   withEditorMat,
   withEditorPan,
   withEditorRatio,
+  withEditorStatusSelected,
   withEditorZoom,
 } from './editor'
 import {
@@ -234,6 +242,8 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
           snapshot: undefined,
           draft: undefined,
           ratio: undefined,
+          detailsSnapshot: undefined,
+          detailsDraft: undefined,
           cropDrag: undefined,
           saving: false,
           leaveUrl: '',
@@ -548,7 +558,19 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // A response for a Photo the URL no longer names is stale: the route
       // moved on while the request was in flight.
       if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
-      return { model: withOptional(model, { photo, photoStatus: 'ready' }) }
+      // The `DETAILS` pair comes from the Photo, not from the Presentation
+      // read: a title is a field on the row, and the panel edits the row.
+      const details = detailsOfPhoto(photo)
+      return {
+        model: withOptional(model, {
+          photo,
+          photoStatus: 'ready',
+          // The Status group's selection is the Photo's own fact, so a cold
+          // load cannot draw the group's default beside a published chip.
+          segmentGroups: withEditorStatusSelected(model.segmentGroups, photo.status ?? 'draft'),
+          editor: { ...model.editor, detailsSnapshot: details, detailsDraft: { ...details } },
+        }),
+      }
     },
     FailedFetchPhoto: ({ id }) => {
       if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
@@ -569,11 +591,14 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
     FailedRpc: ({ message: failure }) => {
       // `error` is optional and may be absent from normalized state; assign
-      // via spread (see `withOptional`) instead of modifyFields.
-      const errored = withOptional(modifyFields(model, { loadingMore: () => false }), {
-        status: 'error',
-        error: failure,
+      // via spread (see `withOptional`) instead of modifyFields. A failed save
+      // releases `saving` too, or the Top Bar's `Update` stays disabled behind
+      // the toast with nothing in flight.
+      const unstuck = modifyFields(model, {
+        loadingMore: () => false,
+        editor: () => ({ ...model.editor, saving: false }),
       })
+      const errored = withOptional(unstuck, { status: 'error', error: failure })
       return showToast(errored, 'Something went wrong', 'Error', failure)
     },
 
@@ -1001,6 +1026,58 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     ToggledEditorMat: ({ enabled }) => ({
       model: modifyFields(model, { editor: () => withEditorMat(model.editor, enabled) }),
     }),
+    // The `DETAILS` tab's controls, one message each so a value's type is the
+    // schema's. The four Fields write their own field on the record draft and
+    // none of them touches the network — `SubmitEditorUpdate` is the one save.
+    // The Ratio Select writes the same override the Crop section's Segment
+    // does, so the two controls cannot disagree.
+    SetEditorTitle: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { title: value }),
+      }),
+    }),
+    SetEditorPlace: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { location: value }),
+      }),
+    }),
+    SetEditorTakenAt: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { takenAt: value }),
+      }),
+    }),
+    SetEditorSlug: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { slug: value }),
+      }),
+    }),
+    SetEditorRatio: ({ ratio }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorRatio(model.editor, model.photo, ratio),
+      }),
+    }),
+    // The Status group. The pick is the Segment child's own state, folded by
+    // `GotSegmentMessage`; what the parent does with it is a lifecycle write
+    // (`SetPhotoStatus`, not `UpdatePhoto`), and the group is put back on the
+    // stored value when the write answers.
+    SucceededSetEditorStatus: ({ id, photo }) => {
+      if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
+      const synced = modifyFields(withOptional(model, { photo }), {
+        segmentGroups: () => withEditorStatusSelected(model.segmentGroups, photo.status ?? 'draft'),
+      })
+      // A Status moved, so the sidebar's counts moved: re-read rather than
+      // patch, exactly as the Library's row menu does.
+      return { model: synced, commands: [FetchCountsCmd()] }
+    },
+    FailedSetEditorStatus: () =>
+      showToast(
+        modifyFields(model, {
+          segmentGroups: () =>
+            withEditorStatusSelected(model.segmentGroups, model.photo?.status ?? 'draft'),
+        }),
+        'Could not change the status',
+        'Error',
+      ),
     SteppedEditorLevel: ({ direction }) => ({
       model: modifyFields(model, { editor: () => withEditorLevel(model.editor, direction) }),
     }),
@@ -1023,8 +1100,10 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     }),
     SubmitEditorUpdate: () => {
       if (model.route._tag !== 'Photo') return { model }
-      const { draft, ratio, saving } = model.editor
-      if (draft === undefined || saving || !isEditorDirty(model.editor)) return { model }
+      const { draft, ratio, detailsDraft, saving } = model.editor
+      if (draft === undefined || detailsDraft === undefined || saving) return { model }
+      if (!isEditorDirty(model.editor)) return { model }
+      const detailsDirty = isDetailsDirty(model.editor)
       return {
         model: modifyFields(model, { editor: () => ({ ...model.editor, saving: true }) }),
         commands: [
@@ -1036,48 +1115,60 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             // and a present-but-undefined one are not the same object.
             ...(ratio === undefined ? {} : { ratio }),
             savePresentation: isPresentationDirty(model.editor),
+            // The record's own fields when they moved, with the metadata blob
+            // the panel does not edit carried because `UpdatePhoto` replaces
+            // the whole thing.
+            ...(detailsDirty
+              ? {
+                  details: detailsDraft,
+                  metadata: metadataWithLocation(model.photo?.metadata, detailsDraft.location),
+                }
+              : {}),
           }),
         ],
       }
     },
-    UpdatedEditor: ({ id, presentation, ratio }) => {
+    UpdatedEditor: ({ id, presentation, photo }) => {
       if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
-      // The snapshot becomes what the database holds, not what was sent, so a
+      // The snapshots become what the database holds, not what was sent, so a
       // value the service changed comes back as what it stored rather than as
       // still-dirty. The Ratio override is spent either way: a save that wrote
-      // one stored it, and a save that did not had none to spend. No toast: the
-      // unsaved dot going out and `Update` going quiet are the design's own
-      // confirmation, and this is the one place in the Admin where the operator
-      // is already looking at the answer.
-      const photo =
-        ratio === undefined || model.photo === undefined ? model.photo : { ...model.photo, ratio }
+      // one stored it, and a save that did not had none to spend. `photo` is
+      // absent for a Presentation-only save, which leaves the record's own
+      // snapshot alone. No toast: the unsaved dot going out and `Update` going
+      // quiet are the design's own confirmation.
+      const details = photo === undefined ? undefined : detailsOfPhoto(photo)
+      const withPhoto = photo === undefined ? model : withOptional(model, { photo })
       return {
-        model: withOptional(model, {
-          photo,
-          editor: {
+        model: modifyFields(withPhoto, {
+          editor: () => ({
             ...model.editor,
             snapshot: presentation,
             draft: { ...presentation },
             ratio: undefined,
+            ...(details === undefined
+              ? {}
+              : { detailsSnapshot: details, detailsDraft: { ...details } }),
             cropDrag: undefined,
             saving: false,
-          },
+          }),
         }),
       }
     },
     DiscardEditor: () => {
-      const { snapshot, draft } = model.editor
+      const { snapshot, draft, detailsSnapshot } = model.editor
       if (snapshot === undefined || draft === undefined) return { model }
       return {
         model: modifyFields(model, {
-          // The Ratio override and any pan in flight go back with the draft:
-          // `Discard` is "put the snapshot back", and a half-dragged crop is
-          // not something the operator asked to keep.
+          // The Ratio override, the `DETAILS` record and any pan in flight go
+          // back with the draft: `Discard` is "put the snapshot back", and a
+          // half-dragged crop is not something the operator asked to keep.
           editor: () => ({
             ...model.editor,
             snapshot,
             draft: { ...snapshot },
             ratio: undefined,
+            ...(detailsSnapshot === undefined ? {} : { detailsDraft: { ...detailsSnapshot } }),
             cropDrag: undefined,
             saving: false,
           }),
@@ -1461,7 +1552,31 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // tag the batch before it goes up.
       withUploadDialogOpen(foldFileDrop(model, message)),
     GotToastMessage: ({ message }) => foldToast(model, message),
-    GotSegmentMessage: ({ groupId, message }) => foldSegmentGroup(groupId)(model, message),
+    // One Segment group, by id. Every group's pick is view state except the
+    // `DETAILS` Status group's, which is a lifecycle write: the child's own
+    // fold has already moved the selection, and the parent adds the
+    // `SetPhotoStatus` call. `SucceededSetEditorStatus` puts the selection back
+    // on the stored value, so a pick that fails leaves the group where it was.
+    GotSegmentMessage: ({ groupId, message }) => {
+      const folded = foldSegmentGroup(groupId)(model, message)
+      if (
+        groupId !== EDITOR_STATUS_SEGMENT.id ||
+        message._tag !== 'Picked' ||
+        !isPhotoStatus(message.value) ||
+        model.route._tag !== 'Photo' ||
+        model.photo === undefined ||
+        model.photoStatus !== 'ready'
+      ) {
+        return folded
+      }
+      return {
+        model: folded.model,
+        commands: [
+          SetEditorStatusCmd({ id: model.route.id, status: message.value }),
+          ...(folded.commands ?? []),
+        ],
+      }
+    },
     // The Crop Ratio `Segment` is authored rather than stored child state: its
     // pick moves the Editor's Ratio override, and the next render reads the
     // selection back off the override, so there is no second copy to sync.

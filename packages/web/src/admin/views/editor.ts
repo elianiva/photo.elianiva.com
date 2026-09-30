@@ -20,17 +20,17 @@
  * What the Stage draws is the *draft*, so an unsaved change is visible before
  * it is saved; `editor.ts` owns that rule and the geometry behind it.
  *
- * Two of the design's four regions are not finished, and both say so here
- * rather than pretending otherwise:
+ * Two regions carry unfinished work, and each says so here rather than
+ * pretending otherwise:
  *
  *   - the Inspector's `HISTORY` tab is deferred (decision 8), so two tabs are
  *     drawn and not three — not even a disabled one, which would be a promise
  *     with nothing behind it;
- *   - the `EDIT` tab's only control is the Mat's on/off. The Mat is the one
- *     thing the Stage draws out of the stored Presentation, so its toggle is
- *     the shell's; the colour, the style and the width beside it are #32, the
- *     crop above them is #31 and the export panel is #33. The `DETAILS` tab is
- *     #34's record, of which this draws the one line no control may change.
+ *   - the `EDIT` tab draws the Crop panel (#31) and the Mat's on/off. The Mat's
+ *     colour, style and width beside the toggle are #32, and the export panel
+ *     is #33. The `DETAILS` tab is finished (#34): the four `UpdatePhoto`
+ *     Fields, the Status group and the `RATIO` override, plus the one line no
+ *     control may change.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
@@ -41,9 +41,12 @@ import { ArrowLeft, FlipHorizontal, RotateCcw, RotateCw } from 'lucide'
 import * as Button from '@/components/ui/button'
 import * as Dialog from '@/components/ui/dialog'
 import * as IconButton from '@/components/ui/icon-button'
+import * as Input from '@/components/ui/input'
 import * as NavLink from '@/components/ui/nav-link'
 import * as Segment from '@/components/ui/segment'
+import * as Select from '@/components/ui/select'
 import * as Status from '@/components/ui/status'
+import * as Textarea from '@/components/ui/textarea'
 import * as ToggleRow from '@/components/ui/toggle-row'
 
 import { icon } from '@/lib/icons'
@@ -54,6 +57,7 @@ import { cn } from '@/lib/utils'
 import {
   COMPARE_SEGMENT,
   CROP_RATIO_SEGMENT,
+  EDITOR_STATUS_SEGMENT,
   ZOOM_SEGMENT,
   cropRatioLabel,
   cropStyle,
@@ -63,10 +67,12 @@ import {
   fitFrameWidth,
   frameAspect,
   isEditorDirty,
+  isPhotoRatio,
   levelLabel,
   matColourClass,
   matPaddingStyle,
   photoNumberLabel,
+  ratioOptionLabel,
   statusVariantOf,
   zoomWidth,
   type EditorCompare,
@@ -528,28 +534,132 @@ const editTab = (model: Model, h: HtmlBuilder<Msg>): Child =>
     ],
   )
 
-/** The `DETAILS` tab. #34 owns the record; the one line drawn here is the part
- *  of it that is not a control — the Photo Number, assigned at upload and never
- *  changed (CONTEXT.md, Photo Number). It makes the tab a record rather than a
- *  gap, and it is a fact the shell has already loaded. */
-const detailsTab = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.div(
+/** The design's `Field` box is a recipe — 8px of padding above and below the
+ *  value's own line box — and the shared `Input` atom pins its box at `h-9`,
+ *  which renders 3.2px shorter than the master's 55.21px. The `DETAILS` tab is
+ *  the design's Field, so its single-line controls take the recipe (`h-auto`,
+ *  and the atom's own padding does the rest) rather than the pin. */
+const FIELD_BOX = 'h-auto'
+
+/** The `DETAILS` tab: the Photo's own record. `TITLE`, `PLACE`, `TAKEN` and
+ *  `SLUG` are `UpdatePhoto` fields written on the Top Bar's `Update`; the
+ *  Status group is `SetPhotoStatus`; the `RATIO` Select writes the same
+ *  `EditorState.ratio` override the Crop section's Segment does. The design's
+ *  `SERIES` Select that followed `PLACE` is gone (decision 5 — no Series
+ *  entity), and `PLACE` is `metadata.location`, so the two rows sit directly
+ *  beside each other with no empty slot between them.
+ *
+ *  The panel draws no footer: the Top Bar already owns the save action, and a
+ *  second `Discard` / `Update` pair below the record would be the same two
+ *  actions offered twice (#30). */
+const detailsTab = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const photo = model.photo
+  const draft = model.editor.detailsDraft
+  const ready = photo !== undefined && model.photoStatus === 'ready' && draft !== undefined
+  // A form over a Photo that has not loaded yet is drawn disabled over empty
+  // values rather than blinking out and back.
+  const details = draft ?? { title: '', slug: '', location: '', takenAt: '' }
+  const number = photo === undefined ? 'NO. —' : photoNumberLabel(photo) || 'NO. —'
+  return h.div(
     [h.Role('tabpanel'), h.AriaLabel('DETAILS'), h.Class('flex flex-col gap-(--spacing-xl)')],
     [
       panel(
         'RECORD',
         h,
+        // TITLE is the one Field that grows with its value. The design's TITLE
+        // Field is 78.41px against the master's 55.21px, and the extra 23.2px
+        // is one more line of `$typography.body` (16px at 1.45 leading) — the
+        // value wraps to two lines. There is no helper row and no `rows` prop
+        // in the master (`cb46079a5eae06e4`), so a `Textarea` — the same
+        // underlined box on a field that grows — is what draws the design's
+        // height, and `min-h-9` keeps a short title at the master's box.
+        Textarea.textarea(
+          {
+            id: 'editor-title',
+            label: 'TITLE',
+            value: details.title,
+            isDisabled: !ready,
+            className: 'min-h-9',
+            onInput: (value) => M.SetEditorTitle({ value }),
+          },
+          h,
+        ),
+        Input.input(
+          {
+            id: 'editor-place',
+            label: 'PLACE',
+            value: details.location,
+            isDisabled: !ready,
+            className: FIELD_BOX,
+            onInput: (value) => M.SetEditorPlace({ value }),
+          },
+          h,
+        ),
+        Input.input(
+          {
+            id: 'editor-taken',
+            label: 'TAKEN',
+            // `takenAt` is a day (`YYYY-MM-DD`); a native date field edits
+            // exactly that column and draws the operator's own format over it.
+            type: 'date',
+            value: details.takenAt,
+            isDisabled: !ready,
+            className: FIELD_BOX,
+            onInput: (value) => M.SetEditorTakenAt({ value }),
+          },
+          h,
+        ),
+        // The Status group is the same `Segment` atom as the Stage Bar's
+        // groups, drawn as equal thirds of the 312px column.
+        editorSegment(
+          model,
+          {
+            ...EDITOR_STATUS_SEGMENT,
+            className: 'w-full',
+            optionClass: 'flex-1',
+            isDisabled: !ready,
+          },
+          h,
+        ),
+        Select.select(
+          {
+            id: 'editor-ratio',
+            label: 'RATIO',
+            // The override if the Crop section (or this Select) set one, else
+            // the stored column, else the frame's nearest supported Ratio. A
+            // stored Ratio always wins over a derived one (CONTEXT.md, Ratio).
+            value: effectiveRatio(photo, model.editor) ?? '3:2',
+            isDisabled: !ready,
+            options: PHOTO_RATIOS.map((ratio) => ({
+              value: ratio,
+              label: ratioOptionLabel(ratio),
+            })),
+            onChange: (value) => M.SetEditorRatio({ ratio: isPhotoRatio(value) ? value : '3:2' }),
+          },
+          h,
+        ),
+        // Read-only. The Photo Number is assigned at upload, is unique across
+        // the site and is never reused — not by a deleted Photo and not by a
+        // purged one (CONTEXT.md, Photo Number) — so no control may edit it.
         h.p(
           [h.Class('type-exif-sm text-role-text-disabled')],
-          [
-            model.photo === undefined
-              ? 'NO. — · SET AT UPLOAD · NEVER REUSED'
-              : `${photoNumberLabel(model.photo) || 'NO. —'} · SET AT UPLOAD · NEVER REUSED`,
-          ],
+          [`${number} · SET AT UPLOAD · NEVER REUSED`],
+        ),
+        Input.input(
+          {
+            id: 'editor-slug',
+            label: 'SLUG',
+            value: details.slug,
+            isDisabled: !ready,
+            className: FIELD_BOX,
+            onInput: (value) => M.SetEditorSlug({ value }),
+          },
+          h,
         ),
       ),
     ],
   )
+}
 
 /** The 360px Inspector: `color.surface.container` with a 1px hairline on the
  *  left, the tab strip over the tab body. */

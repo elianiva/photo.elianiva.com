@@ -19,6 +19,7 @@ import * as Animation from '@foldkit/ui/animation'
 import { AcquireResources, CloseDialog, ShowDialog } from '@foldkit/ui/dialog'
 
 import * as Dialog from '@/components/ui/dialog'
+import * as Segment from '@/components/ui/segment'
 
 import {
   BackCmd,
@@ -28,9 +29,12 @@ import {
   UpdateEditorCmd,
 } from './commands'
 import {
+  DETAILS_FIELDS,
+  EDITOR_STATUS_SEGMENT,
   PRESENTATION_FIELDS,
   cropRatioLabel,
   cropStyle,
+  detailsOfPhoto,
   fitFrameWidth,
   initEditorState,
   levelLabel,
@@ -63,6 +67,8 @@ const photo = {
   status: 'published',
   number: 24,
   ratio: '3:2',
+  takenAt: '2025-08-31',
+  metadata: { location: 'Kota Tua, Jakarta' },
 } as const
 
 /** What migration 0004 stores for a Photo nobody has edited, except that the
@@ -100,6 +106,14 @@ const matSwitch = Scene.role('switch', { name: 'Mat' })
 const discard = Scene.role('button', { name: 'Discard' })
 const save = Scene.role('button', { name: 'Update' })
 const backLink = Scene.role('link', { name: 'Library' })
+const detailsButton = Scene.role('tab', { name: 'DETAILS' })
+const detailsPanel = Scene.role('tabpanel', { name: 'DETAILS' })
+const titleField = Scene.selector('#editor-title')
+const placeField = Scene.selector('#editor-place')
+const takenField = Scene.selector('#editor-taken')
+const slugField = Scene.selector('#editor-slug')
+const ratioSelect = Scene.selector('#editor-ratio')
+const statusGroup = Scene.selector('[data-slot="segment"][data-id="editor-status"]')
 const button = (name: string) => Scene.role('button', { name })
 
 /** The shell's three reads, answered the way the `dev` stage answers them: a
@@ -379,6 +393,113 @@ describe('the unsaved-changes indicator', () => {
     // misspelling at compile time; this catches an omission.
     expect([...PRESENTATION_FIELDS].sort()).toEqual(Object.keys(PRESENTATION).sort())
   })
+
+  it('watches every stored field of the record, both ways', () => {
+    expect([...DETAILS_FIELDS].sort()).toEqual(Object.keys(detailsOfPhoto(photo)).sort())
+  })
+})
+
+describe('the DETAILS record', () => {
+  it('draws the record from the stored columns, with no SERIES Select', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(detailsButton),
+      Scene.expect(detailsPanel).toExist(),
+      // Every value comes off the loaded Photo, not a specimen.
+      Scene.expect(titleField).toHaveValue(photo.title),
+      Scene.expect(placeField).toHaveValue('Kota Tua, Jakarta'),
+      Scene.expect(takenField).toHaveValue('2025-08-31'),
+      Scene.expect(slugField).toHaveValue(photo.slug),
+      Scene.expect(ratioSelect).toHaveValue('3:2'),
+      Scene.expect(statusGroup).toExist(),
+      // The superseded SERIES Select is gone, with no empty row in its place:
+      // PLACE is `metadata.location`, so its row and TAKEN sit adjacent.
+      Scene.expect(Scene.text('SERIES')).not.toExist(),
+      // The Top Bar owns the save, so the panel draws no footer of its own.
+      Scene.expect(
+        Scene.within(detailsPanel, Scene.role('button', { name: 'Update' })),
+      ).not.toExist(),
+      Scene.expect(
+        Scene.within(detailsPanel, Scene.role('button', { name: 'Discard' })),
+      ).not.toExist(),
+    )
+  })
+
+  it('marks the Editor dirty on a record change and sends UpdatePhoto on save', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(detailsButton),
+      Scene.type(titleField, 'Another title'),
+      Scene.expect(unsaved).toExist(),
+      Scene.click(save),
+      Scene.Command.resolve(
+        UpdateEditorCmd({
+          id: PHOTO_ID,
+          presentation: PRESENTATION,
+          savePresentation: false,
+          details: {
+            title: 'Another title',
+            slug: photo.slug,
+            location: 'Kota Tua, Jakarta',
+            takenAt: photo.takenAt,
+          },
+          metadata: { location: 'Kota Tua, Jakarta' },
+        }),
+        Message.UpdatedEditor({
+          id: PHOTO_ID,
+          presentation: PRESENTATION,
+          photo: { ...photo, title: 'Another title' },
+        }),
+      ),
+      Scene.expect(unsaved).not.toExist(),
+      Scene.expect(titleField).toHaveValue('Another title'),
+    )
+  })
+
+  it('puts the stored record back when Discard is pressed', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(detailsButton),
+      Scene.type(titleField, 'Another title'),
+      Scene.expect(unsaved).toExist(),
+      Scene.click(discard),
+      Scene.expect(unsaved).not.toExist(),
+      Scene.expect(titleField).toHaveValue(photo.title),
+    )
+  })
+
+  it('writes the Status through SetPhotoStatus, then re-reads the counts', () => {
+    const picked = update(
+      opened(),
+      Message.GotSegmentMessage({
+        groupId: EDITOR_STATUS_SEGMENT.id,
+        message: Segment.Message.Picked({ value: 'draft' }),
+      }),
+    )
+    expect(picked.commands?.[0]?.name).toBe('SetEditorStatus')
+    expect(picked.commands?.[0]?.args).toEqual({ id: PHOTO_ID, status: 'draft' })
+
+    const written = update(
+      picked.model,
+      Message.SucceededSetEditorStatus({ id: PHOTO_ID, photo: { ...photo, status: 'draft' } }),
+    )
+    expect(written.model.photo?.status).toBe('draft')
+    expect((written.commands ?? []).map((command) => command.name)).toEqual(['FetchCounts'])
+  })
+
+  it('does not write a Status before the Photo has loaded', () => {
+    const picked = update(
+      loading(),
+      Message.GotSegmentMessage({
+        groupId: EDITOR_STATUS_SEGMENT.id,
+        message: Segment.Message.Picked({ value: 'draft' }),
+      }),
+    )
+    expect(picked.commands ?? []).toHaveLength(0)
+  })
 })
 
 describe('leaving the Editor', () => {
@@ -587,7 +708,11 @@ describe('the Crop section', () => {
           ratio: '4:3',
           savePresentation: false,
         }),
-        Message.UpdatedEditor({ id: PHOTO_ID, presentation: PRESENTATION, ratio: '4:3' }),
+        Message.UpdatedEditor({
+          id: PHOTO_ID,
+          presentation: PRESENTATION,
+          photo: { ...photo, ratio: '4:3' },
+        }),
       ),
       Scene.expect(unsaved).not.toExist(),
       Scene.expect(cropRatio).toHaveText('4:3'),

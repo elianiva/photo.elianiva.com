@@ -214,6 +214,22 @@ export type AtomsState = typeof AtomsState.Type
 export const EditorTab = S.Literals(['edit', 'details'])
 export type EditorTab = typeof EditorTab.Type
 
+/** The `DETAILS` tab's editable values: the Photo's own stored fields, as the
+ *  record the tab edits. They are not a Presentation — a title is not a crop —
+ *  and they go through `UpdatePhoto`, which is why they are their own pair of
+ *  snapshot/draft rather than more fields on the Presentation. The Ratio
+ *  override is `EditorState.ratio`, beside the draft rather than in here.
+ *
+ *  `location` is `metadata.location`, lifted to a string because the blob's key
+ *  is optional and a cleared field is an empty string here, never `undefined`. */
+export const PhotoDetails = S.Struct({
+  title: S.String,
+  slug: S.String,
+  location: S.String,
+  takenAt: S.String,
+})
+export type PhotoDetails = typeof PhotoDetails.Type
+
 /** A pan in flight. The pointer's origin and the frame's own box, in client
  *  coordinates, plus the crop the drag started from — a drag is measured
  *  against its origin rather than accumulated, so a pointer that wanders back
@@ -247,6 +263,12 @@ export const EditorState = S.Struct({
    *  is clearing the field, and a pick that lands back on the stored Ratio is
    *  no change at all. */
   ratio: S.optional(PhotoRatio),
+  /** The `DETAILS` record as it was loaded, the pair `Discard` reverts to and
+   *  the save is measured against. Absent until the Photo read answers. */
+  detailsSnapshot: S.optional(PhotoDetails),
+  /** The `DETAILS` record as edited. The panel draws these; the save sends
+   *  them when they differ from the snapshot. */
+  detailsDraft: S.optional(PhotoDetails),
   /** The pan in flight, or absent. View state, never saved. */
   cropDrag: S.optional(EditorCropDrag),
   saving: S.Boolean,
@@ -608,6 +630,23 @@ export const Message = defineMessageUnion({
    *  Mat is the one thing the Stage draws out of the stored Presentation;
    *  #32 adds its colour, style and width beside this toggle. */
   ToggledEditorMat: { enabled: S.Boolean },
+  /** The `DETAILS` tab's controls, one message each so a value's type is the
+   *  schema's and the row that writes it is unambiguous. Every one goes through
+   *  `UpdatePhoto`; the Status group is the one control that does not
+   *  (`SucceededSetEditorStatus`). */
+  SetEditorTitle: { value: S.String },
+  SetEditorPlace: { value: S.String },
+  SetEditorTakenAt: { value: S.String },
+  SetEditorSlug: { value: S.String },
+  /** The `DETAILS` tab's Ratio Select. It writes the same `EditorState.ratio`
+   *  override the Crop section's Segment does. */
+  SetEditorRatio: { ratio: PhotoRatio },
+  /** The Status group's write, through `SetPhotoStatus` rather than
+   *  `UpdatePhoto` because the Status is a lifecycle move, not a field. It is
+   *  immediate: `HISTORY` records nothing, so a status change here is not
+   *  reversible from the Editor. */
+  SucceededSetEditorStatus: { id: PhotoId, photo: PhotoWithTags },
+  FailedSetEditorStatus: {},
   /** One straighten step. `-1` turns the frame counter-clockwise, `1` with it. */
   SteppedEditorLevel: { direction: S.Literals([-1, 1]) },
   /** The mirror beside the two straighten buttons. */
@@ -620,15 +659,19 @@ export const Message = defineMessageUnion({
   /** A wheel notch over the photograph. The sign of `deltaY` is the direction;
    *  the magnitude is the browser's, so one notch is one step. */
   ZoomedEditorCrop: { deltaY: S.Number },
-  /** Send the draft as one Presentation — the crop, the level, the mat and the
-   *  export overrides ride in a single call because the Presentation is one
-   *  fact (CONTEXT.md). */
+  /** Send the draft: the Presentation and, when either moved, the Photo's own
+   *  columns — the Ratio override and the `DETAILS` record — in one act even
+   *  when it is two calls. */
   SubmitEditorUpdate: {},
   /** The stored truth the save answered with, which becomes the new snapshot
    *  and the new draft in one step, so the indicator clears off the server's
-   *  answer rather than off the request. `ratio` is present only when the save
-   *  wrote one. */
-  UpdatedEditor: { id: PhotoId, presentation: PhotoPresentation, ratio: S.optional(PhotoRatio) },
+   *  answer rather than off the request. `photo` is present only when the save
+   *  wrote one of the Photo's own columns. */
+  UpdatedEditor: {
+    id: PhotoId,
+    presentation: PhotoPresentation,
+    photo: S.optional(PhotoWithTags),
+  },
   /** Put the snapshot back. No RPC: the loaded value is the truth the Editor
    *  started from, so reverting is a copy, not a write. */
   DiscardEditor: {},
