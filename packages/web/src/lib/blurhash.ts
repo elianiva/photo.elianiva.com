@@ -55,6 +55,223 @@ export const encodeBlurhash = async (
   }
 }
 
+/** `4 × 3` — the component count the design prints beside `BLURHASH`, read
+ *  off the same two tokens the encoder uses. A readout, not a stored
+ *  dimension: the design's own `4 × 3` is `image.blurhash.x` / `.y`. */
+export const blurhashComponentLabel = (): string => `${imageBlurhashX} × ${imageBlurhashY}`
+
+/** The composition a Blurhash is encoded from, in the terms the Stage draws
+ *  it: the frame's proportion, the source's pan and zoom inside it, the
+ *  straighten and the mirror, and the Mat around it. It is deliberately not a
+ *  `PhotoPresentation` — the delivery facts (quality, format, EXIF policy)
+ *  cannot change the pixels, so they are not here, and the readout does not
+ *  re-encode when one of them moves. */
+export interface CompositionSpec {
+  readonly source: { readonly width: number; readonly height: number }
+  /** The frame's proportion, width / height — the authored Ratio or the
+   *  source's own when none is stored. */
+  readonly frameAspect: number
+  /** The source's position inside the frame, as the `object-position`
+   *  percentages the Stage uses: `50` is centred. */
+  readonly panX: number
+  readonly panY: number
+  /** The crop zoom, with the straighten's own cover scale already folded in. */
+  readonly scale: number
+  /** The straighten angle, in degrees. */
+  readonly rotation: number
+  readonly flipX: boolean
+  /** The Mat, when the draft has one. `side` is the top/left/right thickness
+   *  and `foot` the bottom, both as fractions of the frame's width. */
+  readonly mat?: {
+    readonly colour: 'white' | 'paper' | 'ink'
+    readonly side: number
+    readonly foot: number
+  }
+}
+
+/** Where one composition's parts land in an output box, and the transform its
+ *  source is drawn with. Pure, so the geometry the canvas draws and the
+ *  geometry a test checks are the same function. */
+export interface CompositionLayout {
+  /** The inner frame, in output pixels. */
+  readonly frame: {
+    readonly x: number
+    readonly y: number
+    readonly width: number
+    readonly height: number
+  }
+  /** The source image's destination rect before the transform. */
+  readonly image: {
+    readonly x: number
+    readonly y: number
+    readonly width: number
+    readonly height: number
+  }
+  /** Applied about the frame's centre, in the order the Stage composes it:
+   *  `scale(s) rotate(θ) scaleX(flip)`. */
+  readonly transform: {
+    readonly scale: number
+    readonly rotation: number
+    readonly flipX: boolean
+    readonly originX: number
+    readonly originY: number
+  }
+}
+
+/** Normalise the composition into an `outputW × outputH` box: the Mat is a
+ *  fraction of the frame's width, so the frame is laid out in frame-width
+ *  units and scaled to the box. The box may be non-square — the encoder
+ *  stretches the composition into it, exactly as the upload's own encode
+ *  does — which keeps the readout independent of the frame's proportion. */
+export const compositionLayout = (
+  spec: CompositionSpec,
+  outputW: number,
+  outputH: number,
+): CompositionLayout => {
+  const frameW = 1
+  const frameH = 1 / spec.frameAspect
+  const side = spec.mat?.side ?? 0
+  const foot = spec.mat?.foot ?? 0
+  const totalW = frameW + 2 * side
+  const totalH = frameH + side + foot
+  const kx = outputW / totalW
+  const ky = outputH / totalH
+  const x = side * kx
+  const y = side * ky
+  const width = frameW * kx
+  const height = frameH * ky
+  const { width: iw, height: ih } = spec.source
+  // `object-fit: cover`: the source covers the frame, then `object-position`
+  // pans the overflow that leaves.
+  const cover = Math.max(width / iw, height / ih)
+  const drawnW = iw * cover
+  const drawnH = ih * cover
+  return {
+    frame: { x, y, width, height },
+    image: {
+      x: x + (width - drawnW) * (spec.panX / 100),
+      y: y + (height - drawnH) * (spec.panY / 100),
+      width: drawnW,
+      height: drawnH,
+    },
+    transform: {
+      scale: spec.scale,
+      rotation: spec.rotation,
+      flipX: spec.flipX,
+      originX: x + width / 2,
+      originY: y + height / 2,
+    },
+  }
+}
+
+/** The Mat's colour as the canvas can paint it. The broadsheet token is read
+ *  at runtime — the same colour the Stage's `bg-role-mat-*` class paints —
+ *  with the catalog's value as the fallback for a document that has no styles
+ *  yet (this module is outside the Desk's colour-literal guard on purpose). */
+const matColourCSS = (colour: 'white' | 'paper' | 'ink'): string => {
+  const fallback: Record<'white' | 'paper' | 'ink', string> = {
+    white: '#ffffff',
+    paper: '#f3f0e8',
+    ink: '#111111',
+  }
+  if (typeof document !== 'undefined' && typeof getComputedStyle === 'function') {
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(`--role-mat-${colour}`)
+      .trim()
+    if (value !== '') return value
+  }
+  return fallback[colour]
+}
+
+type TwoDContext = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D
+
+/** An offscreen box of the given size. `OffscreenCanvas` where the platform
+ *  has it, a detached `<canvas>` otherwise — the old encoder's assumption.
+ *  The HTML path sets its own dimensions: a fresh element is 300×150. */
+const createCanvas = (width: number, height: number): OffscreenCanvas | HTMLCanvasElement => {
+  if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(width, height)
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  return canvas
+}
+
+const context2d = (canvas: OffscreenCanvas | HTMLCanvasElement): TwoDContext | null =>
+  canvas.getContext('2d')
+
+/** Draw one composition into a fresh `size × size` canvas and read the pixels
+ *  back for the encoder. The Mat is a solid fill behind the frame; the source
+ *  is clipped to the frame, covered, panned, then scaled, rotated and mirrored
+ *  about the frame's centre — the same order `editor.ts`'s `cropStyle` spells
+ *  for the Stage.
+ *
+ *  The bitmap is drawn as-is and never closed: `compositionSource` caches it
+ *  for the whole session, so closing it here would break the next encode. */
+export const drawCompositionPixels = (
+  bitmap: ImageBitmap,
+  spec: CompositionSpec,
+  size: number = SAMPLE_SIZE,
+): ImageData | undefined => {
+  try {
+    const canvas = createCanvas(size, size)
+    const ctx = context2d(canvas)
+    if (ctx === null) return undefined
+    if (spec.mat !== undefined) {
+      ctx.fillStyle = matColourCSS(spec.mat.colour)
+      ctx.fillRect(0, 0, size, size)
+    }
+    const { frame, image, transform } = compositionLayout(spec, size, size)
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(frame.x, frame.y, frame.width, frame.height)
+    ctx.clip()
+    ctx.translate(transform.originX, transform.originY)
+    ctx.scale(transform.scale, transform.scale)
+    ctx.rotate((transform.rotation * Math.PI) / 180)
+    if (transform.flipX) ctx.scale(-1, 1)
+    ctx.translate(-transform.originX, -transform.originY)
+    ctx.drawImage(bitmap, image.x, image.y, image.width, image.height)
+    ctx.restore()
+    return ctx.getImageData(0, 0, size, size)
+  } catch {
+    return undefined
+  }
+}
+
+/** The decoded originals this module has already fetched, keyed by URL, so a
+ *  re-encode after every committed crop change costs one draw and no network.
+ *  The bitmap is deliberately never closed: it is shared by every encode in
+ *  the session, and the browser evicts it with the page. */
+const sources = new Map<string, Promise<ImageBitmap | undefined>>()
+
+/** Fetch and decode an original once. Resolves to undefined when the bytes are
+ *  unreachable or the browser cannot decode them, which is a re-encode that is
+ *  skipped rather than a failure the Editor has to report. */
+export const compositionSource = (url: string): Promise<ImageBitmap | undefined> => {
+  const cached = sources.get(url)
+  if (cached !== undefined) return cached
+  const loaded = fetch(url, { credentials: 'include' })
+    .then((response) => (response.ok ? response.blob() : undefined))
+    .then((blob) => (blob === undefined ? undefined : createImageBitmap(blob)))
+    .catch(() => undefined)
+  sources.set(url, loaded)
+  return loaded
+}
+
+/** Encode a composition's Blurhash from an already-decoded original. */
+export const encodeCompositionBlurhash = (
+  bitmap: ImageBitmap,
+  spec: CompositionSpec,
+): string | undefined => {
+  const pixels = drawCompositionPixels(bitmap, spec)
+  if (pixels === undefined) return undefined
+  try {
+    return encode(pixels.data, SAMPLE_SIZE, SAMPLE_SIZE, COMPONENTS_X, COMPONENTS_Y)
+  } catch {
+    return undefined
+  }
+}
+
 const cache = new Map<string, string>()
 
 const CRC_TABLE = (() => {

@@ -189,6 +189,15 @@ export class UpdatePhoto extends Rpc.make('UpdatePhoto', {
      *  Presentation field, so it rides on this call and not on
      *  `UpdatePhotoPresentation`. */
     ratio: S.optional(PhotoRatio),
+    /** The client re-encoded Blurhash of the authored composition. A Photo
+     *  column, and the composition is what the crop, the level and the Mat
+     *  produce, so it is written by the same save that moves them. Bounded to
+     *  the range a Blurhash can be; the encoder's own alphabet is enforced by
+     *  the upload path, and a hash the decoder rejects is a placeholder that
+     *  fails rather than corrupt data. */
+    blurhash: S.optional(
+      S.NullOr(S.String.pipe(S.check(S.isMinLength(6)), S.check(S.isMaxLength(64)))),
+    ),
     tagIds: S.optional(
       S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(S.check(S.isMaxLength(32))),
     ),

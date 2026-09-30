@@ -23,14 +23,16 @@
 
 import { Effect, Option, Queue, Schema as S, Stream } from 'effect'
 import { Subscription } from 'foldkit'
-import { formatMeasuredRatio, nearestRatio } from '@photo/shared'
+import { PhotoId, formatMeasuredRatio, nearestRatio } from '@photo/shared'
 
 import { apiUrl } from '@/lib/api'
-import { encodeBlurhash } from '@/lib/blurhash'
+import { compositionSource, encodeBlurhash, encodeCompositionBlurhash } from '@/lib/blurhash'
+import type { CompositionSpec } from '@/lib/blurhash'
+import { originalUrl } from '@/lib/image'
 
 import { Message, fileStore } from './model'
 import type { Model } from './model'
-import { isEditorDirty } from './editor'
+import { blurhashSignature, isEditorDirty } from './editor'
 
 /** The id the Page Head's search input carries, and therefore the element the
  *  shortcut reaches for. Declared here and read by `views/page-head.ts` so the
@@ -220,6 +222,40 @@ const cropFrameRect = (target: EventTarget | null): DOMRect | null => {
   return frame instanceof HTMLElement ? frame.getBoundingClientRect() : null
 }
 
+/** One composition's re-encode, as a Message: decode the original once, draw
+ *  the crop and Mat into a 32×32 canvas, encode, and answer with the hash.
+ *  Nothing is emitted when the bytes are unreachable or the browser cannot
+ *  decode them — a placeholder that cannot be made is not an error the Editor
+ *  has to report, and the stored hash stands.
+ *
+ *  The Bitmap is the cached one `compositionSource` keeps, so repeated
+ *  re-encodes never re-fetch or re-decode the original. */
+const blurhashStream = (id: string, sourceUrl: string, signature: string): Stream.Stream<Message> =>
+  Stream.fromEffect(
+    Effect.promise(async () => {
+      try {
+        const source = await compositionSource(sourceUrl)
+        if (source === undefined) return undefined
+        const spec: CompositionSpec = JSON.parse(signature)
+        return encodeCompositionBlurhash(source, spec)
+      } catch {
+        return undefined
+      }
+    }),
+  ).pipe(
+    Stream.flatMap((blurhash) =>
+      blurhash === undefined
+        ? Stream.empty
+        : Stream.succeed(
+            Message.ReencodedEditorBlurhash({
+              id: PhotoId.make(id),
+              signature,
+              blurhash,
+            }),
+          ),
+    ),
+  )
+
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   // `Escape` leaves the Editor, through the same guard as `← Library` and a
   // Back press: ask when the draft is dirty, go when it is not. It names no
@@ -317,6 +353,35 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
           }),
           Effect.sync(() => onEditor),
         ),
+    },
+  ),
+  // The Editor's Blurhash, re-encoded from the composed crop and Mat on every
+  // committed change (CONTEXT.md, Blurhash). The dependency *is* the
+  // composition: an equal signature leaves the stream alone, so an Export
+  // control that cannot move a pixel — quality, format, an EXIF policy — never
+  // triggers one, and a pan in flight is excluded by `blurhashSignature`
+  // until the operator releases it. The encode is a 32×32 draw against a
+  // cached original, so a crop nudge costs no network.
+  editorBlurhash: entry(
+    { photoId: S.Option(S.String), sourceUrl: S.String, composition: S.String },
+    {
+      modelToDependencies: (model) => {
+        if (model.route._tag !== 'Photo' || model.photo === undefined) {
+          return { photoId: Option.none(), sourceUrl: '', composition: '' }
+        }
+        const composition = blurhashSignature(model.photo, model.editor)
+        return {
+          photoId: Option.some(String(model.route.id)),
+          sourceUrl: composition === '' ? '' : originalUrl(model.photo),
+          composition,
+        }
+      },
+      dependenciesToStream: ({ photoId, sourceUrl, composition }) =>
+        Option.match(photoId, {
+          onNone: () => Stream.empty,
+          onSome: (id) =>
+            composition === '' ? Stream.empty : blurhashStream(id, sourceUrl, composition),
+        }),
     },
   ),
   // The browser's own ways out — a tab closed, a reload, a link to another

@@ -78,6 +78,7 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
         payload.takenAt === undefined &&
         payload.metadata === undefined &&
         payload.ratio === undefined &&
+        payload.blurhash === undefined &&
         payload.tagIds === undefined
       ) {
         return yield* new InvalidInput({ message: 'empty update' })
@@ -89,6 +90,7 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
           takenAt: payload.takenAt,
           metadata: payload.metadata,
           ratio: payload.ratio,
+          blurhash: payload.blurhash,
           tagIds: payload.tagIds,
         }),
       )

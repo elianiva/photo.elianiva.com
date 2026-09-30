@@ -88,6 +88,7 @@ import {
 import type { AppRoute, LibraryFilters } from './route'
 import {
   EDITOR_STATUS_SEGMENT,
+  blurhashSignature,
   detailsOfPhoto,
   editorReturnUrl,
   initEditorSegments,
@@ -101,6 +102,7 @@ import {
   withCropDragEnd,
   withCropDragStart,
   withEditorDetails,
+  withEditorExport,
   withEditorFlip,
   withEditorLevel,
   withEditorMat,
@@ -244,6 +246,7 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
           ratio: undefined,
           detailsSnapshot: undefined,
           detailsDraft: undefined,
+          blurhash: undefined,
           cropDrag: undefined,
           saving: false,
           leaveUrl: '',
@@ -568,7 +571,14 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           // The Status group's selection is the Photo's own fact, so a cold
           // load cannot draw the group's default beside a published chip.
           segmentGroups: withEditorStatusSelected(model.segmentGroups, photo.status ?? 'draft'),
-          editor: { ...model.editor, detailsSnapshot: details, detailsDraft: { ...details } },
+          editor: {
+            ...model.editor,
+            detailsSnapshot: details,
+            detailsDraft: { ...details },
+            // The stored hash is the composition the operator last saved; the
+            // re-encoder replaces it the moment the draft moves off it.
+            blurhash: photo.blurhash ?? undefined,
+          },
         }),
       }
     },
@@ -1016,6 +1026,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             snapshot: undefined,
             draft: undefined,
             ratio: undefined,
+            blurhash: undefined,
             cropDrag: undefined,
             saving: false,
           },
@@ -1026,6 +1037,43 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     ToggledEditorMat: ({ enabled }) => ({
       model: modifyFields(model, { editor: () => withEditorMat(model.editor, enabled) }),
     }),
+    // The Export panel's six overrides. Like the Mat's toggle they write the
+    // draft and touch nothing else; the Top Bar's `Update` is the one save.
+    SetEditorPreviewFormat: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorExport(model.editor, { previewFormat: value }),
+      }),
+    }),
+    SetEditorPreviewQuality: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorExport(model.editor, { previewQuality: value }),
+      }),
+    }),
+    SetEditorPreviewLongEdge: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorExport(model.editor, { previewLongEdge: value }),
+      }),
+    }),
+    SetEditorKeepExif: ({ isChecked }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorExport(model.editor, { keepExif: isChecked }),
+      }),
+    }),
+    SetEditorRemoveGps: ({ isChecked }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorExport(model.editor, { removeGps: isChecked }),
+      }),
+    }),
+    // The composition was re-encoded. A result whose signature no longer
+    // matches the draft is one the operator has already moved off — dropping
+    // it keeps the readout from flickering back to a stale crop.
+    ReencodedEditorBlurhash: ({ id, signature, blurhash }) => {
+      if (model.route._tag !== 'Photo' || model.route.id !== id) return { model }
+      if (blurhashSignature(model.photo, model.editor) !== signature) return { model }
+      return {
+        model: modifyFields(model, { editor: () => ({ ...model.editor, blurhash }) }),
+      }
+    },
     // The `DETAILS` tab's controls, one message each so a value's type is the
     // schema's. The four Fields write their own field on the record draft and
     // none of them touches the network — `SubmitEditorUpdate` is the one save.
@@ -1104,6 +1152,15 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       if (draft === undefined || detailsDraft === undefined || saving) return { model }
       if (!isEditorDirty(model.editor)) return { model }
       const detailsDirty = isDetailsDirty(model.editor)
+      // The Blurhash is a Photo column, not a Presentation field, so it rides
+      // the `UpdatePhoto` call beside the Ratio. Sent only when the client's
+      // re-encode of the composition differs from what the row already holds,
+      // so a save that did not touch the pixels writes nothing.
+      const storedBlurhash = model.photo?.blurhash ?? undefined
+      const blurhash =
+        model.editor.blurhash !== undefined && model.editor.blurhash !== storedBlurhash
+          ? model.editor.blurhash
+          : undefined
       return {
         model: modifyFields(model, { editor: () => ({ ...model.editor, saving: true }) }),
         commands: [
@@ -1114,6 +1171,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             // by structural args equality in a scene test, and an absent key
             // and a present-but-undefined one are not the same object.
             ...(ratio === undefined ? {} : { ratio }),
+            ...(blurhash === undefined ? {} : { blurhash }),
             savePresentation: isPresentationDirty(model.editor),
             // The record's own fields when they moved, with the metadata blob
             // the panel does not edit carried because `UpdatePhoto` replaces
@@ -1146,6 +1204,9 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             snapshot: presentation,
             draft: { ...presentation },
             ratio: undefined,
+            // The row now holds the hash the save carried; keep it as the
+            // draft's own so the readout never regresses to the pre-save value.
+            ...(photo === undefined ? {} : { blurhash: photo.blurhash ?? undefined }),
             ...(details === undefined
               ? {}
               : { detailsSnapshot: details, detailsDraft: { ...details } }),
@@ -1168,6 +1229,9 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             snapshot,
             draft: { ...snapshot },
             ratio: undefined,
+            // The stored hash is what the composition drew before the edits, so
+            // `Discard` puts the readout back with the draft (CONTEXT.md).
+            blurhash: model.photo?.blurhash ?? undefined,
             ...(detailsSnapshot === undefined ? {} : { detailsDraft: { ...detailsSnapshot } }),
             cropDrag: undefined,
             saving: false,

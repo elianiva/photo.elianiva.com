@@ -21,6 +21,8 @@ import { AcquireResources, CloseDialog, ShowDialog } from '@foldkit/ui/dialog'
 import * as Dialog from '@/components/ui/dialog'
 import * as Segment from '@/components/ui/segment'
 
+import { blurhashComponentLabel, compositionLayout } from '@/lib/blurhash'
+
 import {
   BackCmd,
   FetchPhotoCmd,
@@ -32,12 +34,18 @@ import {
   DETAILS_FIELDS,
   EDITOR_STATUS_SEGMENT,
   PRESENTATION_FIELDS,
+  MAT_FOOT_MULTIPLE,
+  blurhashSignature,
+  compositionSpec,
   cropRatioLabel,
   cropStyle,
   detailsOfPhoto,
+  exportSavingLabel,
+  exportSavingPercent,
   fitFrameWidth,
   initEditorState,
   levelLabel,
+  withEditorExport,
 } from './editor'
 import { Message } from './model'
 import type { Model } from './model'
@@ -67,6 +75,7 @@ const photo = {
   status: 'published',
   number: 24,
   ratio: '3:2',
+  bytes: 18_400_000,
   takenAt: '2025-08-31',
   metadata: { location: 'Kota Tua, Jakarta' },
 } as const
@@ -116,6 +125,20 @@ const ratioSelect = Scene.selector('#editor-ratio')
 const statusGroup = Scene.selector('[data-slot="segment"][data-id="editor-status"]')
 const button = (name: string) => Scene.role('button', { name })
 
+// The Export panel
+const exportSaving = Scene.selector('[data-slot="export-saving"]')
+const exportSizes = Scene.selector('[data-slot="export-sizes"]')
+const blurhashReadout = Scene.selector('[data-slot="blurhash-readout"]')
+const blurhashPreview = Scene.selector('[data-slot="blurhash-preview"]')
+const previewQuality = Scene.role('slider', { name: 'PREVIEW QUALITY' })
+const previewLongEdge = Scene.selector('#editor-preview-long-edge')
+const keepExif = Scene.role('switch', { name: 'Keep EXIF data' })
+const removeGps = Scene.role('switch', { name: 'Remove GPS location' })
+
+/** A valid 4-component Blurhash. Its decoded preview is what the panel draws;
+ *  the length is the hash's own, not a dimension the design fixes. */
+const HASH = 'LEHV6nWB2yk8pyo0adR*.7kCMdnj'
+
 /** The shell's three reads, answered the way the `dev` stage answers them: a
  *  proven session with no claim to print. */
 const shellReads: ReadonlyArray<Message> = [
@@ -141,6 +164,13 @@ const opened = (pathname = EDITOR_PATH): Model =>
   foldIn(loading(pathname), [
     Message.SucceededFetchPhoto({ id: PHOTO_ID, photo }),
     Message.SucceededFetchPresentation({ id: PHOTO_ID, presentation: PRESENTATION }),
+  ])
+
+/** The same Editor, whose row already carries a re-encoded composition hash —
+ *  what a second visit draws before the re-encoder runs. */
+const openedWithHash = (hash: string): Model =>
+  foldIn(opened(), [
+    Message.SucceededFetchPhoto({ id: PHOTO_ID, photo: { ...photo, blurhash: hash } }),
   ])
 
 /** The Editor reached by navigating there from `pathname`, which is what makes
@@ -737,6 +767,196 @@ describe('the Crop section', () => {
       Scene.expect(authoredImage).toHaveStyle('object-position', '50% 50%'),
       Scene.expect(unsaved).not.toExist(),
     )
+  })
+})
+
+describe('the Export panel', () => {
+  it('heads EXPORT with the derived saving and draws every control', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.expect(Scene.text('EXPORT')).toExist(),
+      // E6 (#35) has not produced a FULL Rendition, so there is no byte count
+      // to measure against and no honest percentage: `—`, never `−89%`.
+      Scene.expect(exportSaving).toHaveText('—'),
+      Scene.expect(Scene.role('group', { name: 'Format' })).toExist(),
+      Scene.expect(button('AVIF')).toHaveAttr('aria-pressed', 'true'),
+      Scene.expect(previewQuality).toHaveValue('82'),
+      Scene.expect(previewLongEdge).toHaveValue('1200'),
+      Scene.expect(keepExif).toBeChecked(),
+      Scene.expect(removeGps).toBeChecked(),
+    )
+  })
+
+  it('sizes ORIGINAL from the stored columns and leaves both renditions honest', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.expect(exportSaving).toHaveText('—'),
+      Scene.inside(
+        exportSizes,
+        Scene.expect(Scene.text('ORIGINAL')).toExist(),
+        Scene.expect(Scene.text('6000 × 4000 · 17.5 MB')).toExist(),
+        Scene.expect(Scene.text('PREVIEW')).toExist(),
+        Scene.expect(Scene.text('FULL')).toExist(),
+        // Both rendition rows are E6's (#35) and there is no rendition to
+        // measure, so both say `—` rather than inventing a dimension.
+        Scene.expectAll(Scene.all.text('—')).toHaveCount(2),
+      ),
+    )
+  })
+
+  it('marks the Editor dirty on an export override, and Discard puts it back', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(button('WEBP')),
+      Scene.expect(button('WEBP')).toHaveAttr('aria-pressed', 'true'),
+      Scene.type(previewQuality, '60'),
+      Scene.expect(previewQuality).toHaveValue('60'),
+      Scene.change(previewLongEdge, '1600'),
+      Scene.expect(previewLongEdge).toHaveValue('1600'),
+      Scene.click(keepExif),
+      Scene.click(removeGps),
+      Scene.expect(keepExif).not.toBeChecked(),
+      Scene.expect(removeGps).not.toBeChecked(),
+      Scene.expect(unsaved).toExist(),
+      Scene.click(discard),
+      Scene.expect(button('AVIF')).toHaveAttr('aria-pressed', 'true'),
+      Scene.expect(previewQuality).toHaveValue('82'),
+      Scene.expect(previewLongEdge).toHaveValue('1200'),
+      Scene.expect(keepExif).toBeChecked(),
+      Scene.expect(removeGps).toBeChecked(),
+      Scene.expect(unsaved).not.toExist(),
+    )
+  })
+
+  it('saves the overrides through UpdatePhotoPresentation, the same call as the crop', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.click(button('WEBP')),
+      Scene.click(save),
+      Scene.Command.resolve(
+        UpdateEditorCmd({
+          id: PHOTO_ID,
+          presentation: { ...PRESENTATION, previewFormat: 'webp' },
+          savePresentation: true,
+        }),
+        Message.UpdatedEditor({
+          id: PHOTO_ID,
+          presentation: { ...PRESENTATION, previewFormat: 'webp' },
+        }),
+      ),
+      Scene.expect(unsaved).not.toExist(),
+      Scene.expect(button('WEBP')).toHaveAttr('aria-pressed', 'true'),
+    )
+  })
+
+  it('draws the BLURHASH readout off the tokens and the decoded 64×40 preview', () => {
+    Scene.scene(
+      app,
+      Scene.given(openedWithHash(HASH)),
+      Scene.expect(Scene.text('BLURHASH')).toExist(),
+      // `4 × 3` comes from `image.blurhash.x` / `.y`, never a literal; the char
+      // count is the hash's own length.
+      Scene.expect(blurhashReadout).toHaveText(
+        `${blurhashComponentLabel()} · ${String(HASH.length)} CHARS`,
+      ),
+      Scene.expect(blurhashPreview).toHaveAttr('data-placeholder', 'blurhash'),
+    )
+  })
+
+  it('says — and draws no preview before a hash exists', () => {
+    Scene.scene(
+      app,
+      Scene.given(opened()),
+      Scene.expect(blurhashReadout).toHaveText('—'),
+      Scene.expect(blurhashPreview).toHaveAttr('data-placeholder', 'none'),
+    )
+  })
+
+  it('takes the re-encoded hash for the composition the draft still draws', () => {
+    const started = opened()
+    const signature = blurhashSignature(started.photo, started.editor)
+    const reencoded = update(
+      started,
+      Message.ReencodedEditorBlurhash({ id: PHOTO_ID, signature, blurhash: HASH }),
+    )
+    expect(reencoded.model.editor.blurhash).toBe(HASH)
+    // A result for a composition the draft has already moved off is dropped,
+    // so a slow encode cannot repaint the readout with a stale crop.
+    const stale = update(
+      reencoded.model,
+      Message.ReencodedEditorBlurhash({ id: PHOTO_ID, signature: 'stale', blurhash: HASH }),
+    )
+    expect(stale.model.editor.blurhash).toBe(HASH)
+  })
+})
+
+describe('the Export copy', () => {
+  it('derives the saving from the two byte counts, and prints nothing without them', () => {
+    expect(exportSavingPercent(18_400_000, 2_100_000)).toBe(89)
+    expect(exportSavingLabel(18_400_000, 2_100_000)).toBe('−89%')
+    expect(exportSavingPercent(18_400_000, undefined)).toBeNull()
+    expect(exportSavingPercent(18_400_000, null)).toBeNull()
+    expect(exportSavingPercent(0, 0)).toBeNull()
+    expect(exportSavingLabel(photo.bytes, null)).toBe('—')
+  })
+
+  it('encodes the composition from the crop, level, mirror and Mat, not the delivery facts', () => {
+    const editor = opened().editor
+    expect(compositionSpec(photo, editor)?.mat).toEqual({
+      colour: 'white',
+      side: 0.04,
+      foot: 0.04 * MAT_FOOT_MULTIPLE,
+    })
+    // An export override cannot move a pixel, so it cannot move the signature.
+    expect(blurhashSignature(photo, withEditorExport(editor, { previewQuality: 60 }))).toBe(
+      blurhashSignature(photo, editor),
+    )
+    // A crop does.
+    const panned = { ...editor, draft: { ...PRESENTATION, cropX: 10 } }
+    expect(blurhashSignature(photo, panned)).not.toBe(blurhashSignature(photo, editor))
+    // A Mat toggle does: the composition loses its border.
+    const noMat = { ...editor, draft: { ...PRESENTATION, borderEnabled: false } }
+    expect(compositionSpec(photo, noMat)?.mat).toBeUndefined()
+    expect(blurhashSignature(photo, noMat)).not.toBe(blurhashSignature(photo, editor))
+    // A pan in flight is not a committed composition.
+    const dragging = {
+      ...editor,
+      cropDrag: { x: 0, y: 0, width: 400, height: 200, startX: 0, startY: 0 },
+    }
+    expect(compositionSpec(photo, dragging)).toBeUndefined()
+  })
+
+  it('lays the frame out and covers the source, panning the overflow', () => {
+    const spec = {
+      source: { width: 100, height: 100 },
+      frameAspect: 1,
+      panX: 50,
+      panY: 50,
+      scale: 1,
+      rotation: 0,
+      flipX: false,
+    }
+    const square = compositionLayout(spec, 32, 32)
+    expect(square.frame).toEqual({ x: 0, y: 0, width: 32, height: 32 })
+    expect(square.image).toEqual({ x: 0, y: 0, width: 32, height: 32 })
+    // A 2:1 source in a square frame is covered at 2× and only its left half
+    // shows at `object-position: 0%`, the right half at `100%`.
+    const wide = compositionLayout(
+      { ...spec, source: { width: 200, height: 100 }, panX: 0 },
+      32,
+      32,
+    )
+    expect(wide.image).toEqual({ x: 0, y: 0, width: 64, height: 32 })
+    const right = compositionLayout(
+      { ...spec, source: { width: 200, height: 100 }, panX: 100 },
+      32,
+      32,
+    )
+    expect(right.image.x).toBe(-32)
   })
 })
 

@@ -30,6 +30,7 @@ import type {
 
 import * as Dialog from '@/components/ui/dialog'
 import * as Segment from '@/components/ui/segment'
+import type { CompositionSpec } from '@/lib/blurhash'
 
 import { AppRoute, appRouteToUrl, libraryRoute, libraryUrl } from './route'
 import type { EditorState, PhotoDetails } from './model'
@@ -227,6 +228,27 @@ export const withEditorMat = (editor: EditorState, enabled: boolean): EditorStat
   editor.draft === undefined
     ? editor
     : { ...editor, draft: { ...editor.draft, borderEnabled: enabled } }
+
+/** The six export override fields the Export panel edits, as one patch. They
+ *  are all Presentation columns, so a write is a field on the draft exactly
+ *  like the Mat's. */
+export type EditorExportPatch = Partial<
+  Pick<
+    PhotoPresentation,
+    | 'previewLongEdge'
+    | 'previewFormat'
+    | 'previewQuality'
+    | 'fullQuality'
+    | 'keepExif'
+    | 'removeGps'
+  >
+>
+
+/** Write one or more export overrides on the draft. A control that fires
+ *  before the Presentation read answers is dropped rather than resurrecting a
+ *  half-built draft. */
+export const withEditorExport = (editor: EditorState, patch: EditorExportPatch): EditorState =>
+  editor.draft === undefined ? editor : { ...editor, draft: { ...editor.draft, ...patch } }
 
 /** The `DETAILS` tab's editable fields, the counterpart of
  *  `PRESENTATION_FIELDS`. The Ratio override is deliberately not one of them:
@@ -582,6 +604,82 @@ export const cropStyle = (
     'object-position': `${String(50 + presentation.cropX)}% ${String(50 + presentation.cropY)}%`,
     transform: transforms.join(' '),
   }
+}
+
+/** The Mat's foot is the design's `gallery` geometry — 64px of foot against a
+ *  24px side — as a multiple of the side. The width slider is a percentage of
+ *  the frame edge, so the side is `borderWidth`% and the foot this much of it.
+ *  The Stage spells the same ratio in pixels (`matPadding`); this is the one
+ *  the composition's own pixels are drawn with. */
+export const MAT_FOOT_MULTIPLE = 64 / 24
+
+/** The composition a Blurhash is encoded from: the Crop, the level, the mirror
+ *  and the Mat, in the terms `lib/blurhash` draws them. `undefined` while there
+ *  is nothing to encode — no Photo, no draft, or a pan still in flight, which
+ *  is deliberately not a committed composition: re-encoding on every pointer
+ *  move would churn a canvas for a crop the operator has not released. */
+export const compositionSpec = (
+  photo: PhotoWithTags | undefined,
+  editor: EditorState,
+): CompositionSpec | undefined => {
+  const draft = editor.draft
+  if (photo === undefined || draft === undefined || editor.cropDrag !== undefined) return undefined
+  const aspect = frameAspect(photo, effectiveRatio(photo, editor))
+  const frameAspectValue = aspectValue(aspect) ?? photo.width / photo.height
+  const widthPercent = draft.borderWidth ?? MAT_WIDTH_PERCENT
+  const side = widthPercent / 100
+  return {
+    source: { width: photo.width, height: photo.height },
+    frameAspect: frameAspectValue,
+    panX: 50 + draft.cropX,
+    panY: 50 + draft.cropY,
+    scale: draft.cropScale * levelCoverScale(draft.level, aspect),
+    rotation: draft.level ?? 0,
+    flipX: draft.cropFlipX,
+    ...(draft.borderEnabled
+      ? { mat: { colour: draft.borderColour ?? 'white', side, foot: side * MAT_FOOT_MULTIPLE } }
+      : {}),
+  }
+}
+
+/** The composition's identity as a string, for the re-encoder's dependency
+ *  comparison. The empty string means "nothing to encode". */
+export const blurhashSignature = (
+  photo: PhotoWithTags | undefined,
+  editor: EditorState,
+): string => {
+  const spec = compositionSpec(photo, editor)
+  return spec === undefined ? '' : JSON.stringify(spec)
+}
+
+/** The percentage the `FULL` Rendition saves against the original, or `null`
+ *  when either byte count is unknown. Derived, never stored: the Export head
+ *  prints it and nothing keeps it. `fullBytes` is `E6`'s (#35) to supply; until
+ *  then there is no rendition to measure and no honest number to print. */
+export const exportSavingPercent = (
+  originalBytes: number | null | undefined,
+  fullBytes: number | null | undefined,
+): number | null => {
+  if (
+    originalBytes === null ||
+    originalBytes === undefined ||
+    originalBytes <= 0 ||
+    fullBytes === null ||
+    fullBytes === undefined
+  ) {
+    return null
+  }
+  return Math.round(((originalBytes - fullBytes) / originalBytes) * 100)
+}
+
+/** The Export head's readout: `−89%`, or `—` while there is no measurement.
+ *  The minus is the typographic one the design draws, not a hyphen. */
+export const exportSavingLabel = (
+  originalBytes: number | null | undefined,
+  fullBytes: number | null | undefined,
+): string => {
+  const percent = exportSavingPercent(originalBytes, fullBytes)
+  return percent === null ? '—' : `−${String(percent)}%`
 }
 
 /** The frame's width, as the zoom asks for it. `FIT` is `undefined`: the frame
