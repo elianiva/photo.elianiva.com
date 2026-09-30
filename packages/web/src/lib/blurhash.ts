@@ -17,23 +17,36 @@ const SAMPLE_SIZE = 32
 const COMPONENTS_X = imageBlurhashX
 const COMPONENTS_Y = imageBlurhashY
 
-/** Encode a File/ImageBitmapSource to a blurhash string. Resolves to null
- *  when the browser cannot decode the bytes or canvas is unavailable —
- *  uploads proceed without a placeholder. */
-export const encodeBlurhash = async (source: ImageBitmapSource): Promise<string | undefined> => {
+/** Encode a File/ImageBitmapSource to a blurhash string, decoded once. Resolves
+ *  to undefined when the browser cannot decode the bytes or canvas is
+ *  unavailable — uploads proceed without a placeholder. The pixel dimensions
+ *  ride back with the hash because the upload's detail line prints them and
+ *  only the decode that produced the hash actually knows them. */
+export interface DecodedPlaceholder {
+  readonly blurhash: string | undefined
+  readonly width: number
+  readonly height: number
+}
+
+export const encodeBlurhash = async (
+  source: ImageBitmapSource,
+): Promise<DecodedPlaceholder | undefined> => {
   try {
-    const bitmap = await createImageBitmap(source, {
-      resizeWidth: SAMPLE_SIZE,
-      resizeHeight: SAMPLE_SIZE,
-      resizeQuality: 'medium',
-    })
+    const bitmap = await createImageBitmap(source)
     try {
-      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const { width, height } = bitmap
+      const canvas = new OffscreenCanvas(SAMPLE_SIZE, SAMPLE_SIZE)
       const context = canvas.getContext('2d')
       if (context === null) return undefined
-      context.drawImage(bitmap, 0, 0)
-      const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height)
-      return encode(data, bitmap.width, bitmap.height, COMPONENTS_X, COMPONENTS_Y)
+      // Sample the full frame down to the 32×32 the encoder hashes, so the
+      // bitmap can be closed immediately and only 4 KiB of pixels is held.
+      context.drawImage(bitmap, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE)
+      const { data } = context.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE)
+      return {
+        blurhash: encode(data, SAMPLE_SIZE, SAMPLE_SIZE, COMPONENTS_X, COMPONENTS_Y),
+        width,
+        height,
+      }
     } finally {
       bitmap.close()
     }

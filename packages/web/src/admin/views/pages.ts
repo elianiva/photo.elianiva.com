@@ -11,6 +11,8 @@ import type { PhotoWithTags } from '@photo/shared'
 
 import * as Badge from '@/components/ui/badge'
 import * as Button from '@/components/ui/button'
+import * as DropZone from '@/components/ui/drop-zone'
+import * as FileDrop from '@/components/ui/file-drop'
 import * as SpecRow from '@/components/ui/spec-row'
 import { originalUrl } from '@/lib/image'
 
@@ -19,7 +21,7 @@ import { libraryFilterBar } from './filter-bar'
 import { grid } from './grid'
 import { libraryTable } from './library-table'
 import { settingsPage } from './settings'
-import { Message as M } from '../model'
+import { Message as M, UPLOAD_ACCEPT, UPLOAD_CONSTRAINTS } from '../model'
 import type { Model, Msg } from '../model'
 import { AppRoute, libraryUrl, libraryViewOf } from '../route'
 import type { Child } from './shared'
@@ -80,6 +82,30 @@ const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ? [h.div([h.Class('mt-(--spacing-lg) flex justify-end')], [colsToggle(model, h)])]
         : []),
       libraryFilterBar(model, h),
+      // The design's Drop Zone strip sits between the Filter Bar and the rows,
+      // and only over a Library that has rows: the zero-Photograph state has
+      // its own pickers (`library-empty.ts`), so a second drop target there
+      // would be the same affordance twice. Copy is JPEG-only (decision 6).
+      ...(model.photos.length > 0
+        ? [
+            h.submodel({
+              slotId: 'admin-library-file-drop',
+              model: model.fileDrop,
+              view: FileDrop.view,
+              viewInputs: DropZone.dropZone(
+                {
+                  message: 'Drop photographs to upload',
+                  constraints: UPLOAD_CONSTRAINTS,
+                  multiple: true,
+                  accept: UPLOAD_ACCEPT,
+                  className: 'mt-(--spacing-xl)',
+                },
+                h,
+              ),
+              toParentMessage: (message) => M.GotFileDropMessage({ message }),
+            }),
+          ]
+        : []),
       view === 'grid' ? grid(model, h) : libraryTable(model, h),
     ],
   )

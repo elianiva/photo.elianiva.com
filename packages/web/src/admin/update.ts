@@ -44,7 +44,6 @@ import {
   SaveSettingsCmd,
   SetRowStatusCmd,
   UpdateEditorCmd,
-  UploadItemCmd,
   listArgsOf,
   readStoredCols,
 } from './commands'
@@ -73,7 +72,7 @@ import {
   type Commands,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, BULK_BORDER_MAT, abortStore, libraryFiltersOfModel, Message } from './model'
+import { AdminToast, BULK_BORDER_MAT, libraryFiltersOfModel, Message } from './model'
 import type { LibraryPage, Message as Msg, Model } from './model'
 import {
   appRouteToUrl,
@@ -162,6 +161,8 @@ const initialModel = (route: AppRoute): Model => {
     uploadTagIds: [],
     uploadCombo: Multi.init({ id: 'admin-upload-combo' }),
     uploadTakenAt: '',
+    uploadUseExportDefaults: true,
+    uploadPublishWhenReady: false,
     uploading: false,
     confirmDialog: Dialog.init({ id: 'admin-confirm-dialog' }),
     toast: AdminToast.init({ id: 'admin-toasts' }),
@@ -322,36 +323,33 @@ export const init: Runtime.RoutingApplicationInit<Model, Message> = (url: Url) =
 // upload chaining
 // ---------------------------------------------------------------------------
 
-/** Flip one item back to `pending`, clearing any error text. Used by retry
- *  and by the cancel path (a late failure after Stop is not an error). */
+/** Flip one item back to `pending`, clearing any error and progress text. Used
+ *  by retry and by the cancel path (a stopped run has no bytes in flight). */
 const restorePending = (model: Model, itemId: string): Model =>
   modifyFields(model, {
     queue: () =>
       model.queue.map((item) =>
         item.id === itemId
           ? // `error` is optional; spread-clear it (modifyFields cannot add keys).
-            { ...item, status: 'pending' as const, error: undefined }
+            { ...item, status: 'pending' as const, loaded: 0, error: undefined }
           : item,
       ),
   })
 
-/** The one way a run advances: mark the item `uploading` and issue its
- *  command. Every chain-start site goes through here so exactly one row is
- *  ever in-flight — CancelUploads finds it, and the row badge reflects it. */
+/** The one way a run advances: mark the item `uploading`. The upload itself is
+ *  a subscription keyed on exactly that state, so this writes the state and
+ *  nothing else — the runtime tears the previous stream down and opens the
+ *  next. Every chain-start site goes through here so exactly one row is ever
+ *  in-flight, and a retry starts its bar at zero. */
 const startItem = (model: Model, itemId: string): UpdateReturn => ({
   model: modifyFields(model, {
     queue: () =>
       model.queue.map((item) =>
-        item.id === itemId ? modifyFields(item, { status: () => 'uploading' }) : item,
+        item.id === itemId
+          ? modifyFields(item, { status: () => 'uploading', loaded: () => 0 })
+          : item,
       ),
   }),
-  commands: [
-    UploadItemCmd({
-      itemId,
-      tagIds: [...model.uploadTagIds],
-      takenAt: model.uploadTakenAt,
-    }),
-  ],
 })
 
 /** Snapshot the finished batch's counts BEFORE any queue cleanup, so the
@@ -360,7 +358,9 @@ const startItem = (model: Model, itemId: string): UpdateReturn => ({
 const runNextOrFinish = (model: Model): UpdateReturn => {
   const pending = model.queue.find((item) => item.status === 'pending')
   if (pending !== undefined) return startItem(model, pending.id)
-  const uploadedCount = model.queue.filter((item) => item.status === 'done').length
+  const uploadedCount = model.queue.filter(
+    (item) => item.status === 'done' || item.status === 'processing',
+  ).length
   const failedCount = model.queue.filter((item) => item.status === 'failed').length
   const settled = modifyFields(model, { uploading: () => false })
   // The dialog was closed mid-batch: the queue stayed alive so uploads could
@@ -389,7 +389,7 @@ const runNextOrFinish = (model: Model): UpdateReturn => {
 const markItem = (
   model: Model,
   itemId: string,
-  status: 'done' | 'failed',
+  status: 'done' | 'processing' | 'failed',
   errorMessage?: string,
 ): Model =>
   modifyFields(model, {
@@ -448,8 +448,13 @@ const settled = (model: Model, page: LibraryPage, title: string, detail?: string
 const withUploadDialogOpen = (result: UpdateReturn): UpdateReturn => {
   const dialogOpened = Dialog.open(result.model.uploadDialog)
   const model = modifyFields(result.model, { uploadDialog: () => dialogOpened.model })
+  // `Use export defaults` reads the Settings singleton, so opening the dialog
+  // makes sure the row is there to read. A row already read is not re-read on
+  // every open — the read is a convenience for one toggle, not a page load.
+  const settingsCommands: Commands = model.settings === undefined ? [FetchSettingsCmd()] : []
   const commands: Commands = [
     ...(result.commands ?? []),
+    ...settingsCommands,
     ...liftChildCommands(dialogOpened.commands ?? [], (message) =>
       Message.GotUploadDialogMessage({ message }),
     ),
@@ -777,18 +782,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             foldFileDrop(model, FileDrop.Message.DroppedFiles({ files: [first, ...rest] })),
           )
     },
-    ClearFinishedItems: () => {
-      // Only 'done' rows go — pending/uploading items must survive (their
-      // bytes would leak in fileStore otherwise), failures stay for retry.
-      for (const item of model.queue) {
-        if (item.status === 'done') disposeItemAssets(item.id)
-      }
-      return {
-        model: modifyFields(model, {
-          queue: () => model.queue.filter((item) => item.status !== 'done'),
-        }),
-      }
-    },
     RemoveQueueItem: ({ id }) => {
       disposeItemAssets(id)
       return {
@@ -797,6 +790,12 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
     SetUploadTakenAt: ({ value }) => ({
       model: modifyFields(model, { uploadTakenAt: () => value }),
+    }),
+    SetUploadUseExportDefaults: ({ isChecked }) => ({
+      model: modifyFields(model, { uploadUseExportDefaults: () => isChecked }),
+    }),
+    SetUploadPublishWhenReady: ({ isChecked }) => ({
+      model: modifyFields(model, { uploadPublishWhenReady: () => isChecked }),
     }),
     StartUploads: () => {
       const pending = model.queue.find((item) => item.status === 'pending')
@@ -807,12 +806,12 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       )
     },
     CancelUploads: () => {
-      // Abort the in-flight request; its FailedUploadItem arrives later and,
-      // seeing `uploading` already false, quietly re-queues the item instead
-      // of recording a failure or chaining on. Pending rows stay queued.
+      // The in-flight item goes back to `pending`: that is the Model change
+      // that tears the upload subscription down, and the scope's release
+      // aborts the request. Pending rows stay queued.
       const inFlight = model.queue.find((item) => item.status === 'uploading')
-      if (inFlight !== undefined) abortStore.get(inFlight.id)?.abort()
-      return { model: modifyFields(model, { uploading: () => false }) }
+      const stopped = inFlight === undefined ? model : restorePending(model, inFlight.id)
+      return { model: modifyFields(stopped, { uploading: () => false }) }
     },
     RetryUpload: ({ id }) => {
       const retried = restorePending(model, id)
@@ -833,8 +832,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         queue: () =>
           model.queue.map((item) =>
             item.status === 'failed'
-              ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- clearing optional error
-                ({ ...item, status: 'pending' as const, error: undefined } as typeof item)
+              ? // `error` is optional; spread-clear it (modifyFields cannot add keys) and reset the bar.
+                { ...item, status: 'pending' as const, loaded: 0, error: undefined }
               : item,
           ),
       })
@@ -846,15 +845,33 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         first,
       )
     },
-    SucceededUploadItem: ({ itemId }) => {
-      const marked = markItem(model, itemId, 'done')
+    // The frame the client measured, so the detail line can name it while the
+    // bytes are still going up.
+    UploadItemFacts: ({ itemId, width, height, ratio }) => ({
+      model: modifyFields(model, {
+        queue: () =>
+          model.queue.map((item) =>
+            item.id === itemId ? { ...item, width, height, ratio } : item,
+          ),
+      }),
+    }),
+    UploadProgress: ({ itemId, loaded }) => ({
+      model: modifyFields(model, {
+        queue: () => model.queue.map((item) => (item.id === itemId ? { ...item, loaded } : item)),
+      }),
+    }),
+    SucceededUploadItem: ({ itemId, renditionsPending }) => {
+      // `processing` is settled as far as the chain is concerned: the bytes are
+      // stored and `E6` produces renditions in the background, so the next item
+      // may start. The row stays visible in its processing state.
+      const marked = markItem(model, itemId, renditionsPending ? 'processing' : 'done')
       // A settle racing a just-issued Stop: record it, but don't revive the
       // stopped run by chaining on.
       if (!model.uploading) return { model: marked }
       return runNextOrFinish(marked)
     },
     FailedUploadItem: ({ itemId, message }) => {
-      // Post-Stop arrival (the aborted fetch's error): not a failure — put
+      // Post-Stop arrival (the aborted request's error): not a failure — put
       // the item back in line and leave the run stopped.
       if (!model.uploading) return { model: restorePending(model, itemId) }
       return runNextOrFinish(markItem(model, itemId, 'failed', message))
@@ -1438,7 +1455,11 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     GotConfirmMessage: ({ message }) => foldConfirm(model, message),
     GotRowMenuMessage: ({ message }) => foldRowMenu(model, message),
     GotAddTagDialogMessage: ({ message }) => foldAddTag(model, message),
-    GotFileDropMessage: ({ message }) => foldFileDrop(model, message),
+    GotFileDropMessage: ({ message }) =>
+      // A drop anywhere the FileDrop is real (the dialog, the Library strip, the
+      // atoms sheet) opens the dialog on what it queued, so the operator can
+      // tag the batch before it goes up.
+      withUploadDialogOpen(foldFileDrop(model, message)),
     GotToastMessage: ({ message }) => foldToast(model, message),
     GotSegmentMessage: ({ groupId, message }) => foldSegmentGroup(groupId)(model, message),
     // The Crop Ratio `Segment` is authored rather than stored child state: its

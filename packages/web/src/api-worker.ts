@@ -11,11 +11,18 @@ import {
   PhotoServiceLive,
   PublicPhotoServiceLive,
   PublicRpcHandlersLive,
+  SettingsService,
   SettingsServiceLive,
   TagServiceLive,
   type AdminSessionValue,
 } from '@photo/api'
-import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
+import {
+  InvalidInput,
+  PhotoAdminRpcs,
+  PhotoPublicRpcs,
+  hasJpegMagic,
+  isJpegUpload,
+} from '@photo/shared'
 import { verifyAdminAccess } from './access'
 import { clientKey, createRateLimiter, type RateLimiter } from './rate-limit'
 
@@ -32,14 +39,10 @@ const slugify = (input: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 80) || 'untitled'
 
-const extFromName = (name: string): string => {
-  const parts = name.split('.')
-  const ext = parts.length > 1 ? parts[parts.length - 1]!.toLowerCase() : 'jpg'
-  if (['jpg', 'jpeg', 'webp', 'png', 'avif', 'heic', 'heif'].includes(ext)) {
-    return ext === 'jpeg' ? 'jpg' : ext
-  }
-  return 'jpg'
-}
+/** The one extension an original may be stored under. Uploads are JPEG only
+ *  (chain decision 6), so the picker hint, the MIME check and the stored key
+ *  cannot drift into three different format lists — there is one format. */
+const ORIGINAL_EXTENSION = 'jpg'
 
 const jsonResponse = (data: unknown, init?: ResponseInit): Response =>
   new Response(JSON.stringify(data), {
@@ -61,18 +64,18 @@ const withSecurity = (response: Response): Response => {
   return out
 }
 
-const UPLOAD_MAX_BYTES = 20 * 1024 * 1024
-const ALLOWED_UPLOAD_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/avif',
-  'image/heic',
-  'image/heif',
-])
+// 80 MB. The Workers request-body cap is 100 MB on Free/Pro (200 MB Business,
+// 500 MB Enterprise), and a zone's Maximum Upload Size can lower it further, so
+// 80 MB fits with headroom on the cheapest plan and there is no reason to raise
+// it. Verified against Cloudflare's Workers limits before settling on it.
+const UPLOAD_MAX_BYTES = 80 * 1024 * 1024
 
 const sanitizeError = (error: unknown): string => {
   if (error instanceof Error) {
+    // Domain rejections (an unsupported ratio, malformed settings) carry a
+    // message meant for the operator; a storage failure carries one for the
+    // logs. The upload dialog's failed row prints whichever the caller routes.
+    if (error instanceof InvalidInput) return error.message
     if (error.name === 'StorageError') return error.message
     return 'internal error'
   }
@@ -80,6 +83,11 @@ const sanitizeError = (error: unknown): string => {
 }
 
 // Per-isolate fixed windows: uploads are expensive (R2 + D1), RPCs are cheap reads.
+// Ten uploads a minute at 80 MB is an 800 MB/min ceiling for the single
+// Access-gated operator. That is above what a home uplink sustains, so the
+// window is a burst guard against a runaway client rather than the real
+// throughput limit, and ten still admits the design's four-file batch in one
+// run. The request-body cap, not the window, is what actually bounds memory.
 const uploadLimiter = createRateLimiter(10, 60_000)
 const adminRpcLimiter = createRateLimiter(60, 60_000)
 const publicRpcLimiter = createRateLimiter(180, 60_000)
@@ -132,12 +140,17 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     }
     const title = titleRaw.trim().slice(0, 200)
     if (file.size <= 0 || file.size > UPLOAD_MAX_BYTES) {
-      return jsonResponse({ message: 'file must be non-empty and under 20MB' }, { status: 413 })
+      return jsonResponse({ message: 'file must be non-empty and under 80MB' }, { status: 413 })
     }
-    if (file.type !== '' && !ALLOWED_UPLOAD_TYPES.has(file.type)) {
-      return jsonResponse({ message: 'unsupported image type' }, { status: 415 })
+    if (!isJpegUpload(file.name, file.type)) {
+      return jsonResponse({ message: 'unsupported image — JPEG only' }, { status: 415 })
     }
     const takenAtRaw = form.get('takenAt')
+    // The dialog's two Toggle Rows. `Publish when ready` off (the default)
+    // creates a draft; `Use export defaults` on seeds the six export columns
+    // from the Settings singleton rather than from the schema defaults.
+    const publishWhenReady = form.get('publishWhenReady') === 'true'
+    const useExportDefaults = form.get('useExportDefaults') === 'true'
     const tagIdsRaw = form.get('tagIds')
     let tagIds: ReadonlyArray<string> = []
     if (typeof tagIdsRaw === 'string' && tagIdsRaw.trim() !== '') {
@@ -153,6 +166,13 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
       try: () => file.arrayBuffer(),
       catch: () => new Error('failed to read upload'),
     })
+
+    // A declared `image/jpeg` is not enough: a renamed PNG or HEIC can carry
+    // the type. The bytes' own SOI marker is the second, unforgeable check, so
+    // only a real JPEG ever reaches `extractImageMeta` and R2.
+    if (!hasJpegMagic(new Uint8Array(bytes))) {
+      return jsonResponse({ message: 'unsupported image — JPEG only' }, { status: 415 })
+    }
 
     const meta = yield* extractImageMeta(bytes).pipe(Effect.catch(() => Effect.succeed(undefined)))
     if (meta === undefined) {
@@ -175,11 +195,26 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     const slug = slugify(
       typeof slugField === 'string' && slugField.trim() !== '' ? slugField.slice(0, 200) : title,
     )
-    const r2Key = `originals/${id}-${slug}.${extFromName(file.name || 'photo.jpg')}`
+    const r2Key = `originals/${id}-${slug}.${ORIGINAL_EXTENSION}`
     const takenAtValue =
       typeof takenAtRaw === 'string' && takenAtRaw.trim() !== ''
         ? takenAtRaw.trim().slice(0, 64)
         : meta.takenAt
+
+    // `Use export defaults` reads the Settings singleton rather than trusting
+    // the client's copy, so the seeded columns are the stored ones.
+    const exportDefaults = useExportDefaults
+      ? yield* SettingsService.use((service) => service.read).pipe(
+          Effect.map((settings) => ({
+            previewLongEdge: settings.defaultPreviewLongEdge,
+            previewFormat: settings.defaultPreviewFormat,
+            previewQuality: settings.defaultPreviewQuality,
+            fullQuality: settings.defaultFullQuality,
+            keepExif: settings.defaultKeepExif,
+            removeGps: settings.defaultRemoveGps,
+          })),
+        )
+      : undefined
 
     const created = yield* PhotoService.use((service) =>
       service.create({
@@ -188,6 +223,8 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
         r2Key,
         width: meta.width,
         height: meta.height,
+        status: publishWhenReady ? 'published' : 'draft',
+        ...(exportDefaults === undefined ? {} : { exportDefaults }),
         takenAt: takenAtValue,
         aperture: meta.aperture,
         shutter: meta.shutter,
@@ -195,16 +232,26 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
         focalLength: meta.focalLength,
         metadata: JSON.stringify(mergedMetadata),
         blurhash: parseBlurhash(form.get('blurhash')),
-        contentType: file.type || 'image/jpeg',
+        contentType: 'image/jpeg',
         bytes,
         tagIds: tagIds.slice(0, 32),
       }),
     )
     return jsonResponse(created, { status: 201 })
   }).pipe(
-    Effect.provide(PhotoServiceLive.pipe(Layer.provide(gatewayLayer(env)))),
+    Effect.provide(
+      Layer.mergeAll(PhotoServiceLive, SettingsServiceLive).pipe(Layer.provide(gatewayLayer(env))),
+    ),
+    // A rejection the operator can act on (an unsupported ratio) is a 400 with
+    // its own message; everything else is an opaque 500. The failed Upload Item
+    // prints the message, so the ratio reason reaches it from here.
     Effect.catch((error: unknown) =>
-      Effect.succeed(jsonResponse({ message: sanitizeError(error) }, { status: 500 })),
+      Effect.succeed(
+        jsonResponse(
+          { message: sanitizeError(error) },
+          { status: error instanceof InvalidInput ? 400 : 500 },
+        ),
+      ),
     ),
   )
   return Effect.runPromise(program)

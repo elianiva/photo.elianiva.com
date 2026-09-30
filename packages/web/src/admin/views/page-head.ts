@@ -109,7 +109,7 @@ const uploadAction = (model: Model, h: HtmlBuilder<Msg>): Child =>
           [h.Class('inline-flex items-center gap-1.5')],
           [
             Spinner.spinner({ className: 'size-3' }, h),
-            `Uploading ${String(model.queue.filter((item) => item.status === 'done').length)}/${String(model.batchTotal)}`,
+            `Uploading ${String(model.queue.filter((item) => item.status === 'done' || item.status === 'processing').length)}/${String(model.batchTotal)}`,
           ],
         ),
         h,

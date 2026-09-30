@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { Schema as S } from 'effect'
-import { PHOTO_RATIOS, PhotoRatio, nearestRatio } from './photo'
+import {
+  PHOTO_RATIOS,
+  PhotoRatio,
+  formatMeasuredRatio,
+  hasJpegMagic,
+  isJpegUpload,
+  nearestRatio,
+} from './photo'
 
 /**
  * The same eight frames migration 0004's backfill test carries. They are the
@@ -59,6 +66,61 @@ describe('nearestRatio', () => {
 
   it('is pure: the same frame snaps the same way every time', () => {
     expect(nearestRatio(6016, 4000)).toBe(nearestRatio(6016, 4000))
+  })
+})
+
+describe('formatMeasuredRatio', () => {
+  it('reduces a frame to the shortest whole-number ratio', () => {
+    expect(formatMeasuredRatio(3000, 3000)).toBe('1:1')
+    expect(formatMeasuredRatio(6000, 4000)).toBe('3:2')
+    expect(formatMeasuredRatio(4000, 6000)).toBe('2:3')
+    expect(formatMeasuredRatio(1530, 1000)).toBe('153:100')
+  })
+
+  it('formats the shape a rejection names, snapped or not', () => {
+    // The 1:1 the design's failed row prints is this function's answer.
+    expect(nearestRatio(3000, 3000)).toBeNull()
+    expect(formatMeasuredRatio(3000, 3000)).toBe('1:1')
+  })
+})
+
+describe('isJpegUpload', () => {
+  it('accepts a real JPEG Content-Type whatever the name says', () => {
+    expect(isJpegUpload('IMG_0001.JPG', 'image/jpeg')).toBe(true)
+    expect(isJpegUpload('no-extension', 'image/jpeg')).toBe(true)
+  })
+
+  it('accepts an empty or generic type only with a jpeg name', () => {
+    expect(isJpegUpload('photo.jpg', '')).toBe(true)
+    expect(isJpegUpload('photo.JPEG', 'application/octet-stream')).toBe(true)
+    expect(isJpegUpload('photo.png', '')).toBe(false)
+    expect(isJpegUpload('photo.heic', '')).toBe(false)
+  })
+
+  it('rejects every other declared image type', () => {
+    for (const mime of [
+      'image/png',
+      'image/webp',
+      'image/avif',
+      'image/heic',
+      'image/heif',
+      'image/tiff',
+    ]) {
+      expect(isJpegUpload('photo.jpg', mime)).toBe(false)
+    }
+  })
+})
+
+describe('hasJpegMagic', () => {
+  it('recognises the SOI + first APPn lead byte', () => {
+    expect(hasJpegMagic(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe(true)
+  })
+
+  it('rejects a shorter buffer and every other signature', () => {
+    expect(hasJpegMagic(new Uint8Array([0xff, 0xd8]))).toBe(false)
+    // PNG, HEIC (ftyp box), TIFF little-endian.
+    expect(hasJpegMagic(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toBe(false)
+    expect(hasJpegMagic(new Uint8Array([0x49, 0x49, 0x2a, 0x00]))).toBe(false)
   })
 })
 

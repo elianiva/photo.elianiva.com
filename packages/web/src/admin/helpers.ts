@@ -59,7 +59,7 @@ export function toQueueItem(key: string): Model['queue'][number] {
   const splitAt = key.lastIndexOf(':')
   const name = key.slice(0, splitAt)
   const size = Number(key.slice(splitAt + 1))
-  return { id: key, name, size: Number.isFinite(size) ? size : 0, status: 'pending' }
+  return { id: key, name, size: Number.isFinite(size) ? size : 0, status: 'pending', loaded: 0 }
 }
 
 export const byLabel = (a: { readonly label: string }, b: { readonly label: string }): number =>
