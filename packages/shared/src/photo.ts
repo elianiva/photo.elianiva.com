@@ -77,6 +77,52 @@ export const nearestRatio = (width: number, height: number): PhotoRatio | null =
   return nearestDistance <= RATIO_SNAP_TOLERANCE ? nearest : null
 }
 
+/**
+ * A measured frame as the reduced `width:height` a rejection message prints —
+ * `1:1` for a square, `3:2` for a 3:2 frame, `153:100` for one nothing could
+ * describe more shortly. This is the *measured* proportion, not a supported
+ * Ratio: a frame that snaps to nothing still has a shape worth naming in the
+ * reason it was refused.
+ */
+export const formatMeasuredRatio = (width: number, height: number): string => {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
+  const divisor = gcd(Math.round(width), Math.round(height))
+  return divisor > 0
+    ? `${String(Math.round(width) / divisor)}:${String(Math.round(height) / divisor)}`
+    : '?'
+}
+
+// ---------------------------------------------------------------------------
+// Upload inputs — JPEG only (chain decision 6). No HEIC, no TIFF, and no
+// PNG/WebP as *inputs*; a Rendition's output format is a separate choice.
+// The Worker's multipart handler is the one place this is enforced, so it is
+// the one place the rule lives; a picker's `accept` hint and a rejection
+// message both read it rather than spelling a second list.
+// ---------------------------------------------------------------------------
+
+/** The one MIME an original may arrive as. */
+export const UPLOAD_MIME = 'image/jpeg'
+
+/** The JPEG magic: `FF D8 FF`, the SOI marker plus the first APPn marker's
+ *  lead byte. A file whose extension and Content-Type both lie is caught by
+ *  its own header, so a renamed HEIC or TIFF cannot slip past the metadata
+ *  reader and get stored. */
+export const hasJpegMagic = (bytes: Uint8Array): boolean =>
+  bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+
+/**
+ * Is this multipart file an accepted JPEG? The Content-Type is the primary
+ * signal. Some browsers hand a `.jpg` over with an empty or generic type, so an
+ * empty/octet-stream type is allowed only when the name ends `.jpg`/`.jpeg`; a
+ * HEIC or TIFF never earns that. `hasJpegMagic` is the second check the Worker
+ * runs before it trusts the bytes.
+ */
+export const isJpegUpload = (name: string, mime: string): boolean => {
+  if (mime === UPLOAD_MIME) return true
+  if (mime !== '' && mime !== 'application/octet-stream') return false
+  return /\.jpe?g$/i.test(name)
+}
+
 // ---------------------------------------------------------------------------
 // Presentation — the authored presentation of a Photo: its Crop, its level,
 // its Mat and its per-photo export overrides. One fact, saved as one call,

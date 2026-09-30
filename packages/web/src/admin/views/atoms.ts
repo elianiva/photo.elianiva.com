@@ -50,7 +50,7 @@ import {
   type SheetSegment,
 } from '../atoms-sheet'
 import { atomsRouter } from '../route'
-import { Message as M } from '../model'
+import { Message as M, UPLOAD_CONSTRAINTS } from '../model'
 import type { Model, Msg } from '../model'
 import type { Child } from './shared'
 
@@ -351,7 +351,7 @@ const dropZoneBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
       viewInputs: DropZone.dropZone(
         {
           message: 'Drop photographs to upload',
-          constraints: 'JPEG · UP TO 80 MB',
+          constraints: UPLOAD_CONSTRAINTS,
           accept: ['image/jpeg'],
           className: 'flex-row justify-start',
         },

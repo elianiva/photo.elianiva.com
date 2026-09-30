@@ -12,6 +12,8 @@ import { LayoutGrid, List } from 'lucide'
 
 import * as Badge from '@/components/ui/badge'
 import * as Button from '@/components/ui/button'
+import * as DropZone from '@/components/ui/drop-zone'
+import * as FileDrop from '@/components/ui/file-drop'
 import { iconButton } from '@/components/ui/icon-button'
 import * as SpecRow from '@/components/ui/spec-row'
 import { originalUrl } from '@/lib/image'
@@ -20,7 +22,7 @@ import { atomsPage } from './atoms'
 import { grid } from './grid'
 import { libraryTable } from './library-table'
 import { settingsPage } from './settings'
-import { Message as M } from '../model'
+import { Message as M, UPLOAD_ACCEPT, UPLOAD_CONSTRAINTS } from '../model'
 import type { Model, Msg } from '../model'
 import { AppRoute, libraryUrl, libraryViewOf } from '../route'
 import type { LibraryView } from '../route'
@@ -152,6 +154,30 @@ const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
       ),
       filterBar(model, h),
+      // The design's Drop Zone strip sits between the Filter Bar and the rows,
+      // and only over a Library that has rows: the zero-Photograph state has
+      // its own pickers (`library-empty.ts`), so a second drop target there
+      // would be the same affordance twice. Copy is JPEG-only (decision 6).
+      ...(model.photos.length > 0
+        ? [
+            h.submodel({
+              slotId: 'admin-library-file-drop',
+              model: model.fileDrop,
+              view: FileDrop.view,
+              viewInputs: DropZone.dropZone(
+                {
+                  message: 'Drop photographs to upload',
+                  constraints: UPLOAD_CONSTRAINTS,
+                  multiple: true,
+                  accept: UPLOAD_ACCEPT,
+                  className: 'mt-(--spacing-xl)',
+                },
+                h,
+              ),
+              toParentMessage: (message) => M.GotFileDropMessage({ message }),
+            }),
+          ]
+        : []),
       // One Library read, two views. The tile grid and the table are the only
       // two ways to see the rows; there is no third path (no lightbox, no
       // Sheet).

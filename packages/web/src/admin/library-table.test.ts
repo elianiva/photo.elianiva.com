@@ -659,7 +659,11 @@ describe('the states that are not rows', () => {
       }),
     )
     expect(oversized.model.queue.map((item) => [item.name, item.status, item.error])).toEqual([
-      ['huge.jpg', 'failed', 'file too large (max 20 MB)'],
+      [
+        'huge.jpg',
+        'failed',
+        `file too large (max ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB)`,
+      ],
     ])
   })
 

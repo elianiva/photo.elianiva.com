@@ -14,20 +14,10 @@ import { load, pushUrl, replaceUrl, back } from 'foldkit/navigation'
 import { PhotoId, PhotoPresentation, SettingsInput } from '@photo/shared'
 import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
 
-import { apiUrl } from '@/lib/api'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
-import { encodeBlurhash } from '@/lib/blurhash'
 
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
-import {
-  BULK_BORDER_MAT,
-  GridCols,
-  LIBRARY_PAGE_SIZE,
-  Message,
-  Storage,
-  abortStore,
-  fileStore,
-} from './model'
+import { BULK_BORDER_MAT, GridCols, LIBRARY_PAGE_SIZE, Message, Storage } from './model'
 import type { Counts as CountsType, GridCols as GridColsType, LibraryPage } from './model'
 
 /** `ListLibraryRows` as the wire delivers it: the page's rows under `items`,
@@ -446,63 +436,4 @@ export const CreateTagCmd = Command.define('CreateTag', {
     Effect.map(rpcAdmin<Tag>('CreateTag', { slug: label, label }), (tag) =>
       Message.SucceededCreateTag({ source, tag }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
-/** One queue item per command run; `update` chains the next pending item.
- *  Batch-wide tag/takenAt choices ride along as args so the execute closure
- *  needs no access to the Model. The request rides an AbortController stored
- *  in `abortStore` so `CancelUploads` can kill the in-flight fetch. */
-export const UploadItemCmd = Command.define('UploadItem', {
-  args: { itemId: S.String, tagIds: S.Array(S.String), takenAt: S.String },
-  messages: [Message.SucceededUploadItem, Message.FailedUploadItem],
-  execute: ({ itemId, tagIds, takenAt }) =>
-    Effect.gen(function* () {
-      const file = fileStore.get(itemId)
-      if (file === undefined) {
-        return Message.FailedUploadItem({ itemId, message: 'uploaded bytes are gone' })
-      }
-      // Placeholder hash is computed here because only the browser can decode
-      // pixels — the Worker never sees a decodable image.
-      const blurhash = yield* Effect.promise(() => encodeBlurhash(file))
-      const controller = new AbortController()
-      abortStore.set(itemId, controller)
-      const form = new FormData()
-      form.set('file', file)
-      form.set('title', file.name.replace(/\.[^/.]+$/, ''))
-      form.set('tagIds', JSON.stringify([...tagIds]))
-      if (blurhash !== undefined) form.set('blurhash', blurhash)
-      if (takenAt !== '') form.set('takenAt', takenAt)
-      // The foldkit-provided signal is superseded by the cancellable
-      // controller — `CancelUploads` must be able to reach this request
-      // without tearing down the whole command runner.
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(apiUrl('/upload'), {
-            method: 'POST',
-            body: form,
-            credentials: 'include',
-            signal: controller.signal,
-          }),
-        catch: () => new Error('upload request failed'),
-      })
-      if (!response.ok) {
-        const body = yield* Effect.promise(() => response.text())
-        let message = `upload failed (${String(response.status)})`
-        try {
-          const parsed: { message?: unknown } = JSON.parse(body)
-          if (typeof parsed.message === 'string') message = parsed.message
-        } catch (parseError) {
-          // non-JSON error body — the status-based message stands
-          void parseError
-        }
-        return Message.FailedUploadItem({ itemId, message })
-      }
-      return Message.SucceededUploadItem({ itemId })
-    }).pipe(
-      Effect.catch(() =>
-        Effect.succeed(Message.FailedUploadItem({ itemId, message: 'upload failed' })),
-      ),
-      // Unregister on every exit path (success, failure, abort).
-      Effect.ensuring(Effect.sync(() => abortStore.delete(itemId))),
-    ),
 })

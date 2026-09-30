@@ -27,13 +27,19 @@ import { AdminToast, Message, TagMultiCombo, UPLOAD_LIMITS, fileStore, previewSt
 import type { Message as Msg, Model } from './model'
 
 /** Closing the upload dialog (Cancel button sends the child's requested-close
- *  message; Esc/backdrop emit `Closed`) drops queue items that are not stuck. */
+ *  message; Esc/backdrop emit `Closed`) drops queue items that are not stuck.
+ *  A `processing` row stays: its renditions are still being made (`E6`), and
+ *  the row is the only place that fact is shown. Its bytes are disposed like
+ *  any other settled row's. */
 export const releaseFinishedItems = (dialogModel: Model): Model => {
   for (const item of dialogModel.queue) {
     if (item.status !== 'failed') disposeItemAssets(item.id)
   }
   return modifyFields(dialogModel, {
-    queue: () => dialogModel.queue.filter((item) => item.status === 'failed'),
+    queue: () =>
+      dialogModel.queue.filter(
+        (item) => item.status === 'failed' || item.status === 'processing',
+      ),
     uploadTagIds: () => [],
     uploadTakenAt: () => '',
     uploading: () => false,
@@ -141,6 +147,7 @@ export const foldFileDrop = Update.foldChild({
           name,
           size,
           status: 'failed' as const,
+          loaded: 0,
           error: `file too large (max ${maxMb} MB)`,
         }))
 

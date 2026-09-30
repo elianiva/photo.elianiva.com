@@ -113,8 +113,8 @@ npx agent-browser click --role button --name "Upload"
 npx agent-browser click --role button --name "Kyoto"
 # switch the Library to the tile grid; the URL becomes /admin?view=grid
 npx agent-browser click --role button --name "Grid view"
-# upload: pick files via FileDrop, set tags via combo, then Start uploads
-npx agent-browser click --role button --name "Start uploads"
+# upload: pick files via FileDrop, set tags via combo, then Add N to drafts
+npx agent-browser click --role button --name "Add 4 to drafts"
 ```
 
 Every feature file in `features/` pairs each user action with one literal command and the observable result. Treat quoted names and flags as literal.

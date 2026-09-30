@@ -19,6 +19,7 @@ import {
   StorageError,
   TagId,
   describeCause,
+  formatMeasuredRatio,
   nearestRatio,
   PhotoRatio,
   type PhotoStatus,
@@ -140,6 +141,15 @@ export interface CreatePhotoInput {
   readonly r2Key: string
   readonly width: number
   readonly height: number
+  /** Where the new Photo starts in the publish lifecycle. Absent means the
+   *  column default (`published`); the Upload dialog's `Publish when ready`
+   *  off-state passes `draft`. This is the one place the service defaults it —
+   *  the dialog's own default is `draft`. */
+  readonly status?: PhotoStatus | undefined
+  /** The six export columns a new upload is seeded from. Absent leaves the
+   *  schema defaults (migration 0004) in place; the Upload dialog's `Use
+   *  export defaults` sends the Settings singleton's values instead. */
+  readonly exportDefaults?: PhotoExportDefaults | undefined
   readonly takenAt?: string | undefined
   /** The four EXIF facts extracted from the original's bytes. */
   readonly aperture?: number | undefined
@@ -154,6 +164,18 @@ export interface CreatePhotoInput {
   readonly tagIds: ReadonlyArray<string>
 }
 
+/** The export columns a Photo is created with: what `Use export defaults`
+ *  seeds from the Settings singleton. One value rather than six arguments so
+ *  the `CreatePhotoInput` field and the insert cannot disagree about the set. */
+export interface PhotoExportDefaults {
+  readonly previewLongEdge: number
+  readonly previewFormat: RenditionFormat
+  readonly previewQuality: number
+  readonly fullQuality: number
+  readonly keepExif: boolean
+  readonly removeGps: boolean
+}
+
 export interface PhotoServiceContract {
   /** Live Photos newest-first by default, filtered and keyset paginated. */
   readonly list: (
@@ -165,10 +187,13 @@ export interface PhotoServiceContract {
    *  number is the same on every page of the same filter. */
   readonly count: (filter: PhotoListFilter) => Effect.Effect<number, StorageError>
   readonly get: (id: string) => Effect.Effect<PhotoWithTags, StorageError | PhotoNotFound>
-  /** Insert the row, link the tags, then store the bytes. Used by upload. */
+  /** Insert the row, link the tags, then store the bytes. Used by upload.
+   *  The measured frame is snapped to the nearest supported Ratio first; a
+   *  frame matching none of the six is refused with its measured proportion
+   *  in the message and nothing is written to D1 or R2. */
   readonly create: (
     input: CreatePhotoInput,
-  ) => Effect.Effect<CreatePhotoResult, StorageError | SlugConflict>
+  ) => Effect.Effect<CreatePhotoResult, StorageError | SlugConflict | InvalidInput>
   readonly update: (
     id: string,
     patch: PhotoUpdatePatch,
@@ -910,6 +935,18 @@ export const PhotoServiceLive = Layer.effect(
 
     const create: PhotoServiceContract['create'] = (input) =>
       Effect.gen(function* () {
+        // Ratio first, before the slug, the row or the bytes: a frame matching
+        // none of the six is refused here, so a rejected upload costs zero
+        // storage and never reaches R2. The message names the frame's measured
+        // proportion, which is what the failed Upload Item prints.
+        const ratio = nearestRatio(input.width, input.height)
+        if (ratio === null) {
+          return yield* Effect.fail(
+            new InvalidInput({
+              message: `Unsupported ratio ${formatMeasuredRatio(input.width, input.height)}`,
+            }),
+          )
+        }
         let slug = slugify(input.slug)
         if (!(yield* slugAvailable(db, slug))) {
           // deterministic suffix keeps retries stable without a second round-trip
@@ -926,39 +963,99 @@ export const PhotoServiceLive = Layer.effect(
         // lives outside `photos` (migration 0006) because a purge deletes the
         // row a `MAX` would have read, and a Photo Number is never reused.
         //
-        // `status` is left to the column default: a Photo is published on
-        // arrival, which is what the backfill does and what #14 asserts.
+        // `status` and the export columns are only listed when the caller
+        // supplied them; otherwise the migration's column defaults apply, which
+        // is what every `create` that is not the Upload dialog relies on.
+        const columns = [
+          'id',
+          'slug',
+          'title',
+          'r2Key',
+          'width',
+          'height',
+          'number',
+          'ratio',
+          'bytes',
+          'mime',
+          'aperture',
+          'shutter',
+          'iso',
+          'focalLength',
+          'takenAt',
+          'metadata',
+          'blurhash',
+        ]
+        const values = [
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+          '(SELECT value FROM photo_number_counter WHERE id = 1)',
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+          '?',
+        ]
+        const binds: Array<unknown> = [
+          id,
+          slug,
+          input.title,
+          input.r2Key,
+          input.width,
+          input.height,
+          ratio,
+          input.bytes.byteLength,
+          contentType,
+          input.aperture ?? null,
+          input.shutter ?? null,
+          input.iso ?? null,
+          input.focalLength ?? null,
+          input.takenAt ?? null,
+          input.metadata,
+          input.blurhash ?? null,
+        ]
+        if (input.status !== undefined) {
+          columns.push('status')
+          values.push('?')
+          binds.push(input.status)
+        }
+        if (input.exportDefaults !== undefined) {
+          const exportDefaults = input.exportDefaults
+          columns.push(
+            'previewLongEdge',
+            'previewFormat',
+            'previewQuality',
+            'fullQuality',
+            'keepExif',
+            'removeGps',
+          )
+          values.push('?', '?', '?', '?', '?', '?')
+          binds.push(
+            exportDefaults.previewLongEdge,
+            exportDefaults.previewFormat,
+            exportDefaults.previewQuality,
+            exportDefaults.fullQuality,
+            exportDefaults.keepExif ? 1 : 0,
+            exportDefaults.removeGps ? 1 : 0,
+          )
+        }
         yield* Effect.tryPromise({
           try: () =>
             db.batch([
               db.prepare(`UPDATE photo_number_counter SET value = value + 1 WHERE id = 1`),
               db
                 .prepare(
-                  `INSERT INTO photos (id, slug, title, r2Key, width, height, number, ratio, bytes, mime,
-                           aperture, shutter, iso, focalLength, takenAt, metadata, blurhash)
-                   VALUES (?, ?, ?, ?, ?, ?,
-                           (SELECT value FROM photo_number_counter WHERE id = 1),
-                           ?, ?, ?,
-                           ?, ?, ?, ?, ?, ?, ?)`,
+                  `INSERT INTO photos (${columns.join(', ')}) VALUES (${values.join(', ')})`,
                 )
-                .bind(
-                  id,
-                  slug,
-                  input.title,
-                  input.r2Key,
-                  input.width,
-                  input.height,
-                  nearestRatio(input.width, input.height),
-                  input.bytes.byteLength,
-                  contentType,
-                  input.aperture ?? null,
-                  input.shutter ?? null,
-                  input.iso ?? null,
-                  input.focalLength ?? null,
-                  input.takenAt ?? null,
-                  input.metadata,
-                  input.blurhash ?? null,
-                ),
+                .bind(...binds),
               ...linkTags(db, id, input.tagIds),
             ]),
           catch: (cause) =>

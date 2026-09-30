@@ -781,21 +781,92 @@ describe('PhotoService.create', () => {
     expect(row).toEqual({ ratio: '3:2', bytes: 4, mime: 'image/jpeg' })
   })
 
-  it('leaves the ratio unset for a frame that matches none of the six', async () => {
+  it('refuses a frame that matches none of the six, before it reaches R2', async () => {
     const harness = makeTestHarness()
 
-    const square = await seed(harness, {
-      slug: 'square',
-      title: 'Square',
-      width: 3000,
-      height: 3000,
-    })
-
-    // Nothing is invented; the author picks a Ratio in the Editor.
-    expect((await get(harness, square.id)).ratio).toBeUndefined()
-    expect((await list(harness, { ratio: '3:2' })).items.map((item) => item.id)).not.toContain(
-      square.id,
+    const error = await fail(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.create({
+            slug: 'square',
+            title: 'Square',
+            r2Key: 'originals/square.jpg',
+            width: 3000,
+            height: 3000,
+            metadata: '{}',
+            contentType: 'image/jpeg',
+            bytes: JPEG_BYTES(),
+            tagIds: [],
+          }),
+        ),
+        harness,
+      ),
     )
+
+    // The reason the failed Upload Item prints, in the server's own words.
+    expect(error).toEqual(new InvalidInput({ message: 'Unsupported ratio 1:1' }))
+    // A rejected frame costs zero storage: no row, no tag link, no R2 object.
+    expect(await slugsIn(harness)).toEqual([])
+    expect(await harness.photos.head('originals/square.jpg')).toBeNull()
+    expect(await linkedPhotoIds(harness)).toEqual([])
+  })
+
+  it('honours the upload dialog: a draft status and the Settings export defaults', async () => {
+    const harness = makeTestHarness()
+
+    const created = await Effect.runPromise(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.create({
+            slug: 'draft-upload',
+            title: 'Draft upload',
+            r2Key: 'originals/draft-upload.jpg',
+            width: 1200,
+            height: 800,
+            status: 'draft',
+            exportDefaults: {
+              previewLongEdge: 1600,
+              previewFormat: 'webp',
+              previewQuality: 70,
+              fullQuality: 80,
+              keepExif: false,
+              removeGps: false,
+            },
+            metadata: '{}',
+            contentType: 'image/jpeg',
+            bytes: JPEG_BYTES(),
+            tagIds: [],
+          }),
+        ),
+        harness,
+      ),
+    )
+
+    const row = await harness.db
+      .prepare(
+        `SELECT status, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps
+           FROM photos WHERE id = ?`,
+      )
+      .bind(created.id)
+      .first<{
+        status: string
+        previewLongEdge: number
+        previewFormat: string
+        previewQuality: number
+        fullQuality: number
+        keepExif: number
+        removeGps: number
+      }>()
+
+    expect(row).toEqual({
+      status: 'draft',
+      previewLongEdge: 1600,
+      previewFormat: 'webp',
+      previewQuality: 70,
+      fullQuality: 80,
+      keepExif: 0,
+      removeGps: 0,
+    })
   })
 
   it('defaults the content type to image/jpeg when none is given', async () => {

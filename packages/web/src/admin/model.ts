@@ -53,7 +53,7 @@ export const AdminToast = Toast.make(
 // Model
 // ---------------------------------------------------------------------------
 
-export const QueueStatus = S.Literals(['pending', 'uploading', 'done', 'failed'])
+export const QueueStatus = S.Literals(['pending', 'uploading', 'processing', 'done', 'failed'])
 export type QueueStatus = typeof QueueStatus.Type
 
 export const QueueItem = S.Struct({
@@ -62,6 +62,19 @@ export const QueueItem = S.Struct({
   name: S.String,
   size: S.Number,
   status: QueueStatus,
+  /** Bytes confirmed uploaded so far — the bar and the `13.2 of 21.3 MB`
+   *  readout. Zero before the run and for a file the client itself refused. */
+  loaded: S.Number,
+  /** The frame measured from the file's own pixels, so the detail line can
+   *  name it while the bar fills. Absent until the run decodes the bytes. */
+  width: S.optional(S.Number),
+  height: S.optional(S.Number),
+  /** The snapped Ratio, or the measured proportion when none snapped — the
+   *  `3:2` in the uploading line and the `1:1` in a ratio rejection. */
+  ratio: S.optional(S.String),
+  /** The rendition summary `E6` fills in for the `processing` state
+   *  (`AVIF · 2400, 1600, 800 px`). */
+  renditionLabel: S.optional(S.String),
   error: S.optional(S.String),
 })
 export type QueueItem = typeof QueueItem.Type
@@ -104,19 +117,20 @@ export const BULK_BORDER_MAT = { enabled: true, style: 'even', colour: 'paper', 
 
 export const UPLOAD_LIMITS = {
   maxFiles: 50,
-  maxFileSize: 20 * 1024 * 1024,
+  maxFileSize: 80 * 1024 * 1024,
 } as const
 
-/** What the file pickers offer. The server validates uploads with its own
- *  `ALLOWED_UPLOAD_TYPES` in `api-worker.ts`; this is the picker hint, kept in
- *  one place so the empty state's pickers and the upload dialog cannot drift. */
-export const UPLOAD_ACCEPT = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/avif',
-] as const
+/** What the file pickers offer. Uploads are JPEG only (chain decision 6). The
+ *  server enforces it with `isJpegUpload` / `hasJpegMagic` in `@photo/shared`;
+ *  this is the picker hint, kept in one place so the empty state's pickers, the
+ *  Library's drop zone and the upload dialog cannot drift. */
+export const UPLOAD_ACCEPT = ['image/jpeg'] as const
+
+/** The one constraints line every drop zone prints — the dialog's strip, the
+ *  Library's strip and the atoms sheet's specimen. One format, one cap, read
+ *  off the same two facts, so a change to either cannot leave a stale copy
+ *  behind on one of the three. */
+export const UPLOAD_CONSTRAINTS = `JPEG · UP TO ${String(UPLOAD_LIMITS.maxFileSize / (1024 * 1024))} MB`
 
 /** Column counts offered by the admin grid toggle (see `views/grid.ts`). */
 export const GridCols = S.Literals([2, 3, 4, 5, 6])
@@ -218,10 +232,6 @@ export const EditorState = S.Struct({
 })
 export type EditorState = typeof EditorState.Type
 
-/** In-flight upload abort handles, keyed by queue-item id — the Model stays
- *  serializable. Registered by `UploadItemCmd`; aborted by `CancelUploads`. */
-export const abortStore = new Map<string, AbortController>()
-
 /** Object-URL previews keyed by queue-item id (`${name}:${size}`), so rows
  *  can show what they are instead of a filename. Populated client-side when
  *  files are dropped; disposed alongside their bytes via `disposeItemAssets`. */
@@ -285,6 +295,12 @@ export const Model = S.Struct({
   uploadTagIds: S.Array(S.String),
   uploadCombo: Multi.Model,
   uploadTakenAt: S.String,
+  /** `Use export defaults`: seed a new Photo's export columns from the
+   *  Settings singleton rather than the schema defaults. */
+  uploadUseExportDefaults: S.Boolean,
+  /** `Publish when ready`: create the Photo `published` rather than `draft`.
+   *  Off is the dialog's default, so an upload lands in Drafts. */
+  uploadPublishWhenReady: S.Boolean,
   uploading: S.Boolean,
 
   // destructive confirmation
@@ -402,13 +418,23 @@ export const Message = defineMessageUnion({
   RetryUpload: { id: S.String },
   RetryAllFailed: {},
   SetUploadTakenAt: { value: S.String },
+  /** `Use export defaults`. The Settings singleton behind it is fetched when
+   *  the dialog opens, so the toggle is a real read of a real row. */
+  SetUploadUseExportDefaults: { isChecked: S.Boolean },
+  SetUploadPublishWhenReady: { isChecked: S.Boolean },
   StartUploads: {},
-  /** Stops the run: aborts the in-flight request, halts the chain, leaves
-   *  not-yet-uploaded items queued as `pending`. */
+  /** Stops the run: tears down the in-flight request (the subscription's scope
+   *  close aborts it), halts the chain, leaves not-yet-uploaded items queued
+   *  as `pending`. */
   CancelUploads: {},
-  SucceededUploadItem: { itemId: S.String },
+  /** The frame decoded from the file's own pixels, before the bytes go up. */
+  UploadItemFacts: { itemId: S.String, width: S.Number, height: S.Number, ratio: S.String },
+  /** One `XMLHttpRequest.upload.onprogress` tick. */
+  UploadProgress: { itemId: S.String, loaded: S.Number },
+  /** `renditionsPending` is `E6`'s signal: true holds the row at `processing`
+   *  (`AVIF · 2400, 1600, 800 px`) until the renditions land. */
+  SucceededUploadItem: { itemId: S.String, renditionsPending: S.Boolean },
   FailedUploadItem: { itemId: S.String, message: S.String },
-  ClearFinishedItems: {},
   GotUploadComboMessage: { message: S.Unknown },
 
   // destructive confirmation
