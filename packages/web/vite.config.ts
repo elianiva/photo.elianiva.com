@@ -34,7 +34,7 @@ export default defineConfig(({ command }) => ({
   // environment with workerd, so that environment is not runnable and
   // `@foldkit/vite-plugin` stands its own dev rendering down anyway. The
   // Worker is the page host in development and in production, and it renders
-  // the Front itself (ADR 0011).
+  // the Front itself (ADR 0004).
   //
   // A dev server runs one live source session rather than a set of deployable
   // artifacts, so there is no deployment identity to derive and the plugin's

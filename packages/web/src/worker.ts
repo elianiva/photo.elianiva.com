@@ -114,7 +114,7 @@ const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Respons
   // The client template under its old spelling. It is a built asset, so the
   // asset layer would answer it with the unfilled `#root` — a document the
   // front page's `Runtime.hydrate` refuses. The canonical URL is `/`, so this
-  // says so instead of serving a page that cannot boot (ADR 0011).
+  // says so instead of serving a page that cannot boot (ADR 0004).
   if (url.pathname === '/index.html') {
     const canonical = new URL(url)
     canonical.pathname = '/'
@@ -140,7 +140,7 @@ const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Respons
   // is dark and the first paint happens before any of this app has run. This
   // Worker is the page host in development too — the Cloudflare Vite plugin
   // backs the `ssr` environment with workerd, so `@foldkit/vite-plugin` stands
-  // its own dev middleware down and hands page requests here (ADR 0011).
+  // its own dev middleware down and hands page requests here (ADR 0004).
   if (isAdminPath(url.pathname)) {
     if (request.method === 'GET') {
       const shell = await env.ASSETS.fetch(

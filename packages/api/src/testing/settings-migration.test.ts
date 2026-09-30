@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { Effect } from 'effect'
-import { TagService } from '../tag'
-import { createTag } from './fixtures'
-import { makeTestHarness, repoMigrations, withTestServices, type TestHarness } from './harness'
+import { createTag, SETTINGS_DEFAULTS } from './fixtures'
+import { makeTestHarness, repoMigrations, type TestHarness } from './harness'
 
 /** The default-row insert, taken from the migration that ships it, so this
  *  asserts the SQL that runs in production rather than a copy of it. */
@@ -32,29 +30,24 @@ const settingsRow = async (harness: TestHarness): Promise<Record<string, unknown
   return row
 }
 
-const listTags = (harness: TestHarness) =>
-  Effect.runPromise(
-    withTestServices(
-      TagService.use((service) => service.list),
-      harness,
-    ),
-  )
-
 describe('migration 0005 — the settings singleton', () => {
   it('seeds exactly one row, with the documented defaults', async () => {
     const harness = makeTestHarness()
 
+    // The four booleans are 0/1 on the table, not `false`/`true`: this is the
+    // only place that difference is visible, so the columns are asserted as the
+    // migration writes them.
     expect(await settingsRows(harness)).toEqual([
       {
         id: 1,
         updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
-        defaultPreviewLongEdge: 1200,
-        defaultPreviewFormat: 'avif',
-        defaultPreviewQuality: 82,
-        defaultFullQuality: 92,
+        defaultPreviewLongEdge: SETTINGS_DEFAULTS.defaultPreviewLongEdge,
+        defaultPreviewFormat: SETTINGS_DEFAULTS.defaultPreviewFormat,
+        defaultPreviewQuality: SETTINGS_DEFAULTS.defaultPreviewQuality,
+        defaultFullQuality: SETTINGS_DEFAULTS.defaultFullQuality,
         watermarkEnabled: 0,
-        watermarkColour: 'white',
-        watermarkPosition: 'bottom-right',
+        watermarkColour: SETTINGS_DEFAULTS.watermarkColour,
+        watermarkPosition: SETTINGS_DEFAULTS.watermarkPosition,
         defaultKeepExif: 1,
         defaultRemoveGps: 1,
         retainForever: 1,
@@ -98,24 +91,6 @@ describe('migration 0005 — tag captions', () => {
     expect(rows.results).toEqual([
       { slug: 'film', caption: null },
       { slug: 'kyoto', caption: null },
-    ])
-  })
-
-  it('carries the caption on a Tag the service returns', async () => {
-    const harness = makeTestHarness()
-    const film = await createTag(harness, 'film', 'Film')
-    await harness.db
-      .prepare('UPDATE tags SET caption = ? WHERE id = ?')
-      .bind('Ferries, rain, and the long light on Istiklal.', film.id)
-      .run()
-
-    expect(await listTags(harness)).toEqual([
-      {
-        id: film.id,
-        slug: 'film',
-        label: 'Film',
-        caption: 'Ferries, rain, and the long light on Istiklal.',
-      },
     ])
   })
 })

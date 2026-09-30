@@ -35,7 +35,7 @@ const devApiOrigin = 'http://localhost:13371'
  * port in the browser and `''` in the Worker stamped `/api/image/…` into the
  * HTML and asked the browser for
  * `http://localhost:13371/api/image/…`, which foldkit reports as a server DOM
- * that did not match the first client view and rebuilds (ADR 0011). Both stages
+ * that did not match the first client view and rebuilds (ADR 0004). Both stages
  * of a build agree on `DEV`, and the dev port is a property of the dev stage
  * rather than of the browser that happens to be on localhost.
  */

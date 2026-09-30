@@ -738,8 +738,6 @@ export const statusVariantOf = (photo: PhotoWithTags): 'published' | 'draft' | '
 export const editorReturnUrl = (returnRoute: AppRoute): string =>
   returnRoute._tag === 'Library' ||
   returnRoute._tag === 'Drafts' ||
-  returnRoute._tag === 'Scheduled' ||
-  returnRoute._tag === 'Uploads' ||
-  returnRoute._tag === 'Trash'
+  returnRoute._tag === 'Scheduled'
     ? appRouteToUrl(returnRoute)
     : libraryUrl()

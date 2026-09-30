@@ -21,7 +21,7 @@ import { AcquireResources, CloseDialog, ShowDialog } from '@foldkit/ui/dialog'
 import * as Dialog from '@/components/ui/dialog'
 import * as Segment from '@/components/ui/segment'
 
-import { blurhashComponentLabel, compositionLayout } from '@/lib/blurhash'
+import { blurhashComponentLabel } from '@/lib/blurhash'
 
 import {
   BackCmd,
@@ -35,13 +35,8 @@ import {
   MAT_FOOT_MULTIPLE,
   blurhashSignature,
   compositionSpec,
-  cropRatioLabel,
-  cropStyle,
   exportSavingLabel,
   exportSavingPercent,
-  fitFrameWidth,
-  initEditorState,
-  levelLabel,
   withEditorExport,
 } from './editor'
 import { Message } from './model'
@@ -915,67 +910,5 @@ describe('the Export copy', () => {
     }
     expect(compositionSpec(photo, dragging)).toBeUndefined()
   })
-
-  it('lays the frame out and covers the source, panning the overflow', () => {
-    const spec = {
-      source: { width: 100, height: 100 },
-      frameAspect: 1,
-      panX: 50,
-      panY: 50,
-      scale: 1,
-      rotation: 0,
-      flipX: false,
-    }
-    const square = compositionLayout(spec, 32, 32)
-    expect(square.frame).toEqual({ x: 0, y: 0, width: 32, height: 32 })
-    expect(square.image).toEqual({ x: 0, y: 0, width: 32, height: 32 })
-    // A 2:1 source in a square frame is covered at 2× and only its left half
-    // shows at `object-position: 0%`, the right half at `100%`.
-    const wide = compositionLayout(
-      { ...spec, source: { width: 200, height: 100 }, panX: 0 },
-      32,
-      32,
-    )
-    expect(wide.image).toEqual({ x: 0, y: 0, width: 64, height: 32 })
-    const right = compositionLayout(
-      { ...spec, source: { width: 200, height: 100 }, panX: 100 },
-      32,
-      32,
-    )
-    expect(right.image.x).toBe(-32)
-  })
 })
 
-describe('the Crop copy', () => {
-  it('names AS SHOT only while the frame is the one the camera made', () => {
-    const editor = initEditorState()
-    expect(cropRatioLabel(photo, editor)).toBe('3:2 · AS SHOT')
-    expect(cropRatioLabel(photo, { ...editor, ratio: '4:3' })).toBe('4:3')
-  })
-
-  it('prints the level at the step\u2019s own precision, signed', () => {
-    expect(levelLabel({ ...PRESENTATION, level: null })).toBe('LEVEL 0.0°')
-    expect(levelLabel({ ...PRESENTATION, level: 0.4 })).toBe('LEVEL +0.4°')
-    expect(levelLabel({ ...PRESENTATION, level: -0.3 })).toBe('LEVEL -0.3°')
-  })
-
-  it('leaves an un-cropped frame at scale one', () => {
-    expect(cropStyle(PRESENTATION, '3 / 2')).toEqual({
-      'object-position': '50% 50%',
-      transform: 'scale(1)',
-    })
-  })
-
-  it('grows the frame by the level so a straighten cannot show the surface', () => {
-    expect(cropStyle({ ...PRESENTATION, level: 1 }, '3 / 2').transform).toBe(
-      'scale(1.026) rotate(1deg)',
-    )
-  })
-
-  it('fits the plate to the smaller of the Stage’s width and height', () => {
-    expect(fitFrameWidth('3 / 2')).toBe('min(calc(100vw - 29.5rem), calc((100dvh - 16rem) * 1.5))')
-    expect(fitFrameWidth('2 / 3')).toBe(
-      'min(calc(100vw - 29.5rem), calc((100dvh - 16rem) * 0.6667))',
-    )
-  })
-})

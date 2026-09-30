@@ -111,7 +111,7 @@ describe('admin access gate', () => {
     )
     expect(outcome(gate)).toBe('allowed')
     // The dev stand-down is the one admitted state with no claims: there is no
-    // Access assertion to read, and no signed-out state to report (ADR 0007).
+    // Access assertion to read, and no signed-out state to report (ADR 0003).
     expect(gate).toEqual({ ok: true, email: null, teamDomain: null })
   })
 
@@ -387,6 +387,20 @@ describe('CORS for the two dev origins', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
     expect(response.headers.get('access-control-allow-headers')).toContain('content-type')
     expect(response.headers.get('vary')).toBe('Origin')
+  })
+
+  it('allows the trace headers the client stamps on every request', async () => {
+    // Effect's HTTP client puts `b3` and `traceparent` on every request it
+    // makes, so the dev browser asks for them in the preflight. A preflight
+    // that does not answer with the headers it was asked about is a failed
+    // preflight: the browser drops the POST, the Worker never sees it, and the
+    // Admin reads it as an unproven session rather than as a CORS failure.
+    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}), {})
+    const allowed = (response.headers.get('access-control-allow-headers') ?? '')
+      .split(',')
+      .map((header) => header.trim().toLowerCase())
+    expect(allowed).toContain('b3')
+    expect(allowed).toContain('traceparent')
   })
 
   it('carries the header on an answer, not only on the preflight', async () => {

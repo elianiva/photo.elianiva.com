@@ -327,7 +327,7 @@ describe('selection', () => {
 })
 
 describe('the Bulk Bar', () => {
-  it('says Delete moves to Trash, and names the irreversible step as the Trash’s', () => {
+  it('says Delete moves to Trash, and promises nothing the Admin cannot keep', () => {
     Scene.scene(
       app,
       given(),
@@ -337,11 +337,13 @@ describe('the Bulk Bar', () => {
       ...opened(CONFIRM),
       // The one confirm every destructive action uses, and its copy says the
       // delete is a soft one rather than leaving the word "delete" to imply
-      // otherwise.
+      // otherwise. There is no Trash page to restore from, so the copy claims
+      // only what is true of a trashed Photo: it leaves the Library and keeps
+      // its original.
       Scene.expect(Scene.role('button', { name: 'Yes, move to Trash' })).toExist(),
       Scene.expect(
         Scene.text(
-          '2 photographs will be moved to Trash. You can restore them from the Trash; purging is the only irreversible step.',
+          '2 photographs will be moved to Trash: they leave the Library, their originals stay in R2, and their numbers are never reused.',
         ),
       ).toExist(),
     )
@@ -418,12 +420,12 @@ describe('the Bulk Bar', () => {
         }),
       ),
     ).toEqual([
-      '1 photo moved to Trash — Recoverable from the Trash. Purging is the only irreversible step.',
+      '1 photo moved to Trash — Nothing was purged. Originals stay in R2, and no number is ever reused.',
     ])
   })
 
   it('Add tag is Move to series, re-pointed, and it applies exactly what was ticked', () => {
-    // A Series page *is* a Tag page (ADR 0008), so the grouping entity the
+    // A Series page *is* a Tag page (ADR 0006), so the grouping entity the
     // design's `Move to series` slot wanted is the Tag. Ticked out of order on
     // purpose, so the ids assert the table's order and not the click order.
     const tagged = fold(

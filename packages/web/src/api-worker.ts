@@ -333,6 +333,22 @@ const buildRpcHandler = (
  */
 const DEV_ORIGINS = new Set(['http://localhost:5173', 'http://localhost:13371'])
 
+/**
+ * The request headers a dev browser is allowed to send.
+ *
+ * `b3` and `traceparent` are not decoration: Effect's HTTP client stamps both
+ * onto every request it makes, so the dev preflight asks for them by name. A
+ * preflight that does not answer with the headers it asked for is a failed
+ * preflight, and the browser then drops the POST without ever showing the
+ * Worker a response — which reads, in the Admin, exactly like an unproven
+ * session: every read fails, `GetSession` is refused, and the whole shell is
+ * replaced by the sign-in affordance. Nothing in production is preflighted (the
+ * API is a route on the site's own hostname), so this list is dev-only and its
+ * job is to match what the client actually sends.
+ */
+const DEV_ALLOWED_REQUEST_HEADERS =
+  'content-type, authorization, cf-access-jwt-assertion, b3, traceparent'
+
 const corsHeaders = (request: Request): Record<string, string> => {
   const origin = request.headers.get('origin')
   if (origin === null) return {}
@@ -340,7 +356,7 @@ const corsHeaders = (request: Request): Record<string, string> => {
   return {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'content-type, cf-access-jwt-assertion, authorization',
+    'access-control-allow-headers': DEV_ALLOWED_REQUEST_HEADERS,
     'access-control-allow-credentials': 'true',
     'access-control-max-age': '86400',
     vary: 'Origin',

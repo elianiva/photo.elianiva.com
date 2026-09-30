@@ -2,7 +2,7 @@
  * The public site's read path in the website Worker.
  *
  * The API Worker answers over an Effect Layer stack — `GatewayLive` from the
- * D1 and R2 bindings, then the services over it (ADR 0006). The website Worker
+ * D1 and R2 bindings, then the services over it (ADR 0003). The website Worker
  * answers a server-rendered page and a sitemap out of the same stack, so the
  * repo carries one data-access style and one read model: the sitemap's
  * hand-written `env.DB.prepare` is gone, and `frontStats` is the query behind
@@ -16,7 +16,7 @@
  * request to await before the first paint and no second copy of the query. It
  * is also the only read path: the Worker renders the Front in development as
  * well as in production, so there is no second implementation that reads over
- * HTTP (ADR 0011).
+ * HTTP (ADR 0004).
  */
 
 import { Effect, Layer } from 'effect'

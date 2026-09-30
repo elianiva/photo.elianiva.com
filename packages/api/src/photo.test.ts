@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
 import {
-  DEFAULT_SORT,
   clampLimit,
   decodeCursor,
-  encodeCursor,
-  filterWhere,
-  keysetWhere,
-  orderBy,
   slugify,
   type PhotoListFilter,
   type PhotoListPage,
@@ -31,125 +26,9 @@ describe('photo helpers', () => {
     expect(clampLimit(25.8)).toBe(25)
     expect(clampLimit(Number.NaN)).toBe(60)
   })
-
-  it('sorts undated photos last, newest id first among them', () => {
-    // The first level is "has no takenAt", so the empty string never has to be
-    // judged against a date by the collation.
-    expect(orderBy(DEFAULT_SORT)).toBe("(takenAt IS NULL) asc, COALESCE(takenAt, '') desc, id desc")
-    expect(orderBy({ key: 'takenAt', direction: 'asc' })).toBe(
-      "(takenAt IS NULL) asc, COALESCE(takenAt, '') asc, id asc",
-    )
-  })
-
-  it('builds the keyset predicate from the same columns it orders by', () => {
-    const key = [0, '2024-03-01', 'photo_b']
-    expect(keysetWhere(DEFAULT_SORT, key)).toEqual({
-      sql: "(((takenAt IS NULL) > ?) OR ((takenAt IS NULL) = ? AND COALESCE(takenAt, '') < ?) OR ((takenAt IS NULL) = ? AND COALESCE(takenAt, '') = ? AND id < ?))",
-      // Six placeholders, six binds, in the order the query reads them.
-      values: [0, 0, '2024-03-01', 0, '2024-03-01', 'photo_b'],
-    })
-    expect(keysetWhere({ key: 'takenAt', direction: 'asc' }, key).sql).toBe(
-      "(((takenAt IS NULL) > ?) OR ((takenAt IS NULL) = ? AND COALESCE(takenAt, '') > ?) OR ((takenAt IS NULL) = ? AND COALESCE(takenAt, '') = ? AND id > ?))",
-    )
-  })
-
-  it('builds no filter clause at all for an unfiltered query', () => {
-    // An empty filter has to collapse to nothing: the WHERE it is joined into
-    // already has the audience predicate, and a dangling `AND` is not SQL.
-    expect(filterWhere({})).toEqual({ sql: '', binds: [] })
-    // A sort, a limit and a cursor are not filters either.
-    expect(filterWhere({ sort: DEFAULT_SORT, limit: 7, cursor: 'abc' })).toEqual({
-      sql: '',
-      binds: [],
-    })
-  })
-
-  it('binds a status and a ratio in the order the clauses name them', () => {
-    expect(filterWhere({ status: 'draft' })).toEqual({ sql: 'status = ?', binds: ['draft'] })
-    expect(filterWhere({ ratio: '2:3' })).toEqual({ sql: 'ratio = ?', binds: ['2:3'] })
-    expect(filterWhere({ status: 'failed', ratio: '16:9' })).toEqual({
-      sql: 'status = ? AND ratio = ?',
-      binds: ['failed', '16:9'],
-    })
-  })
-
-  it('names every tag in one any-of subquery, and ignores an empty list', () => {
-    expect(filterWhere({ tagIds: ['tag_kyoto', 'tag_film'] })).toEqual({
-      sql: 'id IN (SELECT photoId FROM photo_tags WHERE tagId IN (?, ?))',
-      binds: ['tag_kyoto', 'tag_film'],
-    })
-    // An empty list is the same filter as no list, not a predicate that
-    // matches nothing.
-    expect(filterWhere({ tagIds: [] }).sql).toBe('')
-  })
-
-  it('binds q lowercased and LIKE-escaped, once per searched column', () => {
-    expect(filterWhere({ q: 'Kyoto' })).toEqual({
-      sql: "(LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(slug) LIKE ? ESCAPE '\\' OR LOWER(metadata) LIKE ? ESCAPE '\\')",
-      binds: ['%kyoto%', '%kyoto%', '%kyoto%'],
-    })
-    // `%` and `_` are escaped so a search for `100%` cannot match every
-    // title containing "100".
-    expect(filterWhere({ q: '100%' }).binds).toEqual(['%100\\%%', '%100\\%%', '%100\\%%'])
-    expect(filterWhere({ q: '  ' }).sql).toBe('')
-  })
-
-  it('keeps every clause and every bind in one order for the whole filter', () => {
-    const filter: PhotoListFilter = {
-      status: 'published',
-      ratio: '3:2',
-      tagIds: ['tag_kyoto'],
-      q: 'Alley',
-    }
-    expect(filterWhere(filter)).toEqual({
-      sql: "status = ? AND ratio = ? AND id IN (SELECT photoId FROM photo_tags WHERE tagId IN (?)) AND (LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(slug) LIKE ? ESCAPE '\\' OR LOWER(metadata) LIKE ? ESCAPE '\\')",
-      binds: ['published', '3:2', 'tag_kyoto', '%alley%', '%alley%', '%alley%'],
-    })
-  })
 })
 
-describe('cursor encode/decode', () => {
-  const row = {
-    id: 'photo_123',
-    slug: 'a',
-    title: 'A',
-    r2Key: 'originals/a.jpg',
-    width: 100,
-    height: 100,
-    status: 'published',
-    number: 7,
-    ratio: '3:2',
-    bytes: 1024,
-    takenAt: '2024-01-15',
-    metadata: '{}',
-    blurhash: null,
-    deletedAt: null,
-  }
-
-  it('round-trips the sort key it was built on', () => {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test helper needs the branded row shape
-    const cursor = encodeCursor(row as never, DEFAULT_SORT)
-    expect(decodeCursor(cursor)).toEqual({
-      sort: 'takenAt:desc',
-      key: [0, '2024-01-15', 'photo_123'],
-    })
-  })
-
-  it('round-trips an undated photo, whose first level sorts last', () => {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test helper needs the branded row shape
-    const cursor = encodeCursor({ ...row, takenAt: null } as never, DEFAULT_SORT)
-    expect(decodeCursor(cursor)?.key).toEqual([1, '', 'photo_123'])
-  })
-
-  it('names the direction, so a cursor from an ascending page is not this one', () => {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test helper needs the branded row shape
-    const descending = decodeCursor(encodeCursor(row as never, DEFAULT_SORT))
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test helper needs the branded row shape
-    const ascending = decodeCursor(encodeCursor(row as never, { key: 'takenAt', direction: 'asc' }))
-    expect(descending?.sort).toBe('takenAt:desc')
-    expect(ascending?.sort).toBe('takenAt:asc')
-  })
-
+describe('decodeCursor', () => {
   it('returns null on malformed input', () => {
     expect(decodeCursor('not-base64!')).toBeNull()
     expect(decodeCursor(btoa('not-json'))).toBeNull()

@@ -123,7 +123,7 @@ export interface CompositionLayout {
  *  units and scaled to the box. The box may be non-square — the encoder
  *  stretches the composition into it, exactly as the upload's own encode
  *  does — which keeps the readout independent of the frame's proportion. */
-export const compositionLayout = (
+const compositionLayout = (
   spec: CompositionSpec,
   outputW: number,
   outputH: number,

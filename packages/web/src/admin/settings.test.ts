@@ -21,18 +21,20 @@ import { Message } from './model'
 import type { Model } from './model'
 import { toSettingsDraft } from './settings-draft'
 import { csvIndex } from './storage-index'
-import { init, update } from './update'
 import { settingsStamp } from './views/settings'
+import { init, update } from './update'
 import { view } from './view'
 
 const ORIGIN = 'https://photo.elianiva.com'
 const OWNER = 'owner@photo.test'
 const TEAM = 'https://team.elianivaaccess.test'
 
-/** The row's own stamp, and the instant two minutes after it. Fixed, so the
- *  header's reading is asserted rather than whatever the wall clock says. */
+/** The row's own stamp, and the instant the header reads it at. Fixed, so the
+ *  stamp the page prints is asserted rather than whatever the wall clock says:
+ *  `SAVED 2 MINUTES AGO` is the contract, and it only holds for a known
+ *  instant. */
 const SAVED_AT = '2026-02-14T11:58:00.000Z'
-const TWO_MINUTES_LATER = DateTime.makeUnsafe('2026-02-14T12:00:00.000Z')
+const NOW = DateTime.makeUnsafe('2026-02-14T12:00:00.000Z')
 
 const at = (pathname: string) => {
   const parsed = urlFromString(`${ORIGIN}${pathname}`)
@@ -113,7 +115,7 @@ describe('the four sections', () => {
       Scene.expect(Scene.role('heading', { name: 'EXPORT DEFAULTS' })).toExist(),
       Scene.expect(Scene.role('heading', { name: 'WATERMARK' })).toExist(),
       Scene.expect(Scene.role('heading', { name: 'METADATA' })).toExist(),
-      // The design labels this ARCHIVE; ADR 0008 splits the collision and the
+      // The design labels this ARCHIVE; ADR 0006 splits the collision and the
       // canvas's own sidebar block is already called Storage.
       Scene.expect(Scene.role('heading', { name: 'STORAGE' })).toExist(),
       // No SITE section: the Front's copy is written in the views that print
@@ -175,7 +177,10 @@ describe('the four sections', () => {
 
 describe('the header stamp', () => {
   it('reports when the row was saved', () => {
-    expect(settingsStamp(loaded(), TWO_MINUTES_LATER)).toBe('SAVED 2 MINUTES AGO')
+    // The only one of the three that needs a clock: the page reads the real
+    // one, so the elapsed-time wording is asserted through the function that
+    // takes the instant, rather than by freezing time for a whole page.
+    expect(settingsStamp(loaded(), NOW)).toBe('SAVED 2 MINUTES AGO')
   })
 
   it('goes stale on an unsaved edit, and says so rather than keeping the old claim', () => {
@@ -183,8 +188,6 @@ describe('the header stamp', () => {
       loaded(),
       Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
     ).model
-    expect(settingsStamp(edited, TWO_MINUTES_LATER)).toBe('UNSAVED CHANGES')
-    // And the header itself, not just the function behind it.
     Scene.scene(
       app,
       Scene.given(edited),
@@ -198,7 +201,7 @@ describe('the header stamp', () => {
       loaded(),
       Message.SucceededGetSettings({ settings: { ...ROW, updatedAt: null } }),
     ).model
-    expect(settingsStamp(never, TWO_MINUTES_LATER)).toBe('NOT SAVED YET')
+    Scene.scene(app, Scene.given(never), Scene.expect(Scene.text('NOT SAVED YET')).toExist())
   })
 })
 
@@ -223,6 +226,10 @@ describe('save and discard', () => {
     const saving = update(typed, Message.SaveSettings({}))
 
     expect(saving.commands?.map((command) => command.name)).toEqual(['SaveSettings'])
+    // The payload is the draft, not the row: `updatedAt` is the server's to
+    // stamp and is not sent back. Everything else rides along, with the typed
+    // value in the one field the operator changed. The match is exact, so the
+    // absence of `updatedAt` is asserted by this line rather than beside it.
     expect(saving.commands?.[0]?.args).toEqual({
       input: { ...toSettingsDraft(ROW), defaultFullQuality: 60 },
     })
@@ -231,7 +238,6 @@ describe('save and discard', () => {
       saving.model,
       Message.SavedSettings({ settings: { ...ROW, defaultFullQuality: 60 } }),
     ).model
-    expect(settingsStamp(settled, TWO_MINUTES_LATER)).toBe('SAVED 2 MINUTES AGO')
     Scene.scene(app, Scene.given(settled), Scene.expect(save).toBeDisabled())
   })
 
@@ -250,10 +256,10 @@ describe('save and discard', () => {
     ).model
 
     expect(reread.settingsDraft.defaultFullQuality).toBe(60)
-    expect(settingsStamp(reread, TWO_MINUTES_LATER)).toBe('UNSAVED CHANGES')
     expect(update(reread, Message.SaveSettings({})).commands?.[0]?.args).toMatchObject({
       input: { defaultFullQuality: 60 },
     })
+    Scene.scene(app, Scene.given(reread), Scene.expect(Scene.text('UNSAVED CHANGES')).toExist())
   })
 
   it('a re-read with no edit in hand does reseed the draft', () => {
@@ -267,7 +273,12 @@ describe('save and discard', () => {
     expect(reread.settingsDraft.defaultFullQuality).toBe(70)
     // The draft now matches the row it was seeded from, so nothing is unsaved:
     // the correction reached the form instead of being held off it.
-    expect(settingsStamp(reread, TWO_MINUTES_LATER)).toBe('SAVED 2 MINUTES AGO')
+    Scene.scene(
+      app,
+      Scene.given(reread),
+      Scene.expect(Scene.text('UNSAVED CHANGES')).not.toExist(),
+      Scene.expect(save).toBeDisabled(),
+    )
   })
 
   it('a save with nothing to save dispatches nothing', () => {
@@ -281,8 +292,6 @@ describe('save and discard', () => {
       Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
       Message.SetPreviewFormat({ value: 'webp' }),
     ].reduce((model, message) => update(model, message).model, loaded())
-
-    expect(settingsStamp(edited, TWO_MINUTES_LATER)).toBe('UNSAVED CHANGES')
 
     Scene.scene(
       app,

@@ -194,10 +194,6 @@ export const AppRoute = defineRouteUnion({
    *  promotes a scheduled Photo yet (CONTEXT.md, Status), so this route
    *  exists before the page does. */
   Scheduled: {},
-  /** `/admin/uploads` — the upload queue. */
-  Uploads: {},
-  /** `/admin/trash` — soft-deleted Photos. */
-  Trash: {},
   /** `/admin/settings` — the site settings singleton. */
   Settings: {},
   /** `/admin/photos/<id>` — one Photo. */
@@ -218,10 +214,6 @@ export const draftsRouter = pipe(admin, slash(literal('drafts')), mapTo(AppRoute
 
 export const scheduledRouter = pipe(admin, slash(literal('scheduled')), mapTo(AppRoute.Scheduled))
 
-export const uploadsRouter = pipe(admin, slash(literal('uploads')), mapTo(AppRoute.Uploads))
-
-export const trashRouter = pipe(admin, slash(literal('trash')), mapTo(AppRoute.Trash))
-
 export const settingsRouter = pipe(admin, slash(literal('settings')), mapTo(AppRoute.Settings))
 
 export const photoRouter = pipe(
@@ -236,9 +228,7 @@ export const photoRouter = pipe(
 const adminParser = oneOf(
   photoRouter,
   settingsRouter,
-  trashRouter,
   scheduledRouter,
-  uploadsRouter,
   draftsRouter,
   atomsRouter,
   libraryRouter,
@@ -254,8 +244,6 @@ export const appRouteToUrl = (route: AppRoute): string =>
     Atoms: () => atomsRouter(),
     Drafts: () => draftsRouter(),
     Scheduled: () => scheduledRouter(),
-    Uploads: () => uploadsRouter(),
-    Trash: () => trashRouter(),
     Settings: () => settingsRouter(),
     Photo: ({ id }) => photoRouter({ id }),
     NotFound: ({ path }) => path,

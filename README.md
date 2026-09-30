@@ -18,7 +18,15 @@ pnpm typecheck
 pnpm lint
 ```
 
-The two dev servers have fixed ports (`dev.port` in `alchemy.run.ts`) and fail to start when either is taken, so run one instance at a time per machine. Keep `ACCESS_ALLOWED_EMAILS` in a local `.env` (see `.env.example`); it is required on every stage, `dev` included, although the admin gate stands down on `dev` before the allowlist is consulted.
+The two dev servers have fixed ports (`dev.port` in `alchemy.run.ts`) and fail to start when either is taken, so run one instance at a time per machine. Keep `ACCESS_ALLOWED_EMAILS` and `ACCESS_TEAM_DOMAIN` in a local `.env` (see `.env.example`); both are required on every non-dev stage, and `ACCESS_ALLOWED_EMAILS` on `dev` too, although the admin gate stands down on `dev` before either is consulted — `alchemy.run.ts` forces the _binding_ to `''` on that stage, so carrying the real team domain locally does not gate local development.
+
+## Deploy
+
+```sh
+pnpm infra:deploy  # alchemy deploy --stage prod
+```
+
+`ACCESS_TEAM_DOMAIN` is the Zero Trust organization's `auth_domain` (the host that serves `/cdn-cgi/access/*` and the team JWKS). The Access application names the account's identity provider through `Cloudflare.Access.getIdentityProvider({ type: 'cloudflare' })` — the managed one, which is the email one-time PIN — as a plan-time `Output`, not a resource whose uuid is read with `Output.asEffect()`. The latter asks for a service the engine only provides while applying, and the stack then dies before it plans (`Service not found: RuntimeContext`), which is how every deploy after #79 failed and left production with no Access application at all.
 
 ## Deploy
 
@@ -30,8 +38,10 @@ pnpm infra:deploy  # alchemy deploy --stage prod
 
 Images live in R2 (`photo-elianiva-originals`) and metadata in D1 (`photo-elianiva`). The Admin at `/admin` is a single-operator surface behind Cloudflare Access.
 
-**One hostname, one login.** The API is a Worker of its own but answers on the _site's_ hostname behind a route (`photo.elianiva.com/api/*`), so the Admin and everything it calls are same-origin. That is what makes the Access login work: Access issues an application token per application, and a cross-origin call to a second hostname could neither send the cookie (a browser sends none on a preflight) nor complete the interactive login. In development the two are on separate ports and CORS is answered for the localhost pair alone.
+**One hostname, one login.** The API is a Worker of its own but answers on the _site's_ hostname behind a route (`photo.elianiva.com/api/*`), so the Admin and everything it calls are same-origin. That is what makes the Access login work: Access issues an application token per application, and a cross-origin call to a second hostname could neither send the cookie (a browser sends none on a preflight) nor complete the interactive login. In development the two are on separate ports and CORS is answered for the localhost pair alone — including the `b3` and `traceparent` headers Effect's HTTP client stamps on every request, because a preflight that does not answer with the headers it was asked about fails, and a failed preflight reads in the Admin exactly like an unproven session.
 
-**Delivery is the original's bytes.** Every image is served from R2 through the Worker's own `/api/image/<key>` proxy. The zone is on the Free plan, where Cloudflare Image Resizing is plan-gated (`image_resizing` reports `editable: false`), so `/cdn-cgi/image` answers 404 for every request and no URL builder for it ships. Stored Renditions (CONTEXT.md) are the designed answer; see `docs/adr/0008`.
+**The way back into the Admin is a navigation.** Access runs at the edge, before the Worker, so the request that starts a login is a document request for the protected path itself — which is what the session-expired screen's `Sign in again` link is. It is deliberately not a `/cdn-cgi/access/login` link: that path belongs to the team domain (`<team>.cloudflareaccess.com`) and 404s on any origin without an Access edge in front of it, which is every stage but production.
+
+**Delivery is the original's bytes.** Every image is served from R2 through the Worker's own `/api/image/<key>` proxy. The zone is on the Free plan, where Cloudflare Image Resizing is plan-gated (`image_resizing` reports `editable: false`), so `/cdn-cgi/image` answers 404 for every request and no URL builder for it ships. Stored Renditions (CONTEXT.md) are the designed answer; see `docs/adr/0002-storage-and-image-delivery.md`.
 
 See `CONTEXT.md` for domain language, `docs/plan.md` for the route map, and `docs/adr/` for the decisions.

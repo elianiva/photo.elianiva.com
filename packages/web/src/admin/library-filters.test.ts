@@ -190,15 +190,19 @@ describe('the URL is the filter', () => {
     })
   })
 
-  it('SCHEDULED selects nothing, because nothing records a publish time', () => {
+  it('SCHEDULED is recorded in the URL but dispatches no read, because nothing records a publish time', () => {
     const scheduled = fold(Message.SelectedStatusFilter({ value: 'scheduled' }))
+
+    // The filter is still real — it round-trips through the URL and comes back
+    // on a cold load — but there is no server query to send, so the one
+    // command is the URL move and nothing else. Asserting the emptied rows here
+    // would be no use at all: every filter change empties them while its read
+    // is in flight, so a Scheduled page and a Draft page would agree.
     expect(scheduled.model.statusFilter).toBe('scheduled')
-    expect(scheduled.model.photos).toEqual([])
-    expect(scheduled.model.libraryTotal).toBe(0)
-    // The URL is the query, and there is no server query to send.
     expect(scheduled.commands).toEqual([
       { name: 'ReplaceUrl', args: { url: '/admin?status=scheduled' } },
     ])
+    expect(init(at('/admin?status=scheduled')).model.statusFilter).toBe('scheduled')
   })
 })
 

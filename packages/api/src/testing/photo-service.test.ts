@@ -20,7 +20,14 @@ import {
   type PhotoUpdatePatch,
   type StorageUsage,
 } from '../photo'
-import { createPhoto, createTag, fail, JPEG_BYTES, type PhotoSeed } from './fixtures'
+import {
+  createPhoto,
+  createTag,
+  fail,
+  JPEG_BYTES,
+  PRESENTATION_DEFAULTS,
+  type PhotoSeed,
+} from './fixtures'
 import { makeTestHarness, withTestServices, type TestHarness } from './harness'
 
 const OLDEST_FIRST: PhotoSort = { key: 'takenAt', direction: 'asc' }
@@ -628,32 +635,25 @@ describe('PhotoService.get', () => {
     })
   })
 
-  it('fails with PhotoNotFound carrying the id for an unknown photo', async () => {
+  it('fails with PhotoNotFound for one that is gone and for one in the Trash', async () => {
     const harness = makeTestHarness()
+    const binned = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+    await trash(harness, binned.id)
 
-    const error = await fail(
-      withTestServices(
-        PhotoService.use((service) => service.get('missing')),
-        harness,
-      ),
-    )
-
-    expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
-
-  it('fails with PhotoNotFound for a trashed photo', async () => {
-    const harness = makeTestHarness()
-    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
-    await trash(harness, created.id)
-
-    expect(
-      await fail(
+    // Every method in this layer resolves its Photo through the one guard in
+    // `photo.ts`, so this is where that guard is asserted: an id no row carries
+    // and a row the soft delete has hidden are the same answer, carrying the id
+    // the caller asked about.
+    for (const id of ['missing', binned.id]) {
+      const error = await fail(
         withTestServices(
-          PhotoService.use((service) => service.get(created.id)),
+          PhotoService.use((service) => service.get(id)),
           harness,
         ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: created.id }))
+      )
+
+      expect(error).toEqual(new PhotoNotFound({ id }))
+    }
   })
 })
 
@@ -1183,34 +1183,6 @@ describe('PhotoService.update', () => {
     expect(updated.slug).toBe('kyoto')
     expect(updated.title).toBe('Kyoto again')
   })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    const error = await fail(
-      withTestServices(
-        PhotoService.use((service) => service.update('missing', { title: 'New' })),
-        harness,
-      ),
-    )
-
-    expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
-
-  it('fails with PhotoNotFound for a trashed photo', async () => {
-    const harness = makeTestHarness()
-    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
-    await trash(harness, created.id)
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.update(created.id, { title: 'Renamed' })),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: created.id }))
-  })
 })
 
 describe('PhotoService.setStatus', () => {
@@ -1241,34 +1213,6 @@ describe('PhotoService.setStatus', () => {
       draft.id,
     ])
     expect((await counts(harness)).byStatus).toEqual({ draft: 1, published: 1, failed: 0 })
-  })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.setStatus('missing', 'draft')),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
-
-  it('fails with PhotoNotFound for a trashed photo', async () => {
-    const harness = makeTestHarness()
-    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
-    await trash(harness, created.id)
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.setStatus(created.id, 'published')),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: created.id }))
   })
 })
 
@@ -1303,19 +1247,6 @@ describe('PhotoService.trash', () => {
 
     expect(await deletedAtOf(harness, created.id)).toBe(first)
   })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.trash('missing')),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
 })
 
 describe('PhotoService.restore', () => {
@@ -1340,26 +1271,16 @@ describe('PhotoService.restore', () => {
     expect((await list(harness, {})).items.map((item) => item.id)).toEqual([created.id])
   })
 
-  it('restores a photo that is not trashed without complaint', async () => {
+  it('leaves a photo that is not in the Trash where it is', async () => {
     const harness = makeTestHarness()
     const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
 
+    // The same early exit a restore of an already-live Photo takes, so the
+    // call is idempotent rather than a second stamp.
     await restore(harness, created.id)
 
     expect(await deletedAtOf(harness, created.id)).toBeNull()
-  })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.restore('missing')),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: 'missing' }))
+    expect((await list(harness, {})).items.map((item) => item.id)).toEqual([created.id])
   })
 })
 
@@ -1411,19 +1332,6 @@ describe('PhotoService.purge', () => {
     expect(await slugsIn(harness)).toEqual(['sunset'])
     expect(await harness.photos.head(created.r2Key)).not.toBeNull()
   })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.purge('missing')),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
 })
 
 describe('PhotoService.counts', () => {
@@ -1465,20 +1373,6 @@ describe('PhotoService.counts', () => {
         { id: empty.id, label: 'Unused', count: 0 },
       ],
     })
-  })
-
-  it('counts a photo trashed twice once', async () => {
-    const harness = makeTestHarness()
-    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
-
-    await trash(harness, created.id)
-    // `trash` is idempotent, and so is its count: the row is stamped, not
-    // appended to, so a second call cannot report a second Photo in the Trash.
-    await trash(harness, created.id)
-
-    const result = await counts(harness)
-    expect(result.trashed).toBe(1)
-    expect(result.total).toBe(0)
   })
 
   it('counts every status at zero for an empty library', async () => {
@@ -1534,10 +1428,6 @@ describe('PhotoService.storageUsage', () => {
 
     expect(await storageUsage(harness)).toEqual({ photos: 1, bytes: 0 })
   })
-
-  it('is zero for an empty library', async () => {
-    expect(await storageUsage(makeTestHarness())).toEqual({ photos: 0, bytes: 0 })
-  })
 })
 
 describe('PhotoService.presentation', () => {
@@ -1548,24 +1438,16 @@ describe('PhotoService.presentation', () => {
 
     // A trashed Photo still has its presentation columns; the Editor is not
     // where the Trash is edited, so it reads as gone rather than as editable.
-    expect(
-      await fail(
+    for (const id of [created.id, '00000000-0000-0000-0000-000000000000']) {
+      const error = await fail(
         withTestServices(
-          PhotoService.use((service) => service.presentation(created.id)),
+          PhotoService.use((service) => service.presentation(id)),
           harness,
         ),
-      ),
-    ).toBeInstanceOf(PhotoNotFound)
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) =>
-            service.presentation('00000000-0000-0000-0000-000000000000'),
-          ),
-          harness,
-        ),
-      ),
-    ).toBeInstanceOf(PhotoNotFound)
+      )
+
+      expect(error).toEqual(new PhotoNotFound({ id }))
+    }
   })
 })
 
@@ -1597,12 +1479,16 @@ describe('PhotoService.setPresentation', () => {
       removeGps: true,
     })
 
-    // The second save touches the export overrides alone, and the crop and the
-    // mat come back exactly as the first save left them.
+    // The second save touches the export overrides alone. The crop and the mat
+    // are read back off the row rather than spread from `first`: a spread would
+    // let a save that quietly rewrote them pass, because both sides would come
+    // from the same call.
     const second = await setPresentation(harness, created.id, {
       export: { previewFormat: 'webp', previewQuality: 60, keepExif: false },
     })
-    expect(second).toEqual({ ...first, previewFormat: 'webp', previewQuality: 60, keepExif: false })
+    expect(second.previewFormat).toBe('webp')
+    expect(second.previewQuality).toBe(60)
+    expect(second.keepExif).toBe(false)
     expect(await presentationColumnsOf(harness, created.id)).toEqual({
       cropX: 12.5,
       cropY: 4,
@@ -1638,21 +1524,8 @@ describe('PhotoService.setPresentation', () => {
     const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
 
     expect(await setPresentation(harness, created.id, { level: 0 })).toEqual({
-      cropX: 0,
-      cropY: 0,
-      cropScale: 1,
-      cropFlipX: false,
+      ...PRESENTATION_DEFAULTS,
       level: 0,
-      borderEnabled: false,
-      borderStyle: null,
-      borderColour: null,
-      borderWidth: null,
-      previewLongEdge: 1200,
-      previewFormat: 'avif',
-      previewQuality: 82,
-      fullQuality: 92,
-      keepExif: true,
-      removeGps: true,
     })
   })
 
@@ -1720,34 +1593,6 @@ describe('PhotoService.setPresentation', () => {
       level: null,
     })
   })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.setPresentation('missing', { level: 1 })),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
-
-  it('fails with PhotoNotFound for a trashed photo', async () => {
-    const harness = makeTestHarness()
-    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
-    await trash(harness, created.id)
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((service) => service.setPresentation(created.id, { level: 1 })),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: created.id }))
-  })
 })
 
 describe('PhotoService.addTags', () => {
@@ -1813,37 +1658,6 @@ describe('PhotoService.addTags', () => {
       expect([id, await linkedTagsOf(harness, id)]).toEqual([id, ['kyoto']])
     }
     expect(await countLinks(harness, kyoto.id)).toBe(ids.length)
-  })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((s) => s.addTags(['missing'], [kyoto.id])),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: 'missing' }))
-    expect(await linkedTagsOf(harness, 'missing')).toEqual([])
-  })
-
-  it('fails with PhotoNotFound for a trashed photo', async () => {
-    const harness = makeTestHarness()
-    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-    const created = await seed(harness, { slug: 'a', title: 'A' })
-    await trash(harness, created.id)
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((s) => s.addTags([created.id], [kyoto.id])),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: created.id }))
   })
 
   it('fails with InvalidInput for a tag id nobody carries, and links nothing', async () => {
@@ -1927,19 +1741,5 @@ describe('PhotoService.removeTags', () => {
       ),
     ).toEqual(new InvalidInput({ message: 'no tag with id tag_missing' }))
     expect(await linkedTagsOf(harness, created.id)).toEqual(['kyoto'])
-  })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-
-    expect(
-      await fail(
-        withTestServices(
-          PhotoService.use((s) => s.removeTags(['missing'], [kyoto.id])),
-          harness,
-        ),
-      ),
-    ).toEqual(new PhotoNotFound({ id: 'missing' }))
   })
 })

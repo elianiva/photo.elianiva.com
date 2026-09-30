@@ -54,8 +54,6 @@ export const pageHeadOf = (model: Model): PageHead =>
     Library: (): PageHead => ({ title: 'Library', isSearchable: true, isUploadable: true }),
     Drafts: (): PageHead => ({ title: 'Drafts', isSearchable: true, isUploadable: true }),
     Scheduled: (): PageHead => ({ title: 'Scheduled', isSearchable: true, isUploadable: true }),
-    Uploads: (): PageHead => ({ title: 'Uploads', isSearchable: true, isUploadable: true }),
-    Trash: (): PageHead => ({ title: 'Trash', isSearchable: true, isUploadable: true }),
     Settings: (): PageHead => ({
       title: 'Settings',
       isSearchable: false,

@@ -9,23 +9,8 @@ import { PhotoService, PhotoServiceLive } from './photo'
 import { PublicPhotoServiceLive } from './public-photo'
 import { AdminSession } from './session'
 import { TagServiceLive } from './tag'
-import { createPhoto, createTag, fail, trashPhoto } from './testing/fixtures'
+import { createPhoto, createTag, fail, SETTINGS_DEFAULTS, trashPhoto } from './testing/fixtures'
 import { makeTestHarness, withTestServices, type TestHarness } from './testing/harness'
-
-/** The migration 0005 column defaults, written out: what a row nobody has saved
- *  yet holds, and the starting point for every save below. */
-const DEFAULTS: SettingsInput = {
-  defaultPreviewLongEdge: 1200,
-  defaultPreviewFormat: 'avif',
-  defaultPreviewQuality: 82,
-  defaultFullQuality: 92,
-  watermarkEnabled: false,
-  watermarkColour: 'white',
-  watermarkPosition: 'bottom-right',
-  defaultKeepExif: true,
-  defaultRemoveGps: true,
-  retainForever: true,
-}
 
 const ISO_STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 
@@ -75,20 +60,12 @@ describe('SettingsService', () => {
   it('reads the column defaults off a freshly migrated row', async () => {
     const harness = makeTestHarness()
 
-    const settings = await readSettings(harness)
-
-    expect(settings).toEqual({
+    // The migration writes the row; `settings-migration.test.ts` asserts it
+    // straight off the table. What is asserted here is the read: the service
+    // hands back the row's own columns and never invents a value.
+    expect(await readSettings(harness)).toEqual({
+      ...SETTINGS_DEFAULTS,
       updatedAt: expect.stringMatching(ISO_STAMP),
-      defaultPreviewLongEdge: 1200,
-      defaultPreviewFormat: 'avif',
-      defaultPreviewQuality: 82,
-      defaultFullQuality: 92,
-      watermarkEnabled: false,
-      watermarkColour: 'white',
-      watermarkPosition: 'bottom-right',
-      defaultKeepExif: true,
-      defaultRemoveGps: true,
-      retainForever: true,
     })
   })
 
@@ -115,7 +92,7 @@ describe('SettingsService', () => {
 
   it('stamps a fresh updatedAt on a save that changes nothing', async () => {
     const harness = makeTestHarness()
-    const input: SettingsInput = { ...DEFAULTS, defaultPreviewLongEdge: 2400 }
+    const input: SettingsInput = { ...SETTINGS_DEFAULTS, defaultPreviewLongEdge: 2400 }
     const first = await updateSettings(harness, input)
     await stampOf(harness, '2001-01-01T00:00:00.000Z')
 
@@ -133,7 +110,7 @@ describe('SettingsService', () => {
     const harness = makeTestHarness()
 
     const off = await updateSettings(harness, {
-      ...DEFAULTS,
+      ...SETTINGS_DEFAULTS,
       watermarkEnabled: false,
       defaultKeepExif: false,
       defaultRemoveGps: false,
@@ -154,7 +131,7 @@ describe('SettingsService', () => {
     expect(off.retainForever).toBe(false)
 
     const on = await updateSettings(harness, {
-      ...DEFAULTS,
+      ...SETTINGS_DEFAULTS,
       watermarkEnabled: true,
       defaultKeepExif: true,
       defaultRemoveGps: true,
@@ -176,7 +153,7 @@ describe('SettingsService', () => {
   it('refuses a preview quality outside 1..100 and writes nothing', async () => {
     const harness = makeTestHarness()
 
-    const error = await tryUpdate(harness, { ...DEFAULTS, defaultPreviewQuality: 101 })
+    const error = await tryUpdate(harness, { ...SETTINGS_DEFAULTS, defaultPreviewQuality: 101 })
 
     expect(error).toBeInstanceOf(InvalidInput)
     expect((await readSettings(harness)).defaultPreviewQuality).toBe(82)
@@ -185,7 +162,7 @@ describe('SettingsService', () => {
   it('refuses a long edge that is not positive and writes nothing', async () => {
     const harness = makeTestHarness()
 
-    const error = await tryUpdate(harness, { ...DEFAULTS, defaultPreviewLongEdge: 0 })
+    const error = await tryUpdate(harness, { ...SETTINGS_DEFAULTS, defaultPreviewLongEdge: 0 })
 
     expect(error).toBeInstanceOf(InvalidInput)
     expect((await readSettings(harness)).defaultPreviewLongEdge).toBe(1200)
@@ -198,7 +175,7 @@ describe('SettingsService', () => {
     // A row the migration never wrote is a fresh page, not a broken one, and it
     // has never been saved — so the
     // stamp is null rather than a date the operator never chose.
-    expect(await readSettings(harness)).toEqual({ ...DEFAULTS, updatedAt: null })
+    expect(await readSettings(harness)).toEqual({ ...SETTINGS_DEFAULTS, updatedAt: null })
   })
 })
 

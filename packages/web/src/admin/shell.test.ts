@@ -126,8 +126,6 @@ describe('the sidebar nav', () => {
       cold('/admin'),
       Scene.expect(navLink('Library 412')).toHaveAttr('href', '/admin'),
       Scene.expect(navLink('Drafts 7')).toHaveAttr('href', '/admin/drafts'),
-      Scene.expect(navLink('Uploads 1 failed')).toHaveAttr('href', '/admin/uploads'),
-      Scene.expect(navLink('Trash 3')).toHaveAttr('href', '/admin/trash'),
       Scene.expect(navLink('Scheduled')).toHaveAttr('href', '/admin/scheduled'),
       Scene.expect(navLink('Settings')).toHaveAttr('href', '/admin/settings'),
     )
@@ -143,6 +141,21 @@ describe('the sidebar nav', () => {
     )
   })
 
+  it('carries no row for Uploads or Trash, which are not pages', () => {
+    // Neither is a destination: the upload queue is the dialog that runs a
+    // batch, and the Trash is a state the Library's Delete produces rather than
+    // a list somewhere to go. A row pointing at either would be a link to a
+    // path no route names, and neither `byStatus.failed` nor the trashed count
+    // invents one — they are still facts the Library's filter reads.
+    const clean: Counts = { ...COUNTS, byStatus: { ...COUNTS.byStatus, failed: 0 } }
+    Scene.scene(
+      app,
+      Scene.given(update(signedIn('/admin'), Message.SucceededGetCounts(clean)).model),
+      Scene.expect(Scene.role('link', { name: /^Uploads/ })).not.toExist(),
+      Scene.expect(Scene.role('link', { name: /^Trash/ })).not.toExist(),
+    )
+  })
+
   it('leaves the count slot empty for the two rows with no count to report', () => {
     // Scheduled has no count because nothing records a publish time
     // (CONTEXT.md, Status) and Settings has none because it is a singleton. The
@@ -155,19 +168,6 @@ describe('the sidebar nav', () => {
       Scene.expect(navLink('Settings 0')).not.toExist(),
       Scene.expect(navLink('Scheduled')).toExist(),
       Scene.expect(navLink('Settings')).toExist(),
-    )
-  })
-
-  it('says the Uploads count in words, and only while a Photo has failed to process', () => {
-    // The count is `byStatus.failed` — a Photo whose processing did not finish
-    // — rather than this session's queue, which a reload would empty.
-    const clean: Counts = { ...COUNTS, byStatus: { ...COUNTS.byStatus, failed: 0 } }
-    const withFailures = update(signedIn('/admin'), Message.SucceededGetCounts(clean)).model
-    Scene.scene(
-      app,
-      Scene.given(withFailures),
-      Scene.expect(navLink('Uploads 1 failed')).not.toExist(),
-      Scene.expect(navLink('Uploads')).toHaveAttr('href', '/admin/uploads'),
     )
   })
 })
@@ -317,15 +317,31 @@ describe('the session', () => {
       app,
       Scene.given(refused.model),
       Scene.expect(Scene.role('heading', { name: 'Session expired' })).toExist(),
-      Scene.expect(Scene.role('link', { name: 'Sign in again' })).toHaveAttr(
-        'href',
-        '/cdn-cgi/access/login',
-      ),
+      // The way back is a document request for the Admin's own URL, because
+      // that is the request Access turns into a login — it runs at the edge,
+      // before the Worker. Not a `/cdn-cgi/access/login` path, which is the
+      // team domain's endpoint and a bare 404 on any origin without an Access
+      // edge in front of it.
+      Scene.expect(Scene.role('link', { name: 'Sign in again' })).toHaveAttr('href', '/admin'),
       // There is no signed-out state in the app: the shell is gone rather than
       // half-drawn, and no password field exists anywhere — Access is the
-      // credential boundary (ADR 0007).
+      // credential boundary (ADR 0003).
       Scene.expect(Scene.role('navigation', { name: 'Admin sections' })).not.toExist(),
       Scene.expectAll(Scene.all.selector('input[type="password"]')).toBeEmpty(),
+    )
+  })
+
+  it('sends the operator back to the route they were on', () => {
+    // Access returns a completed login to the URL that started it, so the
+    // affordance names the page rather than the Admin's root.
+    const refused = update(init(at('/admin/photos/abc')).model, Message.FailedGetSession({}))
+    Scene.scene(
+      app,
+      Scene.given(refused.model),
+      Scene.expect(Scene.role('link', { name: 'Sign in again' })).toHaveAttr(
+        'href',
+        '/admin/photos/abc',
+      ),
     )
   })
 })
@@ -346,8 +362,8 @@ describe('the Page Head', () => {
   it('names the route it is drawn on', () => {
     Scene.scene(
       app,
-      cold('/admin/trash'),
-      Scene.expect(Scene.role('heading', { name: 'Trash' })).toExist(),
+      cold('/admin/drafts'),
+      Scene.expect(Scene.role('heading', { name: 'Drafts' })).toExist(),
     )
   })
 

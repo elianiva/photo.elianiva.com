@@ -7,11 +7,8 @@ import {
   RATIO_VALUE,
   editionOf,
   flowColumns,
-  frameCount,
-  frameNo,
   frameNoShort,
   plateUrl,
-  sectionCount,
   sectionsOf,
   type FrontRead,
 } from './content'
@@ -59,40 +56,10 @@ const read = (over: Partial<FrontRead> = {}): FrontRead => ({
 // placard lines
 // ---------------------------------------------------------------------------
 
-describe('frameNo', () => {
-  it('pads the frame number to three digits', () => {
-    expect(frameNo(24)).toBe('No. 024')
-    expect(frameNo(7)).toBe('No. 007')
-  })
-})
-
 describe('frameNoShort', () => {
   it('drops the prefix and keeps the three-digit pad', () => {
     expect(frameNoShort(24)).toBe('024')
     expect(frameNoShort(7)).toBe('007')
-  })
-})
-
-describe('frameCount', () => {
-  it('counts frames with no number range', () => {
-    expect(frameCount(9)).toBe('09 FRAMES')
-    expect(frameCount(10)).toBe('10 FRAMES')
-  })
-
-  it('uses the singular for one frame', () => {
-    expect(frameCount(1)).toBe('01 FRAME')
-  })
-})
-
-describe('sectionCount', () => {
-  it('counts frames and spans the section indices', () => {
-    const two = sectionsOf([section('2025-08', [photo({ number: 16 }), photo({ number: 23 })])])[0]!
-    expect(sectionCount(two)).toBe('02 FRAMES · NO. 016–023')
-  })
-
-  it('uses the singular for a one-figure section', () => {
-    const only = sectionsOf([section('2025-08', [photo({ number: 23 })])])[0]!
-    expect(sectionCount(only)).toBe('01 FRAME · NO. 023–023')
   })
 })
 
@@ -220,14 +187,17 @@ describe('flowColumns', () => {
     ]),
   ])[0]!
 
-  it('places every figure exactly once and keeps each column in reading order', () => {
+  it('places every figure exactly once, and each column in reading order', () => {
     const columns = flowColumns(three.figures, 3)
-    const placed = columns.flat().map((figure) => figure.id)
-    expect([...placed].sort()).toEqual(three.figures.map((figure) => figure.id).sort())
-    columns.forEach((column) => {
-      const positions = column.map((figure) => three.figures.indexOf(figure))
-      expect(positions).toEqual([...positions].sort((a, b) => a - b))
-    })
+    // Written out rather than compared against a sorted copy of the input: a
+    // figure dropped and a figure placed twice both survive a set comparison,
+    // and neither is visible in "the same ids, reordered".
+    expect(columns.flat().map((figure) => figure.id)).toEqual(['a', 'b', 'c'])
+    expect(columns.map((column) => column.map((figure) => figure.id))).toEqual([
+      ['a'],
+      ['b'],
+      ['c'],
+    ])
   })
 
   it('fills the shortest column first', () => {

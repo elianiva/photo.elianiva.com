@@ -1,5 +1,5 @@
 /**
- * Browser-side Effect RPC clients (ADR 0006): lazily-built `RpcClient`s over
+ * Browser-side Effect RPC clients (ADR 0003): lazily-built `RpcClient`s over
  * fetch for the public and admin groups, each held in a long-lived
  * `ManagedRuntime` (the client needs an open Scope for its lifetime).
  *
@@ -134,7 +134,7 @@ const rpcCaller = (group: unknown, url: string) => {
 export const rpcPublic = rpcCaller(PhotoPublicRpcs, `${apiOrigin()}${RPC_PATH}`)
 
 /** Calls on the admin group (`/api/admin/rpc`) — update/delete photos,
- *  create/delete tags. Edge-gated + JWT-verified server-side (ADR 0007).
+ *  create/delete tags. Edge-gated + JWT-verified server-side (ADR 0003).
  *
  *  Same-origin in production, so the browser sends the Access cookie with
  *  `credentials: same-origin` and there is no preflight to fail. No

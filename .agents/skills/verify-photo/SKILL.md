@@ -5,7 +5,7 @@ description: Drive photo.elianiva.com the way a visitor and the owner do — pub
 
 # Verify photo.elianiva.com
 
-Scripted way to launch this repo, drive it as a visitor and as the single admin in the browser, and capture proof. No mocks — the real gallery, upload, and edit flows against the shared remote D1/R2. In prod everything is on ONE hostname: the API Worker is a route at `photo.elianiva.com/api/*` and one Cloudflare Access application covers `/admin`, `/api/admin/rpc` and `/api/upload` (ADR 0007). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
+Scripted way to launch this repo, drive it as a visitor and as the single admin in the browser, and capture proof. No mocks — the real gallery, upload, and edit flows against the shared remote D1/R2. In prod everything is on ONE hostname: the API Worker is a route at `photo.elianiva.com/api/*` and one Cloudflare Access application covers `/admin`, `/api/admin/rpc` and `/api/upload` (ADR 0003). Verified locally with `ACCESS_TEAM_DOMAIN` unset so the admin surface runs unauthenticated by design.
 
 ## Launch
 

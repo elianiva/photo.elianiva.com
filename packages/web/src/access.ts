@@ -1,5 +1,5 @@
 /**
- * Cloudflare Access JWT verification (ADR 0007, defense-in-depth layer).
+ * Cloudflare Access JWT verification (ADR 0003, defense-in-depth layer).
  *
  * The edge (Cloudflare Access applications) is the primary gate; this module
  * independently verifies the `Cf-Access-Jwt-Assertion` token inside the
@@ -147,7 +147,7 @@ export const verifyAccessToken = async (
  * claims the handlers answer with, or the rejection response.
  *
  * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on `dev`, where
- * Alchemy skips the Access applications (ADR 0007). On any other stage a blank
+ * Alchemy skips the Access applications (ADR 0003). On any other stage a blank
  * team domain is a misconfigured deploy and fails closed with 500, because
  * silently serving the Admin ungated is the one failure this gate must not
  * have.

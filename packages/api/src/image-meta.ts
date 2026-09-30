@@ -5,7 +5,7 @@
  *
  * `exifr` and `image-size` are pure JS and Worker-safe — no native deps.
  * Resizing stays with the Cloudflare Images binding at delivery time
- * (ADR 0005); sharp-class native tools cannot run in Workers anyway.
+ * (ADR 0002); sharp-class native tools cannot run in Workers anyway.
  */
 
 import { DateTime, Option as Opt, Effect } from 'effect'

@@ -61,7 +61,7 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
 
 export const view = (model: Model, h: HtmlBuilder<Msg>): Document =>
   model.session.status === 'expired'
-    ? sessionExpired(h)
+    ? sessionExpired(h, model.route)
     : model.route._tag === 'Photo'
       ? editorDocument(model, h)
       : shell(model, h)

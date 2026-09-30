@@ -13,9 +13,18 @@ const PhotoDb = Cloudflare.D1.Database('photo-db', {
   migrations: './migrations',
 })
 
-const OtpIdp = Cloudflare.Access.IdentityProvider('otp', {
-  type: 'onetimepin',
-})
+/** The identity provider the Admin's login uses: the one Cloudflare manages
+ *  for the account, which is the email one-time PIN (a Zero Trust organization
+ *  ships with it, so it is a lookup rather than a resource to create).
+ *
+ *  This is a plan-time *data source*, not a resource. Reading the uuid out of
+ *  a created `Access.IdentityProvider` instead — `yield* idp` and then
+ *  `idp.identityProviderId.asEffect()` — asks for a service the engine only
+ *  provides while it is applying, and the stack then dies before it plans:
+ *  `Service not found: RuntimeContext`, which is how #79 and everything after
+ *  it failed to deploy and left production with no Access application at all.
+ *  `Output.as()` is the shape the Plan layer resolves. */
+const TeamIdp = Cloudflare.Access.getIdentityProvider({ type: 'cloudflare' })
 
 /** The one hostname the whole site answers on. The website Worker owns it as a
  *  custom domain; the API Worker is mounted underneath it at `API_ROUTE_PREFIX`
@@ -37,22 +46,28 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
-    // --- Env-driven only, no fallback (per ADR 0007) ---
+    // --- Env-driven only, no fallback (per ADR 0003) ---
     // Set via Alchemy secrets / CF secrets, not process.env.
     // See README for `alchemy secret set` commands.
     //
     // Local dev (`alchemy dev --stage dev`) creates no Access applications
-    // and runs unauthenticated by design (ADR 0007): ACCESS_TEAM_DOMAIN
-    // defaults to '' there and access.ts stands the admin gate down when the
-    // stage is dev. Non-dev stages still require both values explicitly.
+    // and runs unauthenticated by design (ADR 0003), so the *binding* is
+    // forced to '' there — and `access.ts` stands the admin gate down on a
+    // blank team domain. Every other stage requires both values explicitly.
+    //
+    // Forced, not defaulted: `Config.withDefault('')` only supplies the empty
+    // string when the variable is *absent*, so a real ACCESS_TEAM_DOMAIN in
+    // `.env` — which the same file that `alchemy deploy --stage prod` reads
+    // has to carry — would have gated local development instead, and the
+    // browser there holds no `Cf-Access-Jwt-Assertion` to verify. That is the
+    // whole stand-down, so it is a constant and not a lookup.
+    //
     // STAGE rides along as a binding because only the Worker can see the
     // stage at request time, and the gate is stage-dependent.
     const stage = yield* Stage
     const isLocalDev = stage === 'dev'
     const allowedEmailsRaw = yield* Config.String('ACCESS_ALLOWED_EMAILS')
-    const teamDomain = isLocalDev
-      ? yield* Config.String('ACCESS_TEAM_DOMAIN').pipe(Config.withDefault(''))
-      : yield* Config.String('ACCESS_TEAM_DOMAIN')
+    const teamDomain = isLocalDev ? '' : yield* Config.String('ACCESS_TEAM_DOMAIN')
 
     const allowedEmails = allowedEmailsRaw
       .split(',')
@@ -85,29 +100,27 @@ export default Alchemy.Stack(
     // app token and one same-origin cookie, and no preflight to fail.
     //
     // `destinations` is the field to reach for; `domain` is only the primary
-    // one and is what the App Launcher shows.
-    //
-    // Built here rather than at the top of the block because it names the
-    // identity provider by the uuid Cloudflare assigned it, and that is only
-    // known once the IdP has been created.
+    // one and is what the App Launcher shows. Cloudflare folds `domain` into
+    // the destination set, so the first entry is the primary one named twice
+    // — that is the API's own contract, not a second rule.
     const ADMIN_API_PREFIX = `${API_ROUTE_PREFIX}/admin`
 
-    const adminApp = (identityProviderId: string) =>
-      Cloudflare.Access.Application('photo-admin', {
-        type: 'self_hosted',
-        domain: `${SITE_DOMAIN}/admin`,
-        destinations: [
-          { type: 'public', uri: `${SITE_DOMAIN}/admin` },
-          { type: 'public', uri: `${SITE_DOMAIN}${ADMIN_API_PREFIX}/rpc` },
-          { type: 'public', uri: `${SITE_DOMAIN}${API_ROUTE_PREFIX}/upload` },
-        ],
-        policies: AccessPolicies,
-        sessionDuration: '24h',
-        // Exactly one IdP is declared, so the login can skip the provider
-        // picker and go straight to the one-time PIN box.
-        allowedIdps: [identityProviderId],
-        autoRedirectToIdentity: true,
-      })
+    const adminApp = Cloudflare.Access.Application('photo-admin', {
+      type: 'self_hosted',
+      domain: `${SITE_DOMAIN}/admin`,
+      destinations: [
+        { type: 'public', uri: `${SITE_DOMAIN}/admin` },
+        { type: 'public', uri: `${SITE_DOMAIN}${ADMIN_API_PREFIX}/rpc` },
+        { type: 'public', uri: `${SITE_DOMAIN}${API_ROUTE_PREFIX}/upload` },
+      ],
+      policies: AccessPolicies,
+      sessionDuration: '24h',
+      // Exactly one IdP is declared, so the login can skip the provider picker
+      // and go straight to the one-time PIN box. The uuid is an `Output`, which
+      // the Plan layer resolves before the request is built.
+      allowedIdps: [TeamIdp.identityProviderId.as<string>()],
+      autoRedirectToIdentity: true,
+    })
 
     // The Worker's build is described in `packages/web/vite.config.ts`
     // (`environments.ssr`): `src/worker.ts` as the entry of the environment
@@ -124,7 +137,7 @@ export default Alchemy.Stack(
       rootDir: 'packages/web',
       assets: {
         notFoundHandling: 'none',
-        // The page paths run the Worker before the asset layer (ADR 0011).
+        // The page paths run the Worker before the asset layer (ADR 0004).
         //
         // `dist/client/index.html` is a built asset, and the asset layer is
         // served first by default, so `/` used to be answered with the client
@@ -156,7 +169,7 @@ export default Alchemy.Stack(
     // A Worker of its own, on the site's hostname rather than one of its own.
     // Two Workers stay two Workers because `alchemy dev` binds real D1/R2 to
     // the website Worker, and the read path it renders the Front with is that
-    // Worker's own (ADR 0010) — but in production they share an origin, which
+    // Worker's own (ADR 0004) — but in production they share an origin, which
     // is what the Access application above needs. `dev.port` is the one place
     // they are still cross-origin.
     const ApiWorker = Cloudflare.Worker('photo-api', {
@@ -176,13 +189,7 @@ export default Alchemy.Stack(
     // Edge gating is a production concern — skip Access resources entirely
     // on local dev so the stack boots without touching Cloudflare Access.
     if (!isLocalDev) {
-      // The IdP first: the application names it in `allowedIdps`, and only
-      // Cloudflare knows the uuid it assigned. An Alchemy `Output` is a lazy
-      // handle resolved when the stack plans, so the id is read out of it here
-      // rather than being a string the file could have guessed.
-      const otpIdp = yield* OtpIdp
-      const identityProviderId = yield* otpIdp.identityProviderId.asEffect().pipe(Effect.flatten)
-      yield* adminApp(identityProviderId)
+      yield* adminApp
     }
     // Data resources always converge the real cloud, even during `alchemy
     // dev` — Alchemy.remote() opts them out of local emulation so local dev

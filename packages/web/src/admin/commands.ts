@@ -1,5 +1,5 @@
 /**
- * Admin commands — the RPC seam (ADR 0006). Every side-effecting operation
+ * Admin commands — the RPC seam (ADR 0003). Every side-effecting operation
  * the Admin performs runs here and reports back through Message variants.
  *
  * Every Photo read goes through `rpcAdmin`. The Admin is the audience that
@@ -210,7 +210,7 @@ export const AddBorderCmd = Command.define('AddBorder', {
 })
 
 /** The design's `Move to series`, re-pointed at `Add tag`: a Series page *is* a
- *  Tag page (ADR 0008), so the grouping entity is the Tag. */
+ *  Tag page (ADR 0006), so the grouping entity is the Tag. */
 export const BulkAddTagsCmd = Command.define('BulkAddTags', {
   args: { ids: S.Array(S.String), tagIds: S.Array(S.String), page: PageArgs },
   messages: [Message.SucceededAddTag, Message.FailedRpc],

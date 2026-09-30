@@ -132,11 +132,6 @@ const navRow = (model: Model, row: NavRow, h: HtmlBuilder<Msg>): Child =>
  *  display label over a draft with no publish time recorded, so there is no
  *  Scheduled Photo to count, and `Settings` is a singleton with no rows. */
 const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  // `Uploads` counts the Photos whose processing did not finish, which is a
-  // fact about the library and survives a reload. The session's upload queue
-  // is not that, and a row that says `1 failed` and then says nothing after a
-  // refresh is a number the operator cannot trust.
-  const failed = model.counts.byStatus.failed
   const rows: ReadonlyArray<NavRow> = [
     {
       route: libraryRoute({ ...defaultLibraryFilters, view: libraryViewOf(model.route) }),
@@ -150,12 +145,6 @@ const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
       glyph: NotebookPen,
       count: String(model.counts.byStatus.draft),
     },
-    {
-      route: AppRoute.Uploads(),
-      label: 'Uploads',
-      ...(failed > 0 ? { count: `${String(failed)} failed` } : {}),
-    },
-    { route: AppRoute.Trash(), label: 'Trash', count: String(model.counts.trashed) },
     { route: AppRoute.Scheduled(), label: 'Scheduled', glyph: Clock },
     { route: AppRoute.Settings(), label: 'Settings' },
   ]

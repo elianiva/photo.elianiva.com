@@ -213,10 +213,9 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // ---------------------------------------------------------------------------
 // routes whose pages are still being built
 // ---------------------------------------------------------------------------
-/** `Drafts`, `Uploads` and `Trash` are routes before they are pages. Each URL
- *  resolves, the route is right, and the Page Head above it names the page —
- *  but the body says what is actually true of it rather than pretending to.
- *  #29 and #36 own the bodies. */
+/** `Drafts` is a route before it is a page. The URL resolves, the route is
+ *  right, and the Page Head above it names the page — but the body says what is
+ *  actually true of it rather than pretending to. #29 owns the body. */
 const forthcomingPage = (note: string, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
@@ -273,18 +272,6 @@ export const routePage = (model: Model, h: HtmlBuilder<Msg>): Child =>
         h,
       ),
     Scheduled: () => scheduledPage(h),
-    Uploads: () =>
-      forthcomingPage(
-        model.queue.length === 0
-          ? 'Nothing is queued for upload. The upload dialog runs a batch from the Library; the Upload button opens it.'
-          : `${String(model.queue.length)} item${model.queue.length === 1 ? '' : 's'} in this session’s upload queue. Reopen the upload dialog to retry anything that failed.`,
-        h,
-      ),
-    Trash: () =>
-      forthcomingPage(
-        'The Trash is still being built. A deleted photo is recoverable and nothing is purged on a timer.',
-        h,
-      ),
     Settings: () => settingsPage(model, h),
     Photo: () => photoPage(model, h),
     NotFound: ({ path }) => notFoundPage(path, h),

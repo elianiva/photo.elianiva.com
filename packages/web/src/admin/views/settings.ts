@@ -18,7 +18,7 @@
  * One deviation from the canvas remains, deliberate and recorded in
  * `CONTEXT.md`: the section the design labels `ARCHIVE` renders as `STORAGE`.
  * The canvas contradicts itself — its own sidebar block is already called
- * `Storage` — and ADR 0008 split the collision.
+ * `Storage` — and ADR 0006 split the collision.
  *
  * The block reads `GetStorageUsage`, the same payload the sidebar's meter reads,
  * so the frame count, the byte total and the cap cannot come to disagree.
@@ -291,7 +291,7 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.p(
         [h.Class(captionClass)],
         [
-          'Nothing is purged on a timer. Emptying the Trash is the only thing that frees its bytes.',
+          'Nothing is purged on a timer. A deleted photograph keeps its original in R2 until it is purged.',
         ],
       ),
     ],

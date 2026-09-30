@@ -82,8 +82,6 @@ describe('the route table', () => {
     expect(routeOf('/admin/')).toEqual(libraryRoute())
     expect(routeOf('/admin/drafts')).toEqual({ _tag: 'Drafts' })
     expect(routeOf('/admin/scheduled')).toEqual({ _tag: 'Scheduled' })
-    expect(routeOf('/admin/uploads')).toEqual({ _tag: 'Uploads' })
-    expect(routeOf('/admin/trash')).toEqual({ _tag: 'Trash' })
     expect(routeOf('/admin/settings')).toEqual({ _tag: 'Settings' })
     expect(routeOf('/admin/photos/abc')).toEqual({ _tag: 'Photo', id: 'abc' })
   })
@@ -94,8 +92,6 @@ describe('the route table', () => {
       '/admin/atoms',
       '/admin/drafts',
       '/admin/scheduled',
-      '/admin/uploads',
-      '/admin/trash',
       '/admin/settings',
       '/admin/photos/photo-1',
     ]) {
@@ -126,6 +122,14 @@ describe('the route table', () => {
     expect(routeOf('/')).toEqual({ _tag: 'NotFound', path: '/' })
     expect(routeOf('/about')).toEqual({ _tag: 'NotFound', path: '/about' })
   })
+
+  it('names no route for the retired Uploads and Trash pages', () => {
+    // Both paths are inside the Admin's URL space, so they still boot the Admin
+    // and draw its NotFound — but no route, no sidebar row and no Page Head
+    // title answers to either of them.
+    expect(routeOf('/admin/uploads')).toEqual({ _tag: 'NotFound', path: '/admin/uploads' })
+    expect(routeOf('/admin/trash')).toEqual({ _tag: 'NotFound', path: '/admin/trash' })
+  })
 })
 
 describe('the admin URL space', () => {
@@ -135,8 +139,6 @@ describe('the admin URL space', () => {
       '/admin/',
       '/admin/drafts',
       '/admin/scheduled',
-      '/admin/uploads',
-      '/admin/trash',
       '/admin/settings',
       '/admin/photos/abc',
       '/admin/photos',

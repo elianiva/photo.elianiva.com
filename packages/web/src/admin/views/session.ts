@@ -2,31 +2,38 @@
  * Session expired — the whole Admin, replaced.
  *
  * There is no signed-out state in this app: Cloudflare Access gates `/admin*`
- * before any of it runs (ADR 0007), and nothing here asks for or accepts a
+ * before any of it runs (ADR 0003), and nothing here asks for or accepts a
  * password. So when `GetSession` cannot be answered, the only true statement
  * the UI can make is that the session is not proven, and the only useful thing
  * it can offer is the way back through Access.
  *
- * The link is a same-origin `/cdn-cgi/access/login`. The Access team domain is
- * a server binding this document never sees — and on the stage where the gate
- * stands down there is no team domain to name — so the one URL that is
- * available from inside the page is the one Cloudflare serves for the zone the
- * Admin is on.
+ * The way back is a *navigation to the Admin's own URL*, and that is the whole
+ * mechanism: Access evaluates a request at the edge, before the Worker runs, so
+ * the request that starts a login is a document request for the protected path
+ * itself. Nothing inside a page that has already loaded can start one.
+ *
+ * It is deliberately not a `/cdn-cgi/access/login` link. That path is served by
+ * the Access edge on the *team* domain (`<team>.cloudflareaccess.com`), and it
+ * is not an endpoint of the site's own origin: a browser sent there where no
+ * Access edge fronts the zone — `localhost` in development — gets a bare 404,
+ * and the same 404 is what an operator lands on when a login hands them back to
+ * the app's own hostname. On the stage where the gate stands down there is no
+ * Access to log into at all, and the same navigation is still the right answer
+ * for a different reason: it re-runs the reads.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
 
 import type { Msg } from '../model'
+import { appRouteToUrl, type AppRoute } from '../route'
 import type { Child } from './shared'
 
-/** Where Cloudflare Access takes a session that has ended. Same-origin, so it
- *  works on every stage including the one with no Access edge at all. */
-export const ACCESS_LOGIN_PATH = '/cdn-cgi/access/login'
-
-const signInLink = (h: HtmlBuilder<Msg>): Child =>
+const signInLink = (h: HtmlBuilder<Msg>, route: AppRoute): Child =>
   h.a(
     [
-      h.Href(ACCESS_LOGIN_PATH),
+      // The route the operator was on, so Access brings them back to the page
+      // they were working in rather than to the Library.
+      h.Href(appRouteToUrl(route)),
       h.Class(
         'focus-visible:ring-role-focus/50 bg-role-primary focus-visible:ring-[3px] text-role-on-primary inline-flex h-9 items-center border border-transparent px-(--spacing-lg) type-ui transition-colors duration-(--motion-duration-fast) outline-none',
       ),
@@ -35,7 +42,7 @@ const signInLink = (h: HtmlBuilder<Msg>): Child =>
     ['Sign in again'],
   )
 
-export const sessionExpired = (h: HtmlBuilder<Msg>): Document => ({
+export const sessionExpired = (h: HtmlBuilder<Msg>, route: AppRoute): Document => ({
   title: 'Session expired — Admin',
   body: h.div(
     [
@@ -58,7 +65,7 @@ export const sessionExpired = (h: HtmlBuilder<Msg>): Document => ({
               'The Cloudflare Access session behind the Admin has ended. Sign in again to carry on.',
             ],
           ),
-          h.div([h.Class('flex')], [signInLink(h)]),
+          h.div([h.Class('flex')], [signInLink(h, route)]),
         ],
       ),
     ],

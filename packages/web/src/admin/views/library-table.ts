@@ -182,7 +182,7 @@ const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
           Button.button({ onClick: M.ClearedSelection(), variant: 'ghost' }, 'Discard', h),
           Button.button({ onClick: M.AddBorderToSelection(), variant: 'ghost' }, 'Add border', h),
           // The design's `Move to series`, re-pointed at `Add tag`: a Series
-          // page *is* a Tag page (ADR 0008), so the grouping entity is the Tag.
+          // page *is* a Tag page (ADR 0006), so the grouping entity is the Tag.
           Button.button({ onClick: M.OpenedAddTag(), variant: 'ghost' }, 'Add tag', h),
           Button.button(
             { onClick: M.RequestBulkTrash({ count }), variant: 'destructive' },

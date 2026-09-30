@@ -96,7 +96,7 @@ export interface PublicPhotoPage {
 }
 
 export interface PublicListInput {
-  /** One Tag's slug, not a list. A Series page _is_ a Tag page (ADR 0008), so
+  /** One Tag's slug, not a list. A Series page _is_ a Tag page (ADR 0006), so
    *  the public vocabulary is the slug and the id stays an internal detail. */
   readonly tagSlug?: string | undefined
   readonly q?: string | undefined
@@ -121,11 +121,11 @@ export interface FrontStats {
   readonly latestTakenAt: string | null
 }
 
-/** A public Series page (ADR 0008: a Series page _is_ a Tag page). */
+/** A public Series page (ADR 0006: a Series page _is_ a Tag page). */
 export interface PublicSeries {
   readonly tag: Tag
   /** The Tag's published Photos, earliest first: the cover is the one a
-   *  Series page leads with (ADR 0008). */
+   *  Series page leads with (ADR 0006). */
   readonly photos: ReadonlyArray<PhotoWithTags>
 }
 
@@ -473,7 +473,7 @@ export const PublicPhotoServiceLive = Layer.effect(
         const tag = yield* tagBySlug(db, key)
         if (tag === null) return null
         // Earliest first: a Series page leads with the earliest published
-        // Photo (ADR 0008), so the cover is the head of the list.
+        // Photo (ADR 0006), so the cover is the head of the list.
         const found = yield* rows<DbPhotoRow>(
           db,
           `SELECT ${PHOTO_COLUMNS} FROM photos

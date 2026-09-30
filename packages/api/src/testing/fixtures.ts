@@ -5,7 +5,7 @@
  */
 
 import { Effect } from 'effect'
-import type { PhotoStatus } from '@photo/shared'
+import type { PhotoPresentation, PhotoStatus, SettingsInput } from '@photo/shared'
 import type { CreatePhotoInput } from '../photo'
 import { PhotoService } from '../photo'
 import { TagService } from '../tag'
@@ -88,3 +88,43 @@ export const trashPhoto = (harness: TestHarness, id: string) =>
       harness,
     ),
   )
+
+/**
+ * What migration 0004 gives a Photo nobody has edited, written out once. Both
+ * the service and the RPC handler answer for an unedited row, and a second
+ * hand-copy of these fifteen numbers is a second thing to forget to update when
+ * the migration changes.
+ */
+export const PRESENTATION_DEFAULTS = {
+  cropX: 0,
+  cropY: 0,
+  cropScale: 1,
+  cropFlipX: false,
+  level: null,
+  borderEnabled: false,
+  borderStyle: null,
+  borderColour: null,
+  borderWidth: null,
+  previewLongEdge: 1200,
+  previewFormat: 'avif',
+  previewQuality: 82,
+  fullQuality: 92,
+  keepExif: true,
+  removeGps: true,
+} as const satisfies PhotoPresentation
+
+/** The migration 0005 column defaults — what the Settings row holds before any
+ *  save. `photo-service.test.ts` and `settings.test.ts` both read them off a
+ *  freshly migrated database, so they are written once, here. */
+export const SETTINGS_DEFAULTS = {
+  defaultPreviewLongEdge: 1200,
+  defaultPreviewFormat: 'avif',
+  defaultPreviewQuality: 82,
+  defaultFullQuality: 92,
+  watermarkEnabled: false,
+  watermarkColour: 'white',
+  watermarkPosition: 'bottom-right',
+  defaultKeepExif: true,
+  defaultRemoveGps: true,
+  retainForever: true,
+} as const satisfies SettingsInput

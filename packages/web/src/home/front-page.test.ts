@@ -178,23 +178,35 @@ describe('the rendered Front', () => {
     // Michi carries none, so the page prints two distinct Exif lines and not
     // three.
     //
-    // Read out of the Exif elements rather than by scanning for the line's
-    // text: the hydration stamp at the end of the document carries the same
-    // strings, and the section is drawn twice — a mobile tree and a desktop one
-    // — with the lead drawn again as the first plate of the first section on
-    // mobile. The elements are what a reader sees, so they are what is counted.
+    // Matched on the one class that identifies an Exif line rather than on the
+    // whole utility list: the classes around it are the responsive layout and
+    // are free to change, and a test that breaks when a margin moves is a test
+    // that gets deleted instead of fixed.
     const exifSpans = [
-      ...html.matchAll(/class="hidden type-exif text-role-text-disabled desktop:block">([^<]*)</g),
+      ...html.matchAll(/<span class="[^"]*\btype-exif\b[^"]*">([^<]*)</g),
     ].map((match) => match[1] ?? '')
-    expect(new Set(exifSpans).size).toBe(2)
+    // `type-exif` also types the section year and the colophon, so the
+    // photographic lines are the ones carrying a fact of its own.
+    const lines = exifSpans.filter((line) => line.includes('ISO'))
+    expect(new Set(lines)).toEqual(
+      new Set([
+        'X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 11 JUN',
+        'X-T20 · 25MM · F/2 · 1/500 · ISO 400 · 11 JUN',
+      ]),
+    )
     // And the element is left out rather than rendered empty: an Exif line with
     // nothing in it reads as a fault in the photograph.
     expect(exifSpans.length).toBeGreaterThan(0)
     expect(exifSpans.every((line) => line.trim() !== '')).toBe(true)
   })
 
-  it('carries no stock photograph and no third-party image host', async () => {
+  it('serves every plate from this site’s own image route', async () => {
     const html = await render(read())
+    // Asserted against what the document does carry — three plates, named in
+    // the tests above — so a render that printed nothing at all cannot pass
+    // this as a clean bill of health.
+    expect(html).toContain('Momo')
+    expect(html).toContain('/api/image/originals%2Fmomo.jpg')
     expect(html).not.toContain('unsplash')
     expect(html).not.toContain('cdn-cgi/image')
   })

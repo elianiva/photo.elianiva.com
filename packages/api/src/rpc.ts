@@ -2,7 +2,7 @@
  * RPC handler layers: wire the shared RPC groups (the contract) to the
  * domain services (the implementation). The Worker composes these into its
  * HTTP router — public reads on `/rpc`, admin reads and writes on
- * `/admin/rpc` (ADR 0006/0007).
+ * `/admin/rpc` (ADR 0003).
  *
  * A handler translates a payload and a result, and owns no visibility rule.
  * The public group answers for published, non-trashed Photos because
@@ -113,7 +113,7 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
     }),
   DeleteTag: (payload) => TagService.use((service) => service.remove(payload.id)),
   // The claims the gate already verified, read and never recomputed. A null is
-  // the dev stand-down (ADR 0007), not a signed-out state: there is no sign-in
+  // the dev stand-down (ADR 0003), not a signed-out state: there is no sign-in
   // form to show and no session to end.
   GetSession: () =>
     AdminSession.use((session) =>

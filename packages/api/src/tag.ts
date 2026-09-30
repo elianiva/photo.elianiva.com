@@ -20,7 +20,7 @@ export interface TagServiceContract {
     label: string
   }) => Effect.Effect<Tag, SlugConflict | StorageError>
   /** Relabel and caption in one call. A `slug` is a live URL (a Series page
-   *  is a Tag page, ADR 0008), so it is not writable here. */
+   *  is a Tag page, ADR 0006), so it is not writable here. */
   readonly update: (
     id: string,
     patch: TagUpdatePatch,

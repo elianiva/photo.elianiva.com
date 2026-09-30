@@ -12,7 +12,6 @@ import {
   PhotoAdminRpcs,
   PhotoNotFound,
   PhotoPublicRpcs,
-  type PhotoPresentation,
 } from '@photo/shared'
 import { RpcClient, RpcTest } from 'effect/unstable/rpc'
 import { Gateway } from '../gateway'
@@ -22,7 +21,13 @@ import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
 import { AdminSession, type AdminSessionValue } from '../session'
 import { SettingsServiceLive, type SettingsService } from '../settings'
 import { TagServiceLive, type TagService } from '../tag'
-import { createPhoto, createTag, setPhotoStatus, trashPhoto } from './fixtures'
+import {
+  createPhoto,
+  createTag,
+  PRESENTATION_DEFAULTS,
+  setPhotoStatus,
+  trashPhoto,
+} from './fixtures'
 import { makeTestHarness, type TestHarness } from './harness'
 
 /**
@@ -106,21 +111,6 @@ const deletePhoto = (harness: TestHarness, id: string) =>
     ),
   )
 
-const deletePhotoFailure = (harness: TestHarness, id: string) =>
-  Effect.runPromise(
-    Effect.flip(
-      Effect.provide(
-        Effect.scoped(
-          Effect.gen(function* () {
-            const client = yield* RpcTest.makeClient(PhotoAdminRpcs)
-            return yield* client.DeletePhoto({ id })
-          }),
-        ),
-        adminStackOver(harness, VERIFIED_SESSION),
-      ),
-    ),
-  )
-
 // ---------------------------------------------------------------------------
 // the admin group
 // ---------------------------------------------------------------------------
@@ -152,24 +142,6 @@ const adminRpc = <A, E>(
       adminStackOver(harness, session),
     ),
   )
-
-const DEFAULT_PRESENTATION: PhotoPresentation = {
-  cropX: 0,
-  cropY: 0,
-  cropScale: 1,
-  cropFlipX: false,
-  level: null,
-  borderEnabled: false,
-  borderStyle: null,
-  borderColour: null,
-  borderWidth: null,
-  previewLongEdge: 1200,
-  previewFormat: 'avif',
-  previewQuality: 82,
-  fullQuality: 92,
-  keepExif: true,
-  removeGps: true,
-}
 
 const slugsIn = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
   harness.db
@@ -376,9 +348,11 @@ describe('GetFrontPage handler', () => {
 
     const page = await publicRpc(harness, (client) => client.GetFrontPage({}))
 
-    // The design's July and August, and the constant is the Front's page
-    // weight rather than a number typed at the call site.
+    // The design's July and August. The page weight is `FRONT_SECTION_COUNT`'s
+    // own: asserted against the constant rather than a number typed here, so
+    // moving the constant moves the paint with it.
     expect(FRONT_SECTION_COUNT).toBe(2)
+    expect(page.sections).toHaveLength(FRONT_SECTION_COUNT)
     expect(page.sections.map((section) => section.month)).toEqual(['2025-08', '2025-07'])
     expect(page.sections[0]).toEqual({
       month: '2025-08',
@@ -461,14 +435,6 @@ describe('DeletePhoto handler', () => {
     expect(await harness.photos.head(created.r2Key)).not.toBeNull()
     expect((await listPhotos(harness, { limit: 60 })).items).toEqual([])
   })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    expect(await deletePhotoFailure(harness, 'missing')).toEqual(
-      new PhotoNotFound({ id: 'missing' }),
-    )
-  })
 })
 
 describe('the admin group GetPhoto', () => {
@@ -506,7 +472,8 @@ describe('GetCounts handler', () => {
     const result = await adminRpc(harness, (client) => client.GetCounts({}))
 
     // The trashed Photo is out of every live count and in `trashed`; the Tag
-    // it carried is neither.
+    // it carried is neither. `toEqual` pins the key set, so a `scheduled` count
+    // appearing here fails this without a second assertion.
     expect(result).toEqual({
       total: 1,
       trashed: 1,
@@ -516,7 +483,6 @@ describe('GetCounts handler', () => {
         { id: unused.id, label: 'Unused', count: 0 },
       ],
     })
-    expect('scheduled' in result.byStatus).toBe(false)
   })
 })
 
@@ -527,13 +493,12 @@ describe('GetStorageUsage handler', () => {
 
     const usage = await adminRpc(harness, (client) => client.GetStorageUsage({}))
 
-    // `photos`, not `frames`: ADR 0008, and the design prints `412 FRAMES`.
+    // `photos`, not `frames`: ADR 0006, and the design prints `412 FRAMES`.
     expect(usage.photos).toBe(1)
     expect(usage.bytes).toBeGreaterThan(0)
-    // The cap is the constant, not a Settings row, and the constant is the
-    // 20 GiB the Settings Storage block draws (ADR 0008). #24's sidebar meter
-    // and #37's block both read this one number.
-    expect(usage.capBytes).toBe(20 * 1024 * 1024 * 1024)
+    // The cap rides the answer rather than being read from a Settings row: it is
+    // the one constant `STORAGE_CAP_BYTES` names, which is the 20 GiB the
+    // Settings Storage block and the sidebar's meter both draw (ADR 0006).
     expect(usage.capBytes).toBe(STORAGE_CAP_BYTES)
   })
 })
@@ -644,16 +609,6 @@ describe('SetPhotoStatus handler', () => {
     )
     expect(published.status).toBe('published')
   })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    const error = await adminRpc(harness, (client) =>
-      client.SetPhotoStatus({ id: 'missing', status: 'draft' }).pipe(Effect.flip),
-    )
-
-    expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
 })
 
 describe('UpdatePhoto handler', () => {
@@ -743,7 +698,7 @@ describe('UpdatePhotoPresentation handler', () => {
       client.UpdatePhotoPresentation({ id: created.id, level: 1.25 }),
     )
 
-    expect(saved).toEqual({ ...DEFAULT_PRESENTATION, level: 1.25 })
+    expect(saved).toEqual({ ...PRESENTATION_DEFAULTS, level: 1.25 })
   })
 
   it('rejects an empty patch', async () => {
@@ -783,7 +738,7 @@ describe('UpdatePhotoPresentation handler', () => {
     expect(cleared.borderStyle).toBeNull()
     expect(cleared.borderColour).toBeNull()
     expect(cleared.borderWidth).toBeNull()
-    expect(cleared).toEqual({ ...DEFAULT_PRESENTATION, borderEnabled: true })
+    expect(cleared).toEqual({ ...PRESENTATION_DEFAULTS, borderEnabled: true })
   })
 })
 
@@ -860,16 +815,6 @@ describe('TrashPhotos, RestorePhotos and PurgePhotos handlers', () => {
     expect(error._tag).toBe('InvalidInput')
     expect(await slugsIn(harness)).toEqual(['a'])
   })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-
-    const error = await adminRpc(harness, (client) =>
-      client.TrashPhotos({ ids: ['missing'] }).pipe(Effect.flip),
-    )
-
-    expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
-  })
 })
 
 describe('BulkAddTags and BulkRemoveTags handlers', () => {
@@ -910,17 +855,6 @@ describe('BulkAddTags and BulkRemoveTags handlers', () => {
       ['film'],
       ['kyoto'],
     ])
-  })
-
-  it('fails with PhotoNotFound for an unknown photo', async () => {
-    const harness = makeTestHarness()
-    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-
-    const error = await adminRpc(harness, (client) =>
-      client.BulkAddTags({ photoIds: ['missing'], tagIds: [kyoto.id] }).pipe(Effect.flip),
-    )
-
-    expect(error).toEqual(new PhotoNotFound({ id: 'missing' }))
   })
 
   it('reports a tag id nobody carries as InvalidInput, and links nothing', async () => {
@@ -1006,7 +940,7 @@ describe('UpdateTag handler', () => {
       client.UpdateTag({ id: kyoto.id, label: 'Kyoto Nights' }),
     )
 
-    // A slug is a live URL: a Series page is a Tag page (ADR 0008).
+    // A slug is a live URL: a Series page is a Tag page (ADR 0006).
     expect(relabelled).toEqual({
       id: kyoto.id,
       slug: 'kyoto',

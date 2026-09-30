@@ -87,7 +87,7 @@ export interface PhotoTagCount {
 }
 
 export interface StorageUsage {
-  /** Live Photos. Not `frames` — that is display copy (ADR 0008). */
+  /** Live Photos. Not `frames` — that is display copy (ADR 0006). */
   readonly photos: number
   /** Bytes those originals take, against the bucket cap. */
   readonly bytes: number
@@ -510,6 +510,19 @@ const rowById = (db: (typeof Gateway.Service)['db'], id: string, scope: 'live' |
     if (!raw) return null
     return raw
   })
+
+/** The row an operation is about to act on, or `PhotoNotFound`. Every method
+ *  in this layer resolves its Photo through here, so a Photo that is gone and
+ *  one that is in the Trash are the same answer everywhere, and the only
+ *  difference between the lifecycle operations and the rest is which row they
+ *  ask for — the failure is written once, here. */
+const requireRow = <A>(
+  row: Effect.Effect<NonNullable<A> | null, StorageError>,
+  id: string,
+): Effect.Effect<NonNullable<A>, StorageError | PhotoNotFound> =>
+  Effect.flatMap(row, (found) =>
+    found === null ? Effect.fail(new PhotoNotFound({ id })) : Effect.succeed(found),
+  )
 
 /** The row with its Tags attached — what every read operation returns. */
 const withTags = (db: (typeof Gateway.Service)['db'], row: DbPhotoRow) =>
@@ -943,8 +956,7 @@ export const PhotoServiceLive = Layer.effect(
 
     const get: PhotoServiceContract['get'] = (id) =>
       Effect.gen(function* () {
-        const row = yield* rowById(db, id)
-        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        const row = yield* requireRow(rowById(db, id), id)
         return yield* withTags(db, row)
       })
 
@@ -1093,9 +1105,7 @@ export const PhotoServiceLive = Layer.effect(
 
     const update: PhotoServiceContract['update'] = (id, patch) =>
       Effect.gen(function* () {
-        if ((yield* rowById(db, id)) === null) {
-          return yield* Effect.fail(new PhotoNotFound({ id }))
-        }
+        yield* requireRow(rowById(db, id), id)
         const fields: Array<string> = []
         const binds: Array<string | null> = []
         if (patch.title !== undefined) {
@@ -1142,18 +1152,13 @@ export const PhotoServiceLive = Layer.effect(
               new StorageError({ message: 'Failed to update photo', cause: describeCause(cause) }),
           })
         }
-        const row = yield* rowById(db, id)
-        if (row === null) {
-          return yield* Effect.fail(new PhotoNotFound({ id }))
-        }
+        const row = yield* requireRow(rowById(db, id), id)
         return yield* withTags(db, row)
       })
 
     const setStatus: PhotoServiceContract['setStatus'] = (id, status) =>
       Effect.gen(function* () {
-        if ((yield* rowById(db, id)) === null) {
-          return yield* Effect.fail(new PhotoNotFound({ id }))
-        }
+        yield* requireRow(rowById(db, id), id)
         yield* Effect.tryPromise({
           try: () => db.prepare(`UPDATE photos SET status = ? WHERE id = ?`).bind(status, id).run(),
           catch: (cause) =>
@@ -1162,10 +1167,7 @@ export const PhotoServiceLive = Layer.effect(
               cause: describeCause(cause),
             }),
         })
-        const row = yield* rowById(db, id)
-        if (row === null) {
-          return yield* Effect.fail(new PhotoNotFound({ id }))
-        }
+        const row = yield* requireRow(rowById(db, id), id)
         return yield* withTags(db, row)
       })
 
@@ -1174,8 +1176,7 @@ export const PhotoServiceLive = Layer.effect(
         // Any row, live or not: trashing a trashed Photo is the end state it
         // is already in, and re-stamping the date would make the Trash's
         // ordering depend on how many times it was clicked.
-        const row = yield* rowById(db, id, 'any')
-        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        const row = yield* requireRow(rowById(db, id, 'any'), id)
         if (row.deletedAt !== null) return
         yield* Effect.tryPromise({
           try: () =>
@@ -1191,8 +1192,7 @@ export const PhotoServiceLive = Layer.effect(
 
     const restore: PhotoServiceContract['restore'] = (id) =>
       Effect.gen(function* () {
-        const row = yield* rowById(db, id, 'any')
-        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        const row = yield* requireRow(rowById(db, id, 'any'), id)
         if (row.deletedAt === null) return
         yield* Effect.tryPromise({
           try: () => db.prepare(`UPDATE photos SET deletedAt = NULL WHERE id = ?`).bind(id).run(),
@@ -1203,8 +1203,7 @@ export const PhotoServiceLive = Layer.effect(
 
     const purge: PhotoServiceContract['purge'] = (id) =>
       Effect.gen(function* () {
-        const row = yield* rowById(db, id, 'any')
-        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        const row = yield* requireRow(rowById(db, id, 'any'), id)
         if (row.deletedAt === null) {
           return yield* Effect.fail(
             new InvalidInput({ message: 'only a trashed photo can be purged' }),
@@ -1311,16 +1310,13 @@ export const PhotoServiceLive = Layer.effect(
         // The read is scoped to live Photos, exactly as the write is: a
         // trashed Photo has a stored Presentation, and the Editor is not where
         // the Trash is edited.
-        const row = yield* presentationRow(db, id)
-        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        const row = yield* requireRow(presentationRow(db, id), id)
         return toPhotoPresentation(row)
       })
 
     const setPresentation: PhotoServiceContract['setPresentation'] = (id, patch) =>
       Effect.gen(function* () {
-        if ((yield* rowById(db, id)) === null) {
-          return yield* Effect.fail(new PhotoNotFound({ id }))
-        }
+        yield* requireRow(rowById(db, id), id)
         const { fields, binds } = presentationColumns(patch)
         if (fields.length === 0) {
           return yield* Effect.fail(new InvalidInput({ message: 'empty presentation patch' }))
@@ -1348,8 +1344,7 @@ export const PhotoServiceLive = Layer.effect(
         })
         // The whole presentation, not the patch: a save returns the stored
         // truth so the Editor never has to guess what it did not send.
-        const row = yield* presentationRow(db, id)
-        if (row === null) return yield* Effect.fail(new PhotoNotFound({ id }))
+        const row = yield* requireRow(presentationRow(db, id), id)
         return toPhotoPresentation(row)
       })
 

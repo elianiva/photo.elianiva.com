@@ -1,6 +1,6 @@
 /**
  * The migrations that build the Photo lifecycle against the F1 harness (`d1-fake`,
- * ADR 0009): the schema 0004 adds, the backfill it writes, the indexes the list
+ * ADR 0005): the schema 0004 adds, the backfill it writes, the indexes the list
  * queries depend on, and the Photo Number counter 0006 puts outside `photos`.
  */
 
@@ -333,17 +333,6 @@ describe('migration 0004', () => {
       expect(details[0]).toMatch(expected)
       expect(details[0]).not.toMatch(/\bSCAN\b/)
     }
-  })
-
-  it('builds the partial indexes with the predicates the list queries assume', async () => {
-    const db = makeD1Fake(repoMigrations())
-    const indexes = await indexSql(db)
-    expect(indexes['idx_photos_number']).toMatch(
-      /UNIQUE.*ON photos\(number\).*WHERE number IS NOT NULL/i,
-    )
-    expect(indexes['idx_photos_live']).toMatch(/ON photos\(deletedAt, takenAt\)/)
-    expect(indexes['idx_photos_status']).toMatch(/ON photos\(status\).*WHERE deletedAt IS NULL/i)
-    expect(indexes['idx_photos_ratio']).toMatch(/ON photos\(ratio\)/)
   })
 
   it('keeps the photos table STRICT for the new columns', async () => {

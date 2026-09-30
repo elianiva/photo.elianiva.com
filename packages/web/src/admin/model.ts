@@ -154,7 +154,7 @@ export type MatColour = typeof MatColour.Type
 // ---------------------------------------------------------------------------
 
 /** The Access facts behind the Admin. There is no signed-out state: Access
- *  gates the route before the app runs (ADR 0007), so `status` distinguishes
+ *  gates the route before the app runs (ADR 0003), so `status` distinguishes
  *  "not asked yet" from "the gate refused" rather than a user who is not
  *  signed in. `email` and `teamDomain` are null only where the gate stood
  *  down, which is what hides an address and a sign-out link that would go

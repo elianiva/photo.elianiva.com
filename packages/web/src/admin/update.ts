@@ -1520,7 +1520,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         cleared,
         page,
         `${photoCountLabel(count)} moved to Trash`,
-        'Recoverable from the Trash. Purging is the only irreversible step.',
+        'Nothing was purged. Originals stay in R2, and no number is ever reused.',
       )
     },
 

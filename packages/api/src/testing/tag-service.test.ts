@@ -137,7 +137,7 @@ describe('TagService.remove', () => {
 })
 
 describe('TagService.update', () => {
-  it('writes a caption and leaves the slug alone', async () => {
+  it('writes a caption and carries it back on every read', async () => {
     const harness = makeTestHarness()
     const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
 
@@ -151,6 +151,16 @@ describe('TagService.update', () => {
       label: 'Kyoto',
       caption: 'Ferries, rain, and the long light on Istiklal.',
     })
+    // The list is the read the sidebar draws the caption onto, so a caption
+    // that reaches only the write's return value is not delivered anywhere.
+    expect(await listTags(harness)).toEqual([
+      {
+        id: kyoto.id,
+        slug: 'kyoto',
+        label: 'Kyoto',
+        caption: 'Ferries, rain, and the long light on Istiklal.',
+      },
+    ])
   })
 
   it('clears a caption with null, never an empty string', async () => {
@@ -172,7 +182,7 @@ describe('TagService.update', () => {
 
     const relabelled = await updateTag(harness, kyoto.id, { label: 'Kyoto Nights' })
 
-    // A slug is a live URL: the public Series page is a Tag page (ADR 0008),
+    // A slug is a live URL: the public Series page is a Tag page (ADR 0006),
     // so renaming one is delete + create, not an update.
     expect(relabelled).toEqual({
       id: kyoto.id,

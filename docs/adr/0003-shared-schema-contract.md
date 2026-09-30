@@ -1,7 +1,0 @@
-# Shared Effect Schema contract
-
-`packages/shared` was introduced to own the API and domain schemas (`HelloResponse`, `ApiError`, `Photo`, `Collection`, `PhotoId`/`CollectionId` brands) via `effect/Schema`. Both `packages/web` and `packages/api` depend on it as `workspace:*` and consume it as TS source via `paths` (`@photo/shared` → `../shared/src/index.ts`) — no build step, Vite transforms it on the fly. The scaffold shipped mock `mockPhotos`/`mockCollections` decoded via `S.decodeSync`; the next iteration was to replace them with a fetch that still decodes through the same schemas.
-
-We introduced `packages/shared` from day one (even for a Hello placeholder) so the contract boundary is established before any CMS choice locks the domain shape.
-
-**Since (2026-08, #13).** The scaffold schemas are gone. `packages/shared` now holds two files: `photo.ts` with the domain schemas (`PhotoId`/`TagId` brands, `Tag`, `PhotoMetadata`, `PhotoWithTags`, plus the D1 row shapes) and `rpc.ts` with the RPC groups and the domain errors they can fail with. The pre-RPC schema module `packages/shared/src/api.ts` (`HelloResponse`, `ApiError`, and per-verb request/response schemas) was dead once ADR 0006 moved the contract into `rpc.ts`, and it has been deleted rather than left as a second contract. A dead pre-RPC module is worse than no module, because the next reader cannot tell which one is the contract.

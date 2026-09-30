@@ -56,7 +56,7 @@ export const describeCause = (cause: unknown): string => {
 // Public reads — everything a visitor's browser or the server-rendered Front
 // asks for, on the ungated `/rpc`. Nothing here can reach a Draft or a trashed
 // Photo: the filter lives in `PublicPhotoService`, so it cannot be forgotten
-// per handler (ADR 0010). The Admin reads the admin group instead.
+// per handler (ADR 0004). The Admin reads the admin group instead.
 // ---------------------------------------------------------------------------
 
 export class ListPhotos extends Rpc.make('ListPhotos', {
@@ -190,7 +190,7 @@ export const PhotoPublicRpcs = RpcGroup.make(
 
 // ---------------------------------------------------------------------------
 // Admin writes — edge-gated (Access on photo-api /admin/*) + JWT-verified in-worker
-// (ADR 0007).
+// (ADR 0003).
 // ---------------------------------------------------------------------------
 
 export class UpdatePhoto extends Rpc.make('UpdatePhoto', {
@@ -265,7 +265,7 @@ export class DeleteTag extends Rpc.make('DeleteTag', {
 /** Who the gate already proved, and the team that proved it. `email` and
  *  `teamDomain` are null only on the `dev` stand-down, where the gate verifies
  *  nothing because there is nothing to verify — that is not a signed-out
- *  state, and there is no sign-in form (ADR 0007, ADR 0008).
+ *  state, and there is no sign-in form (ADR 0003).
  *
  *  `teamDomain` is the verified issuer, and it is what makes the sidebar's
  *  `Sign out` a real link: the Access logout lives under it. */
@@ -298,7 +298,7 @@ export class GetCounts extends Rpc.make('GetCounts', {
  *  The design disagrees with itself — the sidebar meter says `7.9 / 50 GB` and
  *  the Settings Storage block says `4.2 GB OF 20 GB` — so one number serves
  *  both, and 20 GiB is the Storage block's, which is the block that pairs the
- *  count with the byte total `GetStorageUsage` returns (ADR 0008). Change this
+ *  count with the byte total `GetStorageUsage` returns (ADR 0006). Change this
  *  one constant and #24's meter and #37's block follow. */
 export const STORAGE_CAP_BYTES = 20 * 1024 * 1024 * 1024
 
@@ -438,11 +438,11 @@ const TagIds = S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(
 )
 
 /** The Bulk Bar's `Move to series` slot, re-pointed: Series has no home
- *  (ADR 0008) and Tag is the grouping entity, so the slot is `Add tag`.
+ *  (ADR 0006) and Tag is the grouping entity, so the slot is `Add tag`.
  *
  *  A Tag id nobody carries is `InvalidInput`, not a storage failure: a stale
  *  multi-select is the operator's to fix, and there is no `TagNotFound` to
- *  invent (ADR 0003 — one contract, existing errors). */
+ *  invent (ADR 0001 — one contract, existing errors). */
 export class BulkAddTags extends Rpc.make('BulkAddTags', {
   payload: { photoIds: PhotoIds, tagIds: TagIds },
   success: S.Void,
@@ -463,7 +463,7 @@ export class AddBorderToPhotos extends Rpc.make('AddBorderToPhotos', {
   error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
 }) {}
 
-/** A Tag's `slug` is not editable: a Series page is a Tag page (ADR 0008), so
+/** A Tag's `slug` is not editable: a Series page is a Tag page (ADR 0006), so
  *  a slug is a live URL and renaming one is delete + create. */
 export class UpdateTag extends Rpc.make('UpdateTag', {
   payload: {
