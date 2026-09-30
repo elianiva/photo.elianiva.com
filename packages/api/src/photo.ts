@@ -100,6 +100,9 @@ export interface PhotoUpdatePatch {
   readonly metadata?: Record<string, unknown> | undefined
   /** The frame proportion. A Photo column, set from the Editor's crop. */
   readonly ratio?: PhotoRatio | undefined
+  /** The client re-encoded Blurhash of the authored composition. A Photo
+   *  column; `null` clears it for a Photo whose bytes no longer back a hash. */
+  readonly blurhash?: string | null | undefined
   readonly tagIds?: ReadonlyArray<string> | undefined
 }
 
@@ -1114,6 +1117,10 @@ export const PhotoServiceLive = Layer.effect(
         if (patch.ratio !== undefined) {
           fields.push('ratio = ?')
           binds.push(patch.ratio)
+        }
+        if (patch.blurhash !== undefined) {
+          fields.push('blurhash = ?')
+          binds.push(patch.blurhash)
         }
         if (patch.metadata !== undefined) {
           fields.push('metadata = ?')

@@ -712,6 +712,18 @@ describe('UpdatePhoto handler', () => {
     expect(updated.ratio).toBe('4:3')
   })
 
+  it('writes the client re-encoded Blurhash, a Photo column beside the Ratio', async () => {
+    const harness = makeTestHarness()
+    const created = await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })
+    const hash = 'LEHV6nWB2yk8pyo0adR*.7kCMdnj'
+
+    const updated = await adminRpc(harness, (client) =>
+      client.UpdatePhoto({ id: created.id, blurhash: hash }),
+    )
+
+    expect(updated.blurhash).toBe(hash)
+  })
+
   it('rejects an empty update even though a Ratio would have been one', async () => {
     const harness = makeTestHarness()
     const created = await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })

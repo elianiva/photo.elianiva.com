@@ -26,15 +26,15 @@
  *   - the Inspector's `HISTORY` tab is deferred (decision 8), so two tabs are
  *     drawn and not three — not even a disabled one, which would be a promise
  *     with nothing behind it;
- *   - the `EDIT` tab draws the Crop panel (#31) and the Mat's on/off. The Mat's
- *     colour, style and width beside the toggle are #32, and the export panel
- *     is #33. The `DETAILS` tab is finished (#34): the four `UpdatePhoto`
+ *   - the `EDIT` tab draws the Crop panel (#31), the Mat's on/off and the
+ *     Export panel (#33). The Mat's colour, style and width beside the toggle
+ *     are #32. The `DETAILS` tab is finished (#34): the four `UpdatePhoto`
  *     Fields, the Status group and the `RATIO` override, plus the one line no
  *     control may change.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
-import type { PhotoPresentation, PhotoRatio, PhotoWithTags } from '@photo/shared'
+import type { PhotoPresentation, PhotoRatio, PhotoWithTags, RenditionFormat } from '@photo/shared'
 import { PHOTO_RATIOS } from '@photo/shared'
 import { ArrowLeft, FlipHorizontal, RotateCcw, RotateCw } from 'lucide'
 
@@ -45,10 +45,14 @@ import * as Input from '@/components/ui/input'
 import * as NavLink from '@/components/ui/nav-link'
 import * as Segment from '@/components/ui/segment'
 import * as Select from '@/components/ui/select'
+import * as Slider from '@/components/ui/slider'
+import * as SpecRow from '@/components/ui/spec-row'
 import * as Status from '@/components/ui/status'
 import * as Textarea from '@/components/ui/textarea'
 import * as ToggleRow from '@/components/ui/toggle-row'
 
+import { blurhashComponentLabel, placeholderDataUrl } from '@/lib/blurhash'
+import { imagePreviewLongEdge, imagePreviewQuality } from '@/lib/design-tokens'
 import { icon } from '@/lib/icons'
 import { originalUrl } from '@/lib/image'
 import { scopeTheme } from '@/lib/theme'
@@ -64,6 +68,7 @@ import {
   editorReturnUrl,
   editorSegmentSelected,
   effectiveRatio,
+  exportSavingLabel,
   fitFrameWidth,
   frameAspect,
   isEditorDirty,
@@ -81,9 +86,10 @@ import {
 } from '../editor'
 import { Message as M } from '../model'
 import type { EditorTab, Model, Msg } from '../model'
+import { PREVIEW_LONG_EDGES } from '../settings-draft'
 import { documentTitle } from './page-head'
 import { toastStack } from './overlays'
-import type { Child } from './shared'
+import { formatBytes, type Child } from './shared'
 
 // ---------------------------------------------------------------------------
 // Top Bar
@@ -501,6 +507,174 @@ const cropPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
   )
 }
 
+/** The three output formats the design's `Segment` offers. AVIF leads because
+ *  the migrated `previewFormat` default is `avif` and the design picks it. */
+const EXPORT_FORMATS: ReadonlyArray<Segment.SegmentOption<RenditionFormat>> = [
+  { value: 'jpeg', label: 'JPEG' },
+  { value: 'webp', label: 'WEBP' },
+  { value: 'avif', label: 'AVIF' },
+]
+
+/** `ORIGINAL 6000 × 4000 · 18.4 MB` — the frame the stored columns measured and
+ *  the bytes the bucket holds. A row uploaded before `bytes` existed prints the
+ *  dimensions and an honest `—` for the size it cannot know. */
+const originalSizeLabel = (photo: PhotoWithTags | undefined): string =>
+  photo === undefined
+    ? '—'
+    : `${String(photo.width)} × ${String(photo.height)} · ${
+        photo.bytes === undefined || photo.bytes === null ? '—' : formatBytes(photo.bytes)
+      }`
+
+/** The `BLURHASH` block in the Export section's lower frame: the component
+ *  readout and the decoded 64×40 preview. The component count is
+ *  `blurhashComponentLabel()`, read off `image.blurhash.x` / `.y` — never the
+ *  design's `4 × 3` written out; the char count is the hash's own length, which
+ *  is what the encoder produced and not the design's illustrative 31. */
+const blurhashBlock = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const hash = model.editor.blurhash
+  const readout =
+    hash === undefined ? '—' : `${blurhashComponentLabel()} · ${String(hash.length)} CHARS`
+  const dataUrl = hash === undefined ? null : placeholderDataUrl(hash)
+  return h.div(
+    [
+      h.DataAttribute('slot', 'blurhash'),
+      h.Class('flex flex-col gap-(--spacing-md) border-t border-role-hairline pt-(--spacing-lg)'),
+    ],
+    [
+      h.div(
+        [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+        [
+          h.h3([h.Class('type-kicker text-role-text-primary')], ['BLURHASH']),
+          h.span(
+            [
+              h.DataAttribute('slot', 'blurhash-readout'),
+              h.Class('type-exif text-role-text-disabled'),
+            ],
+            [readout],
+          ),
+        ],
+      ),
+      h.div(
+        [
+          h.DataAttribute('slot', 'blurhash-preview'),
+          h.DataAttribute('placeholder', dataUrl === null ? 'none' : 'blurhash'),
+          h.AriaHidden(true),
+          h.Class('h-10 w-16 border border-role-hairline bg-role-surface-container'),
+          ...(dataUrl === null
+            ? []
+            : [
+                h.Style({
+                  'background-image': `url(${dataUrl})`,
+                  'background-size': 'cover',
+                  'background-position': 'center',
+                }),
+              ]),
+        ],
+        [],
+      ),
+    ],
+  )
+}
+
+/** The `EXPORT` panel: the output format, the preview's quality and long edge,
+ *  the two metadata policies, the three Sizes rows, and the Blurhash block.
+ *  Every control writes `EditorState.draft`, so the Top Bar's one `Update` is
+ *  the save — there is no `/Use export defaults/` toggle, because the per-photo
+ *  columns *are* the defaults until the operator moves one, and a toggle whose
+ *  off-state nothing defines is a control that lies.
+ *
+ *  The head's saving is derived, not stored: the original's bytes against the
+ *  FULL Rendition's. Until `E6` (#35) produces that rendition there is no
+ *  measurement, so it prints `—` rather than the design's `−89%`. */
+const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const draft = model.editor.draft
+  const disabled = draft === undefined
+  return h.section(
+    [h.Class('flex flex-col gap-(--spacing-md) border-b border-role-hairline pb-(--spacing-lg)')],
+    [
+      panelHead(
+        'EXPORT',
+        h.span(
+          [h.DataAttribute('slot', 'export-saving'), h.Class('type-exif text-role-text-disabled')],
+          [exportSavingLabel(model.photo?.bytes ?? null, null)],
+        ),
+        h,
+      ),
+      Segment.segmentGroup(
+        {
+          selected: draft?.previewFormat ?? 'avif',
+          options: EXPORT_FORMATS,
+          ariaLabel: 'Format',
+          isDisabled: disabled,
+          className: 'w-full',
+          optionClass: 'flex-1',
+        },
+        (value) => M.SetEditorPreviewFormat({ value }),
+        h,
+      ),
+      Slider.slider(
+        {
+          id: 'editor-preview-quality',
+          label: 'PREVIEW QUALITY',
+          value: draft?.previewQuality ?? imagePreviewQuality,
+          min: 1,
+          max: 100,
+          step: 1,
+          isDisabled: disabled,
+          onInput: (value) => M.SetEditorPreviewQuality({ value }),
+        },
+        h,
+      ),
+      Select.select(
+        {
+          id: 'editor-preview-long-edge',
+          label: 'PREVIEW LONG EDGE',
+          value: String(draft?.previewLongEdge ?? imagePreviewLongEdge),
+          options: PREVIEW_LONG_EDGES.map((edge) => ({
+            value: String(edge),
+            label: `${String(edge)} PX`,
+          })),
+          isDisabled: disabled,
+          onChange: (raw) => M.SetEditorPreviewLongEdge({ value: Number(raw) }),
+        },
+        h,
+      ),
+      ToggleRow.toggleRow(
+        {
+          id: 'editor-keep-exif',
+          label: 'Keep EXIF data',
+          isChecked: draft?.keepExif ?? true,
+          isDisabled: disabled,
+          onToggle: (isChecked) => M.SetEditorKeepExif({ isChecked }),
+        },
+        h,
+      ),
+      ToggleRow.toggleRow(
+        {
+          id: 'editor-remove-gps',
+          label: 'Remove GPS location',
+          isChecked: draft?.removeGps ?? true,
+          isDisabled: disabled,
+          onToggle: (isChecked) => M.SetEditorRemoveGps({ isChecked }),
+        },
+        h,
+      ),
+      h.dl(
+        [h.DataAttribute('slot', 'export-sizes'), h.Class('flex flex-col')],
+        [
+          SpecRow.specRow({ label: 'ORIGINAL', value: originalSizeLabel(model.photo) }, h),
+          // PREVIEW and FULL are `E6`'s (#35) rendition rows. Without the
+          // columns there is no dimension and no byte count to print, so both
+          // say `—` — the design's own answer for a Photo with no rendition.
+          SpecRow.specRow({ label: 'PREVIEW', value: '—' }, h),
+          SpecRow.specRow({ label: 'FULL', value: '—' }, h),
+        ],
+      ),
+      blurhashBlock(model, h),
+    ],
+  )
+}
+
 /** The `EDIT` tab. The Crop panel and the Mat's on/off are the shell's: the Mat
  *  is the one control that changes what the Stage draws out of the stored
  *  Presentation, so it is the one the save bar needs to be real. Its three
@@ -531,6 +705,7 @@ const editTab = (model: Model, h: HtmlBuilder<Msg>): Child =>
           ],
         ),
       ),
+      exportPanel(model, h),
     ],
   )
 

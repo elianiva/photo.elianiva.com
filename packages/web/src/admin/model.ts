@@ -269,6 +269,11 @@ export const EditorState = S.Struct({
   /** The `DETAILS` record as edited. The panel draws these; the save sends
    *  them when they differ from the snapshot. */
   detailsDraft: S.optional(PhotoDetails),
+  /** The Blurhash of the composition the draft draws, re-encoded client-side
+   *  on every committed crop/border change. Seeded from the Photo's stored hash
+   *  on load and sent with the save when it moved (CONTEXT.md, Blurhash).
+   *  `undefined` before the first encode answers. */
+  blurhash: S.optional(S.String),
   /** The pan in flight, or absent. View state, never saved. */
   cropDrag: S.optional(EditorCropDrag),
   saving: S.Boolean,
@@ -630,6 +635,18 @@ export const Message = defineMessageUnion({
    *  Mat is the one thing the Stage draws out of the stored Presentation;
    *  #32 adds its colour, style and width beside this toggle. */
   ToggledEditorMat: { enabled: S.Boolean },
+  /** The Export panel's six overrides. One variant each so a value's type is
+   *  the schema's and the row that writes it is unambiguous; every one lands
+   *  on `EditorState.draft` and rides the Top Bar's `Update`. */
+  SetEditorPreviewFormat: { value: RenditionFormat },
+  SetEditorPreviewQuality: { value: S.Number },
+  SetEditorPreviewLongEdge: { value: S.Number },
+  SetEditorKeepExif: { isChecked: S.Boolean },
+  SetEditorRemoveGps: { isChecked: S.Boolean },
+  /** The client re-encoded the composition's Blurhash. `signature` names the
+   *  composition it was encoded from, so a result for a draft the operator has
+   *  already moved off is dropped rather than shown or saved. */
+  ReencodedEditorBlurhash: { id: PhotoId, signature: S.String, blurhash: S.String },
   /** The `DETAILS` tab's controls, one message each so a value's type is the
    *  schema's and the row that writes it is unambiguous. Every one goes through
    *  `UpdatePhoto`; the Status group is the one control that does not

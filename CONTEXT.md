@@ -61,7 +61,7 @@ Raw file bytes / technical artifact. Not a domain term — use Photo for the sho
 _Avoid_: Photo (when you mean the file alone)
 
 **Blurhash**:
-A tiny string encoding a Photo's average color layout, encoded client-side at upload (only the browser can decode pixels) and stored on the Photo. The public gallery decodes it into a placeholder tile — no image bytes are fetched until the visitor opens the lightbox, which shows the original HD file on plain white.
+A tiny string encoding a Photo's average color layout, encoded client-side (only the browser can decode pixels) and stored on the Photo. It is encoded from the raw file at upload, and re-encoded from the **cropped and matted composition** on every committed change in the Editor (a crop, a level, a mirror, a Mat toggle) — so the placeholder the public gallery decodes into a tile depicts the composition the visitor will see, not the uncropped original. It is a placeholder tile, not the photo: no image bytes are fetched until the visitor opens the lightbox, which shows the original HD file on plain white. The `4 × 3` component count is `image.blurhash.x` / `.y` in the design, a readout rather than a stored dimension.
 _Avoid_: Placeholder image, thumbnail (the gallery no longer loads thumbnails)
 
 **Frame**:

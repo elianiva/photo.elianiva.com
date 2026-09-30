@@ -371,6 +371,10 @@ export const UpdateEditorCmd = Command.define('UpdateEditor', {
     presentation: PhotoPresentation,
     /** Present only while the operator's pick differs from the stored Ratio. */
     ratio: S.optional(PhotoRatio),
+    /** The client's re-encoded Blurhash, present only when it differs from the
+     *  stored row's. A Photo column, so it rides `UpdatePhoto`; the composition
+     *  is what it describes, so a save that rewrote the crop carries it. */
+    blurhash: S.optional(S.String),
     savePresentation: S.Boolean,
     /** The `DETAILS` record, present only when it moved. Its `location` rides
      *  in `metadata`, because `UpdatePhoto` replaces the whole blob. */
@@ -378,7 +382,7 @@ export const UpdateEditorCmd = Command.define('UpdateEditor', {
     metadata: S.optional(PhotoMetadata),
   },
   messages: [Message.UpdatedEditor, Message.FailedRpc],
-  execute: ({ id, presentation, ratio, savePresentation, details, metadata }) =>
+  execute: ({ id, presentation, ratio, blurhash, savePresentation, details, metadata }) =>
     Effect.gen(function* () {
       const stored = savePresentation
         ? yield* rpcAdmin<PhotoPresentation>('UpdatePhotoPresentation', {
@@ -406,14 +410,16 @@ export const UpdateEditorCmd = Command.define('UpdateEditor', {
             },
           })
         : presentation
-      // The Ratio and the `DETAILS` record are both columns on `photos`, so
-      // one `UpdatePhoto` carries whichever of them moved — and the answer is
-      // the whole stored row, which is what the Editor's snapshots become.
-      const writesPhoto = ratio !== undefined || details !== undefined
+      // The Ratio, the Blurhash and the `DETAILS` record are all columns on
+      // `photos`, so one `UpdatePhoto` carries whichever of them moved — and
+      // the answer is the whole stored row, which is what the Editor's
+      // snapshots become.
+      const writesPhoto = ratio !== undefined || blurhash !== undefined || details !== undefined
       const photo = writesPhoto
         ? yield* rpcAdmin<PhotoWithTags>('UpdatePhoto', {
             id,
             ...(ratio === undefined ? {} : { ratio }),
+            ...(blurhash === undefined ? {} : { blurhash }),
             ...(details === undefined
               ? {}
               : {
