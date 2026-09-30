@@ -22,11 +22,7 @@ import { Message, UPLOAD_ACCEPT, UPLOAD_LIMITS } from './model'
 import type { Model } from './model'
 import { init, update } from './update'
 import { view } from './view'
-import {
-  uploadFooterStatus,
-  uploadFooterSummary,
-  uploadPrimaryLabel,
-} from './views/upload-dialog'
+import { uploadFooterStatus, uploadFooterSummary, uploadPrimaryLabel } from './views/upload-dialog'
 
 const ORIGIN = 'https://photo.elianiva.com'
 
@@ -75,10 +71,7 @@ const given = () => Scene.given(cold())
 /** Four one-byte files through the picker's own intake, so the ids are the
  *  `${name}:${size}` keys the queue uses. */
 const queued = (names: ReadonlyArray<string>): Model =>
-  update(
-    cold(),
-    Message.ImportedFiles({ files: names.map((name) => new File(['x'], name)) }),
-  ).model
+  update(cold(), Message.ImportedFiles({ files: names.map((name) => new File(['x'], name)) })).model
 
 const uploadingName = (model: Model): string | undefined =>
   model.queue.find((item) => item.status === 'uploading')?.name

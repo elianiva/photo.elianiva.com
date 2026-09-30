@@ -37,9 +37,7 @@ export const releaseFinishedItems = (dialogModel: Model): Model => {
   }
   return modifyFields(dialogModel, {
     queue: () =>
-      dialogModel.queue.filter(
-        (item) => item.status === 'failed' || item.status === 'processing',
-      ),
+      dialogModel.queue.filter((item) => item.status === 'failed' || item.status === 'processing'),
     uploadTagIds: () => [],
     uploadTakenAt: () => '',
     uploading: () => false,

@@ -186,18 +186,12 @@ const uploadStream = (
             }
           }
           xhr.onerror = (): void => {
-            Queue.offerUnsafe(
-              queue,
-              Message.FailedUploadItem({ itemId, message: 'upload failed' }),
-            )
+            Queue.offerUnsafe(queue, Message.FailedUploadItem({ itemId, message: 'upload failed' }))
           }
           xhr.send(form)
           return { xhr }
         } catch {
-          Queue.offerUnsafe(
-            queue,
-            Message.FailedUploadItem({ itemId, message: 'upload failed' }),
-          )
+          Queue.offerUnsafe(queue, Message.FailedUploadItem({ itemId, message: 'upload failed' }))
           return { xhr: undefined }
         }
       }),

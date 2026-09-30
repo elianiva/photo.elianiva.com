@@ -98,7 +98,14 @@ describe('isJpegUpload', () => {
   })
 
   it('rejects every other declared image type', () => {
-    for (const mime of ['image/png', 'image/webp', 'image/avif', 'image/heic', 'image/heif', 'image/tiff']) {
+    for (const mime of [
+      'image/png',
+      'image/webp',
+      'image/avif',
+      'image/heic',
+      'image/heif',
+      'image/tiff',
+    ]) {
       expect(isJpegUpload('photo.jpg', mime)).toBe(false)
     }
   })

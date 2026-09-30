@@ -99,10 +99,7 @@ const rowMeta = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
     case 'processing':
       return h.span([h.Class('shrink-0 type-kicker text-role-text-secondary')], ['PROCESSING'])
     case 'done':
-      return h.span(
-        [h.Class('shrink-0 text-role-text-primary')],
-        [icon(h, Check, 'size-3')],
-      )
+      return h.span([h.Class('shrink-0 text-role-text-primary')], [icon(h, Check, 'size-3')])
     case 'failed':
       // The design's failed row heads its reason with the category the failure
       // belongs to. The only server-side rejection today is a Ratio the frame
@@ -144,7 +141,9 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
   h.li(
     [
       h.Key(item.id),
-      h.Class('flex items-center gap-(--spacing-md) border-b border-role-hairline py-(--spacing-md)'),
+      h.Class(
+        'flex items-center gap-(--spacing-md) border-b border-role-hairline py-(--spacing-md)',
+      ),
     ],
     [
       queueThumbnail(item, h),
@@ -154,9 +153,10 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
           h.div(
             [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
             [
-              h.span([h.Class('min-w-0 flex-1 truncate type-exif text-role-text-primary')], [
-                item.name,
-              ]),
+              h.span(
+                [h.Class('min-w-0 flex-1 truncate type-exif text-role-text-primary')],
+                [item.name],
+              ),
               rowMeta(item, h),
             ],
           ),
@@ -371,16 +371,17 @@ const uploadDialogContent = (
     }),
     ...(hasQueue
       ? [
-          h.ul([h.Class('flex flex-col')], model.queue.map((item) => queueRow(item, h))),
+          h.ul(
+            [h.Class('flex flex-col')],
+            model.queue.map((item) => queueRow(item, h)),
+          ),
           h.div([h.Class('flex flex-col gap-(--spacing-md)')], uploadOptions(model, h)),
           // Announce the run for screen readers; the bars are per-item.
           ...(uploading !== undefined
             ? [
                 h.p(
                   [h.Role('status'), h.AriaLive('polite'), h.Class('sr-only')],
-                  [
-                    `Uploading ${uploading.name} — ${String(uploadPercent(uploading))} per cent`,
-                  ],
+                  [`Uploading ${uploading.name} — ${String(uploadPercent(uploading))} per cent`],
                 ),
               ]
             : []),

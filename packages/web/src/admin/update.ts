@@ -439,8 +439,7 @@ const withUploadDialogOpen = (result: UpdateReturn): UpdateReturn => {
   // `Use export defaults` reads the Settings singleton, so opening the dialog
   // makes sure the row is there to read. A row already read is not re-read on
   // every open — the read is a convenience for one toggle, not a page load.
-  const settingsCommands: Commands =
-    model.settings === undefined ? [FetchSettingsCmd()] : []
+  const settingsCommands: Commands = model.settings === undefined ? [FetchSettingsCmd()] : []
   const commands: Commands = [
     ...(result.commands ?? []),
     ...settingsCommands,

@@ -1052,9 +1052,7 @@ export const PhotoServiceLive = Layer.effect(
             db.batch([
               db.prepare(`UPDATE photo_number_counter SET value = value + 1 WHERE id = 1`),
               db
-                .prepare(
-                  `INSERT INTO photos (${columns.join(', ')}) VALUES (${values.join(', ')})`,
-                )
+                .prepare(`INSERT INTO photos (${columns.join(', ')}) VALUES (${values.join(', ')})`)
                 .bind(...binds),
               ...linkTags(db, id, input.tagIds),
             ]),
