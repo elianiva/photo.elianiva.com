@@ -29,7 +29,7 @@ A Photo's frame proportion, always one of six supported values: `3:2`, `2:3`, `4
 _Avoid_: Aspect ratio, orientation, dimensions (those are the measured `width` and `height`)
 
 **Crop**:
-The window a Photo is presented through, authored in the Editor. `cropX` and `cropY` pan the source inside the Ratio, `cropScale` zooms it, and `level` is the straighten angle in degrees. The defaults — pan at origin, scale 1, no level — mean an un-cropped Photo is the source as shot. A crop is authored data, so it is stored as columns and the Rendition is regenerated from it, never beside it.
+The window a Photo is presented through, authored in the Editor. `cropX` and `cropY` pan the source inside the Ratio, `cropScale` zooms it, `cropFlipX` mirrors it horizontally, and `level` is the straighten angle in degrees. The defaults — pan at origin, scale 1, un-mirrored, no level — mean an un-cropped Photo is the source as shot. A crop is authored data, so it is stored as columns and the Rendition is regenerated from it, never beside it.
 _Avoid_: Resize, Zoom (that is the Stage's own control), Aspect ratio (that is the Ratio)
 
 **Editor**:

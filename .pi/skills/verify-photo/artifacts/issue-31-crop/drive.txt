@@ -1,0 +1,34 @@
+# issue #31 — Crop authoring: ratio, pan, zoom and level
+
+Blocked on the real `pnpm dev`: `alchemy dev` fails with
+`NeedsReauth: Cloudflare OAuth refresh failed`, the same wall PR #63 hit. The
+drive below runs the real Vite dev server (`pnpm --filter @photo/web exec vite`)
+against a small stub on `:13371` that speaks the Effect RPC JSON protocol and
+answers the Editor's reads. The UI, the state machine, the subscriptions and the
+Stage's CSS are the app's; the data and the writes are canned. The API's own
+read/write paths are covered by `packages/api` tests over real SQLite, and the
+persistence claim below is a reload against the stub's kept state.
+
+Base: `http://localhost:5173/admin/photos/p1`.
+
+| Step | Command | Observed |
+|---|---|---|
+| Cold load | `open .../admin/photos/p1` | `CROP` head, `3:2 · AS SHOT`, six-ratio Segment with `3:2` pressed, three transform buttons, `LEVEL 0.0°` |
+| Pick `4:3` | `click '[data-id="editor-crop-ratio"] button:nth-child(3)'` | head `4:3`; plate `427.98 × 320.98` (4:3); unsaved dot on |
+| Straighten ×4 | `click 'button[aria-label="Straighten clockwise"]'` ×4 | `LEVEL +0.4°`; image `rotate(0.4deg)` |
+| Flip | `click 'button[aria-label="Flip horizontally"]'` | button `aria-pressed=true`; image `scaleX(-1)` |
+| Pan | pointerdown / pointermove (+90,+40) / pointerup on the frame | `object-position: 28.971% 37.538%` |
+| Zoom | `wheel deltaY=-100 metaKey` on the frame ×2 | `transform: scale(1.3434) ...` |
+| Save | click `Update` | stub logs `UpdatePhotoPresentation` and `UpdatePhoto {ratio:"4:3"}`; unsaved dot off |
+| Reload | `reload` | head `4:3`, `LEVEL +0.4°`, flip pressed, pan and zoom restored |
+| Zoom level | `200%` | plate at `2400px`, the crop still applied |
+| Compare | `ORIGINAL` | only `photograph-original`; no `crop-image` |
+| Compare | `SPLIT` | `compare-split`, both frames, `crop-image` present |
+| Discard | pick `16:9`, then `Discard` | head back to `4:3`; unsaved dot off |
+
+Artifacts are the screenshots and the two ARIA snapshots in this directory.
+
+One defect found while driving: at `FIT` the plate was `0 × 0` because an
+`aspect-ratio` box with `width: auto` collapses in a shrink-to-fit parent. The
+Stage never showed the photograph at the default zoom. `fitFrameWidth` gives it
+an explicit width, and `editor.test.ts` pins it.

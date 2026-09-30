@@ -1011,6 +1011,17 @@ describe('PhotoService.update', () => {
     expect(await linkedPhotoIds(harness)).toEqual([created.id])
   })
 
+  it('writes the Ratio, which is a Photo column rather than a Presentation field', async () => {
+    const harness = makeTestHarness()
+    // The seed's 1200×800 is a 3:2, so the pick below is a real re-crop.
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+
+    const updated = await update(harness, created.id, { ratio: '4:3' })
+
+    expect(updated.ratio).toBe('4:3')
+    expect((await get(harness, created.id)).ratio).toBe('4:3')
+  })
+
   it('leaves the photo untouched when the tag links fail', async () => {
     const harness = makeTestHarness()
     const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
@@ -1535,6 +1546,7 @@ describe('PhotoService.setPresentation', () => {
       cropX: 12.5,
       cropY: 4,
       cropScale: 1.8,
+      cropFlipX: false,
       level: -2.5,
       borderEnabled: true,
       borderStyle: 'gallery',
@@ -1566,6 +1578,24 @@ describe('PhotoService.setPresentation', () => {
     })
   })
 
+  it('round-trips the crop flip, and leaves it alone when the patch does not name it', async () => {
+    const harness = makeTestHarness()
+    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
+
+    const flipped = await setPresentation(harness, created.id, {
+      crop: { x: 0, y: 0, scale: 1, flipX: true },
+    })
+    expect(flipped.cropFlipX).toBe(true)
+
+    // A later pan names no flip, so the mirror the operator set stands.
+    const panned = await setPresentation(harness, created.id, {
+      crop: { x: 20, y: -5, scale: 1.4 },
+    })
+    expect(panned.cropFlipX).toBe(true)
+    expect(panned.cropX).toBe(20)
+    expect(panned.cropScale).toBe(1.4)
+  })
+
   it('reads back the migration defaults for a photo nobody has edited', async () => {
     const harness = makeTestHarness()
     const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
@@ -1574,6 +1604,7 @@ describe('PhotoService.setPresentation', () => {
       cropX: 0,
       cropY: 0,
       cropScale: 1,
+      cropFlipX: false,
       level: 0,
       borderEnabled: false,
       borderStyle: null,

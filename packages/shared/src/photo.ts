@@ -102,6 +102,8 @@ export const PhotoPresentation = S.Struct({
   cropX: S.Number,
   cropY: S.Number,
   cropScale: S.Number,
+  /** Whether the frame is mirrored horizontally. Migration 0007's column. */
+  cropFlipX: S.Boolean,
   /** The straighten angle in degrees. Null is un-levelled, not zero. */
   level: S.NullOr(S.Number),
   borderEnabled: S.Boolean,

@@ -60,6 +60,16 @@ const focusSearch = (): void => {
   if (field instanceof HTMLInputElement) field.focus()
 }
 
+/** The Stage frame the crop is authored through, when the event landed in it.
+ *  The gesture listeners are on `window` so a pan survives the pointer leaving
+ *  the frame, which is why every one of them filters on this rather than on
+ *  which element owns the listener. */
+const cropFrameRect = (target: EventTarget | null): DOMRect | null => {
+  if (!(target instanceof Element)) return null
+  const frame = target.closest('[data-crop-frame]')
+  return frame instanceof HTMLElement ? frame.getBoundingClientRect() : null
+}
+
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   // `Escape` leaves the Editor, through the same guard as `← Library` and a
   // Back press: ask when the draft is dirty, go when it is not. It names no
@@ -78,6 +88,82 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
             type: 'keydown',
             filterMapEvent: (event) =>
               event.key === 'Escape' ? Option.some(Message.RequestLeaveEditor({})) : Option.none(),
+          }),
+          Effect.sync(() => onEditor),
+        ),
+    },
+  ),
+  // The Stage's direct manipulation. A drag on the photograph pans the crop and
+  // a platform-modified wheel zooms it. Both listeners are on `window` so a
+  // gesture that leaves the frame still tracks and still ends, and both filter
+  // on the frame, so a drag on the Inspector or the Stage Bar is not a crop
+  // gesture. The wheel cancels its default so a modified notch does not also
+  // scroll the Canvas; an unmodified one is left alone and scrolls as usual.
+  editorCropPan: entry(
+    { onEditor: S.Boolean, dragging: S.Boolean },
+    {
+      modelToDependencies: (model) => ({
+        onEditor: model.route._tag === 'Photo',
+        dragging: model.editor.cropDrag !== undefined,
+      }),
+      dependenciesToStream: ({ onEditor, dragging }) =>
+        Stream.merge(
+          Stream.merge(
+            Stream.when(
+              Subscription.fromEventFilterMapPreventDefault({
+                target: window,
+                type: 'pointerdown',
+                filterMapEvent: (event) => {
+                  if (event.button !== 0) return Option.none()
+                  const rect = cropFrameRect(event.target)
+                  if (rect === null) return Option.none()
+                  return Option.some(
+                    Message.StartedEditorCropDrag({
+                      x: event.clientX,
+                      y: event.clientY,
+                      width: rect.width,
+                      height: rect.height,
+                    }),
+                  )
+                },
+              }),
+              Effect.sync(() => onEditor),
+            ),
+            Stream.when(
+              Subscription.fromEventFilterMap({
+                target: window,
+                type: 'pointermove',
+                filterMapEvent: (event) =>
+                  Option.some(Message.DraggedEditorCrop({ x: event.clientX, y: event.clientY })),
+              }),
+              Effect.sync(() => dragging),
+            ),
+          ),
+          Stream.when(
+            Subscription.fromEventFilterMap({
+              target: window,
+              type: 'pointerup',
+              filterMapEvent: () => Option.some(Message.EndedEditorCropDrag()),
+            }),
+            Effect.sync(() => dragging),
+          ),
+        ),
+    },
+  ),
+  editorCropZoom: entry(
+    { onEditor: S.Boolean },
+    {
+      modelToDependencies: (model) => ({ onEditor: model.route._tag === 'Photo' }),
+      dependenciesToStream: ({ onEditor }) =>
+        Stream.when(
+          Subscription.fromEventFilterMapPreventDefault({
+            target: window,
+            type: 'wheel',
+            filterMapEvent: (event) => {
+              if (!event.metaKey && !event.ctrlKey) return Option.none()
+              if (cropFrameRect(event.target) === null) return Option.none()
+              return Option.some(Message.ZoomedEditorCrop({ deltaY: event.deltaY }))
+            },
           }),
           Effect.sync(() => onEditor),
         ),

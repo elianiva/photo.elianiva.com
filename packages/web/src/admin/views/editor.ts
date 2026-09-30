@@ -34,11 +34,13 @@
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
-import type { PhotoPresentation, PhotoWithTags } from '@photo/shared'
-import { ArrowLeft } from 'lucide'
+import type { PhotoPresentation, PhotoRatio, PhotoWithTags } from '@photo/shared'
+import { PHOTO_RATIOS } from '@photo/shared'
+import { ArrowLeft, FlipHorizontal, RotateCcw, RotateCw } from 'lucide'
 
 import * as Button from '@/components/ui/button'
 import * as Dialog from '@/components/ui/dialog'
+import * as IconButton from '@/components/ui/icon-button'
 import * as NavLink from '@/components/ui/nav-link'
 import * as Segment from '@/components/ui/segment'
 import * as Status from '@/components/ui/status'
@@ -51,12 +53,17 @@ import { cn } from '@/lib/utils'
 
 import {
   COMPARE_SEGMENT,
+  CROP_RATIO_SEGMENT,
   ZOOM_SEGMENT,
+  cropRatioLabel,
   cropStyle,
   editorReturnUrl,
   editorSegmentSelected,
+  effectiveRatio,
+  fitFrameWidth,
   frameAspect,
   isEditorDirty,
+  levelLabel,
   matColourClass,
   matPaddingStyle,
   photoNumberLabel,
@@ -71,14 +78,6 @@ import type { EditorTab, Model, Msg } from '../model'
 import { documentTitle } from './page-head'
 import { toastStack } from './overlays'
 import type { Child } from './shared'
-
-/** The frame's ceiling at `FIT`, spelled against the Stage's own size: the
- *  full-bleed viewport less the 360px Inspector, the 52px Top Bar and Stage
- *  Bar, the Canvas's `--spacing.2xl` of padding and the Mat's own 24/24/64/24
- *  (88px of padding and 88px of it below the frame). A view cannot measure the
- *  element it is drawing, and a percentage of the viewport knows nothing about
- *  either — so the geometry is written out, in the same order it is spent. */
-const FIT_CEILING = 'max-h-[calc(100dvh-16rem)] max-w-[calc(100vw-29.5rem)]'
 
 // ---------------------------------------------------------------------------
 // Top Bar
@@ -181,21 +180,25 @@ const frame = (
   photo: PhotoWithTags,
   presentation: PhotoPresentation | undefined,
   aspect: string,
-  width: string | undefined,
+  width: string,
   isOriginal: boolean,
   h: HtmlBuilder<Msg>,
 ): Child =>
   h.div(
     [
       h.DataAttribute('slot', isOriginal ? 'photograph-original' : 'photograph'),
+      // The gesture listeners find the authored frame by this, not by the slot:
+      // the slot names what the element is, and this names what the operator
+      // can do to it. Dragging the `ORIGINAL` frame of a Split is not a crop.
+      ...(isOriginal ? [] : [h.DataAttribute('crop-frame', 'true')]),
       h.Style({
         'aspect-ratio': aspect,
-        ...(width === undefined ? {} : { width }),
+        width,
       }),
       h.Class(
         cn(
           'relative shrink-0 overflow-hidden bg-role-surface-container',
-          width === undefined && FIT_CEILING,
+          isOriginal ? undefined : 'cursor-grab touch-none select-none active:cursor-grabbing',
         ),
       ),
     ],
@@ -204,13 +207,20 @@ const frame = (
       // being targeted by a child selector: the classes are the ones Tailwind
       // emits, and a window with no image in it shows the surface underneath.
       h.img([
+        h.DataAttribute('slot', 'photograph-image'),
+        // The crop's pan, zoom, mirror and level are this element's style, so
+        // it carries its own handle: the frame is the window, the image is what
+        // moves inside it.
+        ...(isOriginal ? [] : [h.DataAttribute('crop-image', 'true')]),
         h.Src(originalUrl(photo)),
         h.Alt(photo.title),
         h.Attribute('decoding', 'async'),
         h.Class('absolute inset-0 size-full object-cover'),
         // The uncropped original, so `ORIGINAL` is the file as the camera made
         // it rather than a second reading of the draft.
-        ...(isOriginal || presentation === undefined ? [] : [h.Style(cropStyle(presentation))]),
+        ...(isOriginal || presentation === undefined
+          ? []
+          : [h.Style(cropStyle(presentation, aspect))]),
       ]),
     ],
   )
@@ -222,7 +232,7 @@ const mat = (
   photo: PhotoWithTags,
   presentation: PhotoPresentation,
   aspect: string,
-  width: string | undefined,
+  width: string,
   h: HtmlBuilder<Msg>,
 ): Child =>
   h.div(
@@ -247,20 +257,23 @@ const stageImage = (
   draft: PhotoPresentation,
   compare: EditorCompare,
   zoom: EditorZoom,
+  ratio: PhotoRatio | null,
   h: HtmlBuilder<Msg>,
 ): Child => {
-  const authored = frameAspect(photo)
+  const authored = frameAspect(photo, ratio)
   const asShot = `${String(photo.width)} / ${String(photo.height)}`
-  const width = zoomWidth(photo, zoom)
-  if (compare === 'original') return frame(photo, undefined, asShot, width, true, h)
+  const explicit = zoomWidth(photo, zoom)
+  if (compare === 'original')
+    return frame(photo, undefined, asShot, explicit ?? fitFrameWidth(asShot), true, h)
+  const authoredWidth = explicit ?? fitFrameWidth(authored)
   const exported = draft.borderEnabled
-    ? mat(photo, draft, authored, width, h)
-    : frame(photo, draft, authored, width, false, h)
+    ? mat(photo, draft, authored, authoredWidth, h)
+    : frame(photo, draft, authored, authoredWidth, false, h)
   if (compare !== 'split') return exported
   return h.div(
     [h.DataAttribute('slot', 'compare-split'), h.Class('flex shrink-0 items-stretch')],
     [
-      frame(photo, undefined, asShot, width, true, h),
+      frame(photo, undefined, asShot, explicit ?? fitFrameWidth(asShot), true, h),
       h.span([h.AriaHidden(true), h.Class('w-px shrink-0 self-stretch bg-role-hairline')], []),
       exported,
     ],
@@ -326,7 +339,7 @@ const stage = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
         [
           ...(ready && photo !== undefined && draft !== undefined
-            ? [stageImage(photo, draft, compare, zoom, h)]
+            ? [stageImage(photo, draft, compare, zoom, effectiveRatio(photo, model.editor), h)]
             : [stageState(model, h)]),
         ],
       ),
@@ -348,11 +361,21 @@ const stage = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // ---------------------------------------------------------------------------
 
 /** A labelled panel in the Inspector: a `$typography.kicker` head over the
- *  design's own section rule. */
+ *  design's own section rule. The head's right half is a slot because the Crop
+ *  panel prints `<ratio> · AS SHOT` there and the other panels print nothing. */
+const panelHead = (kicker: string, right: Child | undefined, h: HtmlBuilder<Msg>): Child =>
+  h.div(
+    [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+    [
+      h.h2([h.Class('type-kicker text-role-text-primary')], [kicker]),
+      ...(right === undefined ? [] : [right]),
+    ],
+  )
+
 const panel = (kicker: string, h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Child>): Child =>
   h.section(
     [h.Class('flex flex-col gap-(--spacing-md) border-b border-role-hairline pb-(--spacing-lg)')],
-    [h.h2([h.Class('type-kicker text-role-text-primary')], [kicker]), ...children],
+    [panelHead(kicker, undefined, h), ...children],
   )
 
 /** One Inspector tab.
@@ -382,15 +405,106 @@ const tab = (value: EditorTab, label: string, active: EditorTab, h: HtmlBuilder<
     [label],
   )
 
-/** The `EDIT` tab. The Mat's on/off is the shell's: it is the one control that
- *  changes what the Stage draws out of the stored Presentation, so it is the
- *  one the save bar needs to be real. Its three siblings — the Swatches, the
- *  `Mat Style` segment and the width slider — are #32's, and the panel's frame
- *  and head are the design's. */
+/** The `EDIT` tab's Crop panel: the design's head, the six-Ratio `Segment` and
+ *  the Transform row. The panel is the whole of the crop's authoring surface
+ *  except the two Stage gestures — panning the photograph and the modified
+ *  wheel — which the design gives no control because the photograph itself is
+ *  the control.
+ *
+ *  The Ratio is a Photo column and the transform facts are Presentation fields,
+ *  but the operator authors them in one place, so they are one panel and one
+ *  `Update`. */
+const cropPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const draft = model.editor.draft
+  const ratio = effectiveRatio(model.photo, model.editor)
+  const disabled = draft === undefined
+  const label = cropRatioLabel(model.photo, model.editor)
+  return h.section(
+    [h.Class('flex flex-col gap-(--spacing-md) border-b border-role-hairline pb-(--spacing-lg)')],
+    [
+      panelHead(
+        'CROP',
+        h.span(
+          [h.DataAttribute('slot', 'crop-ratio'), h.Class('type-exif text-role-text-disabled')],
+          [label],
+        ),
+        h,
+      ),
+      h.submodel({
+        slotId: CROP_RATIO_SEGMENT.id,
+        model: Segment.init({
+          id: CROP_RATIO_SEGMENT.id,
+          selected: ratio ?? PHOTO_RATIOS[0],
+        }),
+        view: Segment.view,
+        viewInputs: {
+          options: CROP_RATIO_SEGMENT.options,
+          ariaLabel: CROP_RATIO_SEGMENT.ariaLabel,
+          isDisabled: disabled,
+          className: 'flex w-full',
+          optionClass: 'flex-1',
+        },
+        toParentMessage: (message) => M.GotCropRatioMessage({ message }),
+      }),
+      h.div(
+        [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+        [
+          h.div(
+            [h.Class('flex items-center gap-(--spacing-xs)')],
+            [
+              IconButton.iconButton(
+                {
+                  kind: 'outline',
+                  ariaLabel: 'Straighten counter-clockwise',
+                  isDisabled: disabled,
+                  onClick: M.SteppedEditorLevel({ direction: -1 }),
+                },
+                RotateCcw,
+                h,
+              ),
+              IconButton.iconButton(
+                {
+                  kind: 'outline',
+                  ariaLabel: 'Straighten clockwise',
+                  isDisabled: disabled,
+                  onClick: M.SteppedEditorLevel({ direction: 1 }),
+                },
+                RotateCw,
+                h,
+              ),
+              IconButton.iconButton(
+                {
+                  kind: 'outline',
+                  ariaLabel: 'Flip horizontally',
+                  isDisabled: disabled,
+                  isPressed: draft?.cropFlipX ?? false,
+                  onClick: M.ToggledEditorFlip(),
+                },
+                FlipHorizontal,
+                h,
+              ),
+            ],
+          ),
+          h.span(
+            [h.Class('type-exif text-role-text-secondary')],
+            [draft === undefined ? '' : levelLabel(draft)],
+          ),
+        ],
+      ),
+    ],
+  )
+}
+
+/** The `EDIT` tab. The Crop panel and the Mat's on/off are the shell's: the Mat
+ *  is the one control that changes what the Stage draws out of the stored
+ *  Presentation, so it is the one the save bar needs to be real. Its three
+ *  siblings — the Swatches, the `Mat Style` segment and the width slider — are
+ *  #32's, and the panel's frame and head are the design's. */
 const editTab = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Role('tabpanel'), h.AriaLabel('EDIT'), h.Class('flex flex-col gap-(--spacing-xl)')],
     [
+      cropPanel(model, h),
       panel(
         'BORDER',
         h,

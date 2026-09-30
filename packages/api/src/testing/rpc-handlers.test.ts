@@ -164,6 +164,7 @@ const DEFAULT_PRESENTATION: PhotoPresentation = {
   cropX: 0,
   cropY: 0,
   cropScale: 1,
+  cropFlipX: false,
   level: null,
   borderEnabled: false,
   borderStyle: null,
@@ -699,6 +700,30 @@ describe('SetPhotoStatus handler', () => {
   })
 })
 
+describe('UpdatePhoto handler', () => {
+  it('writes the Ratio, which is a Photo column rather than a Presentation field', async () => {
+    const harness = makeTestHarness()
+    const created = await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })
+
+    const updated = await adminRpc(harness, (client) =>
+      client.UpdatePhoto({ id: created.id, ratio: '4:3' }),
+    )
+
+    expect(updated.ratio).toBe('4:3')
+  })
+
+  it('rejects an empty update even though a Ratio would have been one', async () => {
+    const harness = makeTestHarness()
+    const created = await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })
+
+    const error = await adminRpc(harness, (client) =>
+      client.UpdatePhoto({ id: created.id }).pipe(Effect.flip),
+    )
+
+    expect(error).toBeInstanceOf(InvalidInput)
+  })
+})
+
 describe('UpdatePhotoPresentation handler', () => {
   it('round-trips the crop, the mat and the export overrides in one call', async () => {
     const harness = makeTestHarness()
@@ -707,7 +732,7 @@ describe('UpdatePhotoPresentation handler', () => {
     const saved = await adminRpc(harness, (client) =>
       client.UpdatePhotoPresentation({
         id: created.id,
-        crop: { x: 12.5, y: 4, scale: 1.8 },
+        crop: { x: 12.5, y: 4, scale: 1.8, flipX: true },
         level: -2.5,
         mat: { enabled: true, style: 'gallery', colour: 'ink', width: 4 },
         export: {
@@ -727,6 +752,7 @@ describe('UpdatePhotoPresentation handler', () => {
       cropX: 12.5,
       cropY: 4,
       cropScale: 1.8,
+      cropFlipX: true,
       level: -2.5,
       borderEnabled: true,
       borderStyle: 'gallery',

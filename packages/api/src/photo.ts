@@ -97,6 +97,8 @@ export interface PhotoUpdatePatch {
   readonly slug?: string | undefined
   readonly takenAt?: string | undefined
   readonly metadata?: Record<string, unknown> | undefined
+  /** The frame proportion. A Photo column, set from the Editor's crop. */
+  readonly ratio?: PhotoRatio | undefined
   readonly tagIds?: ReadonlyArray<string> | undefined
 }
 
@@ -106,7 +108,14 @@ export interface PhotoUpdatePatch {
  *  — `level` and the three mat details are nullable, and null is un-levelled
  *  rather than zero — where an absent key leaves the column alone. */
 export interface PhotoPresentationPatch {
-  readonly crop?: { readonly x: number; readonly y: number; readonly scale: number } | undefined
+  readonly crop?:
+    | {
+        readonly x: number
+        readonly y: number
+        readonly scale: number
+        readonly flipX?: boolean | undefined
+      }
+    | undefined
   readonly level?: number | null | undefined
   readonly mat?:
     | {
@@ -488,13 +497,14 @@ const withTags = (db: (typeof Gateway.Service)['db'], row: DbPhotoRow) =>
 /** The presentation columns migration 0004 added, in one string so the write
  *  and the read-back can never name different columns. */
 const PRESENTATION_COLUMNS =
-  'cropX, cropY, cropScale, level, borderEnabled, borderStyle, borderColour, borderWidth, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps'
+  'cropX, cropY, cropScale, cropFlip, level, borderEnabled, borderStyle, borderColour, borderWidth, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps'
 
 /** SQLite hands booleans back as the 0/1 the columns are declared with. */
 interface DbPresentationRow {
   readonly cropX: number
   readonly cropY: number
   readonly cropScale: number
+  readonly cropFlip: number
   readonly level: number | null
   readonly borderEnabled: number
   readonly borderStyle: MatStyle | null
@@ -512,6 +522,7 @@ const toPhotoPresentation = (row: DbPresentationRow): PhotoPresentation => ({
   cropX: row.cropX,
   cropY: row.cropY,
   cropScale: row.cropScale,
+  cropFlipX: row.cropFlip !== 0,
   level: row.level,
   borderEnabled: row.borderEnabled !== 0,
   borderStyle: row.borderStyle,
@@ -554,6 +565,7 @@ const presentationColumns = (
     set('cropX', patch.crop.x)
     set('cropY', patch.crop.y)
     set('cropScale', patch.crop.scale)
+    if (patch.crop.flipX !== undefined) set('cropFlip', patch.crop.flipX ? 1 : 0)
   }
   if (patch.level !== undefined) set('level', patch.level)
   if (patch.mat !== undefined) {
@@ -1003,6 +1015,10 @@ export const PhotoServiceLive = Layer.effect(
         if (patch.takenAt !== undefined) {
           fields.push('takenAt = ?')
           binds.push(patch.takenAt === '' ? null : patch.takenAt)
+        }
+        if (patch.ratio !== undefined) {
+          fields.push('ratio = ?')
+          binds.push(patch.ratio)
         }
         if (patch.metadata !== undefined) {
           fields.push('metadata = ?')
