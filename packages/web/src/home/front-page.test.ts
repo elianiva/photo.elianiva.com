@@ -18,10 +18,10 @@ import { Effect, Schema as S } from 'effect'
 import * as Server from 'foldkit/experimental/server'
 import { describe, expect, it } from 'vitest'
 
-import { PhotoId, type FrontStats, type PhotoWithTags, type PublicSection } from '@photo/shared'
+import { PhotoId, type PhotoWithTags, type PublicSection } from '@photo/shared'
 
 import { editionOf, type FrontRead } from './content'
-import { Flags, Message, Model } from './model'
+import { Flags, Model } from './model'
 import { init } from './update'
 import { view } from './view'
 
@@ -60,17 +60,6 @@ const month = (key: string, photos: ReadonlyArray<PhotoWithTags>): PublicSection
   photos,
 })
 
-const stats = (over: Partial<FrontStats> = {}): FrontStats => ({
-  number: 6,
-  total: 5,
-  latestTakenAt: '2026-06-11T14:27',
-  volume: 'V',
-  motto: 'photo.elianiva.com',
-  siteSections: [],
-  aboutCopy: null,
-  ...over,
-})
-
 /** Two published months, one photograph with no Ratio and one with no Exif. */
 const read = (over: Partial<FrontRead> = {}): FrontRead => ({
   sections: [
@@ -91,7 +80,6 @@ const read = (over: Partial<FrontRead> = {}): FrontRead => ({
     month('2026-05', [taken('lift', { number: 1, title: 'Lift', ratio: '9:16', iso: 400 })]),
   ],
   nextSectionCursor: null,
-  stats: stats(),
   ...over,
 })
 
@@ -99,15 +87,15 @@ const read = (over: Partial<FrontRead> = {}): FrontRead => ({
 // render
 // ---------------------------------------------------------------------------
 
-/** The same config object both Workers build, named rather than inlined.
+/** The same config object the Worker renders, named rather than inlined.
  *
  *  `renderToString` has a Flags and a no-Flags overload, and TypeScript picks
  *  between them from the config literal. Inlined, the `Flags` schema and the
  *  `init` that consumes those flags are inferred at once and the no-Flags
  *  overload wins; hoisted to a name, the inference has something to read from
- *  and the Flags overload matches. `worker.ts` and `entry.server.ts` hoist it
- *  for the same reason, and this test renders through the shape production
- *  uses rather than a shape only a test can get away with. */
+ *  and the Flags overload matches. `worker.ts` hoists it for the same reason,
+ *  and this test renders through the shape production uses rather than a shape
+ *  only a test can get away with. */
 const config = { Model, Flags, init, view }
 
 const renderApplication = (front: FrontRead) =>
@@ -156,14 +144,26 @@ describe('the rendered Front', () => {
     expect(html).toContain('/api/image/originals%2Flift.jpg')
   })
 
-  it('takes the counts and the date from the read, not from a constant', async () => {
+  it('takes each plate number from the read, and prints no site counters', async () => {
     const html = await render(read())
-    // 5 published photographs, and the 5th Photo Number the read reported.
-    expect(html).toContain('NO. 006')
-    expect(html).toContain('5 FRAMES')
-    // The newest published `takenAt` carried a time; the folio date reads only
-    // its date part.
-    expect(html).toContain('11 JUN 2026')
+    // The placards are the photographs' own Photo Numbers.
+    expect(html).toContain('No. 003')
+    expect(html).toContain('No. 004')
+    expect(html).toContain('No. 001')
+    // The masthead counts nothing: no issue, no volume, no frame total, no
+    // date derived from the archive. The section head still counts the
+    // photographs in its own month, which is a fact about the photographs.
+    expect(html).not.toContain('VOL.')
+    expect(html).not.toContain('NO. 006')
+    expect(html).not.toContain('THIS EDITION')
+    expect(html).toContain('02 FRAMES · NO. 003–004')
+  })
+
+  it('reads the Exif line off the photograph, not off a counter', async () => {
+    const html = await render(read())
+    // The day the frame was made comes out of that photograph's own `takenAt`,
+    // which carries a time here; the Exif line prints the day and month.
+    expect(html).toContain('11 JUN')
   })
 
   it('names each section from its month key', async () => {
@@ -200,16 +200,9 @@ describe('the rendered Front', () => {
   })
 
   it('renders an honest empty edition rather than a placeholder list', async () => {
-    const html = await render(
-      read({
-        sections: [],
-        nextSectionCursor: null,
-        stats: stats({ number: null, total: 0, latestTakenAt: null }),
-      }),
-    )
+    const html = await render(read({ sections: [], nextSectionCursor: null }))
     expect(html).toContain('Nothing published yet.')
-    expect(html).toContain('NO FRAMES YET')
-    expect(html).toContain('NO. 000')
+    expect(html).toContain('NOTHING PUBLISHED YET')
   })
 })
 
@@ -233,24 +226,9 @@ describe('the hydration stamp', () => {
 
   it('encodes an empty edition as one, so the browser opens the same page', async () => {
     const flags = stampedFlags(
-      await renderDocument(
-        read({
-          sections: [],
-          nextSectionCursor: null,
-          stats: stats({ number: null, total: 0, latestTakenAt: null }),
-        }),
-      ),
+      await renderDocument(read({ sections: [], nextSectionCursor: null })),
     )
     expect(flags.edition.lead).toBeNull()
     expect(flags.edition.sections).toEqual([])
-  })
-})
-
-// `Message` is re-exported for the dev-tools config in `entry.ts`; asserting it
-// is reachable keeps the front's message union from silently emptying out.
-describe('the front message union', () => {
-  it('still carries the lightbox and the Continued row messages', () => {
-    expect(Message.ClickedFigure({ id: 'momo' })._tag).toBe('ClickedFigure')
-    expect(Message.LoadOlderSections()._tag).toBe('LoadOlderSections')
   })
 })

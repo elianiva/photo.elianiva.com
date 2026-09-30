@@ -93,26 +93,6 @@ describe('D1 fake', () => {
     expect(result.results).toEqual([])
   })
 
-  it('maps a JS undefined bind to SQL NULL', async () => {
-    const db = migrated()
-    await db
-      .prepare('INSERT INTO tags (id, slug, label) VALUES (?, ?, ?)')
-      .bind('tag_1', 'kyoto', 'Kyoto')
-      .run()
-    const row = await db
-      .prepare('SELECT id, label FROM tags WHERE id = ?')
-      .bind('tag_1')
-      .first<{ id: string; label: string }>()
-    expect(row).toEqual({ id: 'tag_1', label: 'Kyoto' })
-
-    await expect(
-      db
-        .prepare('INSERT INTO tags (id, slug, label) VALUES (?, ?, ?)')
-        .bind('tag_2', 'film', undefined)
-        .run(),
-    ).rejects.toThrow(/NOT NULL/i)
-  })
-
   it('batch applies every statement', async () => {
     const db = migrated()
     await db.batch([

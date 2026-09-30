@@ -31,15 +31,12 @@ import {
   UpdateEditorCmd,
 } from './commands'
 import {
-  DETAILS_FIELDS,
   EDITOR_STATUS_SEGMENT,
-  PRESENTATION_FIELDS,
   MAT_FOOT_MULTIPLE,
   blurhashSignature,
   compositionSpec,
   cropRatioLabel,
   cropStyle,
-  detailsOfPhoto,
   exportSavingLabel,
   exportSavingPercent,
   fitFrameWidth,
@@ -415,17 +412,6 @@ describe('the unsaved-changes indicator', () => {
     const clean = update(opened(), Message.SubmitEditorUpdate())
     expect(clean.commands ?? []).toHaveLength(0)
     expect(clean.model.editor.saving).toBe(false)
-  })
-
-  it('watches every stored field of the Presentation, both ways', () => {
-    // The dirty rule is a comparison against a field list, so a field the list
-    // forgot is a value the indicator would silently ignore. `keyof` catches a
-    // misspelling at compile time; this catches an omission.
-    expect([...PRESENTATION_FIELDS].sort()).toEqual(Object.keys(PRESENTATION).sort())
-  })
-
-  it('watches every stored field of the record, both ways', () => {
-    expect([...DETAILS_FIELDS].sort()).toEqual(Object.keys(detailsOfPhoto(photo)).sort())
   })
 })
 

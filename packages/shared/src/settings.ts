@@ -2,45 +2,6 @@ import { Schema as S } from 'effect'
 import { MatColour, PhotoRatio, RenditionFormat } from './photo'
 
 /**
- * Site Section — one entry in the public Folio nav, authored as an ordered list
- * in the Admin's settings singleton (see CONTEXT.md).
- *
- * The design draws SECTIONS as a single `ALL · STREET · LANDSCAPE · SERIES ·
- * ABOUT` string. That string cannot be routed, so a Section carries its own
- * destination: `kind` says what the destination is, `target` names it, and only
- * the three kinds that go somewhere carry one. The union is deliberate — a
- * Section that cannot point anywhere is not representable.
- */
-
-const label = S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(40)))
-
-/** A Tag's slug, or a page name — the shape `slugify` produces. */
-const target = S.String.pipe(
-  S.check(S.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)),
-  S.check(S.isMaxLength(80)),
-)
-
-/** The Front itself. */
-const allSection = S.Struct({ kind: S.Literal('all'), label })
-
-/** A Tag's page, ordered by takenAt. */
-const tagSection = S.Struct({ kind: S.Literal('tag'), label, target })
-
-/** A curated group, linked from a Tag's slug. A Series page *is* a Tag page
- *  (ADR 0008); the kind records how the author meant the entry. */
-const seriesSection = S.Struct({ kind: S.Literal('series'), label, target })
-
-/** A page of the site, named by its path segment. */
-const pageSection = S.Struct({ kind: S.Literal('page'), label, target })
-
-export const SiteSection = S.Union([allSection, tagSection, seriesSection, pageSection])
-export type SiteSection = typeof SiteSection.Type
-
-/** The whole nav, in the order it renders. */
-export const SiteSections = S.Array(SiteSection).pipe(S.check(S.isMaxLength(16)))
-export type SiteSections = typeof SiteSections.Type
-
-/**
  * Where the watermark sits on an exported frame.
  *
  * The design draws POSITION as a read-out — `BOTTOM RIGHT` — and lists no
@@ -85,10 +46,11 @@ export type PhotoIndexRow = typeof PhotoIndexRow.Type
 
 /**
  * The Settings singleton as one wire value: the export defaults a new upload is
- * seeded from, the watermark and metadata policy, the retention setting and the
- * SITE copy, all of it. `sections` is the decoded nav, never the column's JSON —
- * the codec is a storage detail, and the public `readSiteCopy` path stays the
- * one that reads it.
+ * seeded from, the watermark and metadata policy and the retention setting —
+ * the four things the photograph pipeline actually reads. There is no site copy
+ * here on purpose: every line the public site prints is authored in
+ * `home/content.ts`, and a second, editable source for the same sentence is
+ * copy nobody can find (migration 0008).
  *
  * The fields live in one map because `SettingsInput` is this value without
  * `updatedAt`, and the two must not be able to drift apart.
@@ -103,14 +65,7 @@ const settingsFields = {
   watermarkPosition: WatermarkPosition,
   defaultKeepExif: S.Boolean,
   defaultRemoveGps: S.Boolean,
-  /** Free text, so nullable rather than absent. */
-  copyright: S.NullOr(S.String),
   retainForever: S.Boolean,
-  /** `VOL. V`, authored rather than derived from a count. */
-  volume: S.String,
-  motto: S.NullOr(S.String),
-  aboutCopy: S.NullOr(S.String),
-  sections: SiteSections,
 } as const
 
 export const Settings = S.Struct({

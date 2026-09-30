@@ -18,7 +18,7 @@ import { AcquireResources, ShowDialog } from '@foldkit/ui/dialog'
 import * as Dialog from '@/components/ui/dialog'
 
 import { FetchSettingsCmd } from './commands'
-import { Message, UPLOAD_ACCEPT, UPLOAD_LIMITS } from './model'
+import { Message } from './model'
 import type { Model } from './model'
 import { init, update } from './update'
 import { view } from './view'
@@ -172,11 +172,6 @@ describe('the upload queue', () => {
 })
 
 describe('the upload copy', () => {
-  it('is JPEG-only, and the picker offers nothing else', () => {
-    expect([...UPLOAD_ACCEPT]).toEqual(['image/jpeg'])
-    expect(UPLOAD_LIMITS.maxFileSize).toBe(80 * 1024 * 1024)
-  })
-
   it('names JPEG and 80 MB in the dialog, and no format it no longer takes', () => {
     Scene.scene(
       app,

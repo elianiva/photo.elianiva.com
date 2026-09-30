@@ -3,6 +3,12 @@
  * where else to find them, and the copyright line. The nameplate repeats at
  * half size because the colophon is the last thing on the page.
  *
+ * Every word is written here, where it renders, and none of it is read: a
+ * colophon is a statement about how the work was made, which is the one thing
+ * a settings row cannot know. The Admin's settings page used to author a
+ * copyright line and an about paragraph that this column never printed, so
+ * there was a second, invisible source for both.
+ *
  * The mobile Colophon master (size=mobile) is a different composition: the
  * About block stands on its own above a bordered two-column row, EQUIPMENT is
  * dropped, the lists are shorter, the note is gone and the copyright loses its
@@ -13,7 +19,6 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 
-import type { Colophon, ColophonColumn } from '../content'
 import { Message } from '../model'
 import { colophonRules } from './rules'
 import { BAND, type Child } from './shared'
@@ -30,12 +35,15 @@ const COLUMNS =
 const COLUMN =
   'min-w-0 flex-1 flex-col gap-(--spacing-sm) desktop:border-l desktop:border-role-hairline desktop:pb-(--spacing-xl) desktop:pl-(--spacing-lg) desktop:pt-(--spacing-lg)'
 
-const about = (c: Colophon, h: HtmlBuilder<Message>): Child =>
+const about = (h: HtmlBuilder<Message>): Child =>
   h.div(
     [h.Class('flex min-w-0 flex-col gap-(--spacing-md) py-(--spacing-xl) desktop:py-0')],
     [
       h.span([h.Class('type-nameplate-sm text-role-text-primary')], ['Elianiva']),
-      h.p([h.Class('type-body italic text-role-text-secondary')], [c.blurb]),
+      h.p(
+        [h.Class('type-body italic text-role-text-secondary')],
+        ['Photographs made on foot, mostly in Jakarta, usually around golden hour.'],
+      ),
     ],
   )
 
@@ -45,7 +53,17 @@ const columnLine = (line: string, mobile: boolean, h: HtmlBuilder<Message>): Chi
     [line],
   )
 
-const colophonColumn = (column: ColophonColumn, h: HtmlBuilder<Message>): Child =>
+/** One column, printed twice: the mobile list is the plainer of the two when
+ *  the column names one. */
+const colophonColumn = (
+  column: {
+    readonly label: string
+    readonly lines: ReadonlyArray<string>
+    readonly linesMobile?: ReadonlyArray<string>
+    readonly desktopOnly?: boolean
+  },
+  h: HtmlBuilder<Message>,
+): Child =>
   h.div(
     [h.Class(`${column.desktopOnly === true ? 'hidden desktop:flex' : 'flex'} ${COLUMN}`)],
     [
@@ -61,7 +79,7 @@ const colophonColumn = (column: ColophonColumn, h: HtmlBuilder<Message>): Child 
     ],
   )
 
-const baseline = (c: Colophon, h: HtmlBuilder<Message>): Child =>
+const baseline = (h: HtmlBuilder<Message>): Child =>
   h.div(
     [
       h.Class(
@@ -72,20 +90,48 @@ const baseline = (c: Colophon, h: HtmlBuilder<Message>): Child =>
       h.span(
         [h.Class('type-kicker flex-1 text-role-text-disabled')],
         [
-          h.span([h.Class('desktop:hidden')], [c.copyrightMobile ?? c.copyright]),
-          h.span([h.Class('hidden desktop:inline')], [c.copyright]),
+          h.span([h.Class('desktop:hidden')], ['© 2021–2025 ELIANIVA']),
+          h.span(
+            [h.Class('hidden desktop:inline')],
+            ['© 2021–2025 ELIANIVA · ALL RIGHTS RESERVED'],
+          ),
         ],
       ),
       h.span(
         [h.Class('hidden type-caption italic text-role-text-disabled desktop:block')],
-        [c.note],
+        ['Set in Newsreader, Libre Franklin and IBM Plex Mono.'],
       ),
-      h.a([h.Href('#top'), h.Class('type-kicker text-role-text-primary')], [c.backToTop]),
+      h.a([h.Href('#top'), h.Class('type-kicker text-role-text-primary')], ['BACK TO TOP ↑']),
     ],
   )
 
-export const colophon = (c: Colophon, h: HtmlBuilder<Message>): Child =>
-  h.footer(
+export const colophon = (h: HtmlBuilder<Message>): Child => {
+  // The three lists the Colophon prints, written here rather than in a table
+  // the whole app reads: `linesMobile` is the plainer list, and `desktopOnly`
+  // drops EQUIPMENT on mobile because the master has no room for it.
+  const columns = [
+    {
+      label: 'EQUIPMENT',
+      lines: [
+        'Camera — Fujifilm X-T20',
+        'Lens — 25mm f/1.8, manual',
+        'Film sim — Classic Chrome',
+        'Based in Jakarta',
+      ],
+      desktopOnly: true,
+    },
+    {
+      label: 'SECTIONS',
+      lines: ['Street', 'Landscape', 'Series', 'About', 'Archive'],
+      linesMobile: ['Street', 'Landscape', 'About', 'Archive'],
+    },
+    {
+      label: 'ELSEWHERE',
+      lines: ['Instagram (archive)', 'RSS feed', 'Prints on request', 'hello@elianiva.com'],
+      linesMobile: ['Instagram (archive)', 'RSS feed', 'hello@elianiva.com'],
+    },
+  ]
+  return h.footer(
     [h.Class('flex flex-col')],
     [
       h.div(
@@ -95,19 +141,20 @@ export const colophon = (c: Colophon, h: HtmlBuilder<Message>): Child =>
           h.div(
             [h.Class(COLUMNS)],
             [
-              about(c, h),
+              about(h),
               h.div(
                 [
                   h.Class(
                     'flex flex-row gap-(--spacing-lg) border-t border-role-hairline pb-(--spacing-xl) pt-(--spacing-lg) desktop:contents',
                   ),
                 ],
-                [...c.columns.map((column) => colophonColumn(column, h))],
+                columns.map((column) => colophonColumn(column, h)),
               ),
             ],
           ),
-          baseline(c, h),
+          baseline(h),
         ],
       ),
     ],
   )
+}

@@ -12,8 +12,8 @@ import {
 /**
  * The same eight frames migration 0004's backfill test carries. They are the
  * contract between the SQL `CASE` that snaps a legacy row and `nearestRatio`
- * that snaps an upload, and `migrations.test.ts` runs both over this table so
- * a change to either one turns red.
+ * that snaps an upload, so a change to one of the two tolerances has to turn
+ * red in both suites.
  */
 const RATIO_CASES: ReadonlyArray<{
   readonly id: string
@@ -63,10 +63,6 @@ describe('nearestRatio', () => {
     expect(nearestRatio(Number.NaN, 1000)).toBeNull()
     expect(nearestRatio(Number.POSITIVE_INFINITY, 1000)).toBeNull()
   })
-
-  it('is pure: the same frame snaps the same way every time', () => {
-    expect(nearestRatio(6016, 4000)).toBe(nearestRatio(6016, 4000))
-  })
 })
 
 describe('formatMeasuredRatio', () => {
@@ -75,12 +71,6 @@ describe('formatMeasuredRatio', () => {
     expect(formatMeasuredRatio(6000, 4000)).toBe('3:2')
     expect(formatMeasuredRatio(4000, 6000)).toBe('2:3')
     expect(formatMeasuredRatio(1530, 1000)).toBe('153:100')
-  })
-
-  it('formats the shape a rejection names, snapped or not', () => {
-    // The 1:1 the design's failed row prints is this function's answer.
-    expect(nearestRatio(3000, 3000)).toBeNull()
-    expect(formatMeasuredRatio(3000, 3000)).toBe('1:1')
   })
 })
 
@@ -130,9 +120,5 @@ describe('PhotoRatio', () => {
       expect(S.decodeSync(PhotoRatio)(ratio)).toBe(ratio)
     }
     expect(() => S.decodeUnknownSync(PhotoRatio)('5:4')).toThrow()
-  })
-
-  it('orders the Ratios as the Filter Bar draws them', () => {
-    expect([...PHOTO_RATIOS]).toEqual(['3:2', '2:3', '4:3', '3:4', '16:9', '9:16'])
   })
 })

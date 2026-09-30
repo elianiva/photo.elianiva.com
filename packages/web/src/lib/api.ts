@@ -26,15 +26,20 @@
 const devApiOrigin = 'http://localhost:13371'
 
 /**
- * The API's origin, empty in the browser on the deployed site (every URL below
- * is then a same-origin path) and the dev port on localhost.
+ * The API's origin: the dev port in the dev stage, empty everywhere else (so
+ * every URL below is a same-origin path on the deployed site).
+ *
+ * `import.meta.env.DEV` and not a `window` probe, because a server-rendered
+ * view has to print the same URL the browser will. The website Worker renders
+ * the Front's plates, and it has no `window`: a probe that answered the dev
+ * port in the browser and `''` in the Worker stamped `/api/image/…` into the
+ * HTML and asked the browser for
+ * `http://localhost:13371/api/image/…`, which foldkit reports as a server DOM
+ * that did not match the first client view and rebuilds (ADR 0011). Both stages
+ * of a build agree on `DEV`, and the dev port is a property of the dev stage
+ * rather than of the browser that happens to be on localhost.
  */
-export const apiOrigin = (): string => {
-  if (typeof window !== 'undefined' && window.location.hostname.endsWith('localhost')) {
-    return devApiOrigin
-  }
-  return ''
-}
+export const apiOrigin = (): string => (import.meta.env.DEV ? devApiOrigin : '')
 
 /**
  * The empty string above is a *relative* base, and something downstream has to
@@ -47,8 +52,7 @@ export const apiOrigin = (): string => {
  * browser and in the Worker that server-renders it. Off the browser `baseUrl` is
  * `undefined` and a relative url throws `Invalid URL` — so a test that reaches
  * `rpcAdmin` without a DOM fails with a URL error rather than anything about
- * the request. Set `apiOrigin` to an absolute url in such a test, or drive the
- * Worker directly as `access.test.ts` does.
+ * the request. Drive the Worker directly, as `access.test.ts` does.
  */
 
 /**

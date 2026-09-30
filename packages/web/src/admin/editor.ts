@@ -169,10 +169,8 @@ export const editorSegmentSelected = <T extends string>(
 // ---------------------------------------------------------------------------
 
 /** Every stored field of the Presentation. A `keyof` annotation makes a
- *  misspelled field a compile error; `editor.test.ts` runs the list against a
- *  real Presentation both ways, so a field *added* to one and missed here is a
- *  red test rather than a value the dirty rule silently ignores. */
-export const PRESENTATION_FIELDS: ReadonlyArray<keyof PhotoPresentation> = [
+ *  misspelled field a compile error. */
+const PRESENTATION_FIELDS: ReadonlyArray<keyof PhotoPresentation> = [
   'cropX',
   'cropY',
   'cropScale',
@@ -252,11 +250,8 @@ export const withEditorExport = (editor: EditorState, patch: EditorExportPatch):
 
 /** The `DETAILS` tab's editable fields, the counterpart of
  *  `PRESENTATION_FIELDS`. The Ratio override is deliberately not one of them:
- *  it is `editor.ratio`, beside the draft rather than inside the record. A test
- *  runs this list against a real `PhotoDetails` both ways, so a field added to
- *  one and missed here is a red test rather than a value the dirty rule
- *  silently ignores. */
-export const DETAILS_FIELDS: ReadonlyArray<keyof PhotoDetails> = [
+ *  it is `editor.ratio`, beside the draft rather than inside the record. */
+const DETAILS_FIELDS: ReadonlyArray<keyof PhotoDetails> = [
   'title',
   'slug',
   'location',

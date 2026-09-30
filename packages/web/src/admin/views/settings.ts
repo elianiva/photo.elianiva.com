@@ -1,21 +1,24 @@
 /**
  * The Settings page — the form over the Admin's one row (master
- * `8b3ebe985801026f`). Five sections, each a kicker over its controls, each
+ * `8b3ebe985801026f`). Four sections, each a kicker over its controls, each
  * closed by a hairline and separated by 24px, and the page's own `Save settings`
  * / `Discard changes` at the foot. Explicit save rather than autosave, because
  * the header's `SAVED 2 MINUTES AGO` has to mean something: the stamp is
  * `settings.updatedAt`, and a dirty form replaces it with `UNSAVED CHANGES`
  * rather than leaving a page that claims to be saved while it is not.
  *
- * Two deviations from the canvas, both deliberate and both recorded in
- * `CONTEXT.md`:
+ * What the page edits is what the photograph pipeline reads: the export
+ * defaults, the watermark, the metadata policy and the retention setting. It
+ * used to close with a `SITE` section — a motto, an about paragraph, a
+ * copyright line and a nav repeater — whose four columns the public site never
+ * read, because every line the Front prints is written in the view that prints
+ * it. A control that edits copy nothing renders is not a setting (migration
+ * 0008).
  *
- *   - The section the design labels `ARCHIVE` renders as `STORAGE`. The canvas
- *     contradicts itself — its own sidebar block is already called `Storage` —
- *     and ADR 0008 split the collision (ADR 0008).
- *   - `SECTIONS` is an ordered repeater of `{ label, kind, target }` rather than
- *     the canvas's single `ALL · STREET · LANDSCAPE · SERIES · ABOUT` string.
- *     A string that cannot be routed is a field whose value nothing can honour.
+ * One deviation from the canvas remains, deliberate and recorded in
+ * `CONTEXT.md`: the section the design labels `ARCHIVE` renders as `STORAGE`.
+ * The canvas contradicts itself — its own sidebar block is already called
+ * `Storage` — and ADR 0008 split the collision.
  *
  * The block reads `GetStorageUsage`, the same payload the sidebar's meter reads,
  * so the frame count, the byte total and the cap cannot come to disagree.
@@ -23,26 +26,18 @@
 
 import { DateTime, Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide'
 
 import * as Button from '@/components/ui/button'
-import * as IconButton from '@/components/ui/icon-button'
-import * as Input from '@/components/ui/input'
 import * as Select from '@/components/ui/select'
 import * as Slider from '@/components/ui/slider'
 import * as Swatch from '@/components/ui/swatch'
 import * as ToggleRow from '@/components/ui/toggle-row'
 import { WATERMARK_POSITIONS } from '@photo/shared'
+import type { WatermarkPosition } from '@photo/shared'
 
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
-import {
-  PREVIEW_LONG_EDGES,
-  SECTION_KINDS,
-  sectionKindLabels,
-  settingsUnsaved,
-  watermarkPositionLabels,
-} from '../settings-draft'
+import { PREVIEW_LONG_EDGES, settingsUnsaved } from '../settings-draft'
 import { storageFigure } from '../storage-index'
 import type { Child } from './shared'
 
@@ -53,6 +48,17 @@ const WATERMARK_COLOURS = [
   { colour: 'paper', label: 'Paper' },
   { colour: 'ink', label: 'Ink' },
 ] as const
+
+/** The four corners and the centre, in the order the Select lists them, named
+ *  the way the design's `$typography.exif` prints them. The four corners are the
+ *  value set in `@photo/shared`; the labels belong to this control. */
+const WATERMARK_POSITION_LABELS: ReadonlyArray<{ value: WatermarkPosition; label: string }> = [
+  { value: 'bottom-left', label: 'BOTTOM LEFT' },
+  { value: 'bottom-right', label: 'BOTTOM RIGHT' },
+  { value: 'top-left', label: 'TOP LEFT' },
+  { value: 'top-right', label: 'TOP RIGHT' },
+  { value: 'centre', label: 'CENTRE' },
+]
 
 const captionClass = 'italic type-caption text-role-text-secondary'
 
@@ -180,10 +186,7 @@ const watermark = (model: Model, h: HtmlBuilder<Msg>): Child => {
           id: 'settings-watermark-position',
           label: 'POSITION',
           value: draft.watermarkPosition,
-          options: WATERMARK_POSITIONS.map((position) => ({
-            value: position,
-            label: watermarkPositionLabels[position],
-          })),
+          options: WATERMARK_POSITION_LABELS,
           onChange: (raw) =>
             M.SetWatermarkPosition({
               value: WATERMARK_POSITIONS.find((position) => position === raw) ?? 'bottom-right',
@@ -228,16 +231,6 @@ const metadata = (model: Model, h: HtmlBuilder<Msg>): Child => {
           label: 'Remove GPS location',
           isChecked: draft.defaultRemoveGps,
           onToggle: (isChecked) => M.SetMetadataPolicy({ field: 'defaultRemoveGps', isChecked }),
-        },
-        h,
-      ),
-      Input.input(
-        {
-          id: 'settings-copyright',
-          label: 'COPYRIGHT',
-          value: draft.copyright,
-          onInput: (value) => M.SetSettingsText({ field: 'copyright', value }),
-          placeholder: '© Elianiva',
         },
         h,
       ),
@@ -308,148 +301,6 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child => {
 
 const draftRetainValue = (model: Model): string =>
   model.settingsDraft.retainForever ? 'forever' : 'never'
-
-// ---------------------------------------------------------------------------
-// SITE
-// ---------------------------------------------------------------------------
-
-/** One Section's row. The target field appears only for the three kinds that
- *  go somewhere, which is what the `SiteSection` union in `@photo/shared` is
- *  for: an `all` row cannot hold a target even by accident. */
-const sectionRow = (model: Model, index: number, h: HtmlBuilder<Msg>): Child => {
-  const row = model.settingsDraft.sections[index]
-  if (row === undefined) return h.empty
-  const isFirst = index === 0
-  const isLast = index === model.settingsDraft.sections.length - 1
-  return h.li(
-    [h.Class('flex flex-wrap items-end gap-(--spacing-md)')],
-    [
-      Input.input(
-        {
-          id: `settings-section-${String(index)}-label`,
-          label: 'LABEL',
-          value: row.label,
-          onInput: (value) => M.EditedSection({ edit: { _tag: 'SetLabel', index, value } }),
-          placeholder: 'Street',
-        },
-        h,
-      ),
-      Select.select(
-        {
-          id: `settings-section-${String(index)}-kind`,
-          label: 'KIND',
-          value: row.kind,
-          options: SECTION_KINDS.map((kind) => ({ value: kind, label: sectionKindLabels[kind] })),
-          onChange: (raw) =>
-            M.EditedSection({
-              edit: {
-                _tag: 'SetKind',
-                index,
-                kind: SECTION_KINDS.find((candidate) => candidate === raw) ?? row.kind,
-              },
-            }),
-          className: 'w-[180px]',
-        },
-        h,
-      ),
-      ...(row.kind === 'all'
-        ? []
-        : [
-            Input.input(
-              {
-                id: `settings-section-${String(index)}-target`,
-                label: 'TARGET',
-                value: row.target,
-                onInput: (value) => M.EditedSection({ edit: { _tag: 'SetTarget', index, value } }),
-                placeholder: row.kind === 'page' ? 'about' : 'street',
-              },
-              h,
-            ),
-          ]),
-      h.div(
-        [h.Class('flex items-center gap-(--spacing-xs) pb-(--spacing-sm)')],
-        [
-          IconButton.iconButton(
-            {
-              ariaLabel: `Move ${row.label === '' ? 'section' : row.label} up`,
-              onClick: M.EditedSection({ edit: { _tag: 'Move', index, delta: -1 } }),
-              isDisabled: isFirst,
-            },
-            ArrowUp,
-            h,
-          ),
-          IconButton.iconButton(
-            {
-              ariaLabel: `Move ${row.label === '' ? 'section' : row.label} down`,
-              onClick: M.EditedSection({ edit: { _tag: 'Move', index, delta: 1 } }),
-              isDisabled: isLast,
-            },
-            ArrowDown,
-            h,
-          ),
-          IconButton.iconButton(
-            {
-              ariaLabel: `Remove ${row.label === '' ? 'section' : row.label}`,
-              onClick: M.EditedSection({ edit: { _tag: 'Remove', index } }),
-            },
-            Trash2,
-            h,
-          ),
-        ],
-      ),
-    ],
-  )
-}
-
-const site = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const draft = model.settingsDraft
-  return section(
-    'SITE',
-    [
-      Input.input(
-        {
-          id: 'settings-motto',
-          label: 'MOTTO',
-          value: draft.motto,
-          onInput: (value) => M.SetSettingsText({ field: 'motto', value }),
-          placeholder: 'Street, mostly. Landscape, sometimes.',
-        },
-        h,
-      ),
-      h.fieldset(
-        [h.Class('flex flex-col gap-(--spacing-md) border-0 p-0')],
-        [
-          h.legend([h.Class('type-kicker text-role-text-secondary')], ['SECTIONS']),
-          draft.sections.length === 0
-            ? h.p(
-                [h.Class(captionClass)],
-                ['No sections yet. The Folio prints what this list holds, in this order.'],
-              )
-            : h.ul(
-                [h.Class('flex flex-col gap-(--spacing-md)'), h.AriaLabel('Site sections')],
-                draft.sections.map((_, index) => sectionRow(model, index, h)),
-              ),
-          Button.button(
-            { onClick: M.EditedSection({ edit: { _tag: 'Add' } }), variant: 'ghost' },
-            'Add a section',
-            h,
-          ),
-        ],
-      ),
-      Input.input(
-        {
-          id: 'settings-about-copy',
-          label: 'ABOUT COPY',
-          value: draft.aboutCopy,
-          onInput: (value) => M.SetSettingsText({ field: 'aboutCopy', value }),
-          placeholder: 'One camera, one lens, and a lot of walking.',
-        },
-        h,
-      ),
-    ],
-    h,
-  )
-}
 
 // ---------------------------------------------------------------------------
 // the header's stamp
@@ -538,7 +389,6 @@ export const settingsPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       watermark(model, h),
       metadata(model, h),
       storage(model, h),
-      site(model, h),
       actions(model, h),
     ],
   )

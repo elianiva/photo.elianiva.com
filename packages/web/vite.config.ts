@@ -1,14 +1,45 @@
+import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import { foldkit } from '@foldkit/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 
-export default defineConfig({
+/**
+ * The id one deployment renders and hydrates under.
+ *
+ * `Runtime.hydrate` compares the id the Worker stamped on the page with the id
+ * this client carries and refuses the page when they differ, and
+ * `renderToString` refuses a hydratable render that has none — so the client
+ * and the Worker of one deployment must answer with the same value, and a
+ * deployed build must have one at all. `FOLDKIT_BUILD_ID` is the deployment's
+ * own answer when CI sets one; otherwise a fresh id is minted once and written
+ * back into the environment, because Vite reads this config once per
+ * environment and a value computed per read would hand the two artifacts two
+ * different ids.
+ */
+const deploymentBuildId = (): string => {
+  const fromEnvironment = process.env['FOLDKIT_BUILD_ID']
+  if (fromEnvironment !== undefined && fromEnvironment !== '') return fromEnvironment
+  const minted = randomUUID()
+  process.env['FOLDKIT_BUILD_ID'] = minted
+  return minted
+}
+
+export default defineConfig(({ command }) => ({
   // App mode: `vite build` builds every environment this config declares, not
   // just `client`, which is what makes `pnpm build` a gate on the deployed
   // Worker (see `environments.ssr` below).
   builder: {},
-  plugins: [tailwindcss(), ...foldkit({ ssr: { serverEntry: '/src/entry.server.ts' } })],
+  // No `ssr.serverEntry`: the Cloudflare Vite plugin backs the `ssr`
+  // environment with workerd, so that environment is not runnable and
+  // `@foldkit/vite-plugin` stands its own dev rendering down anyway. The
+  // Worker is the page host in development and in production, and it renders
+  // the Front itself (ADR 0011).
+  //
+  // A dev server runs one live source session rather than a set of deployable
+  // artifacts, so there is no deployment identity to derive and the plugin's
+  // own `development` id is the honest one there.
+  plugins: [tailwindcss(), ...foldkit(command === 'build' ? { buildId: deploymentBuildId() } : {})],
   resolve: {
     tsconfigPaths: true,
     alias: {
@@ -45,4 +76,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

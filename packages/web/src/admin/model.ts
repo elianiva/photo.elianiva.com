@@ -37,7 +37,7 @@ import {
   libraryViewOf,
 } from './route'
 import type { LibraryFilters } from './route'
-import { SectionEdit, SettingsDraft } from './settings-draft'
+import { SettingsDraft } from './settings-draft'
 
 // ---------------------------------------------------------------------------
 // Submodel bundles
@@ -558,8 +558,6 @@ export const Message = defineMessageUnion({
     field: S.Literals(['defaultPreviewLongEdge', 'defaultPreviewQuality', 'defaultFullQuality']),
     value: S.Number,
   },
-  /** A free-text column. */
-  SetSettingsText: { field: S.Literals(['copyright', 'motto', 'aboutCopy']), value: S.String },
   /** One of the two EXIF policies. The watermark's own switch is its own
    *  message, because it is a different kind of fact about a Rendition. */
   SetMetadataPolicy: {
@@ -573,8 +571,6 @@ export const Message = defineMessageUnion({
   /** Retention is display-only — nothing purges on a timer — so this is one
    *  boolean and the page offers no other value. */
   SetRetention: { forever: S.Boolean },
-  /** The nav repeater, as the one edit union `applySectionEdit` reduces. */
-  EditedSection: { edit: SectionEdit },
   SaveSettings: {},
   SavedSettings: { settings: Settings },
   DiscardSettings: {},

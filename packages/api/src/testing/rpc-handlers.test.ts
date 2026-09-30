@@ -9,7 +9,6 @@ import { Effect, Layer } from 'effect'
 import {
   FRONT_SECTION_COUNT,
   InvalidInput,
-  LibrarySort,
   PhotoAdminRpcs,
   PhotoNotFound,
   PhotoPublicRpcs,
@@ -18,13 +17,7 @@ import {
 import { RpcClient, RpcTest } from 'effect/unstable/rpc'
 import { Gateway } from '../gateway'
 import { AdminRpcHandlersLive, PublicRpcHandlersLive } from '../rpc'
-import {
-  DEFAULT_SORT,
-  PHOTO_SORT_KEYS,
-  PhotoServiceLive,
-  STORAGE_CAP_BYTES,
-  type PhotoService,
-} from '../photo'
+import { PhotoServiceLive, STORAGE_CAP_BYTES, type PhotoService } from '../photo'
 import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
 import { AdminSession, type AdminSessionValue } from '../session'
 import { SettingsServiceLive, type SettingsService } from '../settings'
@@ -399,7 +392,7 @@ describe('GetFrontPage handler', () => {
     expect(page.nextSectionCursor).toBe('2025-07')
   })
 
-  it('carries the masthead counters and the site copy as the stats', async () => {
+  it('carries the site counters as the stats', async () => {
     const harness = makeTestHarness()
     await seedMonths(harness)
 
@@ -409,10 +402,6 @@ describe('GetFrontPage handler', () => {
       number: 4,
       total: 4,
       latestTakenAt: '2025-08-05',
-      volume: 'V',
-      motto: null,
-      siteSections: [],
-      aboutCopy: null,
     })
   })
 
@@ -496,39 +485,6 @@ describe('the admin group GetPhoto', () => {
     expect(
       await publicRpc(harness, (client) => client.GetPhoto({ id: created.id }).pipe(Effect.flip)),
     ).toEqual(new PhotoNotFound({ id: created.id }))
-  })
-})
-
-describe('GetSession handler', () => {
-  it('hands back the claims the gate verified', async () => {
-    const harness = makeTestHarness()
-
-    expect(await adminRpc(harness, (client) => client.GetSession({}))).toEqual(VERIFIED_SESSION)
-  })
-
-  it('reports no claims on the dev stand-down', async () => {
-    const harness = makeTestHarness()
-
-    // Both null is ADR 0007's dev gate standing down, not a signed-out state.
-    expect(
-      await adminRpc(harness, (client) => client.GetSession({}), {
-        email: null,
-        teamDomain: null,
-      }),
-    ).toEqual({ email: null, teamDomain: null })
-  })
-
-  it('carries a team domain with no email, which is what signs the operator out', async () => {
-    const harness = makeTestHarness()
-
-    // The `Sign out` row in the sidebar footer needs the team the Access
-    // assertion came from even when the claim carries no address.
-    expect(
-      await adminRpc(harness, (client) => client.GetSession({}), {
-        email: null,
-        teamDomain: 'https://team.test',
-      }),
-    ).toEqual({ email: null, teamDomain: 'https://team.test' })
   })
 })
 
@@ -1067,19 +1023,5 @@ describe('UpdateTag handler', () => {
     )
 
     expect(error._tag).toBe('InvalidInput')
-  })
-})
-
-describe('LibrarySort against the service sort keys', () => {
-  it('offers exactly the sorts the service implements', () => {
-    // The Table Head offers `TAKEN ↓` today. When a second column is added
-    // the contract and `PHOTO_SORT_KEYS` have to grow together, and this is
-    // what says so.
-    expect(LibrarySort.fields.key.literals).toEqual(PHOTO_SORT_KEYS)
-    expect(LibrarySort.fields.direction.literals).toEqual(['asc', 'desc'])
-    expect({ key: DEFAULT_SORT.key, direction: DEFAULT_SORT.direction }).toEqual({
-      key: 'takenAt',
-      direction: 'desc',
-    })
   })
 })

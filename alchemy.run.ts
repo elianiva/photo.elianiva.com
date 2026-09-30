@@ -122,7 +122,25 @@ export default Alchemy.Stack(
     // red deploys behind #67.
     class Website extends Cloudflare.Website.Vite<Website>()('photo', {
       rootDir: 'packages/web',
-      assets: { notFoundHandling: 'none' },
+      assets: {
+        notFoundHandling: 'none',
+        // The page paths run the Worker before the asset layer (ADR 0011).
+        //
+        // `dist/client/index.html` is a built asset, and the asset layer is
+        // served first by default, so `/` used to be answered with the client
+        // template: an empty `#root` with no `data-foldkit-app` stamp. The
+        // front page's `Runtime.hydrate` reads a missing stamp as "this page
+        // was not server-rendered", refuses to boot, and puts the document
+        // behind a refusal shield — the `[foldkit] Runtime.hydrate could not
+        // find a server-rendered root` error, in dev and deployed alike.
+        //
+        // The Worker is the site's page host in both stages: it renders the
+        // Front, serves the Admin shell, and reads the client template through
+        // the ASSETS binding to fill it. `/index.html` is the same page under
+        // its old spelling, so the Worker answers it with a redirect rather
+        // than with the bare template.
+        runWorkerFirst: ['/', '/index.html', '/admin', '/admin/*'],
+      },
       domain: SITE_DOMAIN,
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
       dev: { port: 5173, strictPort: true },
@@ -136,10 +154,11 @@ export default Alchemy.Stack(
     }) {}
 
     // A Worker of its own, on the site's hostname rather than one of its own.
-    // Two Workers stay two Workers because `alchemy dev` binds real D1/R2 to a
-    // Worker resource and foldkit's dev server has no bindings at all — but in
-    // production they share an origin, which is what the Access application
-    // above needs. `dev.port` is the one place they are still cross-origin.
+    // Two Workers stay two Workers because `alchemy dev` binds real D1/R2 to
+    // the website Worker, and the read path it renders the Front with is that
+    // Worker's own (ADR 0010) — but in production they share an origin, which
+    // is what the Access application above needs. `dev.port` is the one place
+    // they are still cross-origin.
     const ApiWorker = Cloudflare.Worker('photo-api', {
       main: 'packages/web/src/api-worker.ts',
       compatibility: { date: '2025-09-01', flags: ['nodejs_compat'] },

@@ -1,7 +1,11 @@
 /**
- * Continued: the seam between this edition and the next one — a button that
- * asks for the next month, showing a spinner while that read is in flight, or
- * the issue's closing marker once there is nothing older.
+ * Continued: the seam between this month's photographs and the next one — a
+ * button that asks for the next month, showing a spinner while that read is in
+ * flight, or the closing marker once there is nothing older.
+ *
+ * The row words its own three states, because the state is all the Edition
+ * carries: what the reader is told depends on what is left, and the sentences
+ * belong beside the markup that prints them.
  */
 
 import { ArrowDown, LoaderCircle } from 'lucide'
@@ -23,9 +27,9 @@ const tailBody = (
   error: string | null,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Child> => {
-  switch (tail.state) {
-    // A read in flight answers to the same row, so a second click cannot start
-    // a second read of the same month.
+  switch (tail) {
+    // A read in flight answers to the same row, so a second click cannot start a
+    // second read of the same month.
     case 'more':
       return [
         h.button(
@@ -40,7 +44,7 @@ const tailBody = (
                 : Option.none(),
             ),
             h.Disabled(loading),
-            h.AriaLabel('Load the earlier editions'),
+            h.AriaLabel('Load more photographs'),
           ],
           [
             loading
@@ -48,20 +52,31 @@ const tailBody = (
               : icon(h, ArrowDown, 'size-2.5 text-role-text-secondary'),
             h.span(
               [h.Class('type-caption italic text-role-text-secondary')],
-              [loading ? 'LOADING' : tail.label],
+              [loading ? 'LOADING' : 'LOAD MORE'],
             ),
           ],
         ),
         // A failed read says so. The Sections already on the page are still
-        // true, so the row offers the load again rather than ending the issue.
+        // true, so the row offers the load again rather than ending the run.
         ...(error === null
           ? []
           : [h.span([h.Class('type-caption italic text-role-text-disabled')], [error])]),
       ]
     case 'end':
       return [
-        h.span([h.Class('type-exif text-role-text-primary')], [tail.marker]),
-        h.span([h.Class('type-caption italic text-role-text-secondary')], [tail.note]),
+        h.span([h.Class('type-exif text-role-text-primary')], ['END OF THE ARCHIVE']),
+        h.span(
+          [h.Class('type-caption italic text-role-text-secondary')],
+          ['That is every photograph.'],
+        ),
+      ]
+    case 'empty':
+      return [
+        h.span([h.Class('type-exif text-role-text-primary')], ['NOTHING PUBLISHED YET']),
+        h.span(
+          [h.Class('type-caption italic text-role-text-secondary')],
+          ['The first photograph will open the front page.'],
+        ),
       ]
   }
 }

@@ -3,6 +3,11 @@
  * paper, black ink, one display serif (Newsreader) over Libre Franklin, and
  * hairline rules as the only structure, so nothing competes with the plates.
  * Bands stack down the page; the region's views live in `views/`.
+ *
+ * The title is the site's name, because a title is the one line every search
+ * result and every tab shows and the only honest one is the name itself. It
+ * used to end in the site's photo counter — `photo.elianiva.com — No. 412` —
+ * which made every tab and every search result an issue nobody can open.
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
@@ -17,25 +22,8 @@ import { masthead } from './views/masthead'
 import { editionSection } from './views/section'
 import { BAND } from './views/shared'
 
-// ---------------------------------------------------------------------------
-// document
-// ---------------------------------------------------------------------------
-
-/**
- * The document title, from what the site actually holds. A hardcoded sentence
- * about a summer in New York outlived the photographs it described, and a title
- * is the one line every search result and every tab shows.
- */
-const documentTitle = (model: Model): string => {
-  const { edition } = model
-  if (edition.headline === '' || edition.number === null) {
-    return 'photo.elianiva.com — Photography'
-  }
-  return `photo.elianiva.com — No. ${String(edition.number).padStart(3, '0')}`
-}
-
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-  title: documentTitle(model),
+  title: 'photo.elianiva.com — Photography',
   lang: 'en',
   body: h.div(
     [
@@ -50,7 +38,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       ),
     ],
     [
-      masthead(model.edition, h),
+      masthead(h),
       h.main(
         [h.Class('flex flex-col')],
         [
@@ -64,7 +52,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           ),
         ],
       ),
-      colophon(model.edition.colophon, h),
+      colophon(h),
       ...(model.selected !== null ? [lightbox(model.selected, h)] : []),
     ],
   ),

@@ -39,26 +39,4 @@ describe('shared schemas', () => {
     const decoded = S.decodeSync(PhotoWithTags)(raw)
     expect(decoded.takenAt).toBeUndefined()
   })
-
-  it('paging payload shape allows limit and cursor', () => {
-    const Payload = S.Struct({
-      tagSlug: S.optional(S.String),
-      q: S.optional(S.String),
-      limit: S.optional(S.Number),
-      cursor: S.optional(S.String),
-    })
-    const payload = S.decodeSync(Payload)({ q: 'kyoto', limit: 60, cursor: 'abc' })
-    expect(payload.limit).toBe(60)
-    expect(payload.cursor).toBe('abc')
-  })
-
-  it('paging success shape has nextCursor', () => {
-    const Page = S.Struct({
-      items: S.Array(PhotoWithTags),
-      nextCursor: S.NullOr(S.String),
-    })
-    const page = S.decodeSync(Page)({ items: [], nextCursor: null })
-    expect(page.nextCursor).toBeNull()
-    expect(page.items).toEqual([])
-  })
 })

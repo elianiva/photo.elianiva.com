@@ -13,15 +13,18 @@ type WorkerEnvWithAssets = WebsiteEnv & {
   ASSETS: { fetch: typeof fetch }
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- import.meta.env is Vite-injected, probe without tightening type
-const BUILD_ID = (() => {
-  const viteEnv: unknown = import.meta.env
-  if (typeof viteEnv === 'object' && viteEnv !== null && 'FOLDKIT_BUILD_ID' in viteEnv) {
-    const id: unknown = viteEnv['FOLDKIT_BUILD_ID']
-    if (typeof id === 'string' && id !== '') return id
-  }
-  return 'development'
-})()
+/**
+ * The id this deployment stamps on the page it renders, and the id the client
+ * carries. `@foldkit/vite-plugin` compiles the same value into both artifacts
+ * from the `buildId` option in `vite.config.ts`, and `Runtime.hydrate` refuses
+ * a page whose two ids differ.
+ *
+ * Read as the member expression rather than by probing the `import.meta.env`
+ * object: a build-time define replaces the expression, and an object probe
+ * misses it and answers a constant no client carries, which reads as a
+ * deployment skew on every page.
+ */
+const BUILD_ID = import.meta.env.FOLDKIT_BUILD_ID
 
 const FALLBACK_TEMPLATE =
   '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="description" content="Photography by elianiva — curated works." /><title>photo.elianiva.com — Photography</title></head><body><div id="root"></div><script type="module" src="/src/entry.ts"></script></body></html>'
@@ -108,6 +111,16 @@ const isAssetPath = (pathname: string): boolean =>
 const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Response> => {
   const url = new URL(request.url)
 
+  // The client template under its old spelling. It is a built asset, so the
+  // asset layer would answer it with the unfilled `#root` — a document the
+  // front page's `Runtime.hydrate` refuses. The canonical URL is `/`, so this
+  // says so instead of serving a page that cannot boot (ADR 0011).
+  if (url.pathname === '/index.html') {
+    const canonical = new URL(url)
+    canonical.pathname = '/'
+    return Response.redirect(canonical, 308)
+  }
+
   // Public front page: SSR per the foldkit server-rendering contract.
   if ((url.pathname === '/' || url.pathname === '') && request.method === 'GET') {
     const ssr = await renderHomeSsr(env, request)
@@ -124,8 +137,10 @@ const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Respons
   // boots the app. The client parses the route and draws NotFound for a path
   // that names none. The shell is the same `index.html` the Front gets, with
   // one difference: the theme branch is named on `<html>`, because the Editor
-  // is dark and the first paint happens before any of this app has run. The
-  // dev mirror of that string edit is `entry.server.ts`'s `clientShell`.
+  // is dark and the first paint happens before any of this app has run. This
+  // Worker is the page host in development too — the Cloudflare Vite plugin
+  // backs the `ssr` environment with workerd, so `@foldkit/vite-plugin` stands
+  // its own dev middleware down and hands page requests here (ADR 0011).
   if (isAdminPath(url.pathname)) {
     if (request.method === 'GET') {
       const shell = await env.ASSETS.fetch(

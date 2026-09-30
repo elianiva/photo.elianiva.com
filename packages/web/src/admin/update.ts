@@ -112,7 +112,6 @@ import {
   withEditorZoom,
 } from './editor'
 import {
-  applySectionEdit,
   emptySettingsDraft,
   settingsInputOf,
   settingsUnsaved,
@@ -1283,7 +1282,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       commands: [FetchSettingsCmd()],
     }),
     SetSettingsNumber: ({ field, value }) => ({ model: setDraftField(model, field, value) }),
-    SetSettingsText: ({ field, value }) => ({ model: setDraftField(model, field, value) }),
     SetMetadataPolicy: ({ field, isChecked }) => ({
       model: setDraftField(model, field, isChecked),
     }),
@@ -1300,14 +1298,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       model: setDraftField(model, 'watermarkPosition', value),
     }),
     SetRetention: ({ forever }) => ({ model: setDraftField(model, 'retainForever', forever) }),
-    EditedSection: ({ edit }) => ({
-      model: modifyFields(model, {
-        settingsDraft: () => ({
-          ...model.settingsDraft,
-          sections: [...applySectionEdit(model.settingsDraft.sections, edit)],
-        }),
-      }),
-    }),
     // A save with nothing to save is not a save: it would stamp a new
     // `updatedAt` and make the header claim a write the operator did not make.
     SaveSettings: () => {

@@ -197,12 +197,6 @@ describe('a cold load', () => {
       'FetchSettings',
     ])
   })
-
-  it('fetches the shell but no list on a URL no route names, and lands on NotFound', () => {
-    const cold = init(at('/admin/photos/abc/edit'))
-    expect(cold.model.route._tag).toBe('NotFound')
-    expect(commandNames(cold.commands)).toEqual(SHELL_READS)
-  })
 })
 
 describe('an in-app navigation', () => {

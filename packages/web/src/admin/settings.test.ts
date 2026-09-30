@@ -1,8 +1,8 @@
 /**
  * The Settings page, driven the way the operator drives it: a cold load of
- * `/admin/settings` with the singleton answered, a control picked, a field
- * typed into, a section row re-ordered, and a save. Every step goes through the
- * real `init` / `update` / `view`.
+ * `/admin/settings` with the singleton answered, a control picked, a number
+ * typed into, and a save. Every step goes through the real `init` / `update` /
+ * `view`.
  *
  * The page's whole state machine is three things — what the row said, what the
  * draft says, and which of them the header is reporting — so that is what these
@@ -19,7 +19,7 @@ import type { Settings, Tag } from '@photo/shared'
 
 import { Message } from './model'
 import type { Model } from './model'
-import { applySectionEdit, emptySettingsDraft, toSettingsDraft } from './settings-draft'
+import { toSettingsDraft } from './settings-draft'
 import { csvIndex } from './storage-index'
 import { init, update } from './update'
 import { settingsStamp } from './views/settings'
@@ -67,15 +67,7 @@ const ROW: Settings = {
   watermarkPosition: 'bottom-right',
   defaultKeepExif: true,
   defaultRemoveGps: true,
-  copyright: '© Elianiva',
   retainForever: true,
-  volume: 'V',
-  motto: 'Street, mostly. Landscape, sometimes.',
-  aboutCopy: 'One camera, one lens, and a lot of walking.',
-  sections: [
-    { kind: 'all', label: 'All' },
-    { kind: 'tag', label: 'Street', target: 'street' },
-  ],
 }
 
 const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })
@@ -104,20 +96,16 @@ const previewQuality = Scene.role('slider', { name: 'PREVIEW QUALITY' })
 const fullQuality = Scene.role('slider', { name: 'FULL QUALITY' })
 const position = Scene.role('combobox', { name: 'POSITION' })
 const retain = Scene.role('combobox', { name: 'RETAIN' })
-const copyright = Scene.role('textbox', { name: 'COPYRIGHT' })
-const motto = Scene.role('textbox', { name: 'MOTTO' })
-const aboutCopy = Scene.role('textbox', { name: 'ABOUT COPY' })
 const keepExif = Scene.role('switch', { name: 'Keep EXIF data' })
 const removeGps = Scene.role('switch', { name: 'Remove GPS location' })
 const watermarkSwitch = Scene.role('switch', { name: 'Watermark new uploads' })
 const save = Scene.role('button', { name: 'Save settings' })
 const discard = Scene.role('button', { name: 'Discard changes' })
 const exportIndex = Scene.role('button', { name: 'Export a CSV index' })
-const stamp = Scene.selector('[data-slot="page-head-stamp"]')
 
 // ---------------------------------------------------------------------------
 
-describe('the five sections', () => {
+describe('the four sections', () => {
   it('all render, and each is closed by a hairline', () => {
     Scene.scene(
       app,
@@ -128,8 +116,10 @@ describe('the five sections', () => {
       // The design labels this ARCHIVE; ADR 0008 splits the collision and the
       // canvas's own sidebar block is already called Storage.
       Scene.expect(Scene.role('heading', { name: 'STORAGE' })).toExist(),
-      Scene.expect(Scene.role('heading', { name: 'SITE' })).toExist(),
-      Scene.expectAll(Scene.all.selector('main section')).toHaveCount(5),
+      // No SITE section: the Front's copy is written in the views that print
+      // it, so there is nothing here for a form to edit (migration 0008).
+      Scene.expect(Scene.role('heading', { name: 'SITE' })).not.toExist(),
+      Scene.expectAll(Scene.all.selector('main section')).toHaveCount(4),
     )
   })
 
@@ -142,9 +132,6 @@ describe('the five sections', () => {
       Scene.expect(previewQuality).toHaveValue('82'),
       Scene.expect(fullQuality).toHaveValue('92'),
       Scene.expect(position).toHaveValue('bottom-right'),
-      Scene.expect(copyright).toHaveValue('© Elianiva'),
-      Scene.expect(motto).toHaveValue('Street, mostly. Landscape, sometimes.'),
-      Scene.expect(aboutCopy).toHaveValue('One camera, one lens, and a lot of walking.'),
       Scene.expect(keepExif).toBeChecked(),
       Scene.expect(removeGps).toBeChecked(),
       Scene.expect(watermarkSwitch).not.toBeChecked(),
@@ -194,7 +181,7 @@ describe('the header stamp', () => {
   it('goes stale on an unsaved edit, and says so rather than keeping the old claim', () => {
     const edited = update(
       loaded(),
-      Message.SetSettingsText({ field: 'motto', value: 'Night' }),
+      Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
     ).model
     expect(settingsStamp(edited, TWO_MINUTES_LATER)).toBe('UNSAVED CHANGES')
     // And the header itself, not just the function behind it.
@@ -212,12 +199,6 @@ describe('the header stamp', () => {
       Message.SucceededGetSettings({ settings: { ...ROW, updatedAt: null } }),
     ).model
     expect(settingsStamp(never, TWO_MINUTES_LATER)).toBe('NOT SAVED YET')
-  })
-
-  it('reads the clock where the Page Head renders it', () => {
-    // The stamp is rendered by the Page Head, so the header is asserted
-    // against a Model loaded and immediately read.
-    Scene.scene(app, cold(), Scene.expect(stamp).toExist())
   })
 })
 
@@ -237,42 +218,21 @@ describe('save and discard', () => {
     // is the stored row rather than the request that produced it.
     const typed = update(
       loaded(),
-      Message.SetSettingsText({ field: 'motto', value: 'Night, mostly.' }),
+      Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
     ).model
     const saving = update(typed, Message.SaveSettings({}))
 
     expect(saving.commands?.map((command) => command.name)).toEqual(['SaveSettings'])
     expect(saving.commands?.[0]?.args).toEqual({
-      input: {
-        ...toSettingsDraft(ROW),
-        motto: 'Night, mostly.',
-        // An empty field is a null column on the wire, not an empty string.
-        copyright: '© Elianiva',
-        aboutCopy: ROW.aboutCopy,
-      },
+      input: { ...toSettingsDraft(ROW), defaultFullQuality: 60 },
     })
 
     const settled = update(
       saving.model,
-      Message.SavedSettings({ settings: { ...ROW, motto: 'Night, mostly.' } }),
+      Message.SavedSettings({ settings: { ...ROW, defaultFullQuality: 60 } }),
     ).model
     expect(settingsStamp(settled, TWO_MINUTES_LATER)).toBe('SAVED 2 MINUTES AGO')
     Scene.scene(app, Scene.given(settled), Scene.expect(save).toBeDisabled())
-  })
-
-  it('clearing a field sends a null column, not an empty string', () => {
-    // A nullable column carries "never written". An empty string is not that,
-    // and a save that wrote one would leave the Colophon printing a blank the
-    // operator never asked for.
-    const cleared = [
-      Message.SetSettingsText({ field: 'aboutCopy', value: '' }),
-      Message.SetSettingsText({ field: 'motto', value: '' }),
-      Message.SetSettingsText({ field: 'copyright', value: '' }),
-    ].reduce((model, message) => update(model, message).model, loaded())
-
-    expect(update(cleared, Message.SaveSettings({})).commands?.[0]?.args).toEqual({
-      input: { ...toSettingsDraft(ROW), copyright: null, motto: null, aboutCopy: null },
-    })
   })
 
   it('a re-read landing mid-edit does not throw the edit away', () => {
@@ -282,17 +242,17 @@ describe('save and discard', () => {
     // what confirms it.
     const edited = update(
       loaded(),
-      Message.SetSettingsText({ field: 'motto', value: 'Night, mostly.' }),
+      Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
     ).model
     const reread = update(
       edited,
-      Message.SucceededGetSettings({ settings: { ...ROW, motto: 'Something else.' } }),
+      Message.SucceededGetSettings({ settings: { ...ROW, defaultFullQuality: 70 } }),
     ).model
 
-    expect(reread.settingsDraft.motto).toBe('Night, mostly.')
+    expect(reread.settingsDraft.defaultFullQuality).toBe(60)
     expect(settingsStamp(reread, TWO_MINUTES_LATER)).toBe('UNSAVED CHANGES')
     expect(update(reread, Message.SaveSettings({})).commands?.[0]?.args).toMatchObject({
-      input: { motto: 'Night, mostly.' },
+      input: { defaultFullQuality: 60 },
     })
   })
 
@@ -318,7 +278,6 @@ describe('save and discard', () => {
 
   it('a discard puts the row back and turns both buttons off again', () => {
     const edited = [
-      Message.SetSettingsText({ field: 'aboutCopy', value: 'Something else.' }),
       Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
       Message.SetPreviewFormat({ value: 'webp' }),
     ].reduce((model, message) => update(model, message).model, loaded())
@@ -328,90 +287,9 @@ describe('save and discard', () => {
     Scene.scene(
       app,
       Scene.given(update(edited, Message.DiscardSettings({})).model),
-      Scene.expect(aboutCopy).toHaveValue('One camera, one lens, and a lot of walking.'),
       Scene.expect(fullQuality).toHaveValue('92'),
       Scene.expect(format).toHaveValue('avif'),
       Scene.expect(discard).toBeDisabled(),
-    )
-  })
-})
-
-describe('the SECTIONS repeater', () => {
-  it('renders one row per Section, and a target field only where the kind goes somewhere', () => {
-    Scene.scene(
-      app,
-      cold(),
-      // Two Sections, so two LABEL fields — and one TARGET, because the second
-      // Section is a `tag` and the first is the Front itself, which goes
-      // nowhere and has no target even by accident. That is the `SiteSection`
-      // union in `@photo/shared` doing the work, not a hidden input.
-      Scene.expectAll(Scene.all.role('textbox', { name: 'LABEL' })).toHaveCount(2),
-      Scene.expectAll(Scene.all.role('textbox', { name: 'TARGET' })).toHaveCount(1),
-      Scene.expect(Scene.role('combobox', { name: 'TARGET' })).not.toExist(),
-    )
-  })
-
-  it('adds, re-orders and removes rows, and the order is the order they render in', () => {
-    const afterAdd = update(loaded(), Message.EditedSection({ edit: { _tag: 'Add' } })).model
-    expect(afterAdd.settingsDraft.sections.length).toBe(3)
-
-    const moved = update(
-      afterAdd,
-      Message.EditedSection({ edit: { _tag: 'Move', index: 2, delta: -1 } }),
-    ).model
-    expect(moved.settingsDraft.sections.map((section) => section.label)).toEqual([
-      'All',
-      '',
-      'Street',
-    ])
-
-    const removed = update(
-      moved,
-      Message.EditedSection({ edit: { _tag: 'Remove', index: 0 } }),
-    ).model
-    expect(removed.settingsDraft.sections.map((section) => section.label)).toEqual(['', 'Street'])
-  })
-
-  it('re-typing a row clears the target the old kind owned', () => {
-    // A target is a slug naming a destination. Under `series` it named a
-    // Series, and a `page` destination is not that, so carrying it across would
-    // publish a nav entry that points somewhere nobody chose.
-    const retyped = applySectionEdit(ROW.sections, {
-      _tag: 'SetKind',
-      index: 1,
-      kind: 'page',
-    })
-    expect(retyped[1]).toEqual({ kind: 'page', label: '', target: '' })
-  })
-
-  it('cannot write a target onto the `all` row', () => {
-    const edited = applySectionEdit(ROW.sections, { _tag: 'SetTarget', index: 0, value: 'street' })
-    expect(edited[0]).toEqual({ kind: 'all', label: 'All' })
-  })
-
-  it('a move off either end changes nothing', () => {
-    expect(applySectionEdit(ROW.sections, { _tag: 'Move', index: 0, delta: -1 })).toEqual(
-      ROW.sections,
-    )
-    expect(applySectionEdit(ROW.sections, { _tag: 'Move', index: 1, delta: 1 })).toEqual(
-      ROW.sections,
-    )
-  })
-
-  it("the repeater is the page's only way in, and a new row draws its own fields", () => {
-    const afterAdd = update(loaded(), Message.EditedSection({ edit: { _tag: 'Add' } })).model
-    const named = update(
-      afterAdd,
-      Message.EditedSection({ edit: { _tag: 'SetLabel', index: 2, value: 'About' } }),
-    ).model
-    Scene.scene(
-      app,
-      Scene.given(named),
-      Scene.expect(Scene.role('button', { name: 'Add a section' })).toExist(),
-      // A third Section is a third row, and a new row starts on `tag` so it
-      // comes with the target field a routable kind needs.
-      Scene.expectAll(Scene.all.role('textbox', { name: 'LABEL' })).toHaveCount(3),
-      Scene.expectAll(Scene.all.role('textbox', { name: 'TARGET' })).toHaveCount(2),
     )
   })
 })
@@ -469,38 +347,5 @@ describe('the CSV index', () => {
     )
     // An embedded quote doubles, a null is an empty cell, not the word "null".
     expect(second).toBe(',"He said ""wait""",he-said-wait,,,,,')
-  })
-})
-
-describe('the draft', () => {
-  it('turns an empty field into a null column, and a null column into an empty field', () => {
-    // The lossless direction matters more than the other: an empty ABOUT COPY
-    // has to come back as an empty field, or a discard would not restore the row.
-    const cleared = update(
-      loaded(),
-      Message.SetSettingsText({ field: 'aboutCopy', value: '' }),
-    ).model
-    const saved = update(cleared, Message.DiscardSettings({})).model
-    expect(saved.settingsDraft.aboutCopy).toBe(ROW.aboutCopy)
-  })
-
-  it("starts from the migration's own defaults, so the first paint is the row's page", () => {
-    expect(emptySettingsDraft.defaultPreviewLongEdge).toBe(1200)
-    expect(emptySettingsDraft.defaultPreviewFormat).toBe('avif')
-    expect(emptySettingsDraft.defaultPreviewQuality).toBe(82)
-    expect(emptySettingsDraft.defaultFullQuality).toBe(92)
-    expect(emptySettingsDraft.watermarkPosition).toBe('bottom-right')
-  })
-
-  it('carries the authored volume through a save rather than resetting it', () => {
-    // The design's SITE section draws MOTTO, SECTIONS and ABOUT COPY and no
-    // VOLUME, so the draft holds the stored value and never offers a control
-    // for it. #38's Masthead reads the column this keeps intact.
-    const edited = update(
-      loaded(),
-      Message.SetSettingsText({ field: 'motto', value: 'Night.' }),
-    ).model
-    const input = update(edited, Message.SaveSettings({})).commands?.[0]
-    expect(input?.args).toMatchObject({ input: { volume: 'V' } })
   })
 })

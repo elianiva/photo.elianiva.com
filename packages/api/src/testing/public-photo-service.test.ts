@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
 import { InvalidInput } from '@photo/shared'
 import { PublicPhotoService, type FrontPageInput } from '../public-photo'
-import { createPhoto, createTag, fail, setPhotoStatus, setSiteCopy, trashPhoto } from './fixtures'
+import { createPhoto, createTag, fail, setPhotoStatus, trashPhoto } from './fixtures'
 import { makeTestHarness, withPublicRead, type TestHarness } from './harness'
 
 /** Six published Photos over three months, created oldest first so the Photo
@@ -199,7 +199,6 @@ describe('PublicPhotoService.frontStats', () => {
     expect(stats.total).toBe(6)
     expect(stats.number).toBe(6)
     expect(stats.latestTakenAt).toBe('2025-08-27')
-    expect(stats.volume).toBe('V')
   })
 
   it('omits a draft and a trashed photo from the count and from the number', async () => {
@@ -238,23 +237,6 @@ describe('PublicPhotoService.frontStats', () => {
     await trashPhoto(harness, last.id)
 
     expect((await frontStats(harness)).number).toBe(6)
-  })
-
-  it('carries the site copy the masthead, folio nav and colophon print', async () => {
-    const harness = makeTestHarness()
-    await seed(harness)
-    await setSiteCopy(harness, {
-      volume: 'V',
-      motto: 'photo.elianiva.com',
-      aboutCopy: 'Street, mostly.',
-      sections: JSON.stringify([{ kind: 'all', label: 'All' }]),
-    })
-
-    const stats = await frontStats(harness)
-
-    expect(stats.motto).toBe('photo.elianiva.com')
-    expect(stats.aboutCopy).toBe('Street, mostly.')
-    expect(stats.siteSections).toEqual([{ kind: 'all', label: 'All' }])
   })
 })
 

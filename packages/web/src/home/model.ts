@@ -1,6 +1,6 @@
 /**
- * Home Model + Message (the TEA core). The front page is one Edition held in
- * the Model and the lightbox's selection — nothing else.
+ * Home Model + Message (the TEA core). The front page is one Edition of
+ * photographs held in the Model and the lightbox's selection — nothing else.
  *
  * The Edition arrives as **Flags** rather than being imported as a module
  * constant, because it is read out of D1 on the Worker that renders it. foldkit
@@ -66,8 +66,6 @@ export const Message = defineMessageUnion({
   LoadedSections: {
     sections: S.Array(EditionSectionSchema),
     nextSectionCursor: S.NullOr(S.String),
-    number: S.NullOr(S.Number),
-    total: S.Number,
   },
   /** The read failed. The Edition already on the page stays; the row offers a
    *  retry rather than pretending the issue ended. */

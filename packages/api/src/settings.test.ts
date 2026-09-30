@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Effect, Layer } from 'effect'
 import { RpcClient, RpcTest } from 'effect/unstable/rpc'
-import {
-  InvalidInput,
-  PhotoAdminRpcs,
-  type Settings,
-  type SettingsInput,
-  type SiteSection,
-} from '@photo/shared'
-import { decodeSections, encodeSections, SettingsService, SettingsServiceLive } from './settings'
+import { InvalidInput, PhotoAdminRpcs, type Settings, type SettingsInput } from '@photo/shared'
+import { SettingsService, SettingsServiceLive } from './settings'
 import { AdminRpcHandlersLive } from './rpc'
 import { Gateway } from './gateway'
 import { PhotoService, PhotoServiceLive } from './photo'
@@ -17,53 +11,6 @@ import { AdminSession } from './session'
 import { TagServiceLive } from './tag'
 import { createPhoto, createTag, fail, trashPhoto } from './testing/fixtures'
 import { makeTestHarness, withTestServices, type TestHarness } from './testing/harness'
-
-const NAV: ReadonlyArray<SiteSection> = [
-  { kind: 'all', label: 'All' },
-  { kind: 'tag', label: 'Street', target: 'street' },
-  { kind: 'series', label: 'Series', target: 'istiklal-ferries' },
-  { kind: 'page', label: 'About', target: 'about' },
-]
-
-const decode = (raw: string | null) => Effect.runPromise(Effect.flip(decodeSections(raw)))
-
-describe('sections codec', () => {
-  it('round-trips every section kind through the column', async () => {
-    const stored = encodeSections(NAV)
-
-    expect(await Effect.runPromise(decodeSections(stored))).toEqual(NAV)
-  })
-
-  it('reads an unauthored column as an empty nav', async () => {
-    expect(await Effect.runPromise(decodeSections(null))).toEqual([])
-  })
-
-  it('fails on malformed JSON instead of publishing an empty nav', async () => {
-    expect(await decode('ALL · STREET · LANDSCAPE')).toEqual(
-      new InvalidInput({ message: 'settings.sections is not valid JSON' }),
-    )
-  })
-
-  it('fails on JSON that is not a list of sections', async () => {
-    const error = await decode('[{"kind":"tag","label":"Street"}]')
-
-    expect(error).toBeInstanceOf(InvalidInput)
-    expect(error.message).toContain('not a sections list')
-  })
-
-  it('fails on a section carrying a target its kind cannot use', async () => {
-    const error = await decode('[{"kind":"all","label":"All","target":"street"}]')
-
-    expect(error).toBeInstanceOf(InvalidInput)
-    expect(error.message).toContain('not a sections list')
-  })
-
-  it('fails on a target that is not a slug', async () => {
-    const error = await decode('[{"kind":"tag","label":"Street","target":"Not A Slug"}]')
-
-    expect(error).toBeInstanceOf(InvalidInput)
-  })
-})
 
 /** The migration 0005 column defaults, written out: what a row nobody has saved
  *  yet holds, and the starting point for every save below. */
@@ -77,12 +24,7 @@ const DEFAULTS: SettingsInput = {
   watermarkPosition: 'bottom-right',
   defaultKeepExif: true,
   defaultRemoveGps: true,
-  copyright: null,
   retainForever: true,
-  volume: 'V',
-  motto: null,
-  aboutCopy: null,
-  sections: [],
 }
 
 const ISO_STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
@@ -126,12 +68,6 @@ const flagColumnsOf = (harness: TestHarness) =>
       retainForever: number
     }>()
 
-const sectionsColumnOf = (harness: TestHarness): Promise<string | null> =>
-  harness.db
-    .prepare('SELECT sections FROM settings WHERE id = 1')
-    .first<{ sections: string | null }>()
-    .then((row) => row?.sections ?? null)
-
 const stampOf = (harness: TestHarness, stamp: string): Promise<unknown> =>
   harness.db.prepare('UPDATE settings SET updatedAt = ? WHERE id = 1').bind(stamp).run()
 
@@ -152,16 +88,11 @@ describe('SettingsService', () => {
       watermarkPosition: 'bottom-right',
       defaultKeepExif: true,
       defaultRemoveGps: true,
-      copyright: null,
       retainForever: true,
-      volume: 'V',
-      motto: null,
-      aboutCopy: null,
-      sections: [],
     })
   })
 
-  it('round-trips every column, all four section kinds included', async () => {
+  it('round-trips every column', async () => {
     const harness = makeTestHarness()
     const input: SettingsInput = {
       defaultPreviewLongEdge: 2400,
@@ -173,28 +104,18 @@ describe('SettingsService', () => {
       watermarkPosition: 'centre',
       defaultKeepExif: false,
       defaultRemoveGps: false,
-      copyright: '© Elian',
       retainForever: false,
-      volume: 'VI',
-      motto: 'Photographs by Elian',
-      aboutCopy: 'A folio of the Bosphorus.',
-      sections: NAV,
     }
 
     const saved = await updateSettings(harness, input)
 
     expect(saved).toEqual({ ...input, updatedAt: saved.updatedAt })
     expect(await readSettings(harness)).toEqual(saved)
-    // The nav is on the column as the codec's own encoding, not as some other
-    // JSON spelling of the same thing.
-    const stored = await sectionsColumnOf(harness)
-    expect(stored).toBe(encodeSections(NAV))
-    expect(await Effect.runPromise(decodeSections(stored))).toEqual(NAV)
   })
 
   it('stamps a fresh updatedAt on a save that changes nothing', async () => {
     const harness = makeTestHarness()
-    const input: SettingsInput = { ...DEFAULTS, volume: 'IV', motto: 'Photographs by Elian' }
+    const input: SettingsInput = { ...DEFAULTS, defaultPreviewLongEdge: 2400 }
     const first = await updateSettings(harness, input)
     await stampOf(harness, '2001-01-01T00:00:00.000Z')
 
@@ -274,28 +195,10 @@ describe('SettingsService', () => {
     const harness = makeTestHarness()
     await harness.db.prepare('DELETE FROM settings WHERE id = 1').run()
 
-    // The same tolerance `readSiteCopy` has: a row the migration never wrote is
-    // a fresh page, not a broken one, and it has never been saved — so the
+    // A row the migration never wrote is a fresh page, not a broken one, and it
+    // has never been saved — so the
     // stamp is null rather than a date the operator never chose.
     expect(await readSettings(harness)).toEqual({ ...DEFAULTS, updatedAt: null })
-  })
-
-  it('fails rather than publishing an empty nav when the column is corrupt', async () => {
-    const harness = makeTestHarness()
-    await harness.db
-      .prepare('UPDATE settings SET sections = ? WHERE id = 1')
-      .bind('ALL · STREET · LANDSCAPE')
-      .run()
-
-    const error = await fail(
-      withTestServices(
-        SettingsService.use((service) => service.read),
-        harness,
-      ),
-    )
-
-    expect(error).toBeInstanceOf(InvalidInput)
-    expect(error.message).toContain('settings.sections')
   })
 })
 
@@ -408,22 +311,18 @@ describe('the admin group settings calls', () => {
       watermarkPosition: 'top-left',
       defaultKeepExif: true,
       defaultRemoveGps: true,
-      copyright: '© Elian',
       retainForever: true,
-      volume: 'V',
-      motto: 'Photographs by Elian',
-      aboutCopy: 'A folio of the Bosphorus.',
-      sections: NAV,
     }
     await createPhoto(harness, { slug: 'ferries', title: 'Ferries' })
 
-    const before: Settings = await adminRpc(harness, (client) => client.GetSettings({}))
+    const read: Settings = await adminRpc(harness, (client) => client.GetSettings({}))
     const saved: Settings = await adminRpc(harness, (client) => client.UpdateSettings(input))
     const index = await adminRpc(harness, (client) => client.ListPhotoIndex({}))
 
-    expect(before.sections).toEqual([])
-    // Booleans, nulls and the decoded nav all survive the JSON codec, which is
-    // the only place a 0 could turn back into a false or a nav into a string.
+    // The read answers the row as it stands, and a save answers the stored row
+    // rather than the request. Booleans and literal unions all survive the JSON
+    // codec, which is the only place a 0 could turn back into a false.
+    expect(read.defaultPreviewFormat).toBe('avif')
     expect(saved).toEqual({ ...input, updatedAt: saved.updatedAt })
     expect(saved.updatedAt).toMatch(ISO_STAMP)
     expect(index.items).toEqual([

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { FrontStats, PhotoWithTags, PublicSection } from '@photo/shared'
+import type { PhotoWithTags, PublicSection } from '@photo/shared'
 import { PhotoId } from '@photo/shared'
 
 import {
@@ -10,7 +10,6 @@ import {
   frameCount,
   frameNo,
   frameNoShort,
-  mastheadCount,
   plateUrl,
   sectionCount,
   sectionsOf,
@@ -50,21 +49,9 @@ const section = (month: string, photos: ReadonlyArray<PhotoWithTags>): PublicSec
   photos,
 })
 
-const stats = (over: Partial<FrontStats> = {}): FrontStats => ({
-  number: 24,
-  total: 19,
-  latestTakenAt: '2025-08-31',
-  volume: 'V',
-  motto: 'photo.elianiva.com',
-  siteSections: [],
-  aboutCopy: null,
-  ...over,
-})
-
 const read = (over: Partial<FrontRead> = {}): FrontRead => ({
   sections: [section('2025-08', [photo()])],
   nextSectionCursor: null,
-  stats: stats(),
   ...over,
 })
 
@@ -193,79 +180,18 @@ describe('sectionsOf', () => {
 // the Edition
 // ---------------------------------------------------------------------------
 
-describe('mastheadCount', () => {
-  it('words the volume, the number and the frame count', () => {
-    expect(mastheadCount(editionOf(read()))).toEqual({
-      volume: 'VOL. V — NO. 024',
-      volumeMobile: 'NO. 024',
-      issue: '19',
-    })
-  })
-
-  it('numbers a site with no photographs from zero rather than from nothing', () => {
-    const edition = editionOf(read({ sections: [], stats: stats({ number: null, total: 0 }) }))
-    expect(mastheadCount(edition)).toEqual({
-      volume: 'VOL. V — NO. 000',
-      volumeMobile: 'NO. 000',
-      issue: '0',
-    })
-  })
-})
-
 describe('editionOf', () => {
-  it('takes the folio date from the newest published photograph', () => {
-    const edition = editionOf(read({ stats: stats({ latestTakenAt: '2025-08-31' }) }))
-    expect(edition.folioDate).toBe('SUNDAY, 31 AUGUST 2025')
-    expect(edition.folioDateMobile).toBe('31 AUG 2025')
-  })
-
-  it('prints no date at all when nothing has been published', () => {
-    const edition = editionOf(
-      read({ sections: [], stats: stats({ number: null, total: 0, latestTakenAt: null }) }),
-    )
-    expect(edition.folioDate).toBe('')
-    expect(edition.folioDateMobile).toBe('')
-  })
-
   it('leads with the newest plate and offers more while a cursor remains', () => {
     const edition = editionOf(read({ nextSectionCursor: '2025-07' }))
     expect(edition.lead?.id).toBe('photo-1')
-    expect(edition.tail).toEqual({ state: 'more', label: 'LOAD THE EARLIER EDITIONS' })
+    expect(edition.tail).toBe('more')
   })
 
   it('is an honest empty edition when nothing is published', () => {
-    const edition = editionOf(
-      read({
-        sections: [],
-        nextSectionCursor: null,
-        stats: stats({ number: null, total: 0, latestTakenAt: null }),
-      }),
-    )
+    const edition = editionOf(read({ sections: [], nextSectionCursor: null }))
     expect(edition.lead).toBeNull()
     expect(edition.sections).toEqual([])
-    expect(edition.headline).toBe('Nothing published yet.')
-    expect(edition.tail.state).toBe('end')
-  })
-
-  it('names the months in the kicker oldest first, the order a reader meets them', () => {
-    const edition = editionOf(
-      read({
-        sections: [
-          section('2026-06', [photo()]),
-          section('2026-05', [photo({ id: PhotoId.make('older') })]),
-        ],
-      }),
-    )
-    expect(edition.kicker).toBe('THIS EDITION · MAY 2026 AND JUNE 2026')
-  })
-
-  it('names one month in full rather than a bare year', () => {
-    const edition = editionOf(read({ sections: [section('2026-06', [photo()])] }))
-    expect(edition.kicker).toBe('THIS EDITION · JUNE 2026')
-  })
-
-  it('keeps the masthead numeral, so the volume is the site’s and not the read’s', () => {
-    expect(editionOf(read({ stats: stats({ volume: 'IX' }) })).volume).toBe('IX')
+    expect(edition.tail).toBe('empty')
   })
 })
 

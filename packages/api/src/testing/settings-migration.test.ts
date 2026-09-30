@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
-import { InvalidInput } from '@photo/shared'
 import { TagService } from '../tag'
-import { decodeSections, encodeSections } from '../settings'
 import { createTag } from './fixtures'
 import { makeTestHarness, repoMigrations, withTestServices, type TestHarness } from './harness'
 
@@ -59,12 +57,7 @@ describe('migration 0005 — the settings singleton', () => {
         watermarkPosition: 'bottom-right',
         defaultKeepExif: 1,
         defaultRemoveGps: 1,
-        copyright: null,
         retainForever: 1,
-        volume: 'V',
-        motto: null,
-        aboutCopy: null,
-        sections: null,
       },
     ])
   })
@@ -87,41 +80,6 @@ describe('migration 0005 — the settings singleton', () => {
         .run(),
     ).rejects.toThrow(/CHECK constraint failed/)
     expect(await settingsRows(harness)).toHaveLength(1)
-  })
-
-  it('carries a sections round trip through the column', async () => {
-    const harness = makeTestHarness()
-    const nav = [
-      { kind: 'all', label: 'All' },
-      { kind: 'tag', label: 'Street', target: 'street' },
-      { kind: 'page', label: 'About', target: 'about' },
-    ] as const
-
-    await harness.db
-      .prepare(`UPDATE settings SET sections = ? WHERE id = 1`)
-      .bind(encodeSections(nav))
-      .run()
-    const stored = await harness.db
-      .prepare('SELECT sections FROM settings WHERE id = 1')
-      .first<{ sections: string | null }>()
-
-    expect(await Effect.runPromise(decodeSections(stored?.sections ?? null))).toEqual(nav)
-  })
-
-  it('surfaces a corrupted column instead of publishing an empty nav', async () => {
-    const harness = makeTestHarness()
-    await harness.db
-      .prepare(`UPDATE settings SET sections = ? WHERE id = 1`)
-      .bind('ALL · STREET')
-      .run()
-
-    const stored = await harness.db
-      .prepare('SELECT sections FROM settings WHERE id = 1')
-      .first<{ sections: string | null }>()
-
-    expect(
-      await Effect.runPromise(Effect.flip(decodeSections(stored?.sections ?? null))),
-    ).toBeInstanceOf(InvalidInput)
   })
 })
 

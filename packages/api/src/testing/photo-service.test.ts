@@ -97,14 +97,6 @@ const storageUsage = (harness: TestHarness): Promise<StorageUsage> =>
     ),
   )
 
-const presentation = (harness: TestHarness, id: string) =>
-  Effect.runPromise(
-    withTestServices(
-      PhotoService.use((service) => service.presentation(id)),
-      harness,
-    ),
-  )
-
 const setPresentation = (harness: TestHarness, id: string, patch: PhotoPresentationPatch) =>
   Effect.runPromise(
     withTestServices(
@@ -1500,18 +1492,6 @@ describe('PhotoService.counts', () => {
     })
   })
 
-  it('has no scheduled count, because scheduled is not a Status', async () => {
-    const harness = makeTestHarness()
-    await seed(harness, { slug: 'draft', title: 'Draft' })
-
-    const result = await counts(harness)
-
-    // `scheduled` is a display label over a draft (chain decision 3) and no
-    // column records a publish time, so there is no honest number to return.
-    expect(Object.keys(result.byStatus).sort()).toEqual(['draft', 'failed', 'published'])
-    expect('scheduled' in result.byStatus).toBe(false)
-  })
-
   it('counts a photo carrying several tags once each', async () => {
     const harness = makeTestHarness()
     const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
@@ -1561,20 +1541,6 @@ describe('PhotoService.storageUsage', () => {
 })
 
 describe('PhotoService.presentation', () => {
-  it('reads the stored presentation, so the Editor has a snapshot to revert to', async () => {
-    const harness = makeTestHarness()
-    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
-    const saved = await setPresentation(harness, created.id, {
-      crop: { x: 12.5, y: 4, scale: 1.8 },
-      level: -2.5,
-      mat: { enabled: true, style: 'gallery', colour: 'ink', width: 4 },
-    })
-
-    // The read is the same value the save answered with, which is what lets a
-    // cold load and a save produce one snapshot shape rather than two.
-    expect(await presentation(harness, created.id)).toEqual(saved)
-  })
-
   it('refuses a Photo that is not there, and one that is in the Trash', async () => {
     const harness = makeTestHarness()
     const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })

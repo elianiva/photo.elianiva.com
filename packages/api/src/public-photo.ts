@@ -23,7 +23,6 @@ import {
   StorageError,
   describeCause,
   type PhotoWithTags,
-  type SiteSection,
   type Tag,
 } from '@photo/shared'
 import { Gateway } from './gateway'
@@ -36,7 +35,6 @@ import {
   tagsForPhotos,
   toPhotoWithTags,
 } from './photo'
-import { readSiteCopy } from './settings'
 
 /**
  * The predicate every public read carries. One string, so `frontPage` and
@@ -119,17 +117,8 @@ export interface FrontStats {
    *  A published Photo with no `takenAt` is counted here and belongs to no
    *  Edition Section, because a Section is a month. */
   readonly total: number
-  /** The newest published `takenAt`. The Masthead's folio date and the
-   *  sitemap's `lastmod` are both this fact. */
+  /** The newest published `takenAt`. The sitemap's `lastmod` is this fact. */
   readonly latestTakenAt: string | null
-  /** `settings.volume` — `VOL. V`, authored rather than derived. */
-  readonly volume: string
-  /** `settings.motto` — the Masthead's centred `photo.elianiva.com`. */
-  readonly motto: string | null
-  /** `settings.sections` decoded: the Folio nav. */
-  readonly siteSections: ReadonlyArray<SiteSection>
-  /** `settings.aboutCopy` — the Colophon's About column. */
-  readonly aboutCopy: string | null
 }
 
 /** A public Series page (ADR 0008: a Series page _is_ a Tag page). */
@@ -151,7 +140,8 @@ export interface PublicPhotoServiceContract {
   readonly frontPage: (
     input?: FrontPageInput,
   ) => Effect.Effect<FrontPage, StorageError | InvalidInput>
-  /** The Front's counters, plus the SITE copy the Masthead and Colophon print. */
+  /** The Front's counters. The site's copy is not here: the Masthead, the
+   *  lede, the Colophon and the Folio nav are authored text, not a read. */
   readonly frontStats: () => Effect.Effect<FrontStats, StorageError | InvalidInput>
   /** A public Photo by slug, or null when none is published under it. */
   readonly bySlug: (slug: string) => Effect.Effect<PhotoWithTags | null, StorageError>
@@ -448,15 +438,10 @@ export const PublicPhotoServiceLive = Layer.effect(
     const frontStats: PublicPhotoServiceContract['frontStats'] = () =>
       Effect.gen(function* () {
         const found = yield* row<StatsRow>(db, STATS_SQL, 'Failed to read the front page stats')
-        const copy = yield* readSiteCopy(db)
         return {
           number: found?.number ?? null,
           total: found?.total ?? 0,
           latestTakenAt: found?.latestTakenAt ?? null,
-          volume: copy.volume,
-          motto: copy.motto,
-          siteSections: copy.sections,
-          aboutCopy: copy.aboutCopy,
         }
       })
 

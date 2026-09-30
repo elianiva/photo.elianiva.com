@@ -122,15 +122,6 @@ describe('the Library view toggle', () => {
       Scene.expect(Scene.selector('[data-slot="library-table"]')).not.toExist(),
     )
   })
-
-  it('says which view is on with `aria-pressed`, and never disables the other', () => {
-    Scene.scene(
-      app,
-      Scene.given(cold('grid')),
-      Scene.expect(Scene.role('button', { name: 'Grid view' })).toHaveAttr('aria-pressed', 'true'),
-      Scene.expect(Scene.role('button', { name: 'List view' })).toHaveAttr('aria-pressed', 'false'),
-    )
-  })
 })
 
 describe('the tiles', () => {

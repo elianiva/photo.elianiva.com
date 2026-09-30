@@ -31,8 +31,7 @@ go somewhere, and the open question was how a server-rendered page reaches D1:
 - **Hybrid.** Layers for domain reads, direct SQL for aggregates. The worst of
   the first two.
 
-The decisive cost is testability. `pnpm dev` cannot be run in CI, and the dev
-SSR entry is served by the Vite middleware rather than by workerd, so a
+The decisive cost is testability. `pnpm dev` cannot be run in CI, so a
 hand-written SQL seam in `worker.ts` is the one piece of the read path that no
 test can reach. Everything behind a Layer is exercised against real SQLite
 through the harness ADR 0009 built.
@@ -75,12 +74,8 @@ line on every request.
   in the Worker bundle as well as the API Worker's.
 - The public read is tested against real SQLite through ADR 0009's harness. The
   `worker.ts` seam it replaced was not tested at all.
-- #38 draws the Front from this service. The dev SSR entry
-  (`entry.server.ts`) is what serves the Front under `pnpm dev`, and it is
-  called with a `Request` and nothing else — no `env` argument — so it has to
-  read the bindings off `cloudflare:workers` rather than off a second
-  parameter. That is #38's call to make; `readSite` is what it calls.
-- Foldkit's dev middleware refuses a path that names an asset before the
-  server entry sees it, so `/sitemap.xml` is a 404 in dev and only the Worker
-  answers it. That gap predates this decision and is left alone: the sitemap
-  has no dev mirror to give, because no request naming it reaches the entry.
+- #38 draws the Front from this service, and the website Worker renders it in
+  development as well as in production (ADR 0011), so `readSite` off `env.DB`
+  and `env.PHOTOS` is the only read path the Front has.
+- `/sitemap.xml` and the API paths are answered by the website Worker, which is
+  the site's page host in both stages.

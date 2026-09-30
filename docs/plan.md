@@ -111,7 +111,7 @@ Replaced by ADR 0006. The contract is the two RPC groups, not a URL per verb:
 
 Clients are `RpcClient`s of the same groups, not hand-written `fetch` calls.
 
-SSR `entry.server.ts` switches from `flagsForRequest()` mock to `Effect` fetch from `DB` (via `PhotoDb` binding passed as Effect Layer).
+SSR `worker.ts` switches from `flagsForRequest()` mock to an `Effect` read from `DB` (via `PhotoDb` binding passed as Effect Layer).
 
 Image delivery: every plate and every Admin thumbnail is the Photo's original, served from R2 through the Worker's `/api/image/<r2Key>` proxy. No zone resizer (plan-gated off) and no build-time Sharp; the plate's own `aspect-ratio` box crops it to the Ratio for display.
 
@@ -141,7 +141,7 @@ No pagination needed at <500 photos; add `?limit=60&cursor=` later.
 
 **Phase 2 — read path (half day):**
 
-- SSR `entry.server.ts` reads the Front from D1 through `PublicPhotoService` and renders the broadsheet front page; plates carry each Photo's R2 key. In development that read goes over HTTP to the API Worker's port, and in production straight to the bindings.
+- SSR `worker.ts` reads the Front from D1 through `PublicPhotoService` and renders the broadsheet front page; plates carry each Photo's R2 key. The Worker is the page host in development and in production, so the read is off its own bindings in both (ADR 0011).
 
 **Phase 3 — admin CRUD (1 day):**
 

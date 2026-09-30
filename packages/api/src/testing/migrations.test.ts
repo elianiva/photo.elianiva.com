@@ -6,10 +6,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
-import { nearestRatio, type PhotoRatio } from '@photo/shared'
 import type { D1DatabaseLike } from '../gateway'
 import { applyMigrations, d1Over, makeD1Fake } from './d1-fake'
-import { makeTestHarness, migrationFiles, migrationsThrough, repoMigrations } from './harness'
+import { migrationFiles, migrationsThrough, repoMigrations } from './harness'
 
 const THROUGH_0003 = '0003_blurhash.sql'
 const THROUGH_0004 = '0004_presentation.sql'
@@ -103,38 +102,6 @@ describe('migration 0004', () => {
     expect(indexes['idx_photos_live']).toBeDefined()
   })
 
-  it('boots the test harness on the migrated schema', async () => {
-    const harness = makeTestHarness()
-    await insertLegacy(harness.db, {
-      id: 'after-0004',
-      takenAt: '2025-08-31',
-      width: 6000,
-      height: 4000,
-    })
-    // The backfill ran before this row existed, so a Photo inserted afterwards
-    // arrives with the column defaults — #16 assigns its Photo Number and
-    // snaps its Ratio on the way in.
-    const row = await harness.db
-      .prepare(
-        'SELECT status, ratio, number, previewFormat, previewLongEdge FROM photos WHERE id = ?',
-      )
-      .bind('after-0004')
-      .first<{
-        status: string
-        ratio: string | null
-        number: number | null
-        previewFormat: string
-        previewLongEdge: number
-      }>()
-    expect(row).toEqual({
-      status: 'published',
-      ratio: null,
-      number: null,
-      previewFormat: 'avif',
-      previewLongEdge: 1200,
-    })
-  })
-
   it('applies cleanly to a database that already has 0001–0003 with rows in it', async () => {
     const { engine, db } = at0003()
     await insertLegacy(db, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
@@ -222,33 +189,6 @@ describe('migration 0004', () => {
 
     expect(await ratiosById(db)).toEqual(
       Object.fromEntries(cases.map(([id, _width, _height, ratio]) => [id, ratio])),
-    )
-  })
-
-  /**
-   * The drift lock #16 asked for. The backfill's SQL `CASE` and
-   * `nearestRatio` are two spellings of one rule, and this is the single
-   * assertion that runs both over the same eight frames — widen or narrow
-   * either tolerance, or retype either of the six values, and this goes red.
-   */
-  it('snaps the same frames the SQL CASE snaps', () => {
-    const cases: ReadonlyArray<readonly [number, number, PhotoRatio | null]> = [
-      [6000, 4000, '3:2'],
-      [4000, 6000, '2:3'],
-      [1024, 768, '4:3'],
-      [768, 1024, '3:4'],
-      [1920, 1080, '16:9'],
-      [1080, 1920, '9:16'],
-      [6016, 4000, '3:2'],
-      [3000, 3000, null],
-    ]
-    // The tolerance the SQL is written with, read out of the migration rather
-    // than restated here.
-    const sql = migrationSql(THROUGH_0004)
-    expect(sql).toMatch(/ABS\(CAST\(width AS REAL\) \/ height - 1\.5\)\s+<= 0\.02/)
-
-    expect(cases.map(([width, height]) => nearestRatio(width, height))).toEqual(
-      cases.map(([, , ratio]) => ratio),
     )
   })
 

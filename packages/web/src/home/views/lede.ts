@@ -1,11 +1,17 @@
 /**
- * Lede: the edition's headline block opposite its Page One plate. The text
- * column takes three parts to the plate's two, which is where the frame's
- * 3:2 / 2:3 split comes from.
+ * Lede: the headline block opposite the Page One plate. The text column takes
+ * three parts to the plate's two, which is where the frame's 3:2 / 2:3 split
+ * comes from.
+ *
+ * The copy is written here, next to the markup that prints it, and it is the
+ * publication's own voice rather than a read: it must be true whatever the
+ * archive holds, so it claims no frame count and no month range. A site with
+ * nothing published says so instead — the one thing a static lede cannot do
+ * is describe a batch of photographs that is not there.
  *
  * The mobile frame has no Page One plate and no deck: the headline sets at the
- * deck's size, the kicker drops the range, and the plate becomes the first
- * frame of the first section (see `editionSection`).
+ * deck's size and the plate becomes the first frame of the first section (see
+ * `editionSection`).
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
@@ -15,8 +21,9 @@ import { Message } from '../model'
 import { figure } from './figure'
 import { BAND, type Child } from './shared'
 
-export const lede = (edition: Edition, h: HtmlBuilder<Message>): Child =>
-  h.section(
+export const lede = (edition: Edition, h: HtmlBuilder<Message>): Child => {
+  const isEmpty = edition.lead === null
+  return h.section(
     [h.Class('flex flex-col')],
     [
       h.div(
@@ -33,25 +40,26 @@ export const lede = (edition: Edition, h: HtmlBuilder<Message>): Child =>
               ),
             ],
             [
-              h.span(
-                [h.Class('type-kicker text-role-text-secondary')],
-                [
-                  h.span([h.Class('desktop:hidden')], [edition.kickerMobile]),
-                  h.span([h.Class('hidden desktop:inline')], [edition.kicker]),
-                ],
-              ),
               h.h1(
                 [h.Class('type-deck text-role-text-primary desktop:type-headline')],
-                [edition.headline],
+                [
+                  isEmpty
+                    ? 'Nothing published yet.'
+                    : 'A summer in New York, a night in Istanbul, then home to Jakarta.',
+                ],
               ),
               h.p(
                 [h.Class('hidden type-deck text-role-text-secondary desktop:block')],
-                [edition.deck],
+                [
+                  isEmpty
+                    ? 'The first photograph is on its way. Everything below the masthead is the front page waiting for it.'
+                    : 'Made on foot, with one camera and one lens.',
+                ],
               ),
             ],
           ),
-          // An Edition with no published photograph has no Page One plate, so
-          // the column is not drawn at all rather than drawn empty.
+          // A site with no published photograph has no Page One plate, so the
+          // column is not drawn at all rather than drawn empty.
           ...(edition.lead === null
             ? []
             : [
@@ -64,3 +72,4 @@ export const lede = (edition: Edition, h: HtmlBuilder<Message>): Child =>
       ),
     ],
   )
+}

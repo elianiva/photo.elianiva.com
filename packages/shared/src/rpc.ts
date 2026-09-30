@@ -12,7 +12,7 @@ import {
   Tag,
   TagId,
 } from './photo'
-import { PhotoIndexRow, Settings, SettingsInput, SiteSection } from './settings'
+import { PhotoIndexRow, Settings, SettingsInput } from './settings'
 
 // ---------------------------------------------------------------------------
 // Shared domain errors — part of the RPC contract so both sides typecheck
@@ -121,20 +121,20 @@ export const PublicSection = S.Struct({
 })
 export type PublicSection = typeof PublicSection.Type
 
-/** The Masthead's `VOL. V — NO. 412`, the Folio's `412 FRAMES`, the lede's
- *  edition line and the Colophon's copy, in one read. `number` is the site's
- *  own counter read as the last photograph a visitor can see, so it moves back
- *  when the highest-numbered Photo is trashed (CONTEXT.md, Photo Number).
+/** The site's counters, in one read: the last published Photo Number, how many
+ *  photographs are published, and the day the newest of them was taken.
+ *  `number` moves back when the highest-numbered Photo is trashed
+ *  (CONTEXT.md, Photo Number).
+ *
+ *  There is no site copy here. The Masthead, the lede, the Colophon and the
+ *  Folio nav are authored text in the views that print them; the read model
+ *  carries the photographs and nothing else.
  *
  *  Exported with {@link PublicSection} and for the same reason. */
 export const FrontStats = S.Struct({
   number: S.NullOr(S.Number),
   total: S.Number,
   latestTakenAt: S.NullOr(S.String),
-  volume: S.String,
-  motto: S.NullOr(S.String),
-  siteSections: S.Array(SiteSection),
-  aboutCopy: S.NullOr(S.String),
 })
 export type FrontStats = typeof FrontStats.Type
 

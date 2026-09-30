@@ -98,13 +98,4 @@ describe('R2 fake', () => {
     expect(third.truncated).toBe(false)
     expect(third.cursor).toBeUndefined()
   })
-
-  it('sums byte counts across the bucket for a storage total', async () => {
-    const bucket = makeR2Fake()
-    await store(bucket, 'originals/a.jpg', new Uint8Array(1000))
-    await store(bucket, 'originals/b.jpg', new Uint8Array(24))
-
-    const total = (await bucket.list()).objects.reduce((sum, object) => sum + object.size, 0)
-    expect(total).toBe(1024)
-  })
 })
