@@ -50,10 +50,16 @@ export const lede = (edition: Edition, h: HtmlBuilder<Message>): Child =>
               ),
             ],
           ),
-          h.div(
-            [h.Class('hidden flex-col desktop:flex desktop:flex-2')],
-            [figure(edition.lead, 'page', h)],
-          ),
+          // An Edition with no published photograph has no Page One plate, so
+          // the column is not drawn at all rather than drawn empty.
+          ...(edition.lead === null
+            ? []
+            : [
+                h.div(
+                  [h.Class('hidden flex-col desktop:flex desktop:flex-2')],
+                  [figure(edition.lead, 'page', h)],
+                ),
+              ]),
         ],
       ),
     ],

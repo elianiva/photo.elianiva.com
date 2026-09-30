@@ -21,8 +21,21 @@ import { BAND } from './views/shared'
 // document
 // ---------------------------------------------------------------------------
 
+/**
+ * The document title, from what the site actually holds. A hardcoded sentence
+ * about a summer in New York outlived the photographs it described, and a title
+ * is the one line every search result and every tab shows.
+ */
+const documentTitle = (model: Model): string => {
+  const { edition } = model
+  if (edition.headline === '' || edition.number === null) {
+    return 'photo.elianiva.com — Photography'
+  }
+  return `photo.elianiva.com — No. ${String(edition.number).padStart(3, '0')}`
+}
+
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-  title: 'photo.elianiva.com — A summer in New York',
+  title: documentTitle(model),
   lang: 'en',
   body: h.div(
     [
@@ -47,7 +60,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           ),
           h.div(
             [h.Id('archive'), h.Class(`${BAND} pt-(--spacing-lg) desktop:pt-(--spacing-3xl)`)],
-            [continued(model.edition.tail, h)],
+            [continued(model.edition.tail, model.loadingSections, model.sectionsError, h)],
           ),
         ],
       ),

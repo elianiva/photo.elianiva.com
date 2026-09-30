@@ -4,11 +4,14 @@
 
 Accepted
 
-> **Correction (2026-08, #13).** The three layers below stand. The paths have
-> since moved with the API onto its own Worker and hostname: the second Access
-> application covers `photo-api.elianiva.com/admin/rpc` and
-> `photo-api.elianiva.com/upload`, and the public route is
-> `photo-api.elianiva.com/rpc`. The current table is in `docs/plan.md`.
+> **Correction (2026-08, #13; superseded 2026-09).** The three *layers* below
+> stand and are still the whole story: edge, route split, in-Worker JWT. What did
+> not survive is the shape of layer 1. Three Access applications across two
+> hostnames turned out to make the Admin unusable, and the reason is recorded in
+> "Why one application on one hostname" below. There is now **one** application
+> with three path destinations on `photo.elianiva.com`, covering `/admin`,
+> `/api/admin/rpc` and `/api/upload`, and the API Worker answers on a route of
+> that same hostname. The current table is in `docs/plan.md`.
 
 ## Context
 
@@ -53,6 +56,58 @@ Three layers, cheapest first:
    misconfigured deploy and fails closed with 500 rather than serving the
    Admin ungated. When the team domain is set, a missing or invalid token
    fails closed with 401 on every stage including `dev`.
+
+## Why one application on one hostname
+
+This section records what the deployed split actually did, because the failure
+was not subtle and the three Access applications were individually correct.
+
+Cloudflare Access evaluates a request **at the edge, before the Worker runs**,
+and issues an **application token per application**. Splitting the Admin across
+three applications on two hostnames meant:
+
+1. **The Admin was ungated.** No Access application covered
+   `photo.elianiva.com/admin` at all. `curl https://photo.elianiva.com/admin`
+   returned 200, and because Access never ran there was no
+   `Cf-Access-Jwt-Assertion` either — so the in-Worker JWT check, which is
+   layer 3 of this ADR, could never pass for the page's own API calls. The
+   defense-in-depth layer was not a second line; it was the only line, and it was
+   closed.
+2. **Every browser read died at the preflight.** The Admin posted JSON to
+   `photo-api.elianiva.com/admin/rpc` from `photo.elianiva.com`. A browser sends
+   **no cookies on a preflight**, by design, so Cloudflare answered the `OPTIONS`
+   with a bare `403` and no CORS headers, before the Worker was reached. Every
+   RPC call and every upload failed; the CORS layer in the Worker never got a
+   turn.
+3. **The login could not have been completed even without the preflight.** The
+   real request 302-redirected to an interactive Access login, which `fetch`
+   cannot follow. And the site's Access application granted nothing on the API
+   hostname, so the operator's login on one granted no token on the other.
+
+Three fixes were available and each treated the symptom: enable
+`options_preflightBypass`, add `cors_headers`, or make the two hostnames one
+Access application with eager cookies. All three assume the premise that the
+Admin's API may live on a different origin from the Admin. Two also require
+fields `Cloudflare.Access.Application` does not model, so they would have had to
+be patched outside the IaC.
+
+**The fix is the premise.** One hostname, one Access application, one cookie:
+
+- the API Worker is mounted at `photo.elianiva.com/api/*` as a **route**, not a
+  custom domain. A route is the more specific match and wins over the website
+  Worker's custom domain for its own paths. (Verified against the live zone
+  before the change: a route on `photo.elianiva.com/api/*` reached the API
+  Worker while the custom domain served everything else.)
+- the three gated paths are three **destinations on one application**, so there
+  is one application token and one login.
+- nothing in production is cross-origin, so there is no preflight to fail and no
+  cookie to withhold. CORS survives only for the two localhost ports, which is
+  the one stage where the two really are separate origins.
+
+Two Workers stay two Workers, because `alchemy dev` binds the real D1 and R2 to
+a Worker resource while foldkit's dev server has no bindings at all. In
+production they share an origin; in development they share nothing but a
+contract.
 
 ## Consequences
 

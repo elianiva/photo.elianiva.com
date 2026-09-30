@@ -2,10 +2,11 @@ import { Effect } from 'effect'
 import * as Server from 'foldkit/experimental/server'
 import type { WebsiteEnv } from '../../../alchemy.run'
 import { isAdminPath } from './admin/route'
-import { Model as HomeModel } from './home/model'
+import { editionOf } from './home/content'
+import { Flags, Model as HomeModel } from './home/model'
 import { init as homeInit } from './home/update'
 import { view as homeView } from './home/view'
-import { renderSitemap } from './lib/public-site'
+import { readFront, renderSitemap } from './lib/public-site'
 import { themeDocument, themeForUrl } from './lib/theme'
 
 type WorkerEnvWithAssets = WebsiteEnv & {
@@ -52,14 +53,21 @@ const renderHomeSsr = async (
   if (template === null) return null
   const homeConfig = {
     Model: HomeModel,
+    Flags,
     init: homeInit,
     view: homeView,
   }
   let rendered: Server.RenderedApplication | null = null
   try {
+    // The Edition is read here, before the render, and handed to `init` as
+    // Flags. `init` is synchronous, so this is the only place a read can happen
+    // — and doing it here is what puts the photographs in the HTML the reader
+    // receives rather than behind a request they watch the page make.
+    const read = await readFront(env)
     rendered = await Effect.runPromise(
       Server.renderToString(homeConfig, {
         buildId: BUILD_ID,
+        flags: { edition: editionOf(read), nextSectionCursor: read.nextSectionCursor },
       }),
     )
   } catch {

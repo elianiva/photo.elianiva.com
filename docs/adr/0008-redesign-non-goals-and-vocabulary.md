@@ -81,15 +81,26 @@ With History gone, the 90-day purge is gone with it. Settings' `RETAIN FOREVER`
 therefore governs **only** the Trash purge. It is not a history retention
 policy, and nothing else in the product may be described as one.
 
-### No Images binding
+### No Images binding, and no zone resizer either
 
 `alchemy.run.ts` declared an `IMAGES` binding on the website Worker and
-`WebsiteEnv` typed it as `unknown`, and nothing read either. Delivery is zone
-image resizing by URL rewrite (`/cdn-cgi/image/width=…/image/<r2Key>` in
-`packages/web/src/lib/image.ts`, served by `handleImageProxy` in
-`packages/web/src/api-worker.ts`) on a different host than the one the binding
-was attached to, and the redesign replaces on-the-fly resizing with stored
-Renditions. The declaration is removed rather than adopted.
+`WebsiteEnv` typed it as `unknown`, and nothing read either. The declaration is
+removed rather than adopted.
+
+The delivery path this replaced was zone image resizing by URL rewrite
+(`/cdn-cgi/image/width=…/image/<r2Key>`, built in `packages/web/src/lib/image.ts`
+and served by `handleImageProxy` in `packages/web/src/api-worker.ts`), and it
+never worked: **Image Resizing is plan-gated, and this zone is on the Free plan,
+where `image_resizing` reports `editable: false`.** Every `/cdn-cgi/image`
+request answers 404 whatever it is asked for, on either host. So `thumbUrl`,
+`srcSet` and the Front's plate URL were all building 404s.
+
+Those builders are removed rather than left to fail. Every image — the Front's
+plates, the Library's grid, the Editor's stage — is now the Photo's original,
+served from R2 through the same proxy, cropped to its Ratio by the plate's own
+`aspect-ratio` box. The trade is honest: a grid of forty plates asks for forty
+originals. The designed answer is stored Renditions, and the resize path is
+either a plan upgrade or #35 — not something the code can assume.
 
 ## Consequences
 

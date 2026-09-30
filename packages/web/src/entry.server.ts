@@ -2,7 +2,11 @@ import { Effect } from 'effect'
 import * as Server from 'foldkit/experimental/server'
 
 import { isAdminPath } from './admin/route'
+import { editionOf } from './home/content'
 import { Model as HomeModel, init as homeInit, view as homeView } from './home/entry'
+import { Flags } from './home/model'
+import { API_PREFIX } from './lib/api'
+import { readFrontOverHttp } from './lib/public-site'
 import { themeDocument, themeForUrl } from './lib/theme'
 
 // Vite inlines the template at transform time. Reading it off disk at request
@@ -44,12 +48,24 @@ const clientShell = (request: Request): string =>
 
 const homeConfig = {
   Model: HomeModel,
+  Flags,
   init: homeInit,
   view: homeView,
 }
 
 export const renderPage = async (request: Request): Promise<Server.EntryResult> => {
-  if (isAdminPath(new URL(request.url).pathname)) {
+  const pathname = new URL(request.url).pathname
+
+  // The API Worker's paths belong to the API Worker. In production its route on
+  // the site's hostname claims them before this document is ever reached; in
+  // development it is on its own port and nothing here serves them. Either way
+  // the answer here is a 404 rather than the broadsheet, so a request to the
+  // wrong port says it missed instead of quietly returning a page.
+  if (pathname === API_PREFIX || pathname.startsWith(`${API_PREFIX}/`)) {
+    return Server.Responded(new Response('Not found', { status: 404 }))
+  }
+
+  if (isAdminPath(pathname)) {
     return Server.Responded(
       new Response(clientShell(request), {
         status: 200,
@@ -58,9 +74,16 @@ export const renderPage = async (request: Request): Promise<Server.EntryResult> 
     )
   }
 
+  // The dev server has no D1 or R2 binding of its own — `alchemy dev` gives
+  // those to the API Worker, which is on its own port here — so the Front's
+  // read goes over HTTP to that Worker in development and straight to the
+  // bindings in production. Both paths decode against the same shared
+  // `GetFrontPage` contract, so the two cannot drift.
+  const read = await readFrontOverHttp(`http://localhost:13371${API_PREFIX}`)
   const rendered = await Effect.runPromise(
     Server.renderToString(homeConfig, {
       buildId: import.meta.env.FOLDKIT_BUILD_ID ?? 'dev',
+      flags: { edition: editionOf(read), nextSectionCursor: read.nextSectionCursor },
     }),
   )
   return Server.Rendered(rendered)
