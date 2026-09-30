@@ -34,6 +34,7 @@ import * as SpecRow from '@/components/ui/spec-row'
 import * as Status from '@/components/ui/status'
 import * as Swatch from '@/components/ui/swatch'
 import * as TableHead from '@/components/ui/table-head'
+import * as Textarea from '@/components/ui/textarea'
 import * as ToggleRow from '@/components/ui/toggle-row'
 
 import { cn } from '@/lib/utils'
@@ -220,11 +221,16 @@ const fieldBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
       h.div(
         [h.Class('w-72')],
         [
-          Input.input(
+          // The design's TITLE Field is the master at two lines: the value is
+          // `$typography.body` prose and it wraps. Drawn as the growing
+          // `Textarea` the Editor's own TITLE uses, so the sheet shows the
+          // 78.41px the canvas draws rather than a one-line input.
+          Textarea.textarea(
             {
               id: 'atoms-field-title',
               label: 'TITLE',
               value: model.atoms.inputs['atoms-field-title'] ?? PHOTOGRAPH_TITLE,
+              className: 'min-h-9',
               onInput: (value) => M.SetAtomInput({ id: 'atoms-field-title', value }),
             },
             h,
@@ -540,11 +546,12 @@ const editorPanelBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
             h.div(
               [h.Class('flex flex-col gap-(--spacing-md)')],
               [
-                Input.input(
+                Textarea.textarea(
                   {
                     id: 'atoms-editor-title',
                     label: 'TITLE',
                     value: model.atoms.inputs['atoms-editor-title'] ?? PHOTOGRAPH_TITLE,
+                    className: 'min-h-9',
                     onInput: (value) => M.SetAtomInput({ id: 'atoms-editor-title', value }),
                   },
                   h,

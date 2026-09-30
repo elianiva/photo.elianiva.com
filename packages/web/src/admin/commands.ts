@@ -11,7 +11,7 @@
 import { Effect, Schema as S } from 'effect'
 import * as Command from 'foldkit/command'
 import { load, pushUrl, replaceUrl, back } from 'foldkit/navigation'
-import { PhotoId, PhotoPresentation, SettingsInput } from '@photo/shared'
+import { PhotoId, PhotoMetadata, PhotoPresentation, SettingsInput } from '@photo/shared'
 import { LibrarySort, PhotoRatio, PhotoStatus } from '@photo/shared'
 import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
 
@@ -20,7 +20,14 @@ import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
 import { librarySortOf } from './route'
 import type { LibraryFilters } from './route'
-import { BULK_BORDER_MAT, GridCols, LIBRARY_PAGE_SIZE, Message, Storage } from './model'
+import {
+  BULK_BORDER_MAT,
+  GridCols,
+  LIBRARY_PAGE_SIZE,
+  Message,
+  PhotoDetails,
+  Storage,
+} from './model'
 import type { Counts as CountsType, GridCols as GridColsType, LibraryPage } from './model'
 
 /** `ListLibraryRows` as the wire delivers it: the page's rows under `items`,
@@ -365,9 +372,13 @@ export const UpdateEditorCmd = Command.define('UpdateEditor', {
     /** Present only while the operator's pick differs from the stored Ratio. */
     ratio: S.optional(PhotoRatio),
     savePresentation: S.Boolean,
+    /** The `DETAILS` record, present only when it moved. Its `location` rides
+     *  in `metadata`, because `UpdatePhoto` replaces the whole blob. */
+    details: S.optional(PhotoDetails),
+    metadata: S.optional(PhotoMetadata),
   },
   messages: [Message.UpdatedEditor, Message.FailedRpc],
-  execute: ({ id, presentation, ratio, savePresentation }) =>
+  execute: ({ id, presentation, ratio, savePresentation, details, metadata }) =>
     Effect.gen(function* () {
       const stored = savePresentation
         ? yield* rpcAdmin<PhotoPresentation>('UpdatePhotoPresentation', {
@@ -395,16 +406,44 @@ export const UpdateEditorCmd = Command.define('UpdateEditor', {
             },
           })
         : presentation
-      const storedRatio =
-        ratio === undefined
-          ? undefined
-          : ((yield* rpcAdmin<PhotoWithTags>('UpdatePhoto', { id, ratio })).ratio ?? undefined)
+      // The Ratio and the `DETAILS` record are both columns on `photos`, so
+      // one `UpdatePhoto` carries whichever of them moved — and the answer is
+      // the whole stored row, which is what the Editor's snapshots become.
+      const writesPhoto = ratio !== undefined || details !== undefined
+      const photo = writesPhoto
+        ? yield* rpcAdmin<PhotoWithTags>('UpdatePhoto', {
+            id,
+            ...(ratio === undefined ? {} : { ratio }),
+            ...(details === undefined
+              ? {}
+              : {
+                  title: details.title,
+                  slug: details.slug,
+                  takenAt: details.takenAt,
+                  ...(metadata === undefined ? {} : { metadata }),
+                }),
+          })
+        : undefined
       return Message.UpdatedEditor({
         id: PhotoId.make(id),
         presentation: stored,
-        ratio: storedRatio,
+        ...(photo === undefined ? {} : { photo }),
       })
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** The `DETAILS` tab's Status group. It is its own call rather than part of the
+ *  save because a Status is a lifecycle move (`SetPhotoStatus`), not a field on
+ *  `UpdatePhoto`, and it takes effect at once. The answer is the whole Photo,
+ *  so the Top Bar's chip and the group's selection are the stored value rather
+ *  than an optimistic guess. */
+export const SetEditorStatusCmd = Command.define('SetEditorStatus', {
+  args: { id: S.String, status: PhotoStatus },
+  messages: [Message.SucceededSetEditorStatus, Message.FailedSetEditorStatus],
+  execute: ({ id, status }) =>
+    Effect.map(rpcAdmin<PhotoWithTags>('SetPhotoStatus', { id, status }), (photo) =>
+      Message.SucceededSetEditorStatus({ id: PhotoId.make(id), photo }),
+    ).pipe(Effect.catch(() => Effect.succeed(Message.FailedSetEditorStatus({})))),
 })
 
 // ---------------------------------------------------------------------------

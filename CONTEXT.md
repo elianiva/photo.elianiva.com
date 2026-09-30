@@ -25,7 +25,7 @@ Where a Photo sits in the publish lifecycle: `draft`, `published`, or `failed`. 
 _Avoid_: Visibility, stage, state, Published (that is one value of Status, not the term)
 
 **Ratio**:
-A Photo's frame proportion, always one of six supported values: `3:2`, `2:3`, `4:3`, `3:4`, `16:9`, `9:16`. The author sets it in the Editor's crop, and an incoming file is snapped to the nearest supported value at upload; a file outside every value's tolerance is refused rather than invented into one. The source file's own proportions stop mattering once a crop is authored.
+A Photo's frame proportion, always one of six supported values: `3:2`, `2:3`, `4:3`, `3:4`, `16:9`, `9:16`. The author sets it in the Editor's crop, and an incoming file is snapped to the nearest supported value at upload; a file outside every value's tolerance is refused rather than invented into one. The source file's own proportions stop mattering once a crop is authored. The Editor's `RATIO` control overrides the stored value; a stored Ratio always wins over a derived one — it is the frame the Photo is presented in — and `nearestRatio` only fills a Photo that carries none, so a legacy row still draws a frame rather than nothing.
 _Avoid_: Aspect ratio, orientation, dimensions (those are the measured `width` and `height`)
 
 **Crop**:

@@ -19,14 +19,20 @@
  *   `Update` exist as a pair.
  */
 
-import { PHOTO_RATIOS, nearestRatio, ratioAspect } from '@photo/shared'
-import type { PhotoPresentation, PhotoRatio, PhotoWithTags } from '@photo/shared'
+import { PHOTO_RATIOS, PHOTO_STATUSES, nearestRatio, ratioAspect } from '@photo/shared'
+import type {
+  PhotoMetadata,
+  PhotoPresentation,
+  PhotoRatio,
+  PhotoStatus,
+  PhotoWithTags,
+} from '@photo/shared'
 
 import * as Dialog from '@/components/ui/dialog'
 import * as Segment from '@/components/ui/segment'
 
 import { AppRoute, appRouteToUrl, libraryRoute, libraryUrl } from './route'
-import type { EditorState } from './model'
+import type { EditorState, PhotoDetails } from './model'
 
 // ---------------------------------------------------------------------------
 // the state it opens in
@@ -46,6 +52,8 @@ export type EditorCompare = (typeof COMPARE_OPTIONS)[number]
 export const initEditorState = (): EditorState => ({
   tab: 'edit',
   saving: false,
+  detailsSnapshot: undefined,
+  detailsDraft: undefined,
   // A cold load of the Editor's URL was not opened from a list, so the honest
   // answer is the Library. `ChangedUrl` records the real one when there is one.
   returnRoute: libraryRoute(),
@@ -90,7 +98,35 @@ export const COMPARE_SEGMENT = {
 /** The design's two groups, in the design's own order. The `Segment` atom is
  *  the one stateful atom in the set, so these are groups in the shared
  *  `segmentGroups` record rather than two fields on the Editor. */
-export const editorSegments: ReadonlyArray<EditorSegmentGroup> = [ZOOM_SEGMENT, COMPARE_SEGMENT]
+/** The `DETAILS` tab's three stored Statuses, in lifecycle order. This is the
+ *  same `Segment` atom as the Filter Bar's status group with a different value
+ *  set: the design draws `DRAFT · SCHEDULED · PUBLISHED`, but `scheduled` is a
+ *  display-only label over a draft with a publish time and nothing records one
+ *  (CONTEXT.md, Status), so it is not a value `SetPhotoStatus` can write. The
+ *  third stored value, `failed`, takes its place — the three columns the
+ *  CHECK allows are the three the group offers.
+ *
+ *  The selection is written by `update.ts` through `SetPhotoStatus`, not by
+ *  `UpdatePhoto`: a Status is a lifecycle move, not a field on the record. */
+export const EDITOR_STATUS_SEGMENT = {
+  id: 'editor-status',
+  selected: 'draft',
+  ariaLabel: 'Status',
+  options: [
+    { value: 'draft', label: 'DRAFT' },
+    { value: 'published', label: 'PUBLISHED' },
+    { value: 'failed', label: 'FAILED' },
+  ],
+} as const satisfies EditorSegmentGroup
+
+/** The design's two Stage Bar groups plus the `DETAILS` tab's Status group. The
+ *  `Segment` atom is the one stateful atom in the set, so these are groups in
+ *  the shared `segmentGroups` record rather than fields on the Editor. */
+export const editorSegments: ReadonlyArray<EditorSegmentGroup> = [
+  ZOOM_SEGMENT,
+  COMPARE_SEGMENT,
+  EDITOR_STATUS_SEGMENT,
+]
 
 /** The Crop section's six-Ratio `Segment`. Unlike the Stage Bar's two groups
  *  this one is not a view mode: its pick is authored data, and its selection
@@ -157,12 +193,12 @@ export const PRESENTATION_FIELDS: ReadonlyArray<keyof PhotoPresentation> = [
  *  loaded: an Editor with no Presentation in it has nothing it could have
  *  changed, and claiming otherwise would light the indicator on every cold
  *  load. A Ratio override is a change on its own — it is another stored fact
- *  the same `Update` commits — so it is checked first. */
+ *  the same `Update` commits — so it is checked first, and the `DETAILS`
+ *  record is a third fact. */
 export const isEditorDirty = (editor: EditorState): boolean => {
   if (editor.ratio !== undefined) return true
-  const { snapshot, draft } = editor
-  if (snapshot === undefined || draft === undefined) return false
-  return PRESENTATION_FIELDS.some((field) => snapshot[field] !== draft[field])
+  if (isPresentationDirty(editor)) return true
+  return isDetailsDirty(editor)
 }
 
 /** Whether the Presentation itself has moved, as opposed to the Ratio override
@@ -174,6 +210,15 @@ export const isPresentationDirty = (editor: EditorState): boolean => {
   return PRESENTATION_FIELDS.some((field) => snapshot[field] !== draft[field])
 }
 
+/** Whether the `DETAILS` record has moved. Its own pair of snapshot/draft, so
+ *  a title edit lights the same indicator and guards the same leave as a crop
+ *  edit, without being a field of the Presentation. */
+export const isDetailsDirty = (editor: EditorState): boolean => {
+  const { detailsSnapshot, detailsDraft } = editor
+  if (detailsSnapshot === undefined || detailsDraft === undefined) return false
+  return DETAILS_FIELDS.some((field) => detailsSnapshot[field] !== detailsDraft[field])
+}
+
 /** The Editor's copy of the Presentation, with the Mat's on/off replaced.
  *  Returns the state unchanged while there is no draft to change, so a toggle
  *  that arrives before the read answers is dropped rather than resurrecting a
@@ -182,6 +227,89 @@ export const withEditorMat = (editor: EditorState, enabled: boolean): EditorStat
   editor.draft === undefined
     ? editor
     : { ...editor, draft: { ...editor.draft, borderEnabled: enabled } }
+
+/** The `DETAILS` tab's editable fields, the counterpart of
+ *  `PRESENTATION_FIELDS`. The Ratio override is deliberately not one of them:
+ *  it is `editor.ratio`, beside the draft rather than inside the record. A test
+ *  runs this list against a real `PhotoDetails` both ways, so a field added to
+ *  one and missed here is a red test rather than a value the dirty rule
+ *  silently ignores. */
+export const DETAILS_FIELDS: ReadonlyArray<keyof PhotoDetails> = [
+  'title',
+  'slug',
+  'location',
+  'takenAt',
+] satisfies ReadonlyArray<keyof PhotoDetails>
+
+/** The `DETAILS` values a Photo carries. `location` is lifted out of the
+ *  metadata blob because the blob's key is optional and the panel edits a
+ *  string; `takenAt` is a nullable column and a cleared field is the empty
+ *  string the panel can put back. */
+export const detailsOfPhoto = (photo: PhotoWithTags): PhotoDetails => ({
+  title: photo.title,
+  slug: photo.slug,
+  location: photo.metadata?.location ?? '',
+  takenAt: photo.takenAt ?? '',
+})
+
+/** Write a `DETAILS` field on the draft. A control that fires before the Photo
+ *  read answers is dropped rather than resurrecting a half-built record. */
+export const withEditorDetails = (
+  editor: EditorState,
+  patch: Partial<PhotoDetails>,
+): EditorState =>
+  editor.detailsDraft === undefined
+    ? editor
+    : { ...editor, detailsDraft: { ...editor.detailsDraft, ...patch } }
+
+/** The metadata blob a `DETAILS` save sends. `UpdatePhoto` replaces the whole
+ *  blob, so the fields the panel does not edit — caption, camera, lens — are
+ *  carried rather than dropped, and a cleared location removes the key rather
+ *  than storing an empty string (CONTEXT.md: a fact the Photo does not carry is
+ *  absent, never a blank). */
+export const metadataWithLocation = (
+  metadata: PhotoMetadata | undefined,
+  location: string,
+): PhotoMetadata => {
+  const base = metadata ?? {}
+  const carried: PhotoMetadata = {
+    ...(base.caption === undefined ? {} : { caption: base.caption }),
+    ...(base.camera === undefined ? {} : { camera: base.camera }),
+    ...(base.lens === undefined ? {} : { lens: base.lens }),
+  }
+  return location === '' ? carried : { ...carried, location }
+}
+
+/** The stored Statuses widened to `string`, so the guard can ask whether an
+ *  arbitrary pick is one of them without an assertion. */
+const PHOTO_STATUS_VALUES: ReadonlyArray<string> = PHOTO_STATUSES
+
+/** Is this a stored Status? The Status group's `Picked` value arrives as a
+ *  string and the write is typed, so a value the column's CHECK would reject
+ *  falls back to a no-op. */
+export const isPhotoStatus = (value: string): value is PhotoStatus =>
+  PHOTO_STATUS_VALUES.includes(value)
+
+/** `3:2 · HORIZONTAL` — the `DETAILS` tab's Ratio option copy. The Crop
+ *  section's own Segment prints the bare Ratio; the record's Select spells the
+ *  orientation out. It is read off the reduced fraction rather than stored, so
+ *  the six ratios are one table and a label cannot disagree with the frame. */
+export const ratioOptionLabel = (ratio: PhotoRatio): string => {
+  const [width, height] = ratio.split(':')
+  return `${ratio} · ${Number(width) >= Number(height) ? 'HORIZONTAL' : 'VERTICAL'}`
+}
+
+/** Put the Status group's selection on the stored Status, so the segment draws
+ *  the Photo's own fact rather than the last thing the operator clicked. Called
+ *  when the Photo loads and after a status write answers. */
+export const withEditorStatusSelected = (
+  groups: Segment.Groups,
+  status: PhotoStatus,
+): Segment.Groups =>
+  Segment.writeGroup(groups, EDITOR_STATUS_SEGMENT.id, {
+    id: EDITOR_STATUS_SEGMENT.id,
+    selected: status,
+  })
 
 // ---------------------------------------------------------------------------
 // the Crop's authored facts

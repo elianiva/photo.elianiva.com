@@ -53,6 +53,12 @@ const failureMessage = (error: unknown): string => {
       typeof unwrapped['reason'] === 'object' && unwrapped['reason'] !== null
         ? failureMessage(unwrapped['reason'])
         : ''
+    // A `SlugConflict` names the slug and nothing else, and the Editor's Slug
+    // field is the control that can cause one, so the toast can say what
+    // happened rather than repeat the tag.
+    if (unwrapped['_tag'] === 'SlugConflict' && typeof unwrapped['slug'] === 'string') {
+      return `The slug “${unwrapped['slug']}” is already taken.`
+    }
     if (typeof unwrapped['_tag'] === 'string') {
       return `${unwrapped['_tag']}${detail === '' ? '' : `: ${detail}`}`
     }
