@@ -17,7 +17,7 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
     [
       h.Key('lightbox'),
       h.Class(
-        'fixed inset-0 z-50 flex items-center justify-center bg-role-mat-white p-(--spacing-xl) sm:p-(--spacing-3xl) lg:p-(--spacing-4xl)',
+        'fixed inset-0 z-50 flex items-center justify-center bg-role-mat-white p-6 sm:p-12 lg:p-16',
       ),
       h.OnClick(Message.CloseLightbox()),
       // Tab cycles back to the close button so focus never leaves the dialog.
@@ -49,7 +49,7 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
           h.Id('lightbox-close'),
           h.Autofocus(true),
           h.Class(
-            'absolute top-(--spacing-3xl) right-(--spacing-3xl) type-kicker text-role-text-disabled hover:text-role-text-primary transition-colors duration-(--motion-duration-fast) sm:top-(--spacing-4xl) sm:right-(--spacing-4xl)',
+            'absolute top-12 right-12 type-kicker text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-16',
           ),
           h.OnClick(Message.CloseLightbox()),
           h.AriaLabel('Close'),

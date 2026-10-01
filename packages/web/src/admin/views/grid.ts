@@ -36,12 +36,11 @@ import type { Child } from './shared'
 // tile sizing hints
 // ---------------------------------------------------------------------------
 
-/** The grid sits in the Admin's content column (`max-w-(--layout-content-max)`,
- *  1080px) behind `px-(--layout-margin-mobile)` / `sm:px-(--layout-margin)`
- *  gutters, with `gap-2` / `sm:gap-3` between tiles. `sizes` tells the browser
- *  how wide one tile will be so it can pick from `srcset` before layout; the
- *  numbers here mirror those tokens, and a token change is a two-line change
- *  rather than a guess. */
+/** The grid sits in the Admin's content column (`max-w-[1080px]`) behind
+ *  `px-4` / `sm:px-12` gutters, with `gap-2` / `sm:gap-3` between tiles.
+ *  `sizes` tells the browser how wide one tile will be so it can pick from
+ *  `srcset` before layout; the numbers here mirror those classes, so a gutter
+ *  change is a two-line change rather than a guess. */
 const tileSizes = (cols: GridCols): string => {
   const gapsSm = ((cols - 1) * 0.75).toFixed(2)
   const gapsXs = ((cols - 1) * 0.5).toFixed(2)
@@ -99,7 +98,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
       h.div(
         [
           h.Class(
-            'pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-(--spacing-sm) bg-gradient-to-t from-role-shadow/60 to-transparent p-(--spacing-sm) opacity-0 transition-opacity duration-(--motion-duration-fast) group-hover:opacity-100 group-focus-within:opacity-100',
+            'pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-role-shadow/60 to-transparent p-2 opacity-0 transition-opacity duration-120 group-hover:opacity-100 group-focus-within:opacity-100',
           ),
         ],
         [
@@ -142,10 +141,7 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
 // ---------------------------------------------------------------------------
 
 const loadingState = (h: HtmlBuilder<Msg>): Child =>
-  h.p(
-    [h.Class('mt-(--spacing-3xl) type-exif text-role-text-secondary animate-pulse')],
-    ['Loading photos…'],
-  )
+  h.p([h.Class('mt-12 type-exif text-role-text-secondary animate-pulse')], ['Loading photos…'])
 
 // ---------------------------------------------------------------------------
 // grid

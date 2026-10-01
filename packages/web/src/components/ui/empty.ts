@@ -10,19 +10,19 @@ import { cn } from '@/lib/utils'
  *  `color.text.disabled` mark, that title, and a `$typography.caption` line in
  *  `color.text.secondary`. */
 export const emptyClass =
-  'gap-(--spacing-lg) border border-dashed border-role-outline p-(--spacing-3xl) flex w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance'
+  'gap-4 border border-dashed border-role-outline p-12 flex w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance'
 
-export const emptyHeaderClass = 'gap-(--spacing-sm) flex max-w-sm flex-col items-center'
+export const emptyHeaderClass = 'gap-2 flex max-w-sm flex-col items-center'
 
 export const emptyMediaVariantKeys = ['default', 'icon'] as const
 export type EmptyMediaVariant = (typeof emptyMediaVariantKeys)[number]
 
 export const emptyMediaClass =
-  'mb-(--spacing-xs) flex shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0'
+  'mb-1 flex shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0'
 
 export const emptyMediaVariants: Record<EmptyMediaVariant, string> = {
   default: 'bg-transparent',
-  icon: 'flex size-(--spacing-3xl) shrink-0 items-center justify-center text-role-text-disabled [&_svg:not([class*="size-"])]:size-(--spacing-2xl)',
+  icon: 'flex size-12 shrink-0 items-center justify-center text-role-text-disabled [&_svg:not([class*="size-"])]:size-8',
 }
 
 export const emptyTitleClass = 'type-section-sm text-role-text-primary'
@@ -31,7 +31,7 @@ export const emptyDescriptionClass =
   'type-caption text-role-text-secondary [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-role-text-primary'
 
 export const emptyContentClass =
-  'gap-(--spacing-sm) type-caption flex w-full max-w-sm min-w-0 flex-col items-center text-balance'
+  'gap-2 type-caption flex w-full max-w-sm min-w-0 flex-col items-center text-balance'
 
 type StyleConfig = Readonly<{ className?: string }>
 

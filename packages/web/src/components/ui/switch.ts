@@ -26,18 +26,18 @@ export const switchSizeKeys = ['default', 'sm'] as const
 export type SwitchSize = (typeof switchSizeKeys)[number]
 
 export const switchClass =
-  'aria-invalid:border-role-error aria-invalid:ring-role-error/20 data-checked:border-role-primary data-checked:bg-role-primary data-disabled:cursor-not-allowed data-disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 outline-none inline-flex h-5 w-[34px] shrink-0 items-center rounded-full border border-role-outline bg-transparent p-(--spacing-xs) transition-colors duration-(--motion-duration-fast)'
+  'aria-invalid:border-role-error aria-invalid:ring-role-error/20 data-checked:border-role-primary data-checked:bg-role-primary data-disabled:cursor-not-allowed data-disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 outline-none inline-flex h-5 w-[34px] shrink-0 items-center rounded-full border border-role-outline bg-transparent p-1 transition-colors duration-120'
 
 export const switchThumbClass =
-  'data-checked:translate-x-3.5 data-checked:bg-role-on-primary pointer-events-none block size-3 rounded-full bg-role-text-disabled transition-transform duration-(--motion-duration-fast)'
+  'data-checked:translate-x-3.5 data-checked:bg-role-on-primary pointer-events-none block size-3 rounded-full bg-role-text-disabled transition-transform duration-120'
 
 export const switchLabelClass = 'type-ui select-none group-data-[disabled]:opacity-50'
 
 export const switchDescriptionClass = 'type-exif text-role-text-disabled'
 
-export const switchWrapperClass = 'flex items-center gap-(--spacing-lg)'
+export const switchWrapperClass = 'flex items-center gap-4'
 
-export const switchTextWrapperClass = 'flex flex-col gap-(--spacing-xs)'
+export const switchTextWrapperClass = 'flex flex-col gap-1'
 
 export type SwitchConfig<M> = Readonly<{
   id: string

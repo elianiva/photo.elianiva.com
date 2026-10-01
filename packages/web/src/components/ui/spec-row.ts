@@ -14,7 +14,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import { cn } from '@/lib/utils'
 
 export const specRowClass =
-  'flex items-center justify-between gap-(--spacing-md) border-b border-role-hairline py-(--spacing-sm)'
+  'flex items-center justify-between gap-3 border-b border-role-hairline py-2'
 
 export type SpecRowConfig = Readonly<{
   label: string

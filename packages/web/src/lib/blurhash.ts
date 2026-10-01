@@ -1,23 +1,17 @@
 /**
  * Blurhash helpers — encode in the Admin (browser can decode pixels; the
  * Worker cannot), decode in the Admin grid for placeholder tiles.
- *
- * The component count is the design's (`image.blurhash.x` / `.y`), read from
- * the generated token module rather than restated here.
  */
 
 import { Cache, Data, Duration, Effect, Exit, Option, Result, Schema as S } from 'effect'
 import { decode, encode } from 'blurhash'
 import { MatColour } from '@photo/shared'
 
-import { imageBlurhashX, imageBlurhashY } from './design-tokens'
-
-/** The long edge the encoder samples down to. A local constant, not a
- *  catalog token: the design fixes the component count (`4 × 3 · 31 chars`)
- *  and says nothing about the sample, so there is nothing to bind to. */
+/** The long edge the encoder samples down to. */
 const SAMPLE_SIZE = 32
-const COMPONENTS_X = imageBlurhashX
-const COMPONENTS_Y = imageBlurhashY
+/** The component count (`4 × 3 · 31 chars`). */
+const COMPONENTS_X = 4
+const COMPONENTS_Y = 3
 
 /** Encode a File/ImageBitmapSource to a blurhash string, decoded once. Resolves
  *  to undefined when the browser cannot decode the bytes or canvas is
@@ -57,10 +51,10 @@ export const encodeBlurhash = async (
   }
 }
 
-/** `4 × 3` — the component count the design prints beside `BLURHASH`, read
- *  off the same two tokens the encoder uses. A readout, not a stored
- *  dimension: the design's own `4 × 3` is `image.blurhash.x` / `.y`. */
-export const blurhashComponentLabel = (): string => `${imageBlurhashX} × ${imageBlurhashY}`
+/** `4 × 3` — the component count the design prints beside `BLURHASH`, read off
+ *  the same two constants the encoder uses. A readout, not a stored
+ *  dimension. */
+export const blurhashComponentLabel = (): string => `${COMPONENTS_X} × ${COMPONENTS_Y}`
 
 /** The Mat, when the draft has one. `side` is the top/left/right thickness and
  *  `foot` the bottom, both as fractions of the frame's width. The three colours
@@ -174,10 +168,10 @@ const compositionLayout = (
   }
 }
 
-/** The Mat's colour as the canvas can paint it. The broadsheet token is read
+/** The Mat's colour as the canvas can paint it. The role token is read
  *  at runtime — the same colour the Stage's `bg-role-mat-*` class paints —
- *  with the catalog's value as the fallback for a document that has no styles
- *  yet (this module is outside the Desk's colour-literal guard on purpose). */
+ *  with a literal as the fallback for a document that has no styles yet
+ *  (this module is outside the Desk's colour-literal guard on purpose). */
 const matColourCSS = (colour: 'white' | 'paper' | 'ink'): string => {
   const fallback: Record<'white' | 'paper' | 'ink', string> = {
     white: '#ffffff',

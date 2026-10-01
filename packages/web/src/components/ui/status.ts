@@ -53,7 +53,7 @@ export type StatusConfig = Readonly<{
 export const status = <M>(config: StatusConfig, h: HtmlBuilder<M>): Html =>
   h.div(
     [
-      h.Class(cn('inline-flex items-center gap-(--spacing-sm)', config.className)),
+      h.Class(cn('inline-flex items-center gap-2', config.className)),
       h.DataAttribute('slot', 'status'),
       h.DataAttribute('variant', config.variant),
     ],

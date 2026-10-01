@@ -23,7 +23,7 @@ import { icon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 export const checkboxClass =
-  'aria-invalid:border-role-error aria-invalid:ring-role-error/20 data-checked:border-role-primary data-checked:bg-role-primary data-checked:text-role-on-primary data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 outline-none size-4 shrink-0 border border-role-outline bg-transparent text-role-on-primary transition-colors duration-(--motion-duration-fast)'
+  'aria-invalid:border-role-error aria-invalid:ring-role-error/20 data-checked:border-role-primary data-checked:bg-role-primary data-checked:text-role-on-primary data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 outline-none size-4 shrink-0 border border-role-outline bg-transparent text-role-on-primary transition-colors duration-120'
 
 export const checkboxIndicatorClass = '[&>svg]:size-3 grid place-content-center transition-none'
 
@@ -61,7 +61,7 @@ export const checkbox = <M>(config: CheckboxConfig<M>, h: HtmlBuilder<M>): Html 
           [h.Class(cn('flex flex-col', config.wrapperClass))],
           [
             h.div(
-              [h.Class('flex items-center gap-(--spacing-sm)')],
+              [h.Class('flex items-center gap-2')],
               [
                 h.button(
                   [

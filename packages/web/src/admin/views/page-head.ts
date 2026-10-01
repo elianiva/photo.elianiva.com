@@ -116,7 +116,7 @@ const uploadAction = (model: Model, h: HtmlBuilder<Msg>): Child =>
 
 const headerActions = (head: PageHead, model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex items-center gap-(--spacing-lg)')],
+    [h.Class('flex items-center gap-4')],
     [
       ...(head.isSearchable ? [searchField(model, h)] : []),
       ...(head.isUploadable ? [uploadAction(model, h)] : []),
@@ -128,17 +128,10 @@ const headerActions = (head: PageHead, model: Model, h: HtmlBuilder<Msg>): Child
 export const pageHead = (model: Model, h: HtmlBuilder<Msg>, gutter: string): Child => {
   const head = pageHeadOf(model)
   return h.header(
-    [
-      h.DataAttribute('slot', 'page-head'),
-      h.Class(cn(gutter, 'pb-(--spacing-lg) pt-(--spacing-2xl)')),
-    ],
+    [h.DataAttribute('slot', 'page-head'), h.Class(cn(gutter, 'pb-4 pt-8'))],
     [
       h.div(
-        [
-          h.Class(
-            'flex flex-wrap items-end justify-between gap-x-(--spacing-lg) gap-y-(--spacing-sm)',
-          ),
-        ],
+        [h.Class('flex flex-wrap items-end justify-between gap-x-4 gap-y-2')],
         [
           h.h1([h.Class('type-headline text-role-text-primary')], [head.title]),
           ...(head.stamp === undefined
@@ -158,13 +151,7 @@ export const pageHead = (model: Model, h: HtmlBuilder<Msg>, gutter: string): Chi
       ),
       // The design's 3px `color.rule` under the whole bar, the only thick rule
       // on the Desk.
-      h.div(
-        [
-          h.AriaHidden(true),
-          h.Class('mt-(--spacing-lg) h-(--stroke-width-strong) w-full bg-role-rule'),
-        ],
-        [],
-      ),
+      h.div([h.AriaHidden(true), h.Class('mt-4 h-[3px] w-full bg-role-rule')], []),
     ],
   )
 }

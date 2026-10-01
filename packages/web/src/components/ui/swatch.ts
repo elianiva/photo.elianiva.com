@@ -43,7 +43,7 @@ export const swatch = <M>(config: SwatchConfig<M>, h: HtmlBuilder<M>): Html =>
       ...(config.onSelect === undefined ? [] : [h.OnClick(config.onSelect)]),
       h.Class(
         cn(
-          'focus-visible:ring-role-focus/50 inline-flex size-8 shrink-0 items-center justify-center rounded-full border-[1.5px] bg-transparent p-(--spacing-xs) outline-none transition-colors duration-(--motion-duration-fast) focus-visible:ring-[3px]',
+          'focus-visible:ring-role-focus/50 inline-flex size-8 shrink-0 items-center justify-center rounded-full border-[1.5px] bg-transparent p-1 outline-none transition-colors duration-120 focus-visible:ring-[3px]',
           config.isSelected ? 'border-role-rule' : 'border-transparent',
           config.className,
         ),

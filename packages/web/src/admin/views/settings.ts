@@ -67,7 +67,7 @@ const captionClass = 'italic type-caption text-role-text-secondary'
  *  leaves between sections, so the two read as one rhythm. */
 const section = (kicker: string, rows: ReadonlyArray<Child>, h: HtmlBuilder<Msg>): Child =>
   h.section(
-    [h.Class('flex flex-col gap-(--spacing-md) border-b border-role-hairline pb-(--spacing-xl)')],
+    [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-6')],
     [h.h2([h.Class('type-kicker text-role-text-secondary')], [kicker]), ...rows],
   )
 
@@ -163,11 +163,7 @@ const watermark = (model: Model, h: HtmlBuilder<Msg>): Child => {
         h,
       ),
       h.div(
-        [
-          h.Class('flex items-center gap-(--spacing-sm)'),
-          h.Role('group'),
-          h.AriaLabel('Watermark colour'),
-        ],
+        [h.Class('flex items-center gap-2'), h.Role('group'), h.AriaLabel('Watermark colour')],
         WATERMARK_COLOURS.map((entry) =>
           Swatch.swatch(
             {
@@ -343,7 +339,7 @@ export const settingsStamp = (model: Model, now: DateTime.Utc = DateTime.nowUnsa
 const actions = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const unsaved = settingsUnsaved(model.settingsDraft, model.settings)
   return h.div(
-    [h.Class('flex items-center gap-(--spacing-sm)')],
+    [h.Class('flex items-center gap-2')],
     [
       Button.button(
         { onClick: M.SaveSettings({}), isDisabled: !unsaved || model.settingsSaving },
@@ -361,13 +357,13 @@ const actions = (model: Model, h: HtmlBuilder<Msg>): Child => {
 
 const notLoaded = (h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex flex-col items-start gap-4 pt-(--spacing-xl)')],
+    [h.Class('flex flex-col items-start gap-4 pt-6')],
     [h.p([h.Class('type-deck text-role-text-secondary')], ['Loading settings…'])],
   )
 
 const failed = (h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex flex-col items-start gap-4 pt-(--spacing-xl)')],
+    [h.Class('flex flex-col items-start gap-4 pt-6')],
     [
       h.p(
         [h.Class('type-deck text-role-text-secondary')],
@@ -383,7 +379,7 @@ export const settingsPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
   // column defaults would invite a save that overwrites a row nobody read.
   if (model.settings === undefined) return notLoaded(h)
   return h.div(
-    [h.Class('flex flex-col gap-(--spacing-xl) pt-(--spacing-2xl)')],
+    [h.Class('flex flex-col gap-6 pt-8')],
     [
       exportDefaults(model, h),
       watermark(model, h),

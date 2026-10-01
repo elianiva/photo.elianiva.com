@@ -46,22 +46,22 @@ export const dialogBackdropClass =
   'data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 bg-role-shadow/40 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50'
 
 export const dialogPanelClass =
-  'bg-role-surface text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 grid max-w-[calc(100%-2rem)] gap-(--spacing-lg) border border-role-hairline p-(--spacing-lg) type-ui duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none'
+  'bg-role-surface text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 grid max-w-[calc(100%-2rem)] gap-4 border border-role-hairline p-4 type-ui duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none'
 
 /** Upstream renders its close control as a ghost button; the Desk's is the
  * `Icon Button` ghost kind: 36px, round, an 18px mark. */
 export const dialogCloseButtonClass =
-  'text-role-text-secondary absolute top-(--spacing-md) right-(--spacing-md) flex size-9 items-center justify-center rounded-full outline-none transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&_svg:not([class*="size-"])]:size-(--spacing-lg)'
+  'text-role-text-secondary absolute top-3 right-3 flex size-9 items-center justify-center rounded-full outline-none transition-colors duration-120 hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&_svg:not([class*="size-"])]:size-4'
 
 export const dialogTitleClass = 'type-section text-role-text-primary'
 
 export const dialogDescriptionClass =
   'type-caption text-role-text-secondary *:[a]:underline *:[a]:underline-offset-4 *:[a:hover]:text-role-text-primary'
 
-export const dialogHeaderClass = 'gap-(--spacing-sm) flex flex-col'
+export const dialogHeaderClass = 'gap-2 flex flex-col'
 
 export const dialogFooterClass =
-  'border-role-hairline -mx-(--spacing-lg) -mb-(--spacing-lg) border-t p-(--spacing-lg) flex flex-col-reverse gap-(--spacing-sm) sm:flex-row sm:justify-end'
+  'border-role-hairline -mx-4 -mb-4 border-t p-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'
 
 // These abstract away element types, base classes, and attribute spreading.
 // Use inside `styledViewInputs` content callbacks:

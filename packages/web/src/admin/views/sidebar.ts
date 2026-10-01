@@ -42,7 +42,7 @@ import type { Child } from './shared'
 
 /** The design's 248px column, and the padding either side of the brand. */
 const SIDEBAR_WIDTH = 'w-[248px]'
-const SIDEBAR_PADDING = 'py-(--spacing-xl) pr-(--spacing-md) pl-(--spacing-md)'
+const SIDEBAR_PADDING = 'py-6 pr-3 pl-3'
 
 // ---------------------------------------------------------------------------
 // storage meter
@@ -65,24 +65,17 @@ const storageMeter = (model: Model, h: HtmlBuilder<Msg>): Child => {
   // dividing by it would be NaN, and a NaN width would silently vanish.
   const usedPercent = capBytes > 0 ? Math.min(100, Math.max(0, (bytes / capBytes) * 100)) : 0
   return h.div(
-    [
-      h.Class(
-        'mt-(--spacing-md) flex flex-col gap-(--spacing-sm) border-t border-role-hairline pt-(--spacing-md)',
-      ),
-    ],
+    [h.Class('mt-3 flex flex-col gap-2 border-t border-role-hairline pt-3')],
     [
       h.div(
-        [h.Class('flex items-baseline justify-between gap-(--spacing-sm)')],
+        [h.Class('flex items-baseline justify-between gap-2')],
         [
           h.span([h.Class('type-kicker text-role-text-secondary')], ['Storage']),
           h.span([h.Class('type-exif text-role-text-primary')], [meterReadout(bytes, capBytes)]),
         ],
       ),
       h.div(
-        [
-          h.AriaHidden(true),
-          h.Class('h-(--stroke-width-firm) w-full overflow-hidden bg-role-hairline'),
-        ],
+        [h.AriaHidden(true), h.Class('h-0.5 w-full overflow-hidden bg-role-hairline')],
         [
           h.div(
             [
@@ -175,7 +168,7 @@ const tagActionsButton = (tag: Tag, h: HtmlBuilder<Msg>): Child =>
       h.AriaLabel(`Tag actions for ${tag.label}`),
       h.Title(`Tag actions for “${tag.label}”`),
       h.Class(
-        'hover:bg-role-surface-hover focus-visible:ring-role-focus/50 mr-(--spacing-xs) shrink-0 p-(--spacing-xs) text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary focus-visible:outline-none focus-visible:ring-[3px]',
+        'hover:bg-role-surface-hover focus-visible:ring-role-focus/50 mr-1 shrink-0 p-1 text-role-text-disabled transition-colors duration-120 hover:text-role-text-primary focus-visible:outline-none focus-visible:ring-[3px]',
       ),
       h.DataAttribute('slot', 'tag-actions'),
     ],
@@ -184,19 +177,11 @@ const tagActionsButton = (tag: Tag, h: HtmlBuilder<Msg>): Child =>
 
 const tagsGroup = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [
-      h.Class('mt-(--spacing-xl) flex flex-col gap-(--spacing-xs)'),
-      h.DataAttribute('slot', 'sidebar-tags'),
-    ],
+    [h.Class('mt-6 flex flex-col gap-1'), h.DataAttribute('slot', 'sidebar-tags')],
     [
       h.h2([h.Class('type-kicker text-role-text-disabled')], ['Tags']),
       ...(model.tags.length === 0
-        ? [
-            h.p(
-              [h.Class('px-(--spacing-sm) type-exif-sm text-role-text-disabled')],
-              ['No tags yet.'],
-            ),
-          ]
+        ? [h.p([h.Class('px-2 type-exif-sm text-role-text-disabled')], ['No tags yet.'])]
         : [
             h.div(
               [h.Class('flex flex-col')],
@@ -249,10 +234,10 @@ export const tagActionsDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
         panelClass: 'w-full max-w-sm',
         content: (render, innerH) => [
           h.div(
-            [h.Class('flex flex-col gap-(--spacing-lg)')],
+            [h.Class('flex flex-col gap-4')],
             [
               h.div(
-                [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
+                [h.Class('flex items-start justify-between gap-2')],
                 [
                   Dialog.title(
                     { attributes: render.title },
@@ -266,7 +251,7 @@ export const tagActionsDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 [
                   h.OnSubmit(M.SubmitTagCreate()),
                   h.DataAttribute('slot', 'tag-create-form'),
-                  h.Class('flex flex-col gap-(--spacing-sm)'),
+                  h.Class('flex flex-col gap-2'),
                 ],
                 [
                   h.label(
@@ -290,7 +275,7 @@ export const tagActionsDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
                           h.Type('submit'),
                           h.AriaLabel('Create tag'),
                           h.Class(
-                            'border border-role-rule px-(--spacing-lg) py-(--spacing-sm) type-ui text-role-text-primary transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover',
+                            'border border-role-rule px-4 py-2 type-ui text-role-text-primary transition-colors duration-120 hover:bg-role-surface-hover',
                           ),
                           h.DataAttribute('slot', 'button'),
                         ],
@@ -301,11 +286,7 @@ export const tagActionsDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 ],
               ),
               h.div(
-                [
-                  h.Class(
-                    'border-role-hairline flex flex-col gap-(--spacing-sm) border-t pt-(--spacing-lg)',
-                  ),
-                ],
+                [h.Class('border-role-hairline flex flex-col gap-2 border-t pt-4')],
                 [
                   h.p(
                     [h.Class('type-caption text-role-text-secondary')],
@@ -327,7 +308,7 @@ export const tagActionsDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
                                 h.OnClick(M.RequestDeleteTag({ id: tag.id, label: tag.label })),
                                 h.AriaLabel(`Delete tag ${tag.label}`),
                                 h.Class(
-                                  'border border-role-accent px-(--spacing-lg) py-(--spacing-sm) type-ui text-role-accent transition-colors duration-(--motion-duration-fast) hover:bg-role-accent hover:text-role-on-accent',
+                                  'border border-role-accent px-4 py-2 type-ui text-role-accent transition-colors duration-120 hover:bg-role-accent hover:text-role-on-accent',
                                 ),
                                 h.DataAttribute('slot', 'button'),
                               ],
@@ -366,7 +347,7 @@ const signOutUrl = (model: Model): string | undefined =>
 const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const signOut = signOutUrl(model)
   return h.div(
-    [h.Class('mt-auto pt-(--spacing-xl)'), h.DataAttribute('slot', 'sidebar-footer')],
+    [h.Class('mt-auto pt-6'), h.DataAttribute('slot', 'sidebar-footer')],
     [
       // The verified claim, or nothing: a dev stage has no Access identity to
       // print, and a placeholder address would be a lie about who is signed in.
@@ -386,7 +367,7 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ? []
         : [
             h.div(
-              [h.Class('mt-(--spacing-sm)')],
+              [h.Class('mt-2')],
               [
                 SidebarItem.sidebarItem(
                   { label: 'Sign out', state: 'default', href: signOut, icon: LogOut },
@@ -399,7 +380,7 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
         [
           h.Href('/'),
           h.Class(
-            'mt-(--spacing-xs) inline-flex items-center gap-1.5 px-(--spacing-sm) type-caption text-role-text-primary transition-colors duration-(--motion-duration-fast) hover:text-role-text-secondary',
+            'mt-1 inline-flex items-center gap-1.5 px-2 type-caption text-role-text-primary transition-colors duration-120 hover:text-role-text-secondary',
           ),
           h.DataAttribute('slot', 'view-site'),
         ],
@@ -417,13 +398,13 @@ export const sidebar = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [
       h.Class(
-        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-container sticky top-0 flex h-dvh shrink-0 flex-col gap-(--spacing-lg) border-r border-role-hairline`,
+        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-container sticky top-0 flex h-dvh shrink-0 flex-col gap-4 border-r border-role-hairline`,
       ),
       h.DataAttribute('slot', 'sidebar'),
     ],
     [
       h.div(
-        [h.Class('flex flex-col gap-(--spacing-xs)')],
+        [h.Class('flex flex-col gap-1')],
         [
           // The design's wordmark. `THE DESK` is display copy for this one
           // place — it is not a route, a type, or a directory (CONTEXT.md).

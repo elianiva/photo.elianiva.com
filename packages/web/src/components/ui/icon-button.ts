@@ -34,7 +34,7 @@ export const iconButtonVariants: Record<IconButtonKind, string> = {
 export const iconButtonIconClass = 'size-[18px]'
 
 const iconButtonBase =
-  'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-role-focus/50 inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding transition-colors duration-(--motion-duration-fast) outline-none focus-visible:ring-[3px]'
+  'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-role-focus/50 inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 export type IconButtonConfig<M> = Readonly<{
   onClick?: M

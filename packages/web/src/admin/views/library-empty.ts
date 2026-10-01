@@ -61,17 +61,17 @@ const ratioPromise = `${PHOTO_RATIOS.join(' · ')} · ORIGINALS ARE KEPT`
 
 export const libraryEmpty = (h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('mt-(--spacing-xl) flex flex-col gap-(--spacing-xl)')],
+    [h.Class('mt-6 flex flex-col gap-6')],
     [
       Empty(
         // `flex-none` because the atom's `flex-1` would otherwise let the
         // 240px height lose to a zero flex-basis.
-        { className: 'h-[240px] flex-none gap-(--spacing-sm) p-(--spacing-xl)' },
+        { className: 'h-[240px] flex-none gap-2 p-6' },
         [
           Empty.media(
-            // The icon variant's 48px box and `mb-(--spacing-xs)` are not the
+            // The icon variant's 48px box and `mb-1` are not the
             // design's: a 32px mark with only the container's own 8px above it.
-            { variant: 'icon', className: 'mb-0 size-(--spacing-2xl)' },
+            { variant: 'icon', className: 'mb-0 size-8' },
             [icon(h, Images, 'size-8')],
             h,
           ),

@@ -60,19 +60,14 @@ const currentHref = (model: Model): string =>
  * The document shell both pages share.
  *
  * The colophon's "back to top" has a target to land on. The layout margin steps
- * up at `tablet`; the compositions themselves flip at `desktop` in the views,
- * because the desktop Front needs its full 1080px measure to fit. The range
- * between shows the mobile composition at the tablet margin — the design has no
- * tablet frame to follow.
+ * up at `md`; the compositions themselves flip at `lg` in the views, because
+ * the desktop Front needs its full 1080px measure to fit. The range between
+ * shows the mobile composition at the wider margin — the design has no tablet
+ * frame to follow.
  */
 const shell = (model: Model, h: HtmlBuilder<Message>, body: ReadonlyArray<Html>) =>
   h.div(
-    [
-      h.Id('top'),
-      h.Class(
-        'min-h-screen bg-role-surface px-(--layout-margin-mobile) text-role-text-primary tablet:px-(--layout-margin)',
-      ),
-    ],
+    [h.Id('top'), h.Class('min-h-screen bg-role-surface px-4 text-role-text-primary md:px-12')],
     [
       masthead(currentHref(model), model.folio, h),
       ...body,
@@ -96,7 +91,7 @@ const frontDocument = (model: Model, h: HtmlBuilder<Message>): Document => ({
         // browser fetches eagerly; every other Section is below the fold.
         ...model.edition.sections.map((section, index) => editionSection(section, index === 0, h)),
         h.div(
-          [h.Id('archive'), h.Class(`${BAND} pt-(--spacing-lg) desktop:pt-(--spacing-3xl)`)],
+          [h.Id('archive'), h.Class(`${BAND} pt-4 lg:pt-12`)],
           [continued(model.edition.tail, model.loadingSections, model.sectionsError, h)],
         ),
       ],

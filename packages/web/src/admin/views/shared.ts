@@ -24,8 +24,7 @@ import type { Model, Msg } from '../model'
 export type Child = Html | string
 
 /** The content column every page and the header align to. */
-export const GUTTER =
-  'mx-auto w-full max-w-(--layout-content-max) px-(--layout-margin-mobile) sm:px-(--layout-margin)'
+export const GUTTER = 'mx-auto w-full max-w-[1080px] px-4 sm:px-12'
 
 export const formatBytes = (size: number): string =>
   size >= 1024 * 1024
@@ -52,7 +51,7 @@ export const CREATE_PREFIX = 'create:'
  *  foldkit calls itemToConfig. */
 const tagRow = (label: string, isSelected: boolean): Html =>
   inertHtml.span(
-    [inertHtml.Class('flex w-full items-center gap-(--spacing-sm) truncate')],
+    [inertHtml.Class('flex w-full items-center gap-2 truncate')],
     [
       inertHtml.span([inertHtml.Class('truncate')], [label]),
       ...(isSelected ? [Combobox.comboboxCheck(inertHtml)] : []),
@@ -63,11 +62,7 @@ const tagRow = (label: string, isSelected: boolean): Html =>
  *  as a distinct action rather than a regular option. */
 const createRow = (label: string): Html =>
   inertHtml.span(
-    [
-      inertHtml.Class(
-        'flex w-full items-center gap-(--spacing-sm) type-exif text-role-text-secondary',
-      ),
-    ],
+    [inertHtml.Class('flex w-full items-center gap-2 type-exif text-role-text-secondary')],
     [
       icon(inertHtml, Plus, 'size-3.5 shrink-0'),
       inertHtml.span([inertHtml.Class('truncate')], [`Create “${label}”`]),
@@ -115,7 +110,7 @@ const pickedChip = (label: string, onRemove: Msg, h: HtmlBuilder<Msg>): Child =>
   h.span(
     [
       h.Class(
-        'inline-flex max-w-full items-center gap-0.5 border border-role-outline bg-transparent py-(--spacing-xs) pr-(--spacing-xs) pl-(--spacing-sm) type-exif text-role-text-primary',
+        'inline-flex max-w-full items-center gap-0.5 border border-role-outline bg-transparent py-1 pr-1 pl-2 type-exif text-role-text-primary',
       ),
     ],
     [
@@ -126,7 +121,7 @@ const pickedChip = (label: string, onRemove: Msg, h: HtmlBuilder<Msg>): Child =>
           h.AriaLabel(`Remove tag ${label}`),
           h.Title(`Remove tag “${label}”`),
           h.Class(
-            'shrink-0 p-(--spacing-xs) text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:outline-none',
+            'shrink-0 p-1 text-role-text-disabled transition-colors duration-120 hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:outline-none',
           ),
         ],
         [icon(h, X, 'size-3')],
@@ -138,7 +133,7 @@ export const embedCombo = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const selectedIds = model.uploadTagIds
   const onRemove = (id: string): Msg => M.RemoveUploadTag({ id })
   return h.div(
-    [h.Class('flex flex-col gap-(--spacing-sm)')],
+    [h.Class('flex flex-col gap-2')],
     [
       h.submodel({
         slotId: 'upload-tag-combo',
@@ -153,11 +148,7 @@ export const embedCombo = (model: Model, h: HtmlBuilder<Msg>): Child => {
       ...(selectedIds.length > 0
         ? [
             h.div(
-              [
-                h.Class('flex flex-wrap gap-(--spacing-xs)'),
-                h.Role('list'),
-                h.AriaLabel('Selected tags'),
-              ],
+              [h.Class('flex flex-wrap gap-1'), h.Role('list'), h.AriaLabel('Selected tags')],
               selectedIds.map((id) => pickedChip(labelOf(model.tags, id), onRemove(id), h)),
             ),
           ]

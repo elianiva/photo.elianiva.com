@@ -19,8 +19,8 @@
  * The mobile Figure master (size=mobile) differs from the desktop one at every
  * level: the placard is a two-line clamped title with a zero-padded number
  * under it, and the Exif line is gone. One tree carries both variants on the
- * `desktop` breakpoint — the desktop composition needs its full 1080px
- * measure, so `breakpoint.desktop` is where the `size` axis flips.
+ * `lg` breakpoint — the desktop composition needs its full 1080px
+ * measure, so `lg` is where the `size` axis flips.
  */
 
 import { Option } from 'effect'
@@ -49,14 +49,14 @@ export type FigureConfig = Readonly<{
  *  Section and at the deck's on the About page. */
 const titleClass = (slot: FigureSlot): string =>
   slot === 'about'
-    ? 'type-caption italic text-role-text-primary line-clamp-2 desktop:line-clamp-none desktop:type-deck'
-    : 'type-caption italic text-role-text-primary line-clamp-2 desktop:line-clamp-none'
+    ? 'type-caption italic text-role-text-primary line-clamp-2 lg:line-clamp-none lg:type-deck'
+    : 'type-caption italic text-role-text-primary line-clamp-2 lg:line-clamp-none'
 
 export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => {
   const { plate, slot } = config
   const loading = config.loading ?? (slot === 'column' ? 'lazy' : 'eager')
   return h.figure(
-    [h.Key(plate.id), h.Class('flex flex-col gap-(--spacing-sm) desktop:gap-(--spacing-md)')],
+    [h.Key(plate.id), h.Class('flex flex-col gap-2 lg:gap-3')],
     [
       h.button(
         [
@@ -88,20 +88,16 @@ export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => 
         ],
       ),
       h.figcaption(
-        [
-          h.Class(
-            'flex flex-col gap-(--spacing-sm) desktop:flex-row desktop:items-baseline desktop:justify-between desktop:gap-(--spacing-lg)',
-          ),
-        ],
+        [h.Class('flex flex-col gap-2 lg:flex-row lg:items-baseline lg:justify-between lg:gap-4')],
         [
           h.span([h.Class(titleClass(slot))], [plate.title]),
           // The mobile placard number is bare, not "No. 024".
           h.span(
-            [h.Class('type-exif whitespace-nowrap text-role-text-secondary desktop:hidden')],
+            [h.Class('type-exif whitespace-nowrap text-role-text-secondary lg:hidden')],
             [frameNoShort(plate.index)],
           ),
           h.span(
-            [h.Class('hidden type-exif whitespace-nowrap text-role-text-secondary desktop:inline')],
+            [h.Class('hidden type-exif whitespace-nowrap text-role-text-secondary lg:inline')],
             [frameNo(plate.index)],
           ),
         ],
@@ -115,12 +111,7 @@ export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => 
       // empty — an empty line under a plate reads as a bug in the photograph.
       ...(plate.exif === null
         ? []
-        : [
-            h.span(
-              [h.Class('hidden type-exif text-role-text-disabled desktop:block')],
-              [plate.exif],
-            ),
-          ]),
+        : [h.span([h.Class('hidden type-exif text-role-text-disabled lg:block')], [plate.exif])]),
     ],
   )
 }

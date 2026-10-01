@@ -497,8 +497,8 @@ export const withEditorZoom = (editor: EditorState, deltaY: number): EditorState
  *  slider reads `4%`, so the design's own padding below is the 4% mat. */
 export const MAT_WIDTH_PERCENT = 4
 
-/** The design's Mat: `$spacing.xl` on the top, right and left and
- *  `$spacing.4xl` along the bottom — 24/24/64/24. That asymmetry *is* the
+/** The design's Mat: 24px on the top, right and left and
+ *  64px along the bottom — 24/24/64/24. That asymmetry *is* the
  *  `gallery` style the design names.
  *
  *  `even` and `square` are named by the design and not defined by it, and
@@ -691,7 +691,7 @@ export const zoomWidth = (photo: PhotoWithTags, zoom: string): string | undefine
  *  drawing, and an `aspect-ratio` box with no width collapses to nothing in a
  *  shrink-to-fit parent, so the fit is spelled against the viewport the way
  *  the Stage's own ceiling always was: the full width less the 360px
- *  Inspector, the Canvas's `--spacing.2xl` and the Mat's 24/24 sides, and the
+ *  Inspector, the Canvas's 32px of padding and the Mat's 24/24 sides, and the
  *  full height less the two 52px bars, the same Canvas padding and the Mat's
  *  24/64. The width is the smaller of what the width allows and what the
  *  height allows for this frame's own proportion, so a 2:3 frame fits the same

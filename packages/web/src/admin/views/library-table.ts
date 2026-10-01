@@ -128,8 +128,8 @@ const row = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Child =>
 
 /** The Bulk Bar (master `2ee1012a86fa8715`). The design draws it inverted —
  *  `ds(, theme(dark))` — even on the light Library, and one `data-theme` on
- *  this element is the generated dark block saying the same thing: the role
- *  tokens below it resolve to their dark branch and nothing above it moves.
+ *  this element is the dark scope saying the same thing: the role tokens below
+ *  it resolve to their dark branch and nothing above it moves.
  *
  *  The box beside `2 SELECTED` is the design's own `state(on)`, so it reads as
  *  "a selection exists" and unticking it is `Clear` — which is the affordance
@@ -141,13 +141,11 @@ const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
     [
       h.Attribute('data-theme', 'dark'),
       h.DataAttribute('slot', 'bulk-bar'),
-      h.Class(
-        'flex items-center justify-between gap-(--spacing-lg) bg-role-surface py-(--spacing-sm) pr-(--spacing-md) pl-(--spacing-md)',
-      ),
+      h.Class('flex items-center justify-between gap-4 bg-role-surface py-2 pr-3 pl-3'),
     ],
     [
       h.div(
-        [h.Class('flex items-center gap-(--spacing-lg)')],
+        [h.Class('flex items-center gap-4')],
         [
           checkbox(
             {
@@ -166,7 +164,7 @@ const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
               h.Type('button'),
               h.OnClick(M.ClearedSelection()),
               h.Class(
-                'type-caption cursor-pointer italic text-role-text-disabled transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary',
+                'type-caption cursor-pointer italic text-role-text-disabled transition-colors duration-120 hover:text-role-text-primary',
               ),
             ],
             ['Clear'],
@@ -174,7 +172,7 @@ const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
       ),
       h.div(
-        [h.Class('flex items-center gap-(--spacing-xs)')],
+        [h.Class('flex items-center gap-1')],
         [
           // `Discard` here means "drop the selection" and nothing else. The
           // Editor's `Discard` — discard unsaved edits — is a different control
@@ -209,10 +207,10 @@ const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
         panelClass: 'w-full max-w-sm',
         content: (render, innerH) => [
           h.div(
-            [h.Class('flex flex-col gap-(--spacing-lg)')],
+            [h.Class('flex flex-col gap-4')],
             [
               h.div(
-                [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
+                [h.Class('flex items-start justify-between gap-2')],
                 [
                   Dialog.title({ attributes: render.title }, ['Add tag'], innerH),
                   Dialog.closeButton({ attributes: render.closeButton }, ['×'], innerH),
@@ -233,14 +231,14 @@ const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                           isChecked: model.addTagIds.includes(tag.id),
                           onToggle: () => M.ToggledAddTag({ id: tag.id }),
                           label: tag.label,
-                          wrapperClass: 'py-(--spacing-xs)',
+                          wrapperClass: 'py-1',
                         },
                         innerH,
                       ),
                     ),
                   ),
               h.div(
-                [h.Class('flex justify-end gap-(--spacing-sm)')],
+                [h.Class('flex justify-end gap-2')],
                 [
                   Button.button(
                     {
@@ -288,10 +286,10 @@ const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
         panelClass: 'w-full max-w-sm',
         content: (render, innerH) => [
           h.div(
-            [h.Class('flex flex-col gap-(--spacing-lg)')],
+            [h.Class('flex flex-col gap-4')],
             [
               h.div(
-                [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
+                [h.Class('flex items-start justify-between gap-2')],
                 [
                   Dialog.title(
                     { attributes: render.title },
@@ -359,10 +357,7 @@ const skeletonTable = (h: HtmlBuilder<Msg>): Child => {
       [
         h.span([h.Class(tableCheckboxWidthClass)]),
         h.div([h.Class(cn('size-16 shrink-0', block))]),
-        h.div(
-          [h.Class('flex min-w-0 flex-1 flex-col gap-(--spacing-xs)')],
-          [one('h-4 w-2/3'), one('w-1/3')],
-        ),
+        h.div([h.Class('flex min-w-0 flex-1 flex-col gap-1')], [one('h-4 w-2/3'), one('w-1/3')]),
         h.div([h.Class(cn('flex shrink-0 items-center', columnWidths.ratio))], [one('h-5 w-10')]),
         h.span([h.Class(cn('shrink-0', columnWidths.taken))], [one('w-16')]),
         h.span([h.Class(cn('shrink-0', columnWidths.size))], [one('w-16')]),

@@ -46,14 +46,14 @@ import { BAND, type Child } from './shared'
  * supplies the gap the desktop grid supplies with `pt`/`gap`.
  */
 const COLUMNS =
-  'grid grid-cols-1 desktop:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))] desktop:gap-(--layout-margin) desktop:pb-(--spacing-3xl) desktop:pt-(--spacing-2xl)'
+  'grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))] lg:gap-12 lg:pb-12 lg:pt-8'
 
 const COLUMN =
-  'min-w-0 flex-1 flex-col gap-(--spacing-sm) desktop:border-l desktop:border-role-hairline desktop:pb-(--spacing-xl) desktop:pl-(--spacing-lg) desktop:pt-(--spacing-lg)'
+  'min-w-0 flex-1 flex-col gap-2 lg:border-l lg:border-role-hairline lg:pb-6 lg:pl-4 lg:pt-4'
 
 const about = (h: HtmlBuilder<Message>): Child =>
   h.div(
-    [h.Class('flex min-w-0 flex-col gap-(--spacing-md) py-(--spacing-xl) desktop:py-0')],
+    [h.Class('flex min-w-0 flex-col gap-3 py-6 lg:py-0')],
     [
       h.span([h.Class('type-nameplate-sm text-role-text-primary')], ['Elianiva']),
       h.p([h.Class('type-body italic text-role-text-secondary')], ['Shot on foot, usually early.']),
@@ -78,15 +78,15 @@ const colophonColumn = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [h.Class(`${column.desktopOnly === true ? 'hidden desktop:flex' : 'flex'} ${COLUMN}`)],
+    [h.Class(`${column.desktopOnly === true ? 'hidden lg:flex' : 'flex'} ${COLUMN}`)],
     [
       h.span([h.Class('type-kicker text-role-text-secondary uppercase')], [column.label]),
       h.ul(
-        [h.Class('flex list-none flex-col gap-1.5 desktop:hidden')],
+        [h.Class('flex list-none flex-col gap-1.5 lg:hidden')],
         [...(column.linesMobile ?? column.lines).map((line) => columnLine(line, true, h))],
       ),
       h.ul(
-        [h.Class('hidden list-none flex-col gap-1.5 desktop:flex')],
+        [h.Class('hidden list-none flex-col gap-1.5 lg:flex')],
         [...column.lines.map((line) => columnLine(line, false, h))],
       ),
     ],
@@ -94,24 +94,17 @@ const colophonColumn = (
 
 const baseline = (h: HtmlBuilder<Message>): Child =>
   h.div(
-    [
-      h.Class(
-        'flex items-center justify-between gap-(--spacing-lg) border-t border-role-hairline pb-(--spacing-xl) pt-(--spacing-lg)',
-      ),
-    ],
+    [h.Class('flex items-center justify-between gap-4 border-t border-role-hairline pb-6 pt-4')],
     [
       h.span(
         [h.Class('type-kicker flex-1 text-role-text-disabled')],
         [
-          h.span([h.Class('desktop:hidden')], ['© 2021–2026 elianiva']),
-          h.span(
-            [h.Class('hidden desktop:inline')],
-            ['© 2021–2026 elianiva · all rights reserved'],
-          ),
+          h.span([h.Class('lg:hidden')], ['© 2021–2026 elianiva']),
+          h.span([h.Class('hidden lg:inline')], ['© 2021–2026 elianiva · all rights reserved']),
         ],
       ),
       h.span(
-        [h.Class('hidden type-caption italic text-role-text-disabled desktop:block')],
+        [h.Class('hidden type-caption italic text-role-text-disabled lg:block')],
         ['Set in Newsreader, Libre Franklin and IBM Plex Mono.'],
       ),
       h.a(
@@ -157,11 +150,7 @@ export const colophon = (folio: ReadonlyArray<FolioEntry>, h: HtmlBuilder<Messag
     [h.Class('flex flex-col')],
     [
       h.div(
-        [
-          h.Class(
-            `${BAND} flex flex-col border-t border-role-hairline pt-(--spacing-3xl) desktop:pt-(--spacing-4xl)`,
-          ),
-        ],
+        [h.Class(`${BAND} flex flex-col border-t border-role-hairline pt-12 lg:pt-16`)],
         [
           h.div(
             [h.Class(COLUMNS)],
@@ -170,7 +159,7 @@ export const colophon = (folio: ReadonlyArray<FolioEntry>, h: HtmlBuilder<Messag
               h.div(
                 [
                   h.Class(
-                    'flex flex-row gap-(--spacing-lg) border-t border-role-hairline pb-(--spacing-xl) pt-(--spacing-lg) desktop:contents',
+                    'flex flex-row gap-4 border-t border-role-hairline pb-6 pt-4 lg:contents',
                   ),
                 ],
                 columns.map((column) => colophonColumn(column, h)),

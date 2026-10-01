@@ -35,7 +35,7 @@ import type { StatusVariant } from './status'
 import { columnWidths, tableActionsWidthClass, tableCheckboxWidthClass } from './table-head'
 
 export const libraryRowClass =
-  'relative flex items-center gap-(--spacing-lg) border-b border-role-hairline px-(--spacing-md) py-(--spacing-md)'
+  'relative flex items-center gap-4 border-b border-role-hairline px-3 py-3'
 
 /** The two cells that sit above the row's selection overlay. */
 const overSelectionClass = 'relative z-10'
@@ -135,7 +135,7 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
         // The photograph column is the one that flexes: the head's 520px is the
         // checkbox, the thumb and this block together, so the block takes the
         // remainder and the Ratio column below stays aligned either way.
-        [h.Class('flex min-w-0 flex-1 flex-col gap-(--spacing-xs)')],
+        [h.Class('flex min-w-0 flex-1 flex-col gap-1')],
         [
           h.span([h.Class('type-body text-role-text-primary')], [inputs.title]),
           h.span([h.Class('type-exif text-role-text-disabled')], [inputs.fileLine]),

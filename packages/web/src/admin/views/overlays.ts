@@ -43,10 +43,10 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
         panelClass: 'w-full max-w-sm',
         content: (render, innerH) => [
           h.div(
-            [h.Class('p-4 flex flex-col gap-(--spacing-lg)')],
+            [h.Class('p-4 flex flex-col gap-4')],
             [
               h.div(
-                [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
+                [h.Class('flex items-start justify-between gap-2')],
                 [
                   Dialog.title({ attributes: render.title }, ['Are you sure?'], innerH),
                   Dialog.closeButton({ attributes: render.closeButton }, ['×'], innerH),
@@ -58,7 +58,7 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                 innerH,
               ),
               h.div(
-                [h.Class('flex justify-end gap-(--spacing-sm)')],
+                [h.Class('flex justify-end gap-2')],
                 [
                   Button.button(
                     {

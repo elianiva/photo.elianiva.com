@@ -22,11 +22,11 @@
  * for a different reason: it re-runs the reads.
  */
 
-import type { Document, HtmlBuilder } from "foldkit/html";
+import type { Document, HtmlBuilder } from 'foldkit/html'
 
-import type { Msg } from "../model";
-import { appRouteToUrl, type AppRoute } from "../route";
-import type { Child } from "./shared";
+import type { Msg } from '../model'
+import { appRouteToUrl, type AppRoute } from '../route'
+import type { Child } from './shared'
 
 const signInLink = (h: HtmlBuilder<Msg>, route: AppRoute): Child =>
   h.a(
@@ -35,39 +35,39 @@ const signInLink = (h: HtmlBuilder<Msg>, route: AppRoute): Child =>
       // they were working in rather than to the Library.
       h.Href(appRouteToUrl(route)),
       h.Class(
-        "focus-visible:ring-role-focus/50 bg-role-primary focus-visible:ring-[3px] text-role-on-primary inline-flex h-9 items-center border border-transparent px-(--spacing-lg) type-ui transition-colors duration-(--motion-duration-fast) outline-none",
+        'focus-visible:ring-role-focus/50 bg-role-primary focus-visible:ring-[3px] text-role-on-primary inline-flex h-9 items-center border border-transparent px-4 type-ui transition-colors duration-120 outline-none',
       ),
-      h.DataAttribute("slot", "button"),
+      h.DataAttribute('slot', 'button'),
     ],
-    ["Sign in again"],
-  );
+    ['Sign in again'],
+  )
 
 export const sessionExpired = (h: HtmlBuilder<Msg>, route: AppRoute): Document => ({
-  title: "Session expired — Admin",
+  title: 'Session expired — Admin',
   body: h.div(
     [
-      h.Class("bg-role-surface min-h-dvh text-role-text-primary"),
-      h.DataAttribute("slot", "session-expired"),
+      h.Class('bg-role-surface min-h-dvh text-role-text-primary'),
+      h.DataAttribute('slot', 'session-expired'),
     ],
     [
       h.div(
         [
           h.Class(
-            "mx-auto flex min-h-dvh w-full max-w-(--layout-content-max) flex-col justify-center gap-(--spacing-lg) px-(--layout-margin-mobile) sm:px-(--layout-margin)",
+            'mx-auto flex min-h-dvh w-full max-w-[1080px] flex-col justify-center gap-4 px-4 sm:px-12',
           ),
         ],
         [
-          h.span([h.Class("type-kicker text-role-text-secondary")], ["THE DESK"]),
-          h.h1([h.Class("type-headline text-role-text-primary")], ["Session expired"]),
+          h.span([h.Class('type-kicker text-role-text-secondary')], ['THE DESK']),
+          h.h1([h.Class('type-headline text-role-text-primary')], ['Session expired']),
           h.p(
-            [h.Class("type-deck max-w-prose text-role-text-secondary")],
+            [h.Class('type-deck max-w-prose text-role-text-secondary')],
             [
-              "The Cloudflare Access session behind the admin has ended. Sign in again to carry on.",
+              'The Cloudflare Access session behind the admin has ended. Sign in again to carry on.',
             ],
           ),
-          h.div([h.Class("flex")], [signInLink(h, route)]),
+          h.div([h.Class('flex')], [signInLink(h, route)]),
         ],
       ),
     ],
   ),
-});
+})

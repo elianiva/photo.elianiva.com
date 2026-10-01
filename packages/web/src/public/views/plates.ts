@@ -6,7 +6,7 @@
  * Desktop flows them into three columns with a hairline between them; mobile
  * flows them into two, without rules, at a 12px beat. The flow is computed per
  * breakpoint because the column count changes the assignment, so this draws
- * both trees and lets the `desktop` breakpoint pick one. The columns are not
+ * both trees and lets `lg` pick one. The columns are not
  * authored — `flowColumns` drops each plate into the shortest column — and the
  * hairline between the desktop columns is a sibling rather than a border, so it
  * stretches to the tallest column and stops where that column stops.
@@ -20,12 +20,15 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { gridColumns, gridColumnsMobile } from '@/lib/design-tokens'
-
 import { flowColumns, type Figure } from '../content'
 import { Message } from '../model'
 import { figure } from './figure'
 import type { Child } from './shared'
+
+/** The two column counts this file draws: three across on the desktop tree, two
+ *  on the mobile one. */
+const DESKTOP_COLUMNS = 3
+const MOBILE_COLUMNS = 2
 
 const column = (
   figures: ReadonlyArray<Figure>,
@@ -47,18 +50,18 @@ const columnsDesktop = (
   headsDocument: boolean,
   h: HtmlBuilder<Message>,
 ): Child => {
-  const flowed = flowColumns(figures, gridColumns)
+  const flowed = flowColumns(figures, DESKTOP_COLUMNS)
   const children: Array<Child> = []
   flowed.forEach((columnFigures, index) => {
     // `flowColumns` puts the run's first plate at the head of the first column
     // on both masters, so one plate per tree is the eager one whichever way the
     // flow broke.
-    children.push(column(columnFigures, 'gap-(--spacing-lg)', headsDocument && index === 0, h))
+    children.push(column(columnFigures, 'gap-4', headsDocument && index === 0, h))
     if (index < flowed.length - 1) {
       children.push(h.div([h.Class('w-px shrink-0 bg-role-hairline')], []))
     }
   })
-  return h.div([h.Class('hidden items-stretch gap-(--spacing-lg) desktop:flex')], children)
+  return h.div([h.Class('hidden items-stretch gap-4 lg:flex')], children)
 }
 
 const columnsMobile = (
@@ -67,10 +70,10 @@ const columnsMobile = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [h.Class('flex items-stretch gap-(--spacing-lg) desktop:hidden')],
+    [h.Class('flex items-stretch gap-4 lg:hidden')],
     [
-      ...flowColumns(figures, gridColumnsMobile).map((columnFigures, index) =>
-        column(columnFigures, 'gap-(--spacing-md)', headsDocument && index === 0, h),
+      ...flowColumns(figures, MOBILE_COLUMNS).map((columnFigures, index) =>
+        column(columnFigures, 'gap-3', headsDocument && index === 0, h),
       ),
     ],
   )

@@ -13,8 +13,7 @@ import { cn } from '@/lib/utils'
 
 import { switch_ } from './switch'
 
-export const toggleRowClass =
-  'flex items-center justify-between gap-(--spacing-sm) py-(--spacing-xs)'
+export const toggleRowClass = 'flex items-center justify-between gap-2 py-1'
 
 export type ToggleRowConfig<M> = Readonly<{
   id: string

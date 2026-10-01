@@ -8,7 +8,7 @@ export type Child = Html | string
  * each section, the tail, the colophon — and cap themselves at this width, so
  * every rule and every left edge lines up down the whole page.
  */
-export const BAND = 'mx-auto w-full max-w-(--layout-content-max)'
+export const BAND = 'mx-auto w-full max-w-[1080px]'
 
 /** Shared cursor feedback timing, from `motion.duration.fast`. */
-export const TRANSITION = 'transition-colors duration-(--motion-duration-fast)'
+export const TRANSITION = 'transition-colors duration-120'

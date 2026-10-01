@@ -47,10 +47,10 @@ const percentOf = (value: number, min: number, max: number): number =>
 export const slider = <M>(config: SliderConfig<M>, h: HtmlBuilder<M>): Html => {
   const percent = percentOf(config.value, config.min, config.max)
   return h.div(
-    [h.Class(cn('flex w-full flex-col gap-(--spacing-sm)', config.className))],
+    [h.Class(cn('flex w-full flex-col gap-2', config.className))],
     [
       h.div(
-        [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+        [h.Class('flex items-center justify-between gap-2')],
         [
           h.label([h.For(config.id), h.Class(sliderLabelClass)], [config.label]),
           h.span([h.Class(sliderValueClass)], [config.display ?? String(config.value)]),

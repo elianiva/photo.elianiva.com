@@ -32,7 +32,7 @@ export const sidebarItemStateKeys = ['active', 'default'] as const
 export type SidebarItemState = (typeof sidebarItemStateKeys)[number]
 
 const sidebarItemBase =
-  'focus-visible:ring-role-focus/50 flex h-9 w-full items-center gap-(--spacing-md) border-0 border-l-(length:--stroke-width-firm) border-l-transparent py-(--spacing-sm) pr-(--spacing-md) pl-(--spacing-sm) text-left transition-colors duration-(--motion-duration-fast) outline-none focus-visible:ring-[3px]'
+  'focus-visible:ring-role-focus/50 flex h-9 w-full items-center gap-3 border-0 border-l-2 border-l-transparent py-2 pr-3 pl-2 text-left transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 export const sidebarItemStateClasses: Record<SidebarItemState, string> = {
   active: 'bg-role-surface border-l-role-rule',

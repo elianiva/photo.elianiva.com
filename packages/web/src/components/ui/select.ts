@@ -30,7 +30,7 @@ export const selectLabelClass = 'type-kicker text-role-text-secondary'
  *  honours only its own prefix draws the native arrow on top of the design's
  *  caret — two carets, silently. */
 export const selectBoxClass =
-  'focus-visible:border-role-rule disabled:text-role-text-disabled h-9 w-full min-w-0 appearance-none border-0 border-b border-role-outline bg-transparent py-(--spacing-sm) pr-(--spacing-xl) type-exif text-role-text-primary outline-none transition-colors duration-(--motion-duration-fast) disabled:cursor-not-allowed [-webkit-appearance:none]'
+  'focus-visible:border-role-rule disabled:text-role-text-disabled h-9 w-full min-w-0 appearance-none border-0 border-b border-role-outline bg-transparent py-2 pr-6 type-exif text-role-text-primary outline-none transition-colors duration-120 disabled:cursor-not-allowed [-webkit-appearance:none]'
 
 export type SelectOption = Readonly<{
   /** What the page acts on — a rendition format, a section kind, a byte count. */
@@ -53,7 +53,7 @@ export type SelectConfig<M> = Readonly<{
  *  accessible name rather than a label and a value to keep in step. */
 export const select = <M>(config: SelectConfig<M>, h: HtmlBuilder<M>): Html =>
   h.div(
-    [h.Class(cn('flex w-full flex-col gap-(--spacing-sm)', config.className))],
+    [h.Class(cn('flex w-full flex-col gap-2', config.className))],
     [
       h.label([h.For(config.id), h.Class(selectLabelClass)], [config.label]),
       h.div(

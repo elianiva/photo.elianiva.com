@@ -52,7 +52,7 @@ import * as Textarea from '@/components/ui/textarea'
 import * as ToggleRow from '@/components/ui/toggle-row'
 
 import { blurhashComponentLabel, placeholderDataUrl } from '@/lib/blurhash'
-import { imagePreviewLongEdge, imagePreviewQuality } from '@/lib/design-tokens'
+
 import { icon } from '@/lib/icons'
 import { originalUrl } from '@/lib/image'
 import { scopeTheme } from '@/lib/theme'
@@ -86,7 +86,11 @@ import {
 } from '../editor'
 import { Message as M } from '../model'
 import type { EditorTab, Model, Msg } from '../model'
-import { PREVIEW_LONG_EDGES } from '../settings-draft'
+import {
+  DEFAULT_PREVIEW_LONG_EDGE,
+  DEFAULT_PREVIEW_QUALITY,
+  PREVIEW_LONG_EDGES,
+} from '../settings-draft'
 import { documentTitle } from './page-head'
 import { toastStack } from './overlays'
 import { formatBytes, type Child } from './shared'
@@ -105,7 +109,7 @@ const backLink = (model: Model, h: HtmlBuilder<Msg>): Child =>
       h.Href(editorReturnUrl(model.editor.returnRoute)),
       h.DataAttribute('slot', 'editor-back'),
       h.Class(
-        'focus-visible:ring-role-focus/50 inline-flex h-9 items-center gap-(--spacing-sm) px-(--spacing-lg) type-ui text-role-text-primary transition-colors duration-(--motion-duration-fast) hover:bg-role-surface-hover focus-visible:ring-[3px] focus-visible:outline-none',
+        'focus-visible:ring-role-focus/50 inline-flex h-9 items-center gap-2 px-4 type-ui text-role-text-primary transition-colors duration-120 hover:bg-role-surface-hover focus-visible:ring-[3px] focus-visible:outline-none',
       ),
     ],
     [icon(h, ArrowLeft, 'size-4 shrink-0'), 'Library'],
@@ -117,7 +121,7 @@ const backLink = (model: Model, h: HtmlBuilder<Msg>): Child =>
 const topBarLeft = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const photo = model.photo
   return h.div(
-    [h.Class('flex min-w-0 items-center gap-(--spacing-lg)')],
+    [h.Class('flex min-w-0 items-center gap-4')],
     [
       backLink(model, h),
       h.span([h.AriaHidden(true), h.Class('h-5 w-px bg-role-hairline')]),
@@ -145,7 +149,7 @@ const topBarLeft = (model: Model, h: HtmlBuilder<Msg>): Child => {
 const topBarRight = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const dirty = isEditorDirty(model.editor)
   return h.div(
-    [h.Class('flex items-center gap-(--spacing-sm)')],
+    [h.Class('flex items-center gap-2')],
     [
       ...(dirty
         ? [
@@ -300,9 +304,7 @@ const stageState = (model: Model, h: HtmlBuilder<Msg>): Child =>
     ? h.div(
         [
           h.DataAttribute('slot', 'editor-error'),
-          h.Class(
-            'border border-role-accent bg-role-error-container p-(--spacing-lg) type-ui text-role-error',
-          ),
+          h.Class('border border-role-accent bg-role-error-container p-4 type-ui text-role-error'),
         ],
         [
           h.p([], ['That photograph could not be loaded.']),
@@ -332,7 +334,7 @@ const editorSegment = (model: Model, group: EditorSegmentGroup, h: HtmlBuilder<M
   })
 }
 
-/** Canvas → Mat → Photograph, centred, `--spacing.2xl` of padding. */
+/** Canvas → Mat → Photograph, centred, `p-8` of padding. */
 const stage = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const photo = model.photo
   const draft = model.editor.draft
@@ -345,9 +347,7 @@ const stage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.div(
         [
           h.DataAttribute('slot', 'editor-canvas'),
-          h.Class(
-            'flex min-h-0 flex-1 items-center justify-center overflow-auto p-(--spacing-2xl)',
-          ),
+          h.Class('flex min-h-0 flex-1 items-center justify-center overflow-auto p-8'),
         ],
         [
           ...(ready && photo !== undefined && draft !== undefined
@@ -358,9 +358,7 @@ const stage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.div(
         [
           h.DataAttribute('slot', 'editor-stage-bar'),
-          h.Class(
-            'flex h-13 shrink-0 items-center gap-(--spacing-lg) border-t border-role-hairline px-(--spacing-xl) py-(--spacing-md)',
-          ),
+          h.Class('flex h-13 shrink-0 items-center gap-4 border-t border-role-hairline px-6 py-3'),
         ],
         [editorSegment(model, ZOOM_SEGMENT, h), editorSegment(model, COMPARE_SEGMENT, h)],
       ),
@@ -377,7 +375,7 @@ const stage = (model: Model, h: HtmlBuilder<Msg>): Child => {
  *  panel prints `<ratio> · AS SHOT` there and the other panels print nothing. */
 const panelHead = (kicker: string, right: Child | undefined, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+    [h.Class('flex items-center justify-between gap-2')],
     [
       h.h2([h.Class('type-kicker text-role-text-primary')], [kicker]),
       ...(right === undefined ? [] : [right]),
@@ -386,7 +384,7 @@ const panelHead = (kicker: string, right: Child | undefined, h: HtmlBuilder<Msg>
 
 const panel = (kicker: string, h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Child>): Child =>
   h.section(
-    [h.Class('flex flex-col gap-(--spacing-md) border-b border-role-hairline pb-(--spacing-lg)')],
+    [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-4')],
     [panelHead(kicker, undefined, h), ...children],
   )
 
@@ -432,7 +430,7 @@ const cropPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const disabled = draft === undefined
   const label = cropRatioLabel(model.photo, model.editor)
   return h.section(
-    [h.Class('flex flex-col gap-(--spacing-md) border-b border-role-hairline pb-(--spacing-lg)')],
+    [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-4')],
     [
       panelHead(
         'CROP',
@@ -459,10 +457,10 @@ const cropPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
         toParentMessage: (message) => M.GotCropRatioMessage({ message }),
       }),
       h.div(
-        [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+        [h.Class('flex items-center justify-between gap-2')],
         [
           h.div(
-            [h.Class('flex items-center gap-(--spacing-xs)')],
+            [h.Class('flex items-center gap-1')],
             [
               IconButton.iconButton(
                 {
@@ -538,11 +536,11 @@ const blurhashBlock = (model: Model, h: HtmlBuilder<Msg>): Child => {
   return h.div(
     [
       h.DataAttribute('slot', 'blurhash'),
-      h.Class('flex flex-col gap-(--spacing-md) border-t border-role-hairline pt-(--spacing-lg)'),
+      h.Class('flex flex-col gap-3 border-t border-role-hairline pt-4'),
     ],
     [
       h.div(
-        [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+        [h.Class('flex items-center justify-between gap-2')],
         [
           h.h3([h.Class('type-kicker text-role-text-primary')], ['BLURHASH']),
           h.span(
@@ -590,7 +588,7 @@ const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const draft = model.editor.draft
   const disabled = draft === undefined
   return h.section(
-    [h.Class('flex flex-col gap-(--spacing-md) border-b border-role-hairline pb-(--spacing-lg)')],
+    [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-4')],
     [
       panelHead(
         'EXPORT',
@@ -616,7 +614,7 @@ const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
         {
           id: 'editor-preview-quality',
           label: 'PREVIEW QUALITY',
-          value: draft?.previewQuality ?? imagePreviewQuality,
+          value: draft?.previewQuality ?? DEFAULT_PREVIEW_QUALITY,
           min: 1,
           max: 100,
           step: 1,
@@ -629,7 +627,7 @@ const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
         {
           id: 'editor-preview-long-edge',
           label: 'PREVIEW LONG EDGE',
-          value: String(draft?.previewLongEdge ?? imagePreviewLongEdge),
+          value: String(draft?.previewLongEdge ?? DEFAULT_PREVIEW_LONG_EDGE),
           options: PREVIEW_LONG_EDGES.map((edge) => ({
             value: String(edge),
             label: `${String(edge)} PX`,
@@ -682,14 +680,14 @@ const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
  *  #32's, and the panel's frame and head are the design's. */
 const editTab = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Role('tabpanel'), h.AriaLabel('EDIT'), h.Class('flex flex-col gap-(--spacing-xl)')],
+    [h.Role('tabpanel'), h.AriaLabel('EDIT'), h.Class('flex flex-col gap-6')],
     [
       cropPanel(model, h),
       panel(
         'BORDER',
         h,
         h.div(
-          [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+          [h.Class('flex items-center justify-between gap-2')],
           [
             h.span([h.Class('type-ui text-role-text-primary')], ['Mat']),
             ToggleRow.toggleRow(
@@ -736,7 +734,7 @@ const detailsTab = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const details = draft ?? { title: '', slug: '', location: '', takenAt: '' }
   const number = photo === undefined ? 'NO. —' : photoNumberLabel(photo) || 'NO. —'
   return h.div(
-    [h.Role('tabpanel'), h.AriaLabel('DETAILS'), h.Class('flex flex-col gap-(--spacing-xl)')],
+    [h.Role('tabpanel'), h.AriaLabel('DETAILS'), h.Class('flex flex-col gap-6')],
     [
       panel(
         'RECORD',
@@ -851,14 +849,12 @@ const inspector = (model: Model, h: HtmlBuilder<Msg>): Child =>
         [
           h.Role('tablist'),
           h.AriaLabel('Editor sections'),
-          h.Class(
-            'flex items-center gap-(--spacing-xl) border-b border-role-hairline px-(--spacing-xl) py-(--spacing-md)',
-          ),
+          h.Class('flex items-center gap-6 border-b border-role-hairline px-6 py-3'),
         ],
         [tab('edit', 'EDIT', model.editor.tab, h), tab('details', 'DETAILS', model.editor.tab, h)],
       ),
       h.div(
-        [h.Class('flex flex-col gap-(--spacing-xl) p-(--spacing-xl)')],
+        [h.Class('flex flex-col gap-6 p-6')],
         [model.editor.tab === 'edit' ? editTab(model, h) : detailsTab(model, h)],
       ),
     ],
@@ -882,10 +878,10 @@ const leaveDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
         panelClass: 'w-full max-w-sm',
         content: (render, innerH) => [
           h.div(
-            [h.Class('flex flex-col gap-(--spacing-lg) p-4')],
+            [h.Class('flex flex-col gap-4 p-4')],
             [
               h.div(
-                [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
+                [h.Class('flex items-start justify-between gap-2')],
                 [
                   Dialog.title({ attributes: render.title }, ['Unsaved changes'], innerH),
                   Dialog.closeButton({ attributes: render.closeButton }, ['×'], innerH),
@@ -899,7 +895,7 @@ const leaveDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                 innerH,
               ),
               h.div(
-                [h.Class('flex justify-end gap-(--spacing-sm)')],
+                [h.Class('flex justify-end gap-2')],
                 [
                   Button.button(
                     {
@@ -947,7 +943,7 @@ export const editorDocument = (model: Model, h: HtmlBuilder<Msg>): Document => (
         [
           h.DataAttribute('slot', 'editor-top-bar'),
           h.Class(
-            'flex h-13 shrink-0 items-center justify-between gap-(--spacing-lg) border-b border-role-hairline px-(--spacing-xl) py-(--spacing-sm)',
+            'flex h-13 shrink-0 items-center justify-between gap-4 border-b border-role-hairline px-6 py-2',
           ),
         ],
         [topBarLeft(model, h), topBarRight(model, h)],

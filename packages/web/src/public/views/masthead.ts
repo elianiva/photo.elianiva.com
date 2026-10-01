@@ -104,13 +104,13 @@ const TRACKS = 'grid grid-cols-[1fr_auto_1fr]'
 
 /** A rule is a filled band, and the width is the design's stroke scale: the
  *  heavy rule is the edge of the paper, the hairline is the fold inside it. */
-const HEAVY = 'h-(--stroke-width-bold) bg-role-rule'
-const HAIR = 'h-(--stroke-width-subtle) bg-role-rule'
+const HEAVY = 'h-[2.5px] bg-role-rule'
+const HAIR = 'h-px bg-role-rule'
 /** The hairlines flanking the name, in the warm grey rather than in ink: they
  *  are print furniture beside the name, not structure under it. */
-const FLANK = 'h-(--stroke-width-subtle) bg-role-hairline'
+const FLANK = 'h-px bg-role-hairline'
 /** The masthead's one red rule. See the note on the second colour. */
-const FOLD = 'h-(--stroke-width-bold) bg-role-accent'
+const FOLD = 'h-[2.5px] bg-role-accent'
 
 /** A rule, drawn rather than typed. */
 const rule = (className: string, h: HtmlBuilder<Message>): Child => h.div([h.Class(className)], [])
@@ -135,7 +135,7 @@ const ruleStack = (weights: ReadonlyArray<string>, h: HtmlBuilder<Message>): Chi
  * these rules inherit rather than against the name beside them.
  */
 const flankRule = (h: HtmlBuilder<Message>): Child =>
-  rule(`${FLANK} -translate-y-1.5 desktop:-translate-y-3.5`, h)
+  rule(`${FLANK} -translate-y-1.5 lg:-translate-y-3.5`, h)
 
 /**
  * The flag: the line above the name that says which paper this is. Read in the
@@ -160,7 +160,7 @@ const flag: ReadonlyArray<{
 
 const flagRow = (h: HtmlBuilder<Message>): Child =>
   h.div(
-    [h.Class(`${TRACKS} items-baseline gap-x-(--spacing-md) py-(--spacing-sm)`)],
+    [h.Class(`${TRACKS} items-baseline gap-x-3 py-2`)],
     flag.map((item) =>
       h.span([h.Class(`type-kicker ${item.place} ${item.className}`)], [item.text]),
     ),
@@ -183,23 +183,17 @@ const flagRow = (h: HtmlBuilder<Message>): Child =>
  */
 const nameplate = (h: HtmlBuilder<Message>): Child =>
   h.div(
-    [
-      h.Class(
-        `${TRACKS} items-center gap-x-(--spacing-lg) gap-y-(--spacing-md) py-(--spacing-md) desktop:pt-(--spacing-lg) desktop:pb-(--spacing-lg)`,
-      ),
-    ],
+    [h.Class(`${TRACKS} items-center gap-x-4 gap-y-3 py-3 lg:pt-4 lg:pb-4`)],
     [
       flankRule(h),
       h.a(
         [
           h.Href(routeHref({ route: 'front' })),
           h.Class(
-            'type-nameplate-sm uppercase text-role-text-primary transition-opacity duration-(--motion-duration-fast) hover:opacity-70 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px]',
+            'type-nameplate-sm uppercase text-role-text-primary transition-opacity duration-120 hover:opacity-70 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px]',
           ),
         ],
-        [
-          h.span([h.Class('tracking-wider')], ['Elianiva']),
-        ],
+        [h.span([h.Class('tracking-wider')], ['Elianiva'])],
       ),
       flankRule(h),
     ],
@@ -219,13 +213,13 @@ const folio = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [h.Class('flex justify-center py-(--spacing-sm) desktop:py-(--spacing-md)')],
+    [h.Class('flex justify-center py-2 lg:py-3')],
     [
       h.nav(
         [
           h.AriaLabel('Sections'),
           h.Class(
-            'flex flex-wrap items-center justify-center gap-x-(--spacing-lg) gap-y-(--spacing-xs) uppercase desktop:gap-x-(--spacing-2xl)',
+            'flex flex-wrap items-center justify-center gap-x-4 gap-y-1 uppercase lg:gap-x-8',
           ),
         ],
         // The link the reader is on is the one the rule marks, so the mark is
@@ -239,7 +233,7 @@ const folio = (
               // The Folio is centred and wraps, so every link carries the same
               // horizontal padding: a hit area a finger can find, and no shift
               // in the row's centring when one link becomes the current one.
-              className: 'px-(--spacing-xs)',
+              className: 'px-1',
             },
             h,
           ),
@@ -261,7 +255,7 @@ export const masthead = (
         // on the document is separated from the one above it by its own
         // padding; the masthead is the first, so it is the one that has to
         // clear the top of the viewport itself.
-        [h.Class(`${BAND} flex flex-col pt-(--spacing-md)`)],
+        [h.Class(`${BAND} flex flex-col pt-3`)],
         [
           // The paper's top edge: the heavy rule, bare stock, the hairline the
           // flag stands on.

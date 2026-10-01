@@ -9,7 +9,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import { cn } from '@/lib/utils'
 
 export const textareaClass =
-  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled field-sizing-content min-h-(--spacing-3xl) w-full min-w-0 border-0 border-b border-role-outline bg-transparent px-0 pb-(--spacing-sm) pt-(--spacing-sm) type-body outline-none transition-colors duration-(--motion-duration-fast) disabled:cursor-not-allowed'
+  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled field-sizing-content min-h-12 w-full min-w-0 border-0 border-b border-role-outline bg-transparent px-0 pb-2 pt-2 type-body outline-none transition-colors duration-120 disabled:cursor-not-allowed'
 
 /** Same string as the `label` item's component classes (upstream label.tsx). */
 /** Upstream string re-keyed for foldkit: the label precedes the control, so
@@ -17,11 +17,11 @@ export const textareaClass =
  *  state flows from the wrapper (group/field + data-disabled, mirroring
  *  switch.ts). */
 export const textareaLabelClass =
-  'type-kicker text-role-text-secondary transition-colors duration-(--motion-duration-fast) flex items-center select-none group-data-[disabled]:opacity-50 group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50 group-focus-within/field:text-role-text-primary'
+  'type-kicker text-role-text-secondary transition-colors duration-120 flex items-center select-none group-data-[disabled]:opacity-50 group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50 group-focus-within/field:text-role-text-primary'
 
 export const textareaDescriptionClass = 'type-exif text-role-text-disabled'
 
-export const textareaWrapperClass = 'group/field flex flex-col gap-(--spacing-xs) w-full'
+export const textareaWrapperClass = 'group/field flex flex-col gap-1 w-full'
 
 export type TextareaConfig<M> = Readonly<{
   id: string

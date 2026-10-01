@@ -40,18 +40,13 @@ export const pager = <M>(config: PagerConfig<M>, h: HtmlBuilder<M>): Html =>
   h.nav(
     [
       h.AriaLabel('Pagination'),
-      h.Class(
-        cn(
-          'flex items-center justify-between gap-(--spacing-lg) py-(--spacing-lg)',
-          config.className,
-        ),
-      ),
+      h.Class(cn('flex items-center justify-between gap-4 py-4', config.className)),
       h.DataAttribute('slot', 'pager'),
     ],
     [
       h.span([h.Class('type-exif tabular-nums text-role-text-disabled')], [pagerRange(config)]),
       h.div(
-        [h.Class('flex items-center gap-(--spacing-sm)')],
+        [h.Class('flex items-center gap-2')],
         [
           iconButton(
             {

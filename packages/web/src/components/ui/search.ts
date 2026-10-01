@@ -30,7 +30,7 @@ export type SearchConfig<M> = Readonly<{
 }>
 
 export const searchClass =
-  'placeholder:text-role-text-disabled focus-within:border-role-rule flex h-9 w-full items-center gap-(--spacing-sm) border-b border-role-outline bg-transparent px-(--spacing-sm) text-role-text-primary transition-colors duration-(--motion-duration-fast)'
+  'placeholder:text-role-text-disabled focus-within:border-role-rule flex h-9 w-full items-center gap-2 border-b border-role-outline bg-transparent px-2 text-role-text-primary transition-colors duration-120'
 
 /** The Page Head's search field. */
 export const search = <M>(config: SearchConfig<M>, h: HtmlBuilder<M>): Html =>

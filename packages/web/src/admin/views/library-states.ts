@@ -43,7 +43,7 @@ export const libraryError = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [
       h.Class(
-        'mt-(--spacing-3xl) border border-role-accent bg-role-error-container p-(--spacing-lg) type-ui text-role-error',
+        'mt-12 border border-role-accent bg-role-error-container p-4 type-ui text-role-error',
       ),
     ],
     [
@@ -62,10 +62,10 @@ export const libraryError = (model: Model, h: HtmlBuilder<Msg>): Child =>
  *  draws the same words and the same clear, whatever arrangement is behind it. */
 export const libraryNoMatch = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('mt-(--spacing-3xl)')],
+    [h.Class('mt-12')],
     [
       Empty(
-        { className: 'border border-dashed border-role-outline p-(--spacing-3xl)' },
+        { className: 'border border-dashed border-role-outline p-12' },
         [
           Empty.header({}, [], h),
           Empty.title({}, ['Nothing matches this filter'], h),

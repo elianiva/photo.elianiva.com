@@ -34,7 +34,7 @@ const backToLibrary = (label: string, h: HtmlBuilder<Msg>): Child =>
     [
       h.Href(libraryUrl()),
       h.Class(
-        'type-ui inline-flex items-center gap-1 text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary',
+        'type-ui inline-flex items-center gap-1 text-role-text-secondary transition-colors duration-120 hover:text-role-text-primary',
       ),
     ],
     [label],
@@ -62,8 +62,8 @@ const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
           h.AriaPressed(String(cols === model.cols)),
           h.Class(
             cols === model.cols
-              ? 'bg-role-primary px-(--spacing-md) py-(--spacing-xs) type-exif text-role-on-primary'
-              : 'px-(--spacing-md) py-(--spacing-xs) type-exif text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary',
+              ? 'bg-role-primary px-3 py-1 type-exif text-role-on-primary'
+              : 'px-3 py-1 type-exif text-role-text-secondary transition-colors duration-120 hover:text-role-text-primary',
           ),
         ],
         [String(cols)],
@@ -79,7 +79,7 @@ const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       // One Library read, two views. The Filter Bar's `View` group is the
       // toggle; the density picker is drawn only when the grid is.
       ...(view === 'grid'
-        ? [h.div([h.Class('mt-(--spacing-lg) flex justify-end')], [colsToggle(model, h)])]
+        ? [h.div([h.Class('mt-4 flex justify-end')], [colsToggle(model, h)])]
         : []),
       libraryFilterBar(model, h),
       // The design's Drop Zone strip sits between the Filter Bar and the rows,
@@ -98,7 +98,7 @@ const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
                   constraints: UPLOAD_CONSTRAINTS,
                   multiple: true,
                   accept: UPLOAD_ACCEPT,
-                  className: 'mt-(--spacing-xl)',
+                  className: 'mt-6',
                 },
                 h,
               ),
@@ -125,14 +125,14 @@ const photoFacts = (photo: PhotoWithTags): ReadonlyArray<string> =>
 const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
   if (model.photoStatus !== 'ready' || model.photo === undefined) {
     return h.div(
-      [h.Class('mt-(--spacing-3xl) flex flex-col items-start gap-4')],
+      [h.Class('mt-12 flex flex-col items-start gap-4')],
       [
         backToLibrary('← Library', h),
         model.photoStatus === 'error'
           ? h.div(
               [
                 h.Class(
-                  'border border-role-accent bg-role-error-container p-(--spacing-lg) type-ui text-role-error',
+                  'border border-role-accent bg-role-error-container p-4 type-ui text-role-error',
                 ),
               ],
               [
@@ -152,7 +152,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const meta = photo.metadata ?? {}
   const facts = photoFacts(photo)
   return h.div(
-    [h.Class('mt-(--spacing-2xl) flex flex-col gap-(--spacing-xl)')],
+    [h.Class('mt-8 flex flex-col gap-6')],
     [
       h.div(
         [h.Class('flex flex-wrap items-center justify-between gap-3')],
@@ -218,7 +218,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
  *  actually true of it rather than pretending to. #29 owns the body. */
 const forthcomingPage = (note: string, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
+    [h.Class('mt-8 flex flex-col items-start gap-4')],
     [
       h.p([h.Class('type-deck max-w-prose text-role-text-secondary')], [note]),
       backToLibrary('← Library', h),
@@ -230,7 +230,7 @@ const forthcomingPage = (note: string, h: HtmlBuilder<Msg>): Child =>
  *  (CONTEXT.md, Status). */
 const scheduledPage = (h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
+    [h.Class('mt-8 flex flex-col items-start gap-4')],
     [
       h.p(
         [h.Class('type-deck max-w-prose text-role-text-secondary')],
@@ -248,7 +248,7 @@ const scheduledPage = (h: HtmlBuilder<Msg>): Child =>
 
 const notFoundPage = (path: string, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('mt-(--spacing-2xl) flex flex-col items-start gap-4')],
+    [h.Class('mt-8 flex flex-col items-start gap-4')],
     [
       h.p(
         [h.Class('type-deck max-w-prose text-role-text-secondary')],

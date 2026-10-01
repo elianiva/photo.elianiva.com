@@ -24,17 +24,13 @@ const sectionHead = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [
-      h.Class(
-        'flex items-end justify-between gap-(--spacing-md) border-t border-role-rule pt-(--spacing-md) desktop:gap-(--spacing-lg)',
-      ),
-    ],
+    [h.Class('flex items-end justify-between gap-3 border-t border-role-rule pt-3 lg:gap-4')],
     [
       h.div(
-        [h.Class('flex items-end gap-(--spacing-sm) desktop:gap-(--spacing-md)')],
+        [h.Class('flex items-end gap-2 lg:gap-3')],
         [
           h.h2(
-            [h.Class('type-section-sm italic text-role-text-primary desktop:type-section')],
+            [h.Class('type-section-sm italic text-role-text-primary lg:type-section')],
             [section.month],
           ),
           h.span([h.Class('type-exif text-role-text-secondary')], [section.year]),
@@ -43,8 +39,8 @@ const sectionHead = (
       h.span(
         [h.Class('type-kicker text-role-text-secondary')],
         [
-          h.span([h.Class('desktop:hidden')], [mobileCount]),
-          h.span([h.Class('hidden desktop:inline')], [sectionCount(section)]),
+          h.span([h.Class('lg:hidden')], [mobileCount]),
+          h.span([h.Class('hidden lg:inline')], [sectionCount(section)]),
         ],
       ),
     ],
@@ -62,11 +58,7 @@ export const editionSection = (
     [h.Class('flex flex-col')],
     [
       h.div(
-        [
-          h.Class(
-            `${BAND} flex flex-col gap-(--spacing-lg) pt-(--spacing-2xl) desktop:gap-(--spacing-xl) desktop:pt-(--spacing-3xl)`,
-          ),
-        ],
+        [h.Class(`${BAND} flex flex-col gap-4 pt-8 lg:gap-6 lg:pt-12`)],
         [
           sectionHead(section, frameCount(section.figures.length), h),
           ...plateColumns(section.figures, h, headsDocument),

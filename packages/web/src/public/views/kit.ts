@@ -35,7 +35,7 @@ export const kit = (h: HtmlBuilder<Message>): Child =>
     // The body's own gap and this table's own top padding are both in the
     // design, so the space between the last plate's Exif line and `KIT` is
     // their sum: 48px at `desktop`, 32px on the mobile master.
-    [h.Class('flex flex-col pt-(--spacing-lg) desktop:pt-(--spacing-xl)')],
+    [h.Class('flex flex-col pt-4 lg:pt-6')],
     [
       h.span([h.Class('type-kicker text-role-text-secondary')], ['KIT']),
       h.dl(

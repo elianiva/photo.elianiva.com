@@ -80,17 +80,13 @@ const segmentNamed = (id: string): SheetSegment => {
  *  beneath. The design's specimen cells, in the Admin's own gutters. */
 const band = (name: string, h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Child>): Html =>
   h.section(
-    [h.Class('mt-(--spacing-2xl) flex flex-col gap-(--spacing-lg)')],
+    [h.Class('mt-8 flex flex-col gap-4')],
     [
       h.h3(
-        [
-          h.Class(
-            'type-kicker border-b-[3px] border-b-role-rule pb-(--spacing-sm) text-role-text-primary',
-          ),
-        ],
+        [h.Class('type-kicker border-b-[3px] border-b-role-rule pb-2 text-role-text-primary')],
         [name],
       ),
-      h.div([h.Class('flex flex-col gap-(--spacing-lg)')], children),
+      h.div([h.Class('flex flex-col gap-4')], children),
     ],
   )
 
@@ -104,7 +100,7 @@ const labelled = (
   className = 'items-start',
 ): Html =>
   h.div(
-    [h.Class(cn('flex flex-col gap-(--spacing-sm)', className))],
+    [h.Class(cn('flex flex-col gap-2', className))],
     [h.span([h.Class('type-kicker text-role-text-disabled')], [label]), body],
   )
 
@@ -114,7 +110,7 @@ const STRETCH = 'items-stretch'
 
 /** A wrapping row of variants — the design's specimen cell layout. */
 const variants = (h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Child>): Html =>
-  h.div([h.Class('flex flex-wrap items-center gap-(--spacing-md)')], children)
+  h.div([h.Class('flex flex-wrap items-center gap-3')], children)
 
 /** The Editor is the one broadsheet branch that is dark, so the sheet draws a
  *  panel in it and every atom above proves it follows the theme scope. */
@@ -124,7 +120,7 @@ const darkPanel = (body: Child, h: HtmlBuilder<Msg>): Html =>
       h.Attribute('data-theme', 'dark'),
       // `w-fit`, not a full row: the design's Inspector is 360px and the panel
       // is drawn at that width, not at the sheet's.
-      h.Class('w-fit bg-role-surface-container p-(--spacing-xl) text-role-text-primary'),
+      h.Class('w-fit bg-role-surface-container p-6 text-role-text-primary'),
     ],
     [body],
   )
@@ -445,14 +441,10 @@ const editorPanelBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
       h.div(
         // 312px: the design's Inspector is 360px including its own 24px
         // padding, and every control inside it is `fill` of what is left.
-        [h.Class('flex w-78 flex-col gap-(--spacing-xl)')],
+        [h.Class('flex w-78 flex-col gap-6')],
         [
           h.div(
-            [
-              h.Class(
-                'flex items-center gap-(--spacing-lg) border-b border-role-hairline pb-(--spacing-md)',
-              ),
-            ],
+            [h.Class('flex items-center gap-4 border-b border-role-hairline pb-3')],
             [
               NavLink.navLink({ href: atomsRouter(), label: 'EDIT', state: 'active' }, h),
               NavLink.navLink({ href: atomsRouter(), label: 'DETAILS', state: 'default' }, h),
@@ -463,10 +455,10 @@ const editorPanelBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
           labelled(
             'Border',
             h.div(
-              [h.Class('flex flex-col gap-(--spacing-md)')],
+              [h.Class('flex flex-col gap-3')],
               [
                 h.div(
-                  [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+                  [h.Class('flex items-center justify-between gap-2')],
                   [
                     h.span([h.Class('type-kicker text-role-text-primary')], ['BORDER']),
                     ToggleRow.toggleRow(
@@ -482,7 +474,7 @@ const editorPanelBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
                   ],
                 ),
                 h.div(
-                  [h.Class('flex items-center gap-(--spacing-sm)')],
+                  [h.Class('flex items-center gap-2')],
                   [
                     ...matColours.map((colour) =>
                       Swatch.swatch(
@@ -515,7 +507,7 @@ const editorPanelBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
           labelled(
             'Export',
             h.div(
-              [h.Class('flex flex-col gap-(--spacing-md)')],
+              [h.Class('flex flex-col gap-3')],
               [
                 sheetSegment(model, segmentNamed('atoms-editor-format'), h),
                 ToggleRow.toggleRow(
@@ -544,7 +536,7 @@ const editorPanelBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
           labelled(
             'Details',
             h.div(
-              [h.Class('flex flex-col gap-(--spacing-md)')],
+              [h.Class('flex flex-col gap-3')],
               [
                 Textarea.textarea(
                   {
@@ -580,9 +572,9 @@ export const atomsPage = (model: Model, h: HtmlBuilder<Msg>): Html =>
   h.div(
     [h.Class('flex flex-col')],
     [
-      h.h1([h.Class('mt-(--spacing-2xl) type-section text-role-text-primary')], ['Atoms']),
+      h.h1([h.Class('mt-8 type-section text-role-text-primary')], ['Atoms']),
       h.p(
-        [h.Class('mt-(--spacing-xs) type-deck max-w-prose text-role-text-secondary')],
+        [h.Class('mt-1 type-deck max-w-prose text-role-text-secondary')],
         ['Every atom of the Desk, drawn at its own size. Nothing on this page links anywhere yet.'],
       ),
       segmentBand(model, h),

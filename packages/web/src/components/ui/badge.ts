@@ -25,7 +25,7 @@ export const badgeVariants: Record<BadgeVariant, string> = {
 export type BadgeVariant = (typeof badgeVariantKeys)[number]
 
 export const badgeClass =
-  'border bg-transparent px-(--spacing-sm) py-(--spacing-xs) type-exif whitespace-nowrap inline-flex w-fit shrink-0 items-center justify-center gap-1 transition-colors duration-(--motion-duration-fast) focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&>svg]:pointer-events-none [&>svg]:shrink-0'
+  'border bg-transparent px-2 py-1 type-exif whitespace-nowrap inline-flex w-fit shrink-0 items-center justify-center gap-1 transition-colors duration-120 focus-visible:border-role-focus focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&>svg]:pointer-events-none [&>svg]:shrink-0'
 
 type StyleConfig = Readonly<{ className?: string; variant?: BadgeVariant }>
 

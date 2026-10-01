@@ -101,13 +101,11 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [
       h.DataAttribute('slot', 'library-filter-bar'),
-      h.Class(
-        'mt-(--spacing-2xl) flex flex-wrap items-center justify-between gap-x-(--spacing-xl) gap-y-(--spacing-sm)',
-      ),
+      h.Class('mt-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-2'),
     ],
     [
       h.div(
-        [h.Class('flex flex-wrap items-center gap-x-(--spacing-xl) gap-y-(--spacing-sm)')],
+        [h.Class('flex flex-wrap items-center gap-x-6 gap-y-2')],
         [
           Segment.segmentGroup(
             {
@@ -120,7 +118,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
             h,
           ),
           h.div(
-            [h.Class('flex items-center gap-(--spacing-sm)')],
+            [h.Class('flex items-center gap-2')],
             [
               h.span([h.Class('type-kicker text-role-text-disabled')], ['RATIO']),
               Segment.segmentGroup(
@@ -137,7 +135,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
         ],
       ),
       h.div(
-        [h.Class('flex items-center gap-(--spacing-lg)')],
+        [h.Class('flex items-center gap-4')],
         [
           // The design's Select is a kicker over a box; the `basic` bar is one
           // 36px row, so the kicker sits beside the box rather than above it.
@@ -149,7 +147,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
               options: SORT_OPTIONS,
               onChange: (value) =>
                 M.SelectedSortFilter({ value: value === 'oldest' ? 'oldest' : 'newest' }),
-              className: 'w-auto flex-row items-center gap-(--spacing-sm)',
+              className: 'w-auto flex-row items-center gap-2',
             },
             h,
           ),

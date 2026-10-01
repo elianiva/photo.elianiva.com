@@ -53,8 +53,7 @@ export const tableActionsWidthClass = 'w-18 shrink-0'
 /** The select-all box, the same 16px the rows carry. */
 export const tableCheckboxWidthClass = 'w-4 shrink-0'
 
-export const tableHeadClass =
-  'flex items-center gap-(--spacing-lg) border-b border-role-rule px-(--spacing-md) pt-(--spacing-md) pb-(--spacing-sm)'
+export const tableHeadClass = 'flex items-center gap-4 border-b border-role-rule px-3 pt-3 pb-2'
 
 export type TableHeadConfig<M> = Readonly<{
   /** The page's select-all box. Omit it and the head opens on a 16px spacer. */

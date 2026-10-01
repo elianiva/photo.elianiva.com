@@ -129,22 +129,27 @@ _Avoid_: Hero image, featured image
 ## Design language
 
 **Broadsheet**:
-The visual system the whole site is drawn in, vendored as
-`packages/web/design/broadsheet.gen.yaml` and emitted as tokens by
-`packages/web/scripts/generate-design-tokens.mjs`. Paper, ink, hairline rules,
-a kicker/exif/deck type hierarchy, and no rounded corners on the Desk's
-controls. It ships as tokens, never as values in a component.
-_Avoid_: shadcn defaults, pill buttons, card shadows
+The visual system the whole site is drawn in, hand-written as
+`packages/web/src/theme.css`. Paper, ink, hairline rules, a
+kicker/exif/deck type hierarchy, and no rounded corners on the Desk's
+controls. Colour and type are the only two things it holds: every length,
+radius, duration and breakpoint is Tailwind's own scale, written inline where
+it is used — `p-3`, never `p-(--spacing-md)`.
+_Avoid_: shadcn defaults, pill buttons, card shadows, a second scale beside
+Tailwind's
 
 **Role token**:
 A colour in the broadsheet, named by what it does rather than what it looks
-like — `color.surface`, `color.hairline`, `color.text.secondary`. Reached in
-CSS as a `role-*` custom property (`bg-role-surface`), and in TypeScript where
-a stylesheet cannot reach, through the generated `lib/design-tokens.ts`. Every
-colour on the site is a role token; a hex literal in Desk code is a defect, and
-`pnpm typecheck` fails on one because it regenerates the tokens and diffs them
-against the catalogue before `tsc` runs.
+like — `bg-role-surface`, `border-role-hairline`, `text-role-text-secondary`.
+Reached as a utility, so it follows the **Theme scope**; a hex literal in Desk
+code is a defect.
 _Avoid_: palette colour (`neutral-500`), shadcn name (`--muted-foreground`) in Desk code
+
+**Type composite**:
+A named typographic decision — `type-ui`, `type-kicker`, `type-exif` — declared
+once as a `@utility` in `theme.css`. One decision named once, rather than four
+utilities repeated at every place that text is drawn.
+_Avoid_: spelling a composite out inline, a composite nothing draws
 
 **Contract name**:
 A shadcn semantic name (`--background`, `--muted-foreground`, `--ring`) bound
@@ -154,7 +159,7 @@ _Avoid_: extending the contract with a name broadsheet does not have
 
 **Theme scope**:
 The element a broadsheet branch is named on: `data-theme="light" | "dark"`,
-with `.dark` on the document root the same generated block spelled as a class.
+with `.dark` on the document root the same block spelled as a class.
 The branch is a function of the Admin's **Route** and of nothing else, so the
 view names it on the app root and the HTML shell names it on `<html>` — the
 only element there is before the app has run. The Library (`/admin`) is light;

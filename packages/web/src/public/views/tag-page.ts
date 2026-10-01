@@ -30,23 +30,14 @@ import { BAND, type Child } from './shared'
 
 export const tagBody = (tag: TagPage, h: HtmlBuilder<Message>): Child =>
   h.div(
-    [
-      h.Id('tag'),
-      h.Class(
-        `${BAND} flex flex-col gap-(--spacing-sm) pt-(--spacing-2xl) desktop:gap-(--spacing-md) desktop:pt-(--spacing-3xl)`,
-      ),
-    ],
+    [h.Id('tag'), h.Class(`${BAND} flex flex-col gap-2 pt-8 lg:gap-3 lg:pt-12`)],
     [
       h.h1([h.Class('type-section text-role-text-primary')], [tag.label]),
       ...(tag.caption === null
         ? []
         : [h.p([h.Class('type-deck text-role-text-secondary')], [tag.caption])]),
       h.div(
-        [
-          h.Class(
-            'flex items-end justify-between gap-(--spacing-md) border-t border-role-rule pt-(--spacing-md) desktop:gap-(--spacing-lg)',
-          ),
-        ],
+        [h.Class('flex items-end justify-between gap-3 border-t border-role-rule pt-3 lg:gap-4')],
         // The Section head's right-hand line, ranged the same way: a Tag's page
         // has no month to head it, so the count is the whole line.
         [

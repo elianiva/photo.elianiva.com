@@ -15,7 +15,7 @@ export const navLinkStateKeys = ['active', 'default'] as const
 export type NavLinkState = (typeof navLinkStateKeys)[number]
 
 export const navLinkBaseClass =
-  'focus-visible:ring-role-focus/50 inline-block border-b-[1.5px] px-0 py-(--spacing-xs) type-kicker transition-colors duration-(--motion-duration-fast) outline-none focus-visible:ring-[3px]'
+  'focus-visible:ring-role-focus/50 inline-block border-b-[1.5px] px-0 py-1 type-kicker transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 export const navLinkStateClasses: Record<NavLinkState, string> = {
   active: 'border-role-rule text-role-text-primary',

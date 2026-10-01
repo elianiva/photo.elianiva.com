@@ -41,21 +41,20 @@ export type GroupHeading = FoldkitCombobox.GroupHeading
  *  in `color.text.secondary`. The listbox is that box lifted onto a
  *  `color.hairline` surface, its active row in `color.surface.hover`. */
 export const comboboxInputClass =
-  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled h-9 w-full min-w-0 border-0 border-b border-role-outline bg-transparent py-(--spacing-sm) pr-(--spacing-xl) type-exif outline-none transition-colors duration-(--motion-duration-fast) disabled:cursor-not-allowed'
+  'placeholder:text-role-text-disabled focus-visible:border-role-rule focus-visible:ring-0 aria-invalid:border-role-error disabled:border-role-hairline disabled:text-role-text-disabled h-9 w-full min-w-0 border-0 border-b border-role-outline bg-transparent py-2 pr-6 type-exif outline-none transition-colors duration-120 disabled:cursor-not-allowed'
 
 export const comboboxButtonClass =
-  'absolute inset-y-0 right-0 flex items-center pr-(--spacing-sm) text-role-text-secondary transition-colors duration-(--motion-duration-fast) hover:text-role-text-primary disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-3.5'
+  'absolute inset-y-0 right-0 flex items-center pr-2 text-role-text-secondary transition-colors duration-120 hover:text-role-text-primary disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-3.5'
 
 export const comboboxItemsClass =
-  'bg-role-surface-container text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 max-h-72 border border-role-hairline p-(--spacing-sm) z-50 min-w-56 outline-hidden'
+  'bg-role-surface-container text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 max-h-72 border border-role-hairline p-2 z-50 min-w-56 outline-hidden'
 
 export const comboboxItemsAnimatedClass = comboboxItemsClass
 
 export const comboboxItemClass =
-  'data-active:bg-role-surface-hover data-active:text-role-on-surface gap-(--spacing-sm) py-(--spacing-xs) pr-(--spacing-lg) pl-(--spacing-xs) type-exif flex w-full cursor-default select-none outline-hidden data-disabled:pointer-events-none data-disabled:text-role-text-disabled data-selected:text-role-text-primary'
+  'data-active:bg-role-surface-hover data-active:text-role-on-surface gap-2 py-1 pr-4 pl-1 type-exif flex w-full cursor-default select-none outline-hidden data-disabled:pointer-events-none data-disabled:text-role-text-disabled data-selected:text-role-text-primary'
 
-export const comboboxGroupHeadingClass =
-  'type-kicker text-role-text-secondary px-(--spacing-sm) py-(--spacing-xs)'
+export const comboboxGroupHeadingClass = 'type-kicker text-role-text-secondary px-2 py-1'
 
 export const comboboxSeparatorClass = 'bg-role-hairline -mx-1 my-1 h-px'
 
@@ -83,7 +82,7 @@ export const comboboxChevron = <M>(h: HtmlBuilder<M>): Html =>
 
 export const comboboxCheck = <M>(h: HtmlBuilder<M>): Html =>
   h.span(
-    [h.Class('absolute right-(--spacing-sm) flex size-4 items-center justify-center')],
+    [h.Class('absolute right-2 flex size-4 items-center justify-center')],
     [icon(h, Check, 'size-3.5 text-role-text-primary')],
   )
 

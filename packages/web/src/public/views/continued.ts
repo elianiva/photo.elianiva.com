@@ -42,7 +42,7 @@ const tailBody = (
         h.button(
           [
             h.Class(
-              'inline-flex cursor-pointer items-center gap-(--spacing-sm) bg-transparent disabled:cursor-progress',
+              'inline-flex cursor-pointer items-center gap-2 bg-transparent disabled:cursor-progress',
             ),
             h.OnClick(Message.LoadOlderSections()),
             h.OnKeyDownPreventDefault((key) =>
@@ -90,10 +90,10 @@ export const continued = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [h.Class('mx-auto flex max-w-[560px] items-center gap-(--spacing-lg) py-(--spacing-xl)')],
+    [h.Class('mx-auto flex max-w-[560px] items-center gap-4 py-6')],
     [
       hairline(h),
-      h.div([h.Class('flex items-center gap-(--spacing-md)')], tailBody(tail, loading, error, h)),
+      h.div([h.Class('flex items-center gap-3')], tailBody(tail, loading, error, h)),
       hairline(h),
     ],
   )

@@ -41,7 +41,7 @@ export const buttonVariants: Record<ButtonVariant, string> = {
 export type ButtonVariant = (typeof buttonVariantKeys)[number]
 
 const buttonBase =
-  'focus-visible:border-role-focus focus-visible:ring-role-focus/50 aria-invalid:ring-role-error/20 aria-invalid:border-role-error disabled:text-role-text-disabled data-disabled:text-role-text-disabled h-9 gap-(--spacing-sm) border border-transparent bg-clip-padding px-(--spacing-lg) type-ui transition-colors duration-(--motion-duration-fast) outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed data-disabled:pointer-events-none [&_svg:not([class*="size-"])]:size-4'
+  'focus-visible:border-role-focus focus-visible:ring-role-focus/50 aria-invalid:ring-role-error/20 aria-invalid:border-role-error disabled:text-role-text-disabled data-disabled:text-role-text-disabled h-9 gap-2 border border-transparent bg-clip-padding px-4 type-ui transition-colors duration-120 outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed data-disabled:pointer-events-none [&_svg:not([class*="size-"])]:size-4'
 
 /** The Button's one geometry, exported so an element that cannot be a
  *  `<button>` — a `<label>` wrapping a file input — can wear it. */

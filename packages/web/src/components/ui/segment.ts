@@ -98,7 +98,7 @@ export const segmentGroupClass =
   'inline-flex items-center border border-transparent [&>*]:h-7 [&>*]:shrink-0'
 
 export const segmentOptionClass =
-  'focus-visible:z-10 focus-visible:ring-role-focus/50 inline-flex items-center justify-center px-(--spacing-md) py-(--spacing-xs) type-exif transition-colors duration-(--motion-duration-fast) outline-none focus-visible:ring-[3px]'
+  'focus-visible:z-10 focus-visible:ring-role-focus/50 inline-flex items-center justify-center px-3 py-1 type-exif transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 const optionClasses = (isSelected: boolean): string =>
   cn(

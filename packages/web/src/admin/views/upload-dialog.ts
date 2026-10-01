@@ -128,7 +128,7 @@ const uploadBar = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
     [
       h.div(
         [
-          h.Class('h-full bg-role-rule transition-[width] duration-(--motion-duration-fast)'),
+          h.Class('h-full bg-role-rule transition-[width] duration-120'),
           h.Style({ width: `${String(percent)}%` }),
         ],
         [],
@@ -139,19 +139,14 @@ const uploadBar = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
 
 const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
   h.li(
-    [
-      h.Key(item.id),
-      h.Class(
-        'flex items-center gap-(--spacing-md) border-b border-role-hairline py-(--spacing-md)',
-      ),
-    ],
+    [h.Key(item.id), h.Class('flex items-center gap-3 border-b border-role-hairline py-3')],
     [
       queueThumbnail(item, h),
       h.div(
         [h.Class('flex min-w-0 flex-1 flex-col gap-1')],
         [
           h.div(
-            [h.Class('flex items-center justify-between gap-(--spacing-sm)')],
+            [h.Class('flex items-center justify-between gap-2')],
             [
               h.span(
                 [h.Class('min-w-0 flex-1 truncate type-exif text-role-text-primary')],
@@ -292,10 +287,10 @@ const uploadFooter = (model: Model, h: HtmlBuilder<Msg>): Child => {
     : M.GotUploadDialogMessage({ message: Dialog.Message.RequestedClose() })
 
   return Dialog.footer(
-    { className: 'mt-(--spacing-md)' },
+    { className: 'mt-3' },
     [
       h.div(
-        [h.Class('flex flex-wrap items-center gap-(--spacing-sm)')],
+        [h.Class('flex flex-wrap items-center gap-2')],
         [
           h.span(
             [
@@ -316,7 +311,7 @@ const uploadFooter = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
       ),
       h.div(
-        [h.Class('flex items-center gap-(--spacing-sm)')],
+        [h.Class('flex items-center gap-2')],
         [
           Button.button({ onClick: onCancel, variant: 'secondary' }, 'Cancel', h),
           Button.button(
@@ -343,7 +338,7 @@ const uploadDialogContent = (
   const uploading = model.queue.find((item) => item.status === 'uploading')
   return [
     h.div(
-      [h.Class('flex items-start justify-between gap-(--spacing-sm)')],
+      [h.Class('flex items-start justify-between gap-2')],
       [
         Dialog.title({ attributes: render.title }, ['Upload photographs'], h),
         Dialog.closeButton({ attributes: render.closeButton }, [icon(h, X)], h),
@@ -375,7 +370,7 @@ const uploadDialogContent = (
             [h.Class('flex flex-col')],
             model.queue.map((item) => queueRow(item, h)),
           ),
-          h.div([h.Class('flex flex-col gap-(--spacing-md)')], uploadOptions(model, h)),
+          h.div([h.Class('flex flex-col gap-3')], uploadOptions(model, h)),
           // Announce the run for screen readers; the bars are per-item.
           ...(uploading !== undefined
             ? [

@@ -37,18 +37,14 @@ export const lede = (edition: Edition, h: HtmlBuilder<Message>): Child => {
     [h.Class('flex flex-col')],
     [
       h.div(
-        [
-          h.Class(
-            `${BAND} flex flex-col gap-(--spacing-sm) pt-(--spacing-2xl) desktop:pt-(--spacing-3xl)`,
-          ),
-        ],
+        [h.Class(`${BAND} flex flex-col gap-2 pt-8 lg:pt-12`)],
         [
           h.h1(
             [h.Class('type-section text-role-text-primary')],
             [isEmpty ? 'nothing here yet' : 'A bunch of photographs I took'],
           ),
           h.p(
-            [h.Class('hidden type-deck text-role-text-secondary desktop:block')],
+            [h.Class('hidden type-deck text-role-text-secondary lg:block')],
             [
               isEmpty
                 ? 'The first one is on its way.'

@@ -56,14 +56,14 @@ export const toastEntryClass =
  *  fading out while hidden behind the frontmost layer (`data-behind`) and
  *  back in when the stack expands (`data-expanded`). */
 export const toastContentClass =
-  'flex h-full w-full items-center gap-(--spacing-sm) overflow-hidden p-(--spacing-lg) transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] data-[behind]:opacity-0 data-[expanded]:opacity-100'
+  'flex h-full w-full items-center gap-2 overflow-hidden p-4 transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] data-[behind]:opacity-0 data-[expanded]:opacity-100'
 
 export const toastTitleClass = 'type-ui text-role-text-primary'
 
 export const toastDescriptionClass = 'type-exif text-role-text-secondary'
 
 export const toastDismissButtonClass =
-  "shrink-0 cursor-pointer p-(--spacing-xs) text-role-text-secondary opacity-70 transition-opacity hover:text-role-text-primary hover:opacity-100 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-role-focus/50 after:absolute after:-inset-2 after:content-['']"
+  "shrink-0 cursor-pointer p-1 text-role-text-secondary opacity-70 transition-opacity hover:text-role-text-primary hover:opacity-100 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-role-focus/50 after:absolute after:-inset-2 after:content-['']"
 
 const variantIconNode = (variant: Variant) => {
   switch (variant) {

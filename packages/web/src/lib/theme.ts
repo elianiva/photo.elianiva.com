@@ -1,9 +1,8 @@
 /**
  * Theme scope. The broadsheet design system has two branches, `light` and
- * `dark`, and the generator emits both as plain custom properties under a
- * scope selector (`tokens.css` sections 4 and 5). A theme is therefore a
- * matter of naming the scope on the element the app is rendered into, not of
- * shipping a second palette.
+ * `dark`, and `theme.css` declares both as plain custom properties under a
+ * scope selector. A theme is therefore a matter of naming the scope on the
+ * element the app is rendered into, not of shipping a second palette.
  *
  * `.dark` on the document root is the same block spelled as a class; the
  * Editor uses the attribute so it can be dark as a subtree while the Library
@@ -30,7 +29,7 @@ import { AppRoute, urlToAppRoute } from '@/admin/route'
 export const Theme = S.Literals(['light', 'dark'])
 export type Theme = typeof Theme.Type
 
-/** The attribute the generated scopes key off. */
+/** The attribute the theme scopes key off. */
 export const themeAttribute = 'data-theme'
 
 /** The broadsheet branch a route is drawn in. Light is the default, so a

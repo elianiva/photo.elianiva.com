@@ -40,14 +40,20 @@ export const SettingsDraft = S.Struct({
 })
 export type SettingsDraft = typeof SettingsDraft.Type
 
-/** What a page draws before the row has arrived: the column defaults migration
- *  0005 declares, so the first paint is the page the row would produce rather
- *  than a flash of zeroes. */
+/** The rendition defaults migration 0005 declares. Named because the Editor
+ *  falls back to them too: its Details tab prints the Photo's own settings, and
+ *  before the draft has loaded the column defaults are the honest answer. */
+export const DEFAULT_PREVIEW_LONG_EDGE = 1200
+export const DEFAULT_PREVIEW_QUALITY = 82
+export const DEFAULT_FULL_QUALITY = 92
+
+/** What a page draws before the row has arrived, so the first paint is the page
+ *  the row would produce rather than a flash of zeroes. */
 export const emptySettingsDraft: SettingsDraft = {
-  defaultPreviewLongEdge: 1200,
+  defaultPreviewLongEdge: DEFAULT_PREVIEW_LONG_EDGE,
   defaultPreviewFormat: 'avif',
-  defaultPreviewQuality: 82,
-  defaultFullQuality: 92,
+  defaultPreviewQuality: DEFAULT_PREVIEW_QUALITY,
+  defaultFullQuality: DEFAULT_FULL_QUALITY,
   watermarkEnabled: false,
   watermarkColour: 'white',
   watermarkPosition: 'bottom-right',
@@ -115,7 +121,6 @@ export const settingsUnsaved = (draft: SettingsDraft, saved: Settings | undefine
 // the option sets the Selects list
 // ---------------------------------------------------------------------------
 
-/** `PREVIEW LONG EDGE`. 1200 is the value the design draws and the value
- *  `image.preview.long-edge` declares in the broadsheet; the rest are the
+/** `PREVIEW LONG EDGE`. 1200 is the value the design draws; the rest are the
  *  sizes either side of it a preview Rendition is usefully made at. */
 export const PREVIEW_LONG_EDGES = [600, 800, 1200, 1600, 2000] as const
