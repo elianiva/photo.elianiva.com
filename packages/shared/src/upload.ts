@@ -1,6 +1,6 @@
 /**
  * The multipart upload contract — the one HTTP endpoint that is not RPC
- * (`POST /api/upload`, the route map in `docs/plan.md`).
+ * (`POST /api/upload`, the route map in `README.md`).
  *
  * It lives here, in `@photo/shared`, because it is a contract with two
  * readers on two sides of the boundary: the API Worker produces these bodies

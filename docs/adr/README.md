@@ -15,4 +15,4 @@ never leave both standing.
 
 The domain language these decisions are written in — Photo, Tag, Rendition,
 Status, Ratio, Frame, Archive, Storage, Public read — is `CONTEXT.md`, not
-these files. `docs/plan.md` is the route map and the shipping record.
+these files. `README.md` carries the route map and the shipping record.

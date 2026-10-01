@@ -3,6 +3,7 @@ import { Schema as S } from 'effect'
 import {
   PHOTO_RATIOS,
   PhotoRatio,
+  PhotoWithTags,
   formatMeasuredRatio,
   hasJpegMagic,
   isJpegUpload,
@@ -120,5 +121,36 @@ describe('PhotoRatio', () => {
       expect(S.decodeSync(PhotoRatio)(ratio)).toBe(ratio)
     }
     expect(() => S.decodeUnknownSync(PhotoRatio)('5:4')).toThrow()
+  })
+})
+
+describe('PhotoWithTags', () => {
+  /** A row as the wire carries it: the Photo's own columns plus its Tag
+   *  links, which is the payload every public and admin RPC answers with. */
+  const wire = (patch: Record<string, unknown> = {}) => ({
+    id: 'photo_1',
+    slug: 'seed-photo-01',
+    title: 'Seed Photo 01',
+    r2Key: 'originals/photo_1-seed-photo-01.jpg',
+    width: 1200,
+    height: 800,
+    takenAt: '2024-01-15',
+    metadata: { caption: 'hello' },
+    tags: [{ id: 'tag_kyoto', slug: 'kyoto', label: 'Kyoto', caption: null }],
+    ...patch,
+  })
+
+  it('decodes a Photo and its Tags from the wire', () => {
+    const decoded = S.decodeSync(PhotoWithTags)(wire())
+    expect(decoded.slug).toBe('seed-photo-01')
+    expect(decoded.tags?.[0]?.label).toBe('Kyoto')
+  })
+
+  it('leaves takenAt and the Tags absent rather than inventing them', () => {
+    const decoded = S.decodeSync(PhotoWithTags)(
+      wire({ takenAt: undefined, tags: undefined, metadata: {} }),
+    )
+    expect(decoded.takenAt).toBeUndefined()
+    expect(decoded.tags).toBeUndefined()
   })
 })

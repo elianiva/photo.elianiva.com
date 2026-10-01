@@ -60,42 +60,18 @@ describe('R2 fake', () => {
     await expect(bucket.delete('originals/a.jpg')).resolves.toBeUndefined()
   })
 
-  it('lists keys lexicographically and filters by prefix', async () => {
+  it('lists every key lexicographically', async () => {
     const bucket = makeR2Fake()
     await store(bucket, 'originals/b.jpg')
     await store(bucket, 'originals/a.jpg')
     await store(bucket, 'thumbs/a.webp')
 
-    const listed = await bucket.list({ prefix: 'originals/' })
+    const listed = await bucket.list()
     expect(listed.objects.map((object) => object.key)).toEqual([
-      'originals/a.jpg',
-      'originals/b.jpg',
-    ])
-    expect(listed.truncated).toBe(false)
-
-    const all = await bucket.list()
-    expect(all.objects.map((object) => object.key)).toEqual([
       'originals/a.jpg',
       'originals/b.jpg',
       'thumbs/a.webp',
     ])
-  })
-
-  it('paginates by limit and round-trips the cursor', async () => {
-    const bucket = makeR2Fake()
-    for (const key of ['a', 'b', 'c', 'd', 'e']) await store(bucket, key)
-
-    const first = await bucket.list({ limit: 2 })
-    expect(first.objects.map((object) => object.key)).toEqual(['a', 'b'])
-    expect(first.truncated).toBe(true)
-
-    const second = await bucket.list({ limit: 2, cursor: first.cursor })
-    expect(second.objects.map((object) => object.key)).toEqual(['c', 'd'])
-    expect(second.truncated).toBe(true)
-
-    const third = await bucket.list({ limit: 2, cursor: second.cursor })
-    expect(third.objects.map((object) => object.key)).toEqual(['e'])
-    expect(third.truncated).toBe(false)
-    expect(third.cursor).toBeUndefined()
+    expect(listed.truncated).toBe(false)
   })
 })

@@ -17,7 +17,7 @@
  *
  * The minimum the code needs is `node:sqlite`, which the D1 fake in
  * `@photo/api` loads and which is only stable from Node 24. See
- * `docs/adr/0009-sqlite-backed-test-fakes.md`.
+ * `docs/adr/0005-test-fakes-on-node-sqlite.md`.
  */
 
 import { readFileSync } from 'node:fs'
@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const read = (path) => readFileSync(join(root, path), 'utf8')
 
-/** `node:sqlite` is stable from Node 24; see docs/adr/0009. */
+/** `node:sqlite` is stable from Node 24; see ADR 0005. */
 const MINIMUM_SUPPORTED_MAJOR = 24
 
 const WORKFLOWS = ['.github/workflows/ci.yml', '.github/workflows/deploy.yml']

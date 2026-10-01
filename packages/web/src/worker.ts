@@ -201,7 +201,6 @@ const canonicalRoute = HttpRouter.add('*', '/index.html', () =>
   ),
 )
 
-/** Sitemap: the crawler route (robots.txt points here). */
 /** Sitemap: the crawler route (robots.txt points here). `renderSitemap` already
  *  answers a `Response` with its own content type, so the route only has to
  *  carry the span. */
@@ -215,18 +214,6 @@ const sitemapRoute = (env: WorkerEnvWithAssets) =>
  *  them. */
 class Assets extends Context.Service<Assets, WorkerEnvWithAssets['ASSETS']>()('photo/PageAssets') {}
 
-/**
- * A public document, served by SSR per the foldkit server-rendering contract.
- *
- * Declared as the three patterns the route table names, rather than by asking
- * `routeNamedBy` whether an arbitrary path is one. The route table and the
- * Worker's match then cannot disagree about what a path means: a pattern that
- * stops matching a real page is a 404 a test can see, where the hand-written
- * chain asked the table and fell through on `null`.
- *
- * A path no pattern names is not a public document, and falls through to the
- * asset layer, which has no page to serve for it.
- */
 /**
  * A public document rendered by SSR, as an `HttpServerResponse`.
  *

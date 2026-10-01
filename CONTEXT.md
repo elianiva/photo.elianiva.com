@@ -141,8 +141,9 @@ A colour in the broadsheet, named by what it does rather than what it looks
 like — `color.surface`, `color.hairline`, `color.text.secondary`. Reached in
 CSS as a `role-*` custom property (`bg-role-surface`), and in TypeScript where
 a stylesheet cannot reach, through the generated `lib/design-tokens.ts`. Every
-colour on the site is a role token; a hex literal in Desk code is a defect and
-`design-tokens.test.ts` fails the build on one.
+colour on the site is a role token; a hex literal in Desk code is a defect, and
+`pnpm typecheck` fails on one because it regenerates the tokens and diffs them
+against the catalogue before `tsc` runs.
 _Avoid_: palette colour (`neutral-500`), shadcn name (`--muted-foreground`) in Desk code
 
 **Contract name**:

@@ -235,10 +235,12 @@ export default Alchemy.Stack(
 // assignable to the DOM one the services hand to `new Response` — they declare
 // `getReader` differently — so naming `R2Bucket` here would move the cast
 // rather than remove it. `R2BucketBinding` is a member-for-member copy of
-// `R2BucketLike`, and the two are checked against each other by
-// `env-bindings.test.ts`, which is what keeps them from drifting apart again —
-// which is how the binding came to be missing `head` and `list` in the first
-// place.
+// `R2BucketLike`, and the one place the two meet — `MetadataLive`'s `photos`
+// parameter, handed `env.PHOTOS` in `packages/web/src/api-worker.ts` — is what
+// keeps them from drifting apart again, since a member added to the contract
+// without the copy is a type error right there. Which is how the binding came
+// to be missing `head` and `list` in the first place, and how the `as never`
+// that papered over it came to exist.
 export type R2ObjectBinding = {
   readonly key: string
   readonly size: number

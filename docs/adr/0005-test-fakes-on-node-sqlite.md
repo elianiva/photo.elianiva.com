@@ -66,14 +66,19 @@ with a real transaction.
   or `updateValues`, must be written against `Batch` or not at all.
 - `R2BucketLike` gained `head` and `list`, and `R2ObjectLike` gained `key`,
   `size` and `uploaded`, so byte counts and storage totals are expressible
-  against the contract rather than only against a real binding.
+  against the contract rather than only against a real binding. Nothing reads
+  them by page or prefix — Photo listing is a D1 query — so the fake's `list`
+  takes no options rather than implementing a pagination no caller reaches.
 - The fakes are Node-only. Anything that must run under workerd is not covered
   by this harness — which is why `BatchD1Live` has its own test over a D1-shaped
   binding rather than relying on the SQLite harness to stand in for it.
 - `WebsiteEnv['PHOTOS']` in `alchemy.run.ts` and `R2BucketLike` in
   `packages/api/src/gateway.ts` are two declarations that must agree, and the env
-  shape cannot import the contract. `packages/web/src/env-bindings.test.ts` is a
-  bidirectional assignability check between them, so drift is a type error.
+  shape cannot import the contract. Nothing checks them head-on, and nothing
+  needs to: `metadataLayer` in `packages/web/src/api-worker.ts` hands
+  `env.PHOTOS` straight to `MetadataLive`, which takes an `R2BucketLike`, so a
+  member added to the contract without the copy is a type error there. The
+  explicit `as never` this used to need is what made the gap invisible.
 - The platform's `R2Bucket` is not assignable to `R2BucketLike`, and that is not
   fixable: the platform ships its own `ReadableStream`, which is mutually
   unassignable with the DOM one the services hand to `new Response`. The Worker

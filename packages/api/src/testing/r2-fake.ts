@@ -1,20 +1,21 @@
 /**
  * `R2BucketLike` backed by an in-memory `Map`.
  *
- * R2's read surface is small enough to be faithful rather than approximate:
- * `get` streams the stored bytes back, `head` reports size without a body, and
- * `list` walks keys lexicographically with a `prefix` filter. Byte counts and
- * storage totals are the reason `head` and `list` are on the interface at all,
- * so both report `size` and `uploaded` the way the real binding does.
+ * The services write originals and delete them, and the tests read the bucket
+ * back to prove the write landed: `put` and `delete` are the product's half of
+ * the contract, and `get`, `head` and `list` are how a test observes it. So
+ * `get` streams the stored bytes back and `head` reports the size without a
+ * body, because those are the two shapes the assertions ask for.
  *
- * The `cursor` is the last key of the previous page, base64url-encoded. R2's own
- * cursor is opaque, so a test may not assert on its shape — only round-trip it.
+ * `list` takes no options. Nothing in the suite pages the bucket — Photo
+ * listing is a D1 query, not an R2 one — so honouring `limit`, `cursor` and
+ * `prefix` here would be a fidelity nothing could check.
  *
  * Node-only. Never exported from the package index.
  */
 
 import { DateTime } from 'effect'
-import type { R2BucketLike, R2ListOptions, R2ObjectLike, R2ObjectsLike } from '../gateway'
+import type { R2BucketLike, R2ObjectLike } from '../gateway'
 
 interface StoredObject {
   readonly bytes: Uint8Array
@@ -70,22 +71,12 @@ export const makeR2Fake = (): R2BucketLike => {
       const object = store.get(key)
       return object === undefined ? null : describe(key, object, null)
     },
-    list: async (options: R2ListOptions = {}): Promise<R2ObjectsLike> => {
-      const after = options.cursor === undefined ? null : decodeCursor(options.cursor)
-      const matches = [...store.keys()]
-        .filter((key) => (options.prefix === undefined ? true : key.startsWith(options.prefix)))
-        .filter((key) => (after === null ? true : lexicographic(key, after) > 0))
+    list: async () => ({
+      objects: [...store.keys()]
         .sort(lexicographic)
-      const limit = options.limit ?? 1000
-      const page = matches.slice(0, limit)
-      const last = page.at(-1)
-      const truncated = matches.length > page.length
-      return {
-        objects: page.map((key) => describe(key, store.get(key)!, null)),
-        truncated,
-        ...(truncated && last !== undefined ? { cursor: encodeCursor(last) } : {}),
-      }
-    },
+        .map((key) => describe(key, store.get(key)!, null)),
+      truncated: false,
+    }),
     put: async (key, value, options) => {
       const object: StoredObject = {
         bytes: await toBytes(value),
@@ -100,17 +91,5 @@ export const makeR2Fake = (): R2BucketLike => {
       // R2 deletes in bulk; the services only ever pass one key.
       for (const key of typeof keys === 'string' ? [keys] : keys) store.delete(key)
     },
-  }
-}
-
-const encodeCursor = (lastKey: string): string =>
-  btoa(lastKey).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
-
-const decodeCursor = (cursor: string): string | null => {
-  const padded = cursor.replaceAll('-', '+').replaceAll('_', '/')
-  try {
-    return atob(padded + '='.repeat((4 - (padded.length % 4)) % 4))
-  } catch {
-    return null
   }
 }

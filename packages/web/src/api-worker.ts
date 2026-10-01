@@ -287,7 +287,12 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
 
 /** The metadata stack: the `SqlClient` over D1, D1's own atomic `Batch`, and
  *  the R2 `Gateway`. A Worker deployed without a binding cannot answer
- *  anything, so the missing binding is a startup error. */
+ *  anything, so the missing binding is a startup error.
+ *
+ *  `MetadataLive`'s `photos` parameter is also what keeps `R2BucketBinding` in
+ *  `alchemy.run.ts` honest: it is a member-for-member copy of `R2BucketLike`,
+ *  and a member added to the contract without the copy is a type error right
+ *  here. Nothing casts, so there is no `as never` for a gap to hide behind. */
 const metadataLayer = (env: ApiEnv) => {
   if (env.DB === undefined || env.DB === null || env.PHOTOS === undefined || env.PHOTOS === null) {
     throw new Error('missing D1 or R2 binding')
