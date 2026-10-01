@@ -107,10 +107,9 @@ const one = <Row>(
 
 const numbersById = (engine: DatabaseSync): Record<string, number | null> =>
   Object.fromEntries(
-    all<{ id: string; number: number | null }>(engine, 'SELECT id, number FROM photos').map((row) => [
-      row.id,
-      row.number,
-    ]),
+    all<{ id: string; number: number | null }>(engine, 'SELECT id, number FROM photos').map(
+      (row) => [row.id, row.number],
+    ),
   )
 
 const ratiosById = (engine: DatabaseSync): Record<string, string | null> =>
@@ -234,23 +233,28 @@ describe('migration 0004', () => {
     insertLegacy(engine, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
     apply0004(engine)
 
-    const row = one<{ status: string; deletedAt: string | null; mime: string; bytes: number | null }>(
-      engine,
-      'SELECT status, deletedAt, mime, bytes FROM photos WHERE id = ?',
-      'p1',
-    )
+    const row = one<{
+      status: string
+      deletedAt: string | null
+      mime: string
+      bytes: number | null
+    }>(engine, 'SELECT status, deletedAt, mime, bytes FROM photos WHERE id = ?', 'p1')
     expect(row).toEqual({ status: 'published', deletedAt: null, mime: 'image/jpeg', bytes: null })
   })
 
   it('gives a new photo the documented defaults', async () => {
     const engine = migrated(repoMigrations())
     insertLegacy(engine, { id: 'fresh', takenAt: '2025-01-01', width: 6000, height: 4000 })
-    const row = one<Record<string, unknown>>(engine, `SELECT status, deletedAt, number, cropX, cropY, cropScale, cropFlip, level,
+    const row = one<Record<string, unknown>>(
+      engine,
+      `SELECT status, deletedAt, number, cropX, cropY, cropScale, cropFlip, level,
                 borderEnabled, borderStyle, borderColour, borderWidth,
                 aperture, shutter, iso, focalLength,
                 previewLongEdge, previewFormat, previewQuality, fullQuality,
                 keepExif, removeGps
-         FROM photos WHERE id = ?`, 'fresh')
+         FROM photos WHERE id = ?`,
+      'fresh',
+    )
     expect(row).toEqual({
       status: 'published',
       deletedAt: null,
@@ -281,7 +285,7 @@ describe('migration 0004', () => {
     const engine = migrated(repoMigrations())
     insertLegacy(engine, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
     expect(() =>
-      engine.prepare(`UPDATE photos SET status = 'scheduled' WHERE id = 'p1'`).run()
+      engine.prepare(`UPDATE photos SET status = 'scheduled' WHERE id = 'p1'`).run(),
     ).toThrow(/CHECK constraint failed: status/i)
     expect(() =>
       engine
@@ -289,7 +293,7 @@ describe('migration 0004', () => {
           `INSERT INTO photos (id, slug, title, r2Key, width, height, status)
            VALUES ('p2', 'p2', 'p2', 'originals/p2.jpg', 6000, 4000, 'archived')`,
         )
-        .run()
+        .run(),
     ).toThrow(/CHECK constraint failed: status/i)
   })
 
@@ -301,7 +305,7 @@ describe('migration 0004', () => {
           `INSERT INTO photos (id, slug, title, r2Key, width, height, ratio)
            VALUES ('p1', 'p1', 'p1', 'originals/p1.jpg', 6000, 4000, '5:4')`,
         )
-        .run()
+        .run(),
     ).toThrow(/CHECK constraint failed: ratio/i)
   })
 
@@ -309,11 +313,14 @@ describe('migration 0004', () => {
     const engine = migrated(repoMigrations())
     insertLegacy(engine, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
     insertLegacy(engine, { id: 'p2', takenAt: '2024-01-16', width: 6000, height: 4000 })
-    one<{}>(engine, `UPDATE photos SET number = 7, ratio = '3:2' WHERE id = 'p1'`, )
+    one<{}>(engine, `UPDATE photos SET number = 7, ratio = '3:2' WHERE id = 'p1'`)
     // Both rows are 3:2, so only a non-unique index on ratio can be holding
     // this up.
     engine.prepare(`UPDATE photos SET ratio = '3:2' WHERE id = 'p2'`).run()
-    const shared = one<{ n: number }>(engine, `SELECT COUNT(*) AS n FROM photos WHERE ratio = '3:2'`)
+    const shared = one<{ n: number }>(
+      engine,
+      `SELECT COUNT(*) AS n FROM photos WHERE ratio = '3:2'`,
+    )
     expect(shared?.n).toBe(2)
 
     expect(() => engine.prepare(`UPDATE photos SET number = 7 WHERE id = 'p2'`).run()).toThrow(
@@ -325,7 +332,7 @@ describe('migration 0004', () => {
     const engine = migrated(repoMigrations())
     insertLegacy(engine, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
     insertLegacy(engine, { id: 'p2', takenAt: '2024-01-16', width: 6000, height: 4000 })
-    one<{}>(engine, `UPDATE photos SET number = 7 WHERE id = 'p1'`, )
+    one<{}>(engine, `UPDATE photos SET number = 7 WHERE id = 'p1'`)
     // Two unnumbered rows would collide under a plain unique index. The
     // predicate on idx_photos_number is what lets both exist.
     insertLegacy(engine, { id: 'p3', takenAt: '2024-01-17', width: 6000, height: 4000 })
@@ -358,7 +365,9 @@ describe('migration 0004', () => {
       [`SELECT id FROM photos WHERE number = 7`, /USING (COVERING )?INDEX idx_photos_number/],
     ]
     for (const [sql, expected] of cases) {
-      const details = all<{ detail: string }>(engine, `EXPLAIN QUERY PLAN ${sql}`).map((row) => row.detail)
+      const details = all<{ detail: string }>(engine, `EXPLAIN QUERY PLAN ${sql}`).map(
+        (row) => row.detail,
+      )
       expect(details).toHaveLength(1)
       expect(details[0]).toMatch(expected)
       expect(details[0]).not.toMatch(/\bSCAN\b/)
@@ -368,7 +377,9 @@ describe('migration 0004', () => {
   it('keeps the photos table STRICT for the new columns', async () => {
     const engine = migrated(repoMigrations())
     insertLegacy(engine, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
-    expect(() => engine.prepare(`UPDATE photos SET bytes = 'eighteen megabytes' WHERE id = 'p1'`).run()).toThrow(/INT/i)
+    expect(() =>
+      engine.prepare(`UPDATE photos SET bytes = 'eighteen megabytes' WHERE id = 'p1'`).run(),
+    ).toThrow(/INT/i)
   })
 })
 
@@ -385,8 +396,8 @@ describe(`migration ${COUNTER}`, () => {
   }
 
   const counterValue = (engine: DatabaseSync): number | null =>
-    one<{ value: number | null }>(engine, 'SELECT value FROM photo_number_counter WHERE id = 1')?.value ??
-    null
+    one<{ value: number | null }>(engine, 'SELECT value FROM photo_number_counter WHERE id = 1')
+      ?.value ?? null
 
   it('starts above the highest serial 0004 already handed out', async () => {
     const engine = at0003()
@@ -417,12 +428,16 @@ describe(`migration ${COUNTER}`, () => {
 
   it('holds exactly one row', async () => {
     const engine = migrated(repoMigrations())
-    expect(() => engine.prepare('INSERT INTO photo_number_counter (id, value) VALUES (2, 1)').run()).toThrow(/CHECK constraint failed/i)
+    expect(() =>
+      engine.prepare('INSERT INTO photo_number_counter (id, value) VALUES (2, 1)').run(),
+    ).toThrow(/CHECK constraint failed/i)
   })
 
   it('is STRICT, so the counter cannot hold a non-integer', async () => {
     const engine = migrated(repoMigrations())
-    expect(() => engine.prepare(`UPDATE photo_number_counter SET value = 'forty one' WHERE id = 1`).run()).toThrow(/INT/i)
+    expect(() =>
+      engine.prepare(`UPDATE photo_number_counter SET value = 'forty one' WHERE id = 1`).run(),
+    ).toThrow(/INT/i)
   })
 })
 
@@ -435,15 +450,16 @@ describe('migration 0007_crop_flip.sql', () => {
 
     engine.exec(migrationSql(CROP_FLIP))
 
-    expect(one<{ cropFlip: number }>(engine, 'SELECT cropFlip FROM photos WHERE id = ?', 'p1')?.cropFlip)
-      .toBe(0)
+    expect(
+      one<{ cropFlip: number }>(engine, 'SELECT cropFlip FROM photos WHERE id = ?', 'p1')?.cropFlip,
+    ).toBe(0)
   })
 
   it('is NOT NULL, so a crop cannot have an unknown mirror', async () => {
     const engine = migrated(repoMigrations())
     insertLegacy(engine, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
-    expect(() =>
-      engine.prepare(`UPDATE photos SET cropFlip = NULL WHERE id = 'p1'`).run()
-    ).toThrow(/NOT NULL/i)
+    expect(() => engine.prepare(`UPDATE photos SET cropFlip = NULL WHERE id = 'p1'`).run()).toThrow(
+      /NOT NULL/i,
+    )
   })
 })

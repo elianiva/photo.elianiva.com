@@ -121,16 +121,14 @@ export const storedCols = (): GridColsType => {
 
 /** The stored column count, or the default. */
 const readCols = (store: KeyValueStore.KeyValueStore): Effect.Effect<GridColsType> =>
-  store
-    .get(COLS_STORAGE_KEY)
-    .pipe(
-      // A `KeyValueStoreError` — a blocked context, a full quota — is a
-      // preference that cannot be remembered, not a failure the operator can
-      // act on. The default is the answer.
-      Effect.catch(() => Effect.succeed(undefined)),
-      Effect.flatMap((raw) => Effect.succeed(decodeStored(raw))),
-      Effect.map((cols) => Option.getOrElse(cols, () => DEFAULT_COLS)),
-    )
+  store.get(COLS_STORAGE_KEY).pipe(
+    // A `KeyValueStoreError` — a blocked context, a full quota — is a
+    // preference that cannot be remembered, not a failure the operator can
+    // act on. The default is the answer.
+    Effect.catch(() => Effect.succeed(undefined)),
+    Effect.flatMap((raw) => Effect.succeed(decodeStored(raw))),
+    Effect.map((cols) => Option.getOrElse(cols, () => DEFAULT_COLS)),
+  )
 
 /** Persist the column count. */
 const writeCols = (store: KeyValueStore.KeyValueStore, cols: GridColsType): Effect.Effect<void> =>

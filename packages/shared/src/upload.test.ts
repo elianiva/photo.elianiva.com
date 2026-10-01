@@ -13,7 +13,8 @@ describe('Blurhash', () => {
   it('accepts every character of the base83 alphabet', () => {
     // One character at a time: the alphabet is 83 symbols, which is over the
     // 64-character bound, so the whole string is not itself a decodable hash.
-    const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~'
+    const alphabet =
+      '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~'
     expect(alphabet).toHaveLength(83)
     for (const char of alphabet) {
       // Padded to the 6-character minimum with the candidate inside, so the
@@ -72,10 +73,12 @@ describe('TagIdList', () => {
 })
 
 describe('the upload response union', () => {
-  const decode = S.decodeUnknownOption(S.Union([
-    S.Struct({ id: S.String, slug: S.String, r2Key: S.String, renditionsPending: S.Boolean }),
-    S.Struct({ message: S.String }),
-  ]))
+  const decode = S.decodeUnknownOption(
+    S.Union([
+      S.Struct({ id: S.String, slug: S.String, r2Key: S.String, renditionsPending: S.Boolean }),
+      S.Struct({ message: S.String }),
+    ]),
+  )
 
   it('reads a stored Photo, and reports whether a Rendition is owed', () => {
     const decoded = Option.getOrThrow(

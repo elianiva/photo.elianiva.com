@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Effect, Layer, Result } from 'effect'
 import { FetchHttpClient } from 'effect/unstable/http'
-import { verifyAdminAccess as verifyAdminAccessEffect, type AccessEnv, type AdminGate } from './access'
+import {
+  verifyAdminAccess as verifyAdminAccessEffect,
+  type AccessEnv,
+  type AdminGate,
+} from './access'
 import worker from './api-worker'
 
 /** The gate, run over the same fetch-backed HTTP client the Worker's own layer
@@ -208,9 +212,7 @@ describe('the claims the gate hands back', () => {
       env({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
     )
 
-    expect(gate).toEqual(
-      Result.succeed({ email: 'owner@photo.test', teamDomain: key.teamDomain }),
-    )
+    expect(gate).toEqual(Result.succeed({ email: 'owner@photo.test', teamDomain: key.teamDomain }))
   })
 
   it('carries an allowlisted address, and withholds one that is not', async () => {
@@ -274,9 +276,7 @@ describe('the claims the gate hands back', () => {
     )
 
     // An `iss` is optional in the verifier, and a session is never half-read.
-    expect(gate).toEqual(
-      Result.succeed({ email: 'owner@photo.test', teamDomain: key.teamDomain }),
-    )
+    expect(gate).toEqual(Result.succeed({ email: 'owner@photo.test', teamDomain: key.teamDomain }))
   })
 })
 

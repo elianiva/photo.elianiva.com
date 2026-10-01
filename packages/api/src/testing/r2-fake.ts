@@ -31,7 +31,8 @@ const toBytes = async (
   if (value === null) return new Uint8Array(0)
   if (typeof value === 'string') return new TextEncoder().encode(value)
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
-  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  if (ArrayBuffer.isView(value))
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
   return new Uint8Array(await new Response(value).arrayBuffer())
 }
 

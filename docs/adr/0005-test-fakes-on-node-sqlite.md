@@ -17,11 +17,11 @@ typecheck two Node-only fakes would undo that.
 `D1DatabaseLike` reached through 52 `prepare`/`first`/`all`/`run`/`batch` sites.
 It is `effect/unstable/sql/SqlClient`, with the dialect supplied by a layer:
 
-| Where | Driver | Provided by |
-|---|---|---|
-| Worker | `@effect/sql-d1` | `MetadataLive` in `packages/api/src/metadata.ts` |
-| Tests | `@effect/sql-sqlite-node` | `makeTestHarness` |
-| D1 driver tests | `@effect/sql-d1` over a D1-shaped binding | `makeD1Fake` |
+| Where           | Driver                                    | Provided by                                      |
+| --------------- | ----------------------------------------- | ------------------------------------------------ |
+| Worker          | `@effect/sql-d1`                          | `MetadataLive` in `packages/api/src/metadata.ts` |
+| Tests           | `@effect/sql-sqlite-node`                 | `makeTestHarness`                                |
+| D1 driver tests | `@effect/sql-d1` over a D1-shaped binding | `makeD1Fake`                                     |
 
 `Gateway` is R2-only. Atomic multi-statement writes are the `Batch` service in
 `packages/api/src/batch.ts`, satisfied in production by D1's own `batch` and in

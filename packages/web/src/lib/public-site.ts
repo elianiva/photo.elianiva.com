@@ -34,7 +34,9 @@ const siteLayers = (env: WebsiteEnv) => {
   if (env.DB === undefined || env.DB === null || env.PHOTOS === undefined || env.PHOTOS === null) {
     throw new Error('missing D1 or R2 binding')
   }
-  return PublicPhotoServiceLive.pipe(Layer.provide(MetadataLive({ db: env.DB, photos: env.PHOTOS })))
+  return PublicPhotoServiceLive.pipe(
+    Layer.provide(MetadataLive({ db: env.DB, photos: env.PHOTOS })),
+  )
 }
 
 /** The Folio a failed read leaves behind. One value rather than two literals,
@@ -138,14 +140,15 @@ export const readFolioEffect = (
   env: WebsiteEnv,
 ): Effect.Effect<ReadonlyArray<FolioEntry>, unknown> =>
   Effect.map(
-    readSiteEffect(env, PublicPhotoService.use((service) => service.folio())),
+    readSiteEffect(
+      env,
+      PublicPhotoService.use((service) => service.folio()),
+    ),
     (folio) => folio.map(({ slug, label }) => ({ slug, label })),
   )
 
 export const readFolio = (env: WebsiteEnv): Promise<ReadonlyArray<FolioEntry>> =>
-  Effect.runPromise(
-    Effect.orElseSucceed(readFolioEffect(env), () => NO_FOLIO),
-  )
+  Effect.runPromise(Effect.orElseSucceed(readFolioEffect(env), () => NO_FOLIO))
 
 /**
  * A Tag page's read: the Tag and its published photographs, earliest first, so
@@ -177,7 +180,10 @@ export const readTag = (env: WebsiteEnv, slug: string): Promise<TagRead | null> 
 const lastModified = (env: WebsiteEnv): Effect.Effect<string, never> =>
   Effect.map(
     Effect.orElseSucceed(
-      readSiteEffect(env, PublicPhotoService.use((service) => service.frontStats())),
+      readSiteEffect(
+        env,
+        PublicPhotoService.use((service) => service.frontStats()),
+      ),
       () => null,
     ),
     (stats) => stats?.latestTakenAt?.slice(0, 10) ?? '',

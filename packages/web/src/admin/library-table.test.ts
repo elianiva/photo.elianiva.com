@@ -18,10 +18,8 @@ import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { PhotoId, STORAGE_CAP_BYTES, TagId } from '@photo/shared'
 import type { PhotoWithTags, Tag } from '@photo/shared'
-import * as Animation from '@foldkit/ui/animation'
-import { AcquireResources, ShowDialog } from '@foldkit/ui/dialog'
 
-import * as Dialog from '@/components/ui/dialog'
+import { dialogOpened } from './scene-dialog'
 
 import { FetchPhotosCmd, NavigateCmd, ReplaceUrlCmd } from './commands'
 import { Message, UPLOAD_LIMITS } from './model'
@@ -161,20 +159,6 @@ const told = (...messages: ReadonlyArray<Message>): ReadonlyArray<string> =>
 const box = (name: string) => Scene.role('checkbox', { name })
 const rowSelect = (title: string) => Scene.role('button', { name: `Select ${title}` })
 const headBox = () => Scene.role('checkbox', { name: 'Select every photograph on this page' })
-
-/** The steps a Dialog submodel needs answered when it opens. */
-const opened = (id: string) => [
-  Scene.Command.resolve(
-    ShowDialog({ id, focusSelector: '[data-foldkit-dialog-initial-focus]' }),
-    Dialog.Message.SucceededShowDialog(),
-  ),
-  Scene.Command.resolve(Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()),
-  Scene.Command.resolve(
-    Animation.WaitForAnimationSettled({ id: `${id}-panel` }),
-    Animation.Message.EndedAnimation(),
-  ),
-  Scene.Mount.resolve(AcquireResources, Dialog.Message.SucceededAcquireResources()),
-]
 
 const CONFIRM = 'admin-confirm-dialog'
 const ROW_MENU = 'admin-row-menu'
@@ -334,7 +318,7 @@ describe('the Bulk Bar', () => {
       Scene.click(box('Photograph 1')),
       Scene.click(box('Photograph 2')),
       Scene.click(Scene.role('button', { name: 'Delete' })),
-      ...opened(CONFIRM),
+      ...dialogOpened(CONFIRM),
       // The one confirm every destructive action uses, and its copy says the
       // delete is a soft one rather than leaving the word "delete" to imply
       // otherwise. There is no Trash page to restore from, so the copy claims
@@ -470,7 +454,7 @@ describe('the Bulk Bar', () => {
       given(),
       Scene.click(box('Photograph 1')),
       Scene.click(Scene.role('button', { name: 'Add tag' })),
-      ...opened(ADD_TAG),
+      ...dialogOpened(ADD_TAG),
       Scene.expectAll(Scene.all.text('Move to series')).toBeEmpty(),
       Scene.expect(box('Kyoto')).toHaveAttr('aria-checked', 'false'),
       // Nothing ticked is nothing to apply, so the action is unavailable rather
@@ -511,7 +495,7 @@ describe('the row ⋯ menu', () => {
       app,
       given(),
       Scene.click(Scene.role('button', { name: 'More actions for Photograph 1' })),
-      ...opened(ROW_MENU),
+      ...dialogOpened(ROW_MENU),
       Scene.expect(Scene.role('button', { name: 'Unpublish' })).toExist(),
       Scene.expect(Scene.role('button', { name: 'Move to Trash' })).toExist(),
     )

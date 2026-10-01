@@ -132,7 +132,6 @@ const out = (line: string): Effect.Effect<void> =>
   Effect.sync(() => process.stdout.write(`${line}\n`))
 
 const dryRun: Effect.Effect<void> = Effect.gen(function* () {
-
   yield* out('-- Seed SQL (dry-run) --')
   yield* out(
     '-- Run with --apply to POST against http://localhost:13371/api/upload (requires pnpm dev)\n',

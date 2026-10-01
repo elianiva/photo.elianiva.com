@@ -8,13 +8,27 @@ allowBuilds:
   sharp: true
   workerd: true
 
-# CI enforces pnpm's minimum-release-age policy (rejects packages published
-# within 24h). Pin transitives that float onto day-old releases back to
-# proven versions until the new ones age out. Re-check ages on the next dep
-# bump (`npm view <pkg> time`) and unpin whatever is older than a day.
-# Unpinned 2026-09-24 (aged out): @cloudflare/unenv-preset 2.16.2,
-# @oxlint/plugins 1.85.0.
+# This repo holds every dependency back 24 hours from its publish date. Pin a
+# transitive back to the last proven version when a newer one lands inside that
+# window, then unpin it on the next dep bump (`npm view <pkg> time`).
+# Unpinned 2026-10-01: @aws-sdk/credential-providers 3.1143.0, undici 8.11.2.
+# @cloudflare/workers-types needs no override; it is a direct dependency.
+#
+# Effect is held at 4.0.0-rc.117 because that is the newest release foldkit runs
+# on. 4.0.0-rc.118 moved `Schema.make` to a memoizing getter on the prototype;
+# foldkit wraps schemas in a Proxy that forwards `get` with itself as the
+# receiver, so the memoization lands on the Proxy and the second read throws
+# "Cannot redefine property: make". Lift this the day foldkit ships a release
+# built against Effect 4.0.0 (`npm view foldkit peerDependencies`).
 overrides:
-  '@aws-sdk/credential-providers': 3.1117.0
-  '@cloudflare/workers-types': 5.20260825.1
-  undici: 8.10.0
+  '@aws-sdk/credential-providers': 3.1143.0
+  '@effect/platform-browser': 4.0.0-rc.117
+  '@effect/platform-bun': 4.0.0-rc.117
+  '@effect/platform-node': 4.0.0-rc.117
+  '@effect/platform-node-shared': 4.0.0-rc.117
+  '@effect/sql-d1': 4.0.0-rc.117
+  '@effect/sql-sqlite-do': 4.0.0-rc.117
+  '@effect/sql-sqlite-node': 4.0.0-rc.117
+  '@effect/vitest': 4.0.0-rc.117
+  effect: 4.0.0-rc.117
+  undici: 8.11.2

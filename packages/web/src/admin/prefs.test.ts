@@ -1,12 +1,6 @@
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
-import {
-  COLS_STORAGE_KEY,
-  DEFAULT_COLS,
-  GridPrefs,
-  GridPrefsLive,
-  storedCols,
-} from './prefs'
+import { COLS_STORAGE_KEY, DEFAULT_COLS, GridPrefs, GridPrefsLive, storedCols } from './prefs'
 
 /**
  * The grid's column preference.
@@ -107,7 +101,10 @@ const withWindowAsync = <A>(
 describe('the preference service', () => {
   it('round-trips a column count', async () => {
     const storage = fakeStorage()
-    await withWindowAsync(storage, GridPrefs.use((prefs) => prefs.setCols(5)))
+    await withWindowAsync(
+      storage,
+      GridPrefs.use((prefs) => prefs.setCols(5)),
+    )
     expect(storage.getItem(COLS_STORAGE_KEY)).toBe('5')
   })
 
@@ -116,7 +113,10 @@ describe('the preference service', () => {
     // itself does not report a preference the operator cannot act on as a
     // failure.
     await expect(
-      withWindowAsync(fakeStorage({ throws: true }), GridPrefs.use((p) => p.setCols(5))),
+      withWindowAsync(
+        fakeStorage({ throws: true }),
+        GridPrefs.use((p) => p.setCols(5)),
+      ),
     ).resolves.toBeUndefined()
   })
 })
@@ -130,7 +130,10 @@ describe('the layer over the platform storage', () => {
     Reflect.deleteProperty(globalThis, 'window')
     try {
       const cols = await Effect.runPromise(
-        Effect.provide(GridPrefs.use((prefs) => prefs.cols), GridPrefsLive),
+        Effect.provide(
+          GridPrefs.use((prefs) => prefs.cols),
+          GridPrefsLive,
+        ),
       )
       expect(cols).toBe(DEFAULT_COLS)
     } finally {

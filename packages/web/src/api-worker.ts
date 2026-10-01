@@ -266,7 +266,9 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
   return Effect.runPromise(
     upload().pipe(
       Effect.provide(
-        Layer.mergeAll(PhotoServiceLive, SettingsServiceLive).pipe(Layer.provide(metadataLayer(env))),
+        Layer.mergeAll(PhotoServiceLive, SettingsServiceLive).pipe(
+          Layer.provide(metadataLayer(env)),
+        ),
       ),
       // The upload's span is only reported if something reads it; the Worker's
       // logger is what turns it into a line `wrangler tail` prints.
@@ -275,7 +277,9 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
       // its own message; everything else is an opaque 500. The failed Upload Item
       // prints the message, so the ratio reason reaches it from here.
       Effect.catch((error: unknown) =>
-        Effect.succeed(uploadError(sanitizeError(error), error instanceof InvalidInput ? 400 : 500)),
+        Effect.succeed(
+          uploadError(sanitizeError(error), error instanceof InvalidInput ? 400 : 500),
+        ),
       ),
     ),
   )
@@ -330,7 +334,12 @@ const imageProxy = Effect.fn('api.imageProxy')(function* (env: ApiEnv, rawKey: s
   // An object read with a precondition carries no stream, and there is no
   // precondition here, so this is unreachable in practice — answered rather than
   // handed to `Response` as a body it cannot use.
-  if (object === null || object === undefined || object.body === null || object.body === undefined) {
+  if (
+    object === null ||
+    object === undefined ||
+    object.body === null ||
+    object.body === undefined
+  ) {
     return yield* HttpServerResponse.json({ message: 'not found' }, { status: 404 })
   }
   const headers = new globalThis.Headers()
@@ -418,7 +427,10 @@ const uploadRoute = (env: ApiEnv, request: globalThis.Request) =>
       Effect.promise(() => handleUpload(env, request)),
       HttpServerResponse.fromWeb,
     ),
-  ).pipe(Layer.provide(adminGate(env, request)), Layer.provide(limited('upload', 10, 60_000, request)))
+  ).pipe(
+    Layer.provide(adminGate(env, request)),
+    Layer.provide(limited('upload', 10, 60_000, request)),
+  )
 
 /** The admin group. The gate is what makes it reachable, and it is mounted under
  *  its own path so the public route cannot name it. */
@@ -462,12 +474,13 @@ const publicRpcRoute = (env: ApiEnv, request: globalThis.Request) =>
  * the old `startsWith` did and decides what is an acceptable key, because that
  * check is about R2 rather than about routing.
  */
-const imageRoute = (env: ApiEnv) => HttpRouter.add('*', `${IMAGE_PATH}/*`, () =>
-  Effect.gen(function* () {
-    const params = yield* HttpRouter.params
-    return yield* imageProxy(env, params['*'] ?? '')
-  }),
-)
+const imageRoute = (env: ApiEnv) =>
+  HttpRouter.add('*', `${IMAGE_PATH}/*`, () =>
+    Effect.gen(function* () {
+      const params = yield* HttpRouter.params
+      return yield* imageProxy(env, params['*'] ?? '')
+    }),
+  )
 
 /**
  * The only origins that get CORS headers: the two localhost ports the dev
@@ -494,13 +507,7 @@ const imageRoute = (env: ApiEnv) => HttpRouter.add('*', `${IMAGE_PATH}/*`, () =>
 const corsLayer = HttpRouter.cors({
   allowedOrigins: ['http://localhost:5173', 'http://localhost:13371'],
   allowedMethods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: [
-    'content-type',
-    'authorization',
-    'cf-access-jwt-assertion',
-    'b3',
-    'traceparent',
-  ],
+  allowedHeaders: ['content-type', 'authorization', 'cf-access-jwt-assertion', 'b3', 'traceparent'],
   credentials: true,
   maxAge: 86_400,
 })
@@ -541,17 +548,18 @@ const securityLayer = HttpRouter.middleware(
 )
 
 /** The health probe, as a route. */
-const healthRoute = (env: ApiEnv) => HttpRouter.add('GET', HEALTH_PATH, () =>
-  Effect.gen(function* () {
-    const healthy = yield* healthProbe().pipe(Effect.provide(metadataLayer(env)))
-    // A `Result`, not a failure: a database that is not answering is the health
-    // endpoint reporting `503`, which is the one route whose whole job is to
-    // answer with that.
-    return healthy
-      ? yield* HttpServerResponse.json({ ok: true })
-      : yield* HttpServerResponse.json({ ok: false }, { status: 503 })
-  }),
-)
+const healthRoute = (env: ApiEnv) =>
+  HttpRouter.add('GET', HEALTH_PATH, () =>
+    Effect.gen(function* () {
+      const healthy = yield* healthProbe().pipe(Effect.provide(metadataLayer(env)))
+      // A `Result`, not a failure: a database that is not answering is the health
+      // endpoint reporting `503`, which is the one route whose whole job is to
+      // answer with that.
+      return healthy
+        ? yield* HttpServerResponse.json({ ok: true })
+        : yield* HttpServerResponse.json({ ok: false }, { status: 503 })
+    }),
+  )
 
 /**
  * Every route, and the three layers the whole app needs.

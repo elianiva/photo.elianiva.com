@@ -98,9 +98,8 @@ const decodeUploadBody = (
   xhr: XMLHttpRequest,
 ): Option.Option<typeof UploadSuccessBody.Type | typeof UploadErrorBody.Type> =>
   Option.flatMap(parseJson(xhr.responseText), (parsed) =>
-    Option.orElse(
-      S.decodeUnknownOption(UploadSuccessBody)(parsed),
-      () => S.decodeUnknownOption(UploadErrorBody)(parsed),
+    Option.orElse(S.decodeUnknownOption(UploadSuccessBody)(parsed), () =>
+      S.decodeUnknownOption(UploadErrorBody)(parsed),
     ),
   )
 

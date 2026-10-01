@@ -12,15 +12,11 @@ import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { PhotoId } from '@photo/shared'
 import type { PhotoWithTags } from '@photo/shared'
-import * as Animation from '@foldkit/ui/animation'
-import { AcquireResources, ShowDialog } from '@foldkit/ui/dialog'
-
-import * as Dialog from '@/components/ui/dialog'
-
 import { FetchSettingsCmd } from './commands'
 import { Message } from './model'
 import type { Model } from './model'
 import { init, update } from './update'
+import { dialogOpened } from './scene-dialog'
 import { view } from './view'
 import { uploadFooterStatus, uploadFooterSummary, uploadPrimaryLabel } from './views/upload-dialog'
 
@@ -82,16 +78,7 @@ const opened = (id: string) => [
   // `Use export defaults` reads the Settings singleton; opening the dialog
   // asks for it. The resolver answers with the failure the toggle tolerates.
   Scene.Command.resolve(FetchSettingsCmd(), Message.FailedGetSettings({})),
-  Scene.Command.resolve(
-    ShowDialog({ id, focusSelector: '[data-foldkit-dialog-initial-focus]' }),
-    Dialog.Message.SucceededShowDialog(),
-  ),
-  Scene.Command.resolve(Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()),
-  Scene.Command.resolve(
-    Animation.WaitForAnimationSettled({ id: `${id}-panel` }),
-    Animation.Message.EndedAnimation(),
-  ),
-  Scene.Mount.resolve(AcquireResources, Dialog.Message.SucceededAcquireResources()),
+  ...dialogOpened(id),
 ]
 
 describe('the upload queue', () => {

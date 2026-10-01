@@ -156,18 +156,22 @@ const fetchJwks = (
 /** One entry per Access team. The site has one; the capacity is a bound on a
  *  map that would otherwise grow with every distinct `teamDomain` a request
  *  names, and the entries are hour-old JWKS documents. */
-const jwksCache: Cache.Cache<string, ReadonlyArray<Jwk>, AccessRejection, HttpClient.HttpClient> =
-  Effect.runSync(
-    Cache.make({
-      capacity: 8,
-      timeToLive: JWKS_TTL,
-      // The lookup needs the HTTP client; the cache value itself does not, so
-      // the cache is built once per isolate at module scope and every request
-      // that misses a key brings its own `HttpClient`.
-      requireServicesAt: 'lookup',
-      lookup: (teamDomain: string) => fetchJwks(teamDomain),
-    }),
-  )
+const jwksCache: Cache.Cache<
+  string,
+  ReadonlyArray<Jwk>,
+  AccessRejection,
+  HttpClient.HttpClient
+> = Effect.runSync(
+  Cache.make({
+    capacity: 8,
+    timeToLive: JWKS_TTL,
+    // The lookup needs the HTTP client; the cache value itself does not, so
+    // the cache is built once per isolate at module scope and every request
+    // that misses a key brings its own `HttpClient`.
+    requireServicesAt: 'lookup',
+    lookup: (teamDomain: string) => fetchJwks(teamDomain),
+  }),
+)
 
 /** Verify an Access JWT. Answers the claim's subject email and the issuer that
  *  vouched for the signature, or the rejection that says why not.
@@ -179,14 +183,22 @@ export const verifyAccessToken = (
   token: string,
   teamDomain: string,
 ): Effect.Effect<
-  Result.Result<{ readonly email: string | undefined; readonly teamDomain: string }, AccessRejection>,
+  Result.Result<
+    { readonly email: string | undefined; readonly teamDomain: string },
+    AccessRejection
+  >,
   never,
   HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
     const parts = token.split('.')
     const [rawHeader, rawPayload, rawSignature] = parts
-    if (parts.length !== 3 || rawHeader === undefined || rawPayload === undefined || rawSignature === undefined) {
+    if (
+      parts.length !== 3 ||
+      rawHeader === undefined ||
+      rawPayload === undefined ||
+      rawSignature === undefined
+    ) {
       return Result.fail(reject('malformed token'))
     }
 

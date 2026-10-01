@@ -139,16 +139,19 @@ const removeTags = (
 /** A photo's tag links as slugs, ordered by label: ids are UUIDs, so an
  *  assertion written over them is a coin toss. */
 const linkedTagsOf = (harness: TestHarness, id: string): Promise<ReadonlyArray<string>> =>
-  queryRows<{ slug: string }>(harness, (sql) =>
-    sql`SELECT t.slug AS slug FROM photo_tags pt JOIN tags t ON t.id = pt.tagId
+  queryRows<{ slug: string }>(
+    harness,
+    (sql) =>
+      sql`SELECT t.slug AS slug FROM photo_tags pt JOIN tags t ON t.id = pt.tagId
         WHERE pt.photoId = ${id} ORDER BY t.label`,
   ).then((rows) => rows.map((row) => row.slug))
 
 /** How many Photos carry a Tag. The chunk tests need the total, because a
  *  per-row spot check cannot see a link that was written to the wrong id. */
 const countLinks = (harness: TestHarness, tagId: string): Promise<number> =>
-  queryRow<{ n: number }>(harness, (sql) =>
-    sql`SELECT COUNT(*) AS n FROM photo_tags WHERE tagId = ${tagId}`,
+  queryRow<{ n: number }>(
+    harness,
+    (sql) => sql`SELECT COUNT(*) AS n FROM photo_tags WHERE tagId = ${tagId}`,
   ).then((row) => row?.n ?? 0)
 
 /** The crop and mat columns, straight off the row: the assertion that the
@@ -163,8 +166,10 @@ const presentationColumnsOf = (harness: TestHarness, id: string) =>
     borderStyle: string | null
     borderColour: string | null
     borderWidth: number | null
-  }>(harness, (sql) =>
-    sql`SELECT cropX, cropY, cropScale, level, borderEnabled, borderStyle, borderColour, borderWidth
+  }>(
+    harness,
+    (sql) =>
+      sql`SELECT cropX, cropY, cropScale, level, borderEnabled, borderStyle, borderColour, borderWidth
         FROM photos WHERE id = ${id}`,
   )
 
@@ -180,23 +185,26 @@ const withFailingPut = (harness: TestHarness): TestHarness => ({
 })
 
 const slugsIn = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
-  queryRows<{ slug: string }>(harness, (sql) =>
-    sql`SELECT slug FROM photos ORDER BY slug`,
-  ).then((rows) => rows.map((row) => row.slug))
+  queryRows<{ slug: string }>(harness, (sql) => sql`SELECT slug FROM photos ORDER BY slug`).then(
+    (rows) => rows.map((row) => row.slug),
+  )
 
 const numbersIn = (harness: TestHarness): Promise<ReadonlyArray<number | null>> =>
-  queryRows<{ number: number | null }>(harness, (sql) =>
-    sql`SELECT number FROM photos ORDER BY number`,
+  queryRows<{ number: number | null }>(
+    harness,
+    (sql) => sql`SELECT number FROM photos ORDER BY number`,
   ).then((rows) => rows.map((row) => row.number))
 
 const linkedPhotoIds = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
-  queryRows<{ photoId: string }>(harness, (sql) =>
-    sql`SELECT photoId FROM photo_tags ORDER BY photoId, tagId`,
+  queryRows<{ photoId: string }>(
+    harness,
+    (sql) => sql`SELECT photoId FROM photo_tags ORDER BY photoId, tagId`,
   ).then((rows) => rows.map((row) => row.photoId))
 
 const deletedAtOf = (harness: TestHarness, id: string): Promise<string | null> =>
-  queryRow<{ deletedAt: string | null }>(harness, (sql) =>
-    sql`SELECT deletedAt FROM photos WHERE id = ${id}`,
+  queryRow<{ deletedAt: string | null }>(
+    harness,
+    (sql) => sql`SELECT deletedAt FROM photos WHERE id = ${id}`,
   ).then((row) => row?.deletedAt ?? null)
 
 /** The bytes behind an R2 key, or null when the key is empty. */
@@ -233,16 +241,19 @@ interface PhotoRowSeed {
 /** Rows the service API cannot produce: a fixed id, an undated Photo, or a
  *  trashed one. */
 const seedPhotoRow = async (harness: TestHarness, row: PhotoRowSeed): Promise<void> => {
-  await queryRows(harness, (sql) =>
-    sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
+  await queryRows(
+    harness,
+    (sql) =>
+      sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
         VALUES (${row.id}, ${row.slug}, ${row.slug}, ${`originals/${row.id}.jpg`},
                 ${row.width ?? 1200}, ${row.height ?? 800}, ${row.status ?? 'published'},
                 ${row.ratio === undefined ? '3:2' : row.ratio}, ${row.bytes ?? null},
                 ${row.takenAt ?? null}, ${'{}'}, ${null}, ${row.deletedAt ?? null})`,
   )
   for (const tagId of row.tagIds ?? []) {
-    await queryRows(harness, (sql) =>
-      sql`INSERT INTO photo_tags (photoId, tagId) VALUES (${row.id}, ${tagId})`,
+    await queryRows(
+      harness,
+      (sql) => sql`INSERT INTO photo_tags (photoId, tagId) VALUES (${row.id}, ${tagId})`,
     )
   }
 }
@@ -558,8 +569,10 @@ describe('PhotoService.list', () => {
     for (let index = 0; index < 81; index += 1) {
       await seedPhotoRow(harness, { id: `photo_${String(index)}`, slug: `p${index}` })
     }
-    await queryRows(harness, (sql) =>
-      sql`INSERT INTO photo_tags (photoId, tagId) SELECT photos.id, ${film.id} FROM photos`,
+    await queryRows(
+      harness,
+      (sql) =>
+        sql`INSERT INTO photo_tags (photoId, tagId) SELECT photos.id, ${film.id} FROM photos`,
     )
 
     const page = await list(harness, { limit: 100 })
@@ -811,8 +824,10 @@ describe('PhotoService.create', () => {
       fullQuality: number
       keepExif: number
       removeGps: number
-    }>(harness, (sql) =>
-      sql`SELECT status, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps
+    }>(
+      harness,
+      (sql) =>
+        sql`SELECT status, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps
           FROM photos WHERE id = ${created.id}`,
     )
 

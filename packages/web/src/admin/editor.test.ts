@@ -15,10 +15,8 @@ import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { PHOTO_RATIOS, PhotoId } from '@photo/shared'
 import type { PhotoPresentation } from '@photo/shared'
-import * as Animation from '@foldkit/ui/animation'
-import { AcquireResources, CloseDialog, ShowDialog } from '@foldkit/ui/dialog'
+import { AcquireResources } from '@foldkit/ui/dialog'
 
-import * as Dialog from '@/components/ui/dialog'
 import * as Segment from '@/components/ui/segment'
 
 import { blurhashComponentLabel } from '@/lib/blurhash'
@@ -41,6 +39,7 @@ import {
 } from './editor'
 import { Message } from './model'
 import type { Model } from './model'
+import { dialogClosed, dialogOpened } from './scene-dialog'
 import { init, onUrlChange, update } from './update'
 import { view } from './view'
 
@@ -170,33 +169,12 @@ const openedWithHash = (hash: string): Model =>
 const reachedFrom = (pathname: string): Model =>
   update(update(opened(), onUrlChange(at(pathname))).model, onUrlChange(at(EDITOR_PATH))).model
 
-/** What the Editor's own dialog needs answered when it opens. Its show, paint
- *  and acquire commands are the framework's business; a scene is about the
- *  app's Messages, so they are resolved by name here. */
-const leaveOpened = [
-  Scene.Command.resolve(
-    ShowDialog({ id: 'admin-editor-leave', focusSelector: '[data-foldkit-dialog-initial-focus]' }),
-    Dialog.Message.SucceededShowDialog(),
-  ),
-  Scene.Command.resolve(Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()),
-  Scene.Command.resolve(
-    Animation.WaitForAnimationSettled({ id: 'admin-editor-leave-panel' }),
-    Animation.Message.EndedAnimation(),
-  ),
-  Scene.Mount.resolve(AcquireResources, Dialog.Message.SucceededAcquireResources()),
-]
+/** What the Editor's own dialog needs answered when it opens and when it
+ *  closes. Its show, paint and acquire commands are the framework's business;
+ *  a scene is about the app's Messages, so they are resolved here. */
+const leaveOpened = dialogOpened('admin-editor-leave')
 
-const leaveClosed = [
-  Scene.Command.resolve(Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()),
-  Scene.Command.resolve(
-    Animation.WaitForAnimationSettled({ id: 'admin-editor-leave-panel' }),
-    Animation.Message.EndedAnimation(),
-  ),
-  Scene.Command.resolve(
-    CloseDialog({ id: 'admin-editor-leave' }),
-    Dialog.Message.CompletedCloseDialog(),
-  ),
-]
+const leaveClosed = dialogClosed('admin-editor-leave')
 
 describe('the Editor on a cold load', () => {
   it('is a document of its own — no sidebar, no Page Head, and the dark branch', () => {

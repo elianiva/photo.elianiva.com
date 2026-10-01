@@ -524,7 +524,8 @@ const rowById = (sql: Db, id: string, scope: 'live' | 'any' = 'live') =>
     sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos WHERE id = ${id}${
       scope === 'live' ? sql.literal(` AND ${LIVE}`) : sql.literal('')
     }`,
-    (cause) => new StorageError({ message: `Failed to get photo ${id}`, cause: describeCause(cause) }),
+    (cause) =>
+      new StorageError({ message: `Failed to get photo ${id}`, cause: describeCause(cause) }),
   ).pipe(Effect.map(firstRow))
 
 /** The row an operation is about to act on, or `PhotoNotFound`. Every method
@@ -659,7 +660,9 @@ const assertLivePhotos = (sql: Db, photoIds: ReadonlyArray<string>) =>
     const found = new Set<string>()
     for (const chunk of chunkOf(photoIds, LINK_BIND_BUDGET)) {
       const raw = yield* Effect.mapError(
-        sql<{ id: string }>`SELECT id FROM photos WHERE ${sql.literal(LIVE)} AND ${sql.in('id', chunk)}`,
+        sql<{
+          id: string
+        }>`SELECT id FROM photos WHERE ${sql.literal(LIVE)} AND ${sql.in('id', chunk)}`,
         (cause) =>
           new StorageError({ message: 'Failed to check photos', cause: describeCause(cause) }),
       )
@@ -749,7 +752,8 @@ const selectPhotoRows = (
         sql,
         sort,
       )} LIMIT ${limit}`,
-      (cause) => new StorageError({ message: 'Failed to list photos', cause: describeCause(cause) }),
+      (cause) =>
+        new StorageError({ message: 'Failed to list photos', cause: describeCause(cause) }),
     )
     const nextCursor = rows.length === limit ? encodeCursor(rows[rows.length - 1]!, sort) : null
     return { rows, nextCursor }
@@ -802,8 +806,8 @@ const linkTags = (
   tagIds: ReadonlyArray<string>,
 ): ReadonlyArray<BatchStatement> => [
   sql`DELETE FROM photo_tags WHERE photoId = ${photoId}`,
-  ...tagIds.map((tagId) =>
-    sql`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (${photoId}, ${tagId})`,
+  ...tagIds.map(
+    (tagId) => sql`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (${photoId}, ${tagId})`,
   ),
 ]
 
@@ -819,10 +823,14 @@ const deletePhoto = (sql: Db, photoId: string): ReadonlyArray<BatchStatement> =>
  *  two Photos the same one. */
 const slugAvailable = (sql: Db, slug: string, exceptPhotoId?: string) =>
   Effect.mapError(
-    sql<{ id: string }>`SELECT id FROM photos WHERE slug = ${slug} AND (${exceptPhotoId ?? null} IS NULL OR id != ${exceptPhotoId ?? ''})`,
-    (cause) =>
-      new StorageError({ message: 'Failed to check slug', cause: describeCause(cause) }),
-  ).pipe(Effect.map(firstRow), Effect.map((row) => row === null))
+    sql<{
+      id: string
+    }>`SELECT id FROM photos WHERE slug = ${slug} AND (${exceptPhotoId ?? null} IS NULL OR id != ${exceptPhotoId ?? ''})`,
+    (cause) => new StorageError({ message: 'Failed to check slug', cause: describeCause(cause) }),
+  ).pipe(
+    Effect.map(firstRow),
+    Effect.map((row) => row === null),
+  )
 
 /**
  * Drops a row this call inserted, best effort. Keyed by id and never by
@@ -832,7 +840,10 @@ const slugAvailable = (sql: Db, slug: string, exceptPhotoId?: string) =>
  *  nothing useful to say, and failing the call it was undoing would report the
  *  original write as lost when the row is still there. */
 const dropRow = (batch: BatchContract, sql: Db, id: string): Effect.Effect<void> =>
-  batch.run(deletePhoto(sql, id)).pipe(Effect.orElseSucceed(() => undefined), Effect.asVoid)
+  batch.run(deletePhoto(sql, id)).pipe(
+    Effect.orElseSucceed(() => undefined),
+    Effect.asVoid,
+  )
 
 // ---------------------------------------------------------------------------
 // aggregates
@@ -902,7 +913,8 @@ export const PhotoServiceLive = Layer.effect(
     const list: PhotoServiceContract['list'] = (filter) =>
       Effect.gen(function* () {
         const { rows, nextCursor } = yield* pagePhotos(sql, sql.literal(LIVE), filter)
-        const tagMap = yield* tagsForPhotos(sql,
+        const tagMap = yield* tagsForPhotos(
+          sql,
           rows.map((row) => row.id),
         )
         const items = rows.map((row) => toPhotoWithTags(row, tagMap.get(row.id) ?? []))
@@ -1114,7 +1126,8 @@ export const PhotoServiceLive = Layer.effect(
         if (row.deletedAt !== null) return
         yield* Effect.mapError(
           // `YYYY-MM-DD`, the format #14 gives `deletedAt` and `takenAt`.
-          sql`UPDATE photos SET deletedAt = ${DateTime.formatIsoDateUtc(DateTime.nowUnsafe())} WHERE id = ${id} AND ${sql.literal(LIVE)}`.raw,
+          sql`UPDATE photos SET deletedAt = ${DateTime.formatIsoDateUtc(DateTime.nowUnsafe())} WHERE id = ${id} AND ${sql.literal(LIVE)}`
+            .raw,
           (cause) =>
             new StorageError({ message: 'Failed to trash photo', cause: describeCause(cause) }),
         )
@@ -1195,7 +1208,10 @@ export const PhotoServiceLive = Layer.effect(
               cause: describeCause(cause),
             }),
         )
-        const tagMap = yield* tagsForPhotos(sql, rows.map((row) => row.id))
+        const tagMap = yield* tagsForPhotos(
+          sql,
+          rows.map((row) => row.id),
+        )
         return rows.map((row) => {
           const location = parseMetadataObject(row.metadata)?.['location']
           return {
@@ -1213,7 +1229,10 @@ export const PhotoServiceLive = Layer.effect(
 
     const storageUsage: PhotoServiceContract['storageUsage'] = () =>
       Effect.mapError(
-        sql<{ photos: number; bytes: number }>`SELECT COUNT(*) AS photos, COALESCE(SUM(bytes), 0) AS bytes FROM photos WHERE ${sql.literal(LIVE)}`,
+        sql<{
+          photos: number
+          bytes: number
+        }>`SELECT COUNT(*) AS photos, COALESCE(SUM(bytes), 0) AS bytes FROM photos WHERE ${sql.literal(LIVE)}`,
         (cause) =>
           new StorageError({
             message: 'Failed to read storage usage',
@@ -1271,8 +1290,9 @@ export const PhotoServiceLive = Layer.effect(
         // one `tagId`, so the Tag ids are the loop and the Photo ids are the
         // binds inside one statement.
         const statements = tagIds.flatMap((tagId) =>
-          linkPhotoChunks(photoIds).map((chunk) =>
-            sql`INSERT OR IGNORE INTO photo_tags (photoId, tagId)
+          linkPhotoChunks(photoIds).map(
+            (chunk) =>
+              sql`INSERT OR IGNORE INTO photo_tags (photoId, tagId)
                 SELECT id, ${tagId} FROM photos WHERE ${sql.literal(LIVE)} AND ${sql.in('id', chunk)}`,
           ),
         )
@@ -1289,8 +1309,9 @@ export const PhotoServiceLive = Layer.effect(
         yield* assertLivePhotos(sql, photoIds)
         yield* assertTagsExist(sql, tagIds)
         const statements = tagIds.flatMap((tagId) =>
-          linkPhotoChunks(photoIds).map((chunk) =>
-            sql`DELETE FROM photo_tags WHERE tagId = ${tagId} AND ${sql.in('photoId', chunk)}`,
+          linkPhotoChunks(photoIds).map(
+            (chunk) =>
+              sql`DELETE FROM photo_tags WHERE tagId = ${tagId} AND ${sql.in('photoId', chunk)}`,
           ),
         )
         if (statements.length === 0) return

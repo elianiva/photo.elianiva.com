@@ -109,18 +109,22 @@ export interface TestHarness {
 }
 
 /** A migrated, isolated database and bucket. Every call is a fresh one. */
-export const makeTestHarness = (migrations: ReadonlyArray<string> = repoMigrations()): TestHarness => {
+export const makeTestHarness = (
+  migrations: ReadonlyArray<string> = repoMigrations(),
+): TestHarness => {
   const photos = makeR2Fake()
   const { uri } = openMigrated(migrations)
   // One `provideMerge`, so there is exactly one client: `Batch` needs the same
   // `SqlClient` the migrations ran on.
-  const storage = Layer.mergeAll(BatchTransactionLive, Layer.succeed(Gateway, Gateway.of({ photos })))
-    .pipe(
-      // WAL is a file feature; an in-memory shared-cache database does not
-      // want it, and the busy timeout is irrelevant when nothing else can open
-      // the same name.
-      Layer.provideMerge(SqliteClient.layer({ filename: uri, disableWAL: true })),
-    )
+  const storage = Layer.mergeAll(
+    BatchTransactionLive,
+    Layer.succeed(Gateway, Gateway.of({ photos })),
+  ).pipe(
+    // WAL is a file feature; an in-memory shared-cache database does not
+    // want it, and the busy timeout is irrelevant when nothing else can open
+    // the same name.
+    Layer.provideMerge(SqliteClient.layer({ filename: uri, disableWAL: true })),
+  )
   return {
     gateway: Gateway.of({ photos }),
     photos,
@@ -137,10 +141,7 @@ export const withTestServices = <A, E>(
   harness.run(
     withGateway(
       harness.gateway,
-      Effect.provide(
-        effect,
-        Layer.mergeAll(PhotoServiceLive, TagServiceLive, SettingsServiceLive),
-      ),
+      Effect.provide(effect, Layer.mergeAll(PhotoServiceLive, TagServiceLive, SettingsServiceLive)),
     ),
   )
 
@@ -214,7 +215,10 @@ export const describeFailure = (cause: unknown, depth = 6): string => {
   if (typeof cause === 'string') return cause
   if (depth === 0) return ''
   if (Array.isArray(cause)) {
-    return cause.map((entry) => describeFailure(entry, depth - 1)).filter((t) => t !== '').join(' | ')
+    return cause
+      .map((entry) => describeFailure(entry, depth - 1))
+      .filter((t) => t !== '')
+      .join(' | ')
   }
   if (typeof cause !== 'object') {
     // A thrown primitive, which is not what this exists for. Handled so the

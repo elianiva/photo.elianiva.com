@@ -10,7 +10,13 @@ import { PublicPhotoServiceLive } from './public-photo'
 import { AdminSession } from './session'
 import { TagServiceLive } from './tag'
 import { createPhoto, createTag, fail, SETTINGS_DEFAULTS, trashPhoto } from './testing/fixtures'
-import { makeTestHarness, queryRow, queryRows, withTestServices, type TestHarness } from './testing/harness'
+import {
+  makeTestHarness,
+  queryRow,
+  queryRows,
+  withTestServices,
+  type TestHarness,
+} from './testing/harness'
 
 const ISO_STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 
@@ -46,8 +52,10 @@ const flagColumnsOf = (harness: TestHarness) =>
     defaultKeepExif: number
     defaultRemoveGps: number
     retainForever: number
-  }>(harness, (sql) =>
-    sql`SELECT watermarkEnabled, defaultKeepExif, defaultRemoveGps, retainForever
+  }>(
+    harness,
+    (sql) =>
+      sql`SELECT watermarkEnabled, defaultKeepExif, defaultRemoveGps, retainForever
         FROM settings WHERE id = 1`,
   )
 
@@ -193,16 +201,19 @@ interface IndexRowSeed {
 /** Rows the service API cannot produce: a fixed id, a Photo Number the counter
  *  never spent, and a metadata blob with a place in it. */
 const seedIndexRow = async (harness: TestHarness, row: IndexRowSeed): Promise<void> => {
-  await queryRows(harness, (sql) =>
-    sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, number, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
+  await queryRows(
+    harness,
+    (sql) =>
+      sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, number, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
         VALUES (${row.id}, ${row.slug}, ${row.title ?? row.slug}, ${`originals/${row.id}.jpg`},
                 1200, 800, 'published', ${row.number ?? null},
                 ${row.ratio === undefined ? '3:2' : row.ratio}, ${row.bytes ?? null},
                 ${row.takenAt ?? null}, ${row.metadata ?? '{}'}, ${null}, ${row.deletedAt ?? null})`,
   )
   for (const tagId of row.tagIds ?? []) {
-    await queryRows(harness, (sql) =>
-      sql`INSERT INTO photo_tags (photoId, tagId) VALUES (${row.id}, ${tagId})`,
+    await queryRows(
+      harness,
+      (sql) => sql`INSERT INTO photo_tags (photoId, tagId) VALUES (${row.id}, ${tagId})`,
     )
   }
 }

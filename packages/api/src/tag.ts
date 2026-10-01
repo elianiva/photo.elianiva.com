@@ -44,8 +44,7 @@ export const TagServiceLive = Layer.effect(
 
     const list: TagServiceContract['list'] = Effect.mapError(
       sql<Tag>`SELECT id, slug, label, caption FROM tags ORDER BY label`,
-      (cause) =>
-        new StorageError({ message: 'Failed to list tags', cause: describeCause(cause) }),
+      (cause) => new StorageError({ message: 'Failed to list tags', cause: describeCause(cause) }),
     )
 
     const create: TagServiceContract['create'] = (input) =>
@@ -106,7 +105,10 @@ export const TagServiceLive = Layer.effect(
     const remove: TagServiceContract['remove'] = (id) =>
       Effect.gen(function* () {
         yield* Effect.mapError(
-          batch.run([sql`DELETE FROM photo_tags WHERE tagId = ${id}`, sql`DELETE FROM tags WHERE id = ${id}`]),
+          batch.run([
+            sql`DELETE FROM photo_tags WHERE tagId = ${id}`,
+            sql`DELETE FROM tags WHERE id = ${id}`,
+          ]),
           (cause) =>
             new StorageError({
               message: `Failed to delete tag ${id}`,

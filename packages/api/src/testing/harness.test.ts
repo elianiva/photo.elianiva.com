@@ -17,8 +17,10 @@ const insertPhoto = (
   id: string,
   overrides: { readonly width?: unknown; readonly slug?: string } = {},
 ): Promise<ReadonlyArray<unknown>> =>
-  queryRows(harness, (sql) =>
-    sql`INSERT INTO photos (id, slug, title, r2Key, width, height, takenAt, metadata, blurhash)
+  queryRows(
+    harness,
+    (sql) =>
+      sql`INSERT INTO photos (id, slug, title, r2Key, width, height, takenAt, metadata, blurhash)
         VALUES (${id}, ${overrides.slug ?? `slug-${id}`}, ${`Title ${id}`}, ${`originals/${id}.jpg`},
                 ${overrides.width ?? 1200}, 800, '2024-01-15', '{"caption":"a"}', 'LEHV6nWB')`,
   )
@@ -51,17 +53,18 @@ describe('the migrated test database', () => {
 
   it('honours STRICT — a text value in an integer column is rejected', async () => {
     const harness = makeTestHarness()
-    await expect(failureOf(insertPhoto(harness, 'photo_1', { width: 'not-a-number' }))).resolves.toMatch(
-      /cannot store TEXT value in INTEGER column/i,
-    )
+    await expect(
+      failureOf(insertPhoto(harness, 'photo_1', { width: 'not-a-number' })),
+    ).resolves.toMatch(/cannot store TEXT value in INTEGER column/i)
   })
 
   it('honours foreign keys — a photo_tags row with a missing photoId is rejected', async () => {
     const harness = makeTestHarness()
     await expect(
       failureOf(
-        queryRows(harness, (sql) =>
-          sql`INSERT INTO photo_tags (photoId, tagId) VALUES ('nope', 'nope')`,
+        queryRows(
+          harness,
+          (sql) => sql`INSERT INTO photo_tags (photoId, tagId) VALUES ('nope', 'nope')`,
         ),
       ),
     ).resolves.toMatch(/FOREIGN KEY/i)
@@ -77,9 +80,9 @@ describe('the migrated test database', () => {
   it('honours the unique slug index', async () => {
     const harness = makeTestHarness()
     await insertPhoto(harness, 'photo_1')
-    await expect(failureOf(insertPhoto(harness, 'photo_2', { slug: 'slug-photo_1' }))).resolves.toMatch(
-      /UNIQUE/i,
-    )
+    await expect(
+      failureOf(insertPhoto(harness, 'photo_2', { slug: 'slug-photo_1' })),
+    ).resolves.toMatch(/UNIQUE/i)
   })
 
   it('hands out a fresh database per harness', async () => {

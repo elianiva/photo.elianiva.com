@@ -22,7 +22,6 @@ const SECURITY_HEADERS = {
   'x-frame-options': 'DENY',
 } as const
 
-
 /**
  * The incoming web `Request`, as a service.
  *
@@ -208,10 +207,7 @@ const canonicalRoute = HttpRouter.add('*', '/index.html', () =>
  *  carry the span. */
 const sitemapRoute = (env: WorkerEnvWithAssets) =>
   HttpRouter.add('GET', '/sitemap.xml', () =>
-    Effect.map(
-      Effect.provide(renderSitemap(env), WorkerLoggerLive),
-      HttpServerResponse.fromWeb,
-    ),
+    Effect.map(Effect.provide(renderSitemap(env), WorkerLoggerLive), HttpServerResponse.fromWeb),
   )
 
 /** The asset binding, as a service. It is a `fetch`, so the route handlers
@@ -312,7 +308,6 @@ const assetRoute = HttpRouter.add('*', '/*', () =>
   }),
 )
 
-
 /**
  * Every route, and the one layer the whole app needs.
  *
@@ -348,10 +343,7 @@ const appLayer = (env: WorkerEnvWithAssets) =>
 const handlerFor = (env: WorkerEnvWithAssets, request: Request) =>
   HttpRouter.toWebHandler(
     HttpRouter.provideRequest(
-      Layer.mergeAll(
-        Layer.succeed(Assets, env.ASSETS),
-        Layer.succeed(WebRequest, request),
-      ),
+      Layer.mergeAll(Layer.succeed(Assets, env.ASSETS), Layer.succeed(WebRequest, request)),
     )(appLayer(env)),
     { disableLogger: true, routerConfig: { ignoreTrailingSlash: true } },
   ).handler

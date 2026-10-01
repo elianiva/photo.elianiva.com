@@ -163,8 +163,10 @@ const matOf = (harness: TestHarness, id: string) =>
     borderStyle: string | null
     borderColour: string | null
     borderWidth: number | null
-  } | null>(harness, (sql) =>
-    sql`SELECT borderEnabled, borderStyle, borderColour, borderWidth FROM photos WHERE id = ${id}`,
+  } | null>(
+    harness,
+    (sql) =>
+      sql`SELECT borderEnabled, borderStyle, borderColour, borderWidth FROM photos WHERE id = ${id}`,
   )
 
 describe('ListPhotos handler', () => {
@@ -205,8 +207,9 @@ describe('ListPhotos handler', () => {
     const harness = makeTestHarness()
     const kept = await createPhoto(harness, { slug: 'kept', title: 'Kept' })
     const binned = await createPhoto(harness, { slug: 'binned', title: 'Binned' })
-    await queryRows(harness, (sql) =>
-      sql`UPDATE photos SET deletedAt = '2026-01-01' WHERE id = ${binned.id}`,
+    await queryRows(
+      harness,
+      (sql) => sql`UPDATE photos SET deletedAt = '2026-01-01' WHERE id = ${binned.id}`,
     )
 
     const page = await listPhotos(harness, { limit: 60 })

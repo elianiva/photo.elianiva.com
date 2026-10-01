@@ -79,7 +79,9 @@ export const makeD1Fake = (migrations: ReadonlyArray<string>): D1Binding => {
      * overloaded function because one implementation cannot be both: `columnNames`
      * prepends the column names as the first element.
      */
-    function raw<Row = unknown[]>(options: { readonly columnNames: true }): Promise<[string[], ...Row[]]>
+    function raw<Row = unknown[]>(options: {
+      readonly columnNames: true
+    }): Promise<[string[], ...Row[]]>
     function raw<Row = unknown[]>(options?: { readonly columnNames?: false }): Promise<Row[]>
     function raw<Row = unknown[]>(options?: {
       readonly columnNames?: boolean
@@ -87,7 +89,10 @@ export const makeD1Fake = (migrations: ReadonlyArray<string>): D1Binding => {
       const rows = statement.all(...bound)
       if (options?.columnNames === true) {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- `node:sqlite` types its rows as `Record<string, SQLOutputValue>`; `Row` is the shape the caller asked D1 for
-        return Promise.resolve([Object.keys(rows[0] ?? {}), ...rows] as unknown as [string[], ...ReadonlyArray<Row>])
+        return Promise.resolve([Object.keys(rows[0] ?? {}), ...rows] as unknown as [
+          string[],
+          ...ReadonlyArray<Row>,
+        ])
       }
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- as above, in D1's positional-array shape
       return Promise.resolve(rows.map((row) => Object.values(row)) as unknown as ReadonlyArray<Row>)
@@ -96,7 +101,10 @@ export const makeD1Fake = (migrations: ReadonlyArray<string>): D1Binding => {
     const run = (): { changes: number } => statement.run(...bound) as { changes: number }
     return {
       bind: (...values: ReadonlyArray<unknown>) =>
-        prepared(sql, values.map((value) => (value === undefined ? null : toInput(value)))),
+        prepared(
+          sql,
+          values.map((value) => (value === undefined ? null : toInput(value))),
+        ),
       all: async <Row>() => {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- `node:sqlite` types its rows as `Record<string, SQLOutputValue>`; `Row` is the shape the query returns, and the driver is what asks for it
         const results = statement.all(...bound) as unknown as Row[]
@@ -126,7 +134,8 @@ export const makeD1Fake = (migrations: ReadonlyArray<string>): D1Binding => {
   const toInput = (value: unknown): SQLInputValue => {
     if (typeof value === 'boolean') return value ? 1 : 0
     if (value === undefined || value === null) return null
-    if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'string')
+      return value
     if (value instanceof Uint8Array) return value
     return JSON.stringify(value)
   }
@@ -160,7 +169,8 @@ export const makeD1Fake = (migrations: ReadonlyArray<string>): D1Binding => {
         // an object, and handing them over unbound is the mistake the rule is
         // about.
         prepare: (query: string) => session.prepare(query),
-        batch: (statements: ReadonlyArray<D1PreparedStatementLike>) => session.batch([...statements]),
+        batch: (statements: ReadonlyArray<D1PreparedStatementLike>) =>
+          session.batch([...statements]),
         getBookmark: () => null,
       }
     },

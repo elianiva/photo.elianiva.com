@@ -16,17 +16,17 @@ At `4.0.0-rc.116` the `sql` and `persistence` modules ship under `unstable/`.
 The reference repo (`rc.118`) has them at the top level, so its paths do not
 resolve against the installed version:
 
-| Module | rc.118 (reference repo) | rc.116 (pinned here) |
-| --- | --- | --- |
-| SqlClient | `effect/sql/SqlClient` | `effect/unstable/sql/SqlClient` |
-| Migrator | `effect/sql/Migrator` | `effect/unstable/sql/Migrator` |
+| Module      | rc.118 (reference repo)          | rc.116 (pinned here)                      |
+| ----------- | -------------------------------- | ----------------------------------------- |
+| SqlClient   | `effect/sql/SqlClient`           | `effect/unstable/sql/SqlClient`           |
+| Migrator    | `effect/sql/Migrator`            | `effect/unstable/sql/Migrator`            |
 | RateLimiter | `effect/persistence/RateLimiter` | `effect/unstable/persistence/RateLimiter` |
 
 `effect/sql` and `effect/persistence` are not merely unstable in rc.116 — they
 are absent, and the `exports` map does not list them, so the import fails at
 resolve time rather than at runtime.
 
-`KeyValueStore` is the fourth such module, and it *is* used
+`KeyValueStore` is the fourth such module, and it _is_ used
 (`packages/web/src/admin/prefs.ts`).
 
 ## Baseline — what was already Effect
@@ -34,13 +34,13 @@ resolve time rather than at runtime.
 The stack is genuinely Effect-native, so what follows are gaps in a mature
 codebase rather than a conversion backlog:
 
-| Already load-bearing | Where |
-| --- | --- |
-| `Rpc` / `RpcGroup` / `RpcServer` / `RpcClient` | `packages/shared/src/rpc.ts`, `packages/api/src/rpc.ts`, `packages/web/src/lib/rpc.ts`, `packages/web/src/api-worker.ts` |
-| `Schema` as the wire + domain contract | `packages/shared/src/{photo,settings,rpc,upload}.ts` |
-| `Layer` / `Context.Service` for the service graph | `packages/api/src/{gateway,photo,public-photo,tag,settings}.ts` |
-| `Stream` + `Queue` for the upload queue | `packages/web/src/admin/subscriptions.ts` |
-| `Option`, `DateTime`, `Match`, `ManagedRuntime`, `Scope`, `Cause` | throughout |
+| Already load-bearing                                              | Where                                                                                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `Rpc` / `RpcGroup` / `RpcServer` / `RpcClient`                    | `packages/shared/src/rpc.ts`, `packages/api/src/rpc.ts`, `packages/web/src/lib/rpc.ts`, `packages/web/src/api-worker.ts` |
+| `Schema` as the wire + domain contract                            | `packages/shared/src/{photo,settings,rpc,upload}.ts`                                                                     |
+| `Layer` / `Context.Service` for the service graph                 | `packages/api/src/{gateway,photo,public-photo,tag,settings}.ts`                                                          |
+| `Stream` + `Queue` for the upload queue                           | `packages/web/src/admin/subscriptions.ts`                                                                                |
+| `Option`, `DateTime`, `Match`, `ManagedRuntime`, `Scope`, `Cause` | throughout                                                                                                               |
 
 Non-test counts, measured before and after (`git grep` at `HEAD` vs the working
 tree; the test fixtures' own `try`/`catch` are counted on both sides so the
@@ -115,7 +115,7 @@ Two genuine landmines were found here, both worth knowing:
    `defaultValueCacheKey`). So `FetchHttpClient.Fetch` captures
    `globalThis.fetch` on the first request, and a `vi.stubGlobal('fetch', …)`
    after that is invisible to it. The first Access test passed and every one
-   after it failed with `bad signature` — each was being handed the *first*
+   after it failed with `bad signature` — each was being handed the _first_
    test's public key. Fixed on the test side by providing `Fetch` explicitly,
    and in `api-worker.ts` by naming `globalThis.fetch` in the wrapper so it is
    read per call.
@@ -143,7 +143,7 @@ names before the closure now.
 - **`blurhash.ts`** → `compositionSource` now returns
   `Effect<Option<ImageBitmap>>` off a `Cache.makeWith`, and its time-to-live is
   a function of the lookup's `Exit`. **This fixed a real bug:** the old
-  `Map<string, Promise<ImageBitmap | undefined>>` stored the *settled* promise,
+  `Map<string, Promise<ImageBitmap | undefined>>` stored the _settled_ promise,
   so one unreachable fetch made that URL undecodable for the rest of the session
   and no later re-encode could recover. A failure now expires immediately.
   `Cache` also evicts least-recently-used rather than oldest-inserted, and
@@ -151,13 +151,13 @@ names before the closure now.
   design.
 
 **Why `rate-limit.ts` does not use `RateLimiter`.** It is the obvious candidate
-and it works. It is not used because its `"fixed-window"` algorithm is a *leaky
-bucket*, and the two answer differently on a route that fronts an auth gate.
+and it works. It is not used because its `"fixed-window"` algorithm is a _leaky
+bucket_, and the two answer differently on a route that fronts an auth gate.
 Measured at `limit: 1, window: 60s`: the bucket's answer stays `delay = 59s` at
 t = 1s, 61s, 121s and 181s, because each refused request borrows the token the
 moment it refills — a client that keeps hammering never recovers. The old
 window answers at t = 61s, because the first hit has aged out. Its `resetAfter`
-is also the time until the window is *whole* rather than until this key has
+is also the time until the window is _whole_ rather than until this key has
 room, so a rejected upload would carry `retry-after: 57` where the window
 carried the time until the oldest hit expired. Both are defensible for a burst
 guard, and a leaky bucket is arguably the better abuse damper — but changing the
@@ -212,16 +212,16 @@ What replaced what:
   `StorageError` keeps its wire-safe `cause: string` for the upload body, and
   `describeCause` stays for exactly that — it is still what flattens a cause
   into that string, on the R2 calls that `tryPromise` because Effect has no R2
-  module. What is retired is the *SQL* use of it, where a typed error now
+  module. What is retired is the _SQL_ use of it, where a typed error now
   carries the query itself.
 - **`D1DatabaseLike`** is gone. It was a hand-written re-declaration of the
-  binding surface, and it was also *narrower than the real binding* — which is
+  binding surface, and it was also _narrower than the real binding_ — which is
   why the Worker wiring had to hand `env.DB` over with an `as never`.
 - **The old `testing/d1-fake.ts`** — 118 lines re-implementing `D1Database`'s
   API by hand — is gone. The harness is a `SqlClient` over `node:sqlite` running
   the real `migrations/*.sql`, and `describeFailure` reads a `Data` error's
   prototype-only `message` / `cause` / `reason` so a test can assert on the
-  engine's own reason rather than the wrapper's. (A *different* `d1-fake.ts`
+  engine's own reason rather than the wrapper's. (A _different_ `d1-fake.ts`
   exists now, with a narrower job — see below.)
 - **`Batch` is a service, not a method.** D1 has no transactions; its atomic
   primitive is `batch`, which the generic `SqlClient` deliberately does not
@@ -283,7 +283,7 @@ refusal is the absent header in both cases and that is the part a browser
 enforces. `access.test.ts` asserts `204` explicitly so the change is visible.
 
 The 404 is an explicit catch-all route. Global middleware cannot reach the
-answer the router produces *before* a route is matched, and the hand-written
+answer the router produces _before_ a route is matched, and the hand-written
 dispatcher put security headers on every response; the catch-all makes the 404 a
 route like any other, so it keeps them.
 
@@ -300,13 +300,13 @@ dispatcher refactor can break silently.
 - **`localStorage`** was one site, in two functions. It is now
   `packages/web/src/admin/prefs.ts`: a `GridPrefs` service over
   `KeyValueStore.layerStorage`, which owns the storage key, the SSR guard, and
-  the fact that a value outside the five choices is a *decoding failure* rather
+  the fact that a value outside the five choices is a _decoding failure_ rather
   than a `find(...) ?? 4` at the point of use. A store that throws is a
   preference that cannot be remembered, not a failure the operator can act on,
   and both the read and the write now say so once instead of twice.
 
   One asymmetry, and it is Foldkit's: `init` is synchronous by contract, so the
-  startup *read* stays a plain function and the *write* is a command over the
+  startup _read_ stays a plain function and the _write_ is a command over the
   service. Both go through one decode, so they cannot disagree.
 
 - **`scripts/seed.ts`** is an `Effect` program with a Schema for the seed data,
@@ -327,7 +327,7 @@ dispatcher refactor can break silently.
 - **`SqlResolver` / `Migrator`** — see the A1/A2 notes above; deliberately not
   adopted, with the reason.
 - **The real D1 driver against a real D1.** `BatchD1Live` and `MetadataLive` are
-  covered by `d1-driver.test.ts`, over a D1-*shaped* binding on `node:sqlite`.
+  covered by `d1-driver.test.ts`, over a D1-_shaped_ binding on `node:sqlite`.
   Running them against a real D1 needs `wrangler` or miniflare, neither of which
   the repo has, and the dev server needs Cloudflare credentials this environment
   does not have. So the D1 driver is verified for shape, atomicity and error

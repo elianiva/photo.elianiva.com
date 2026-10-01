@@ -16,10 +16,9 @@ import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { STORAGE_CAP_BYTES, TagId } from '@photo/shared'
 import type { Tag } from '@photo/shared'
-import * as Animation from '@foldkit/ui/animation'
-import { AcquireResources, CloseDialog, ShowDialog } from '@foldkit/ui/dialog'
+import { AcquireResources } from '@foldkit/ui/dialog'
 
-import * as Dialog from '@/components/ui/dialog'
+import { dialogClosed, dialogOpened } from './scene-dialog'
 
 import { CreateTagCmd, FetchCountsCmd, FetchPhotosCmd, ReplaceUrlCmd } from './commands'
 import { Message } from './model'
@@ -84,34 +83,6 @@ const tagRow = (label: string) => Scene.role('button', { name: label })
 const searchField = Scene.role('searchbox', { name: 'Search photographs' })
 const searchForm = Scene.selector('[data-slot="search-form"]')
 const tagCreateForm = Scene.selector('[data-slot="tag-create-form"]')
-
-/** The steps a Dialog submodel needs answered when it opens. The dialog's own
- *  show/paint/acquire commands are its business, and the app's Messages are
- *  what a scene is about, so the framework's are resolved by name here rather
- *  than left dangling. */
-const dialogOpened = (id: string) => [
-  Scene.Command.resolve(
-    ShowDialog({ id, focusSelector: '[data-foldkit-dialog-initial-focus]' }),
-    Dialog.Message.SucceededShowDialog(),
-  ),
-  Scene.Command.resolve(Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()),
-  Scene.Command.resolve(
-    Animation.WaitForAnimationSettled({ id: `${id}-panel` }),
-    Animation.Message.EndedAnimation(),
-  ),
-  Scene.Mount.resolve(AcquireResources, Dialog.Message.SucceededAcquireResources()),
-]
-
-/** The same, for the close that follows a create: the leave paint, the settled
- *  animation, then the close itself. */
-const dialogClosed = (id: string) => [
-  Scene.Command.resolve(Animation.WaitForPaint, Animation.Message.CompletedWaitForPaint()),
-  Scene.Command.resolve(
-    Animation.WaitForAnimationSettled({ id: `${id}-panel` }),
-    Animation.Message.EndedAnimation(),
-  ),
-  Scene.Command.resolve(CloseDialog({ id }), Dialog.Message.CompletedCloseDialog()),
-]
 
 const TAG_ACTIONS = 'admin-tag-actions'
 const CONFIRM = 'admin-confirm-dialog'

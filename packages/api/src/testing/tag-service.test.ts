@@ -33,8 +33,9 @@ const updateTag = (harness: TestHarness, id: string, patch: TagUpdatePatch) =>
   )
 
 const linkedTagIds = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
-  queryRows<{ tagId: string }>(harness, (sql) =>
-    sql`SELECT tagId FROM photo_tags ORDER BY tagId`,
+  queryRows<{ tagId: string }>(
+    harness,
+    (sql) => sql`SELECT tagId FROM photo_tags ORDER BY tagId`,
   ).then((rows) => rows.map((row) => row.tagId))
 
 describe('TagService.list', () => {

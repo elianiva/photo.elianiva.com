@@ -325,7 +325,9 @@ const photosForMonths = (
       // bound into a plain `IN` list rather than through `sql.in(column, …)`,
       // which escapes its argument as an identifier and would turn
       // `substr(takenAt, 1, 7)` into a quoted name.
-      sql<DbPhotoRow & { readonly month: string }>`SELECT ${sql.literal(PHOTO_COLUMNS)}, substr(takenAt, 1, 7) AS month
+      sql<
+        DbPhotoRow & { readonly month: string }
+      >`SELECT ${sql.literal(PHOTO_COLUMNS)}, substr(takenAt, 1, 7) AS month
          FROM photos
         WHERE ${sql.literal(PUBLIC)}
           AND substr(takenAt, 1, 7) IN (${sql.join(', ', false)(months.map((month) => sql`${month}`))})
@@ -379,10 +381,7 @@ const publishedBy = (
  * handler so a caller cannot resolve a slug over a set of Photos wider than
  * the published one.
  */
-const tagBySlug = (
-  sql: Db,
-  slug: string,
-): Effect.Effect<Tag | null, StorageError> =>
+const tagBySlug = (sql: Db, slug: string): Effect.Effect<Tag | null, StorageError> =>
   row<Tag>(
     sql,
     sql<Tag>`SELECT id, slug, label, caption FROM tags WHERE slug = ${slug}`,
