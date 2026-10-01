@@ -51,10 +51,21 @@ export default Alchemy.Stack(
     // Set via Alchemy secrets / CF secrets, not process.env.
     // See README for `alchemy secret set` commands.
     //
-    // Local dev (`alchemy dev --stage dev`) creates no Access applications
-    // and runs unauthenticated by design (ADR 0003), so the *binding* is
-    // forced to '' there — and `access.ts` stands the admin gate down on a
-    // blank team domain. Every other stage requires both values explicitly.
+    // Local dev creates no Access applications and runs unauthenticated by
+    // design (ADR 0003), so the *binding* is forced to '' there — and
+    // `access.ts` stands the admin gate down on a blank team domain. Every
+    // other stage requires both values explicitly.
+    //
+    // `alchemy dev` does NOT default to the stage `dev`. It resolves
+    // `--stage`, else `$ALCHEMY_STAGE`, else `dev_$USER` — so a bare
+    // `pnpm dev` on this machine runs as `dev_elianiva`. Comparing against
+    // the bare string `dev` therefore never matched: the stand-down was
+    // silently off, the real team domain out of `.env` reached the Workers,
+    // and every admin RPC answered 401 `missing access token`. The Admin's
+    // session screen is the correct response to that, but its only action is
+    // a document request, which cannot fix a 401 — so `Sign in again`
+    // reloaded into the same screen forever. Matching the `dev` *prefix* is
+    // what makes the stand-down mean what the comment above says it means.
     //
     // Forced, not defaulted: `Config.withDefault('')` only supplies the empty
     // string when the variable is *absent*, so a real ACCESS_TEAM_DOMAIN in
@@ -66,7 +77,14 @@ export default Alchemy.Stack(
     // STAGE rides along as a binding because only the Worker can see the
     // stage at request time, and the gate is stage-dependent.
     const stage = yield* Stage
-    const isLocalDev = stage === 'dev'
+    // `dev` or `dev_$USER` — see the note above on how the CLI resolves it.
+    const isLocalDev = stage === 'dev' || stage.startsWith('dev_')
+    // What the Workers are told. Normalized so `access.ts`'s own `=== 'dev'`
+    // is the single place that decides "this stage has no Access edge": it
+    // would otherwise see `dev_elianiva`, take the fail-closed 500 branch on a
+    // blank team domain, and refuse every admin RPC on a stack that is meant
+    // to be ungated.
+    const workerStage = isLocalDev ? 'dev' : stage
     const allowedEmailsRaw = yield* Config.String('ACCESS_ALLOWED_EMAILS')
     const teamDomain = isLocalDev ? '' : yield* Config.String('ACCESS_TEAM_DOMAIN')
 
@@ -166,7 +184,7 @@ export default Alchemy.Stack(
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
-        STAGE: stage,
+        STAGE: workerStage,
         ACCESS_TEAM_DOMAIN: teamDomain,
         ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },
@@ -185,7 +203,7 @@ export default Alchemy.Stack(
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,
-        STAGE: stage,
+        STAGE: workerStage,
         ACCESS_TEAM_DOMAIN: teamDomain,
         ACCESS_ALLOWED_EMAILS: allowedEmailsRaw,
       },

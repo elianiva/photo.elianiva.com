@@ -167,6 +167,46 @@ describe('admin access gate', () => {
     expect(outcome(gate)).toBe(500)
   })
 
+  it('stands down on `dev_$USER`, which is what a bare `alchemy dev` resolves to', async () => {
+    // `alchemy dev` defaults to `dev_$USER`, not `dev` — a bare `pnpm dev` ran
+    // as `dev_elianiva`. Comparing the stage to the bare string `dev` read
+    // that as a deployed stage: the stand-down was silently off, the real
+    // team domain reached the Workers, and every admin RPC answered 401.
+    for (const stage of ['dev', 'dev_elianiva', 'dev_someone-else']) {
+      const gate = await verifyAdminAccess(
+        adminRequest(),
+        env({ STAGE: stage, ACCESS_TEAM_DOMAIN: '' }),
+      )
+      expect([stage, outcome(gate)]).toEqual([stage, 'allowed'])
+    }
+  })
+
+  it('does not mistake a deployed stage that merely contains `dev` for local dev', async () => {
+    // The stand-down fails *open*, so the check has to be a prefix and not a
+    // substring: these are real deployments and must still fail closed.
+    for (const stage of ['live_dev', 'predev', 'production', 'live_elianiva']) {
+      const gate = await verifyAdminAccess(
+        adminRequest(),
+        env({ STAGE: stage, ACCESS_TEAM_DOMAIN: '' }),
+      )
+      expect([stage, outcome(gate)]).toEqual([stage, 500])
+    }
+  })
+
+  it('still fails closed on a deployed stage whose name starts with `dev_`', async () => {
+    // Guards the prefix from over-reaching in the other direction: the rule is
+    // `dev_$USER`, and a *set* team domain is what actually arms the gate. A
+    // stage named `dev_staging` that carries a real team domain must verify
+    // assertions rather than admit an empty one.
+    const key = await makeSigningKey()
+    serveJwks(key)
+    const gate = await verifyAdminAccess(
+      adminRequest(),
+      env({ STAGE: 'dev_staging', ACCESS_TEAM_DOMAIN: key.teamDomain }),
+    )
+    expect(outcome(gate)).toBe(401)
+  })
+
   it('admits a valid assertion and rejects a tampered one', async () => {
     const key = await makeSigningKey()
     serveJwks(key)

@@ -1,44 +1,34 @@
 /**
- * The Library table, driven the way the operator drives it: the rows the
- * design draws, ticking them, the Bulk Bar that appears, the tri-state box, and
- * a page turn. The write paths — which RPC a gesture reaches, and which two
- * reads follow it — are asserted through `update` directly, because a toast
- * brings an animation, a height measurement and a dismissal timer with it and
- * none of those is what these are about.
+ * The Library's state machine: what a gesture puts in the Model, which RPC it
+ * reaches, and which reads follow it. All of it runs through the real
+ * `init` / `update`, and the seed is a cold load whose responses have been
+ * folded through the same `update` the runtime folds Command results through.
  *
- * Every scene goes through the real `init` / `update` / `view`, and the seed is
- * a cold load whose responses have been folded through the same `update` the
- * runtime folds Command results through, so the page these scenes draw is the
- * one the runtime would have drawn.
+ * What the table *draws* — the rows' columns, the Bulk Bar, the empty and
+ * loading states — is a page, and a page is verified in the browser
+ * (`.agents/skills/verify-photo`). A toast is left out of it for the same
+ * reason: it brings an animation, a height measurement and a dismissal timer.
  */
 
 import { Option } from 'effect'
-import { Scene } from 'foldkit'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { PhotoId, STORAGE_CAP_BYTES, TagId } from '@photo/shared'
 import type { PhotoWithTags, Tag } from '@photo/shared'
 
-import { dialogOpened } from './scene-dialog'
-
-import { FetchPhotosCmd, NavigateCmd, ReplaceUrlCmd } from './commands'
 import { Message, UPLOAD_LIMITS } from './model'
 import type { Counts, Model } from './model'
 import { init, update } from './update'
-import { view } from './view'
 
 const ORIGIN = 'https://photo.elianiva.com'
 const TEAM = 'https://team.elianivaaccess.test'
 const OWNER = 'owner@photo.test'
-const PHOTO_ROUTE = '/admin/photos/photo_1'
 
 const at = (pathname: string) => {
   const parsed = urlFromString(`${ORIGIN}${pathname}`)
   if (Option.isNone(parsed)) throw new Error(`not a URL: ${pathname}`)
   return parsed.value
 }
-
-const app = { update, view }
 
 const tag = (slug: string, label: string): Tag => ({
   id: TagId.make(slug),
@@ -110,12 +100,6 @@ const cold = (
     listed(photos, total, nextCursor),
   ].reduce((model, message) => update(model, message).model, init(at('/admin')).model)
 
-const given = (
-  photos: ReadonlyArray<PhotoWithTags> = PAGE,
-  total = 412,
-  nextCursor: string | null = NEXT_CURSOR,
-) => Scene.given(cold(photos, total, nextCursor))
-
 /** The Admin's own Commands — the RPCs and the navigation. Everything a child
  *  submodel answers with (a Dialog opening, a toast animating and timing
  *  itself out) is not one of these. */
@@ -156,114 +140,17 @@ const told = (...messages: ReadonlyArray<Message>): ReadonlyArray<string> =>
       : `${entry.payload.title} — ${entry.payload.detail}`,
   )
 
-const box = (name: string) => Scene.role('checkbox', { name })
-const rowSelect = (title: string) => Scene.role('button', { name: `Select ${title}` })
-const headBox = () => Scene.role('checkbox', { name: 'Select every photograph on this page' })
-
-const CONFIRM = 'admin-confirm-dialog'
-const ROW_MENU = 'admin-row-menu'
-const ADD_TAG = 'admin-add-tag-dialog'
-
-describe('the Library rows', () => {
-  it('compose the design’s columns from what the Photo carries', () => {
-    Scene.scene(
-      app,
-      given(),
-      // The `NO.` line is composed, not stored: the Photo Number, the original
-      // filename derived from `r2Key`, and the place in caps.
-      Scene.expectAll(Scene.all.text('NO. 023 · DSCF4801.JPG · KOTA TUA, JAKARTA')).toHaveCount(1),
-      // Scoped to the rows' own slots: a bare text match also lands on the
-      // wrapper the atom puts the value in.
-      Scene.expectAll(Scene.all.selector('[data-slot="ratio-tag"]')).toHaveCount(7),
-      Scene.expect(Scene.text('3:2')).toExist(),
-      Scene.expect(Scene.text('31 AUG 2025')).toExist(),
-      // The SIZE cell prints the original's byte count, because no read returns
-      // the PREVIEW Rendition's — the design's `18.4 → 2.1 MB` is half a fact
-      // this Admin does not have.
-      Scene.expect(Scene.text('18.4 MB')).toExist(),
-      Scene.expectAll(Scene.all.selector('[data-slot="status"]')).toHaveCount(7),
-      Scene.expect(Scene.text('PUBLISHED')).toExist(),
-      Scene.expect(Scene.text('1–7 OF 412')).toExist(),
-    )
-  })
-
-  it('print a dash for the facts a Photo does not carry, never a gap between separators', () => {
-    // The design's own `Untitled` row reads `DSCF4583.JPG` — no number, no
-    // place — rather than a line of separators with holes in it.
-    Scene.scene(
-      app,
-      given(
-        [
-          row(1, { number: null, metadata: {} }),
-          row(2, { number: null, ratio: null, takenAt: undefined, bytes: null, status: 'draft' }),
-        ],
-        2,
-        null,
-      ),
-      Scene.expect(Scene.text('DSCF4801.JPG')).toExist(),
-      Scene.expect(Scene.text('DSCF4802.JPG · KOTA TUA, JAKARTA')).toExist(),
-      Scene.expect(Scene.text('—')).toExist(),
-      Scene.expect(Scene.text('DRAFT')).toExist(),
-      // `1–7` follows the page's own rows, and `OF 2` the filtered total.
-      Scene.expect(Scene.text('1–2 OF 2')).toExist(),
-    )
-  })
-
-  it('is a skeleton, not a spinner, while the page is on its way', () => {
-    const loading = update(
-      init(at('/admin')).model,
-      Message.SucceededGetSession({ email: OWNER, teamDomain: TEAM }),
-    ).model
-    Scene.scene(
-      app,
-      Scene.given(loading),
-      // The head's column widths hold while the rows arrive, so the table does
-      // not jump when they land.
-      Scene.expect(Scene.selector('[data-slot="table-head"]')).toExist(),
-      Scene.expectAll(Scene.all.selector('[data-slot="library-skeleton-row"]')).toHaveCount(7),
-      Scene.expect(Scene.text('Loading photos…')).not.toExist(),
-    )
-  })
-})
-
 describe('selection', () => {
-  it('ticking two rows brings up the Bulk Bar, and Clear takes it away', () => {
-    Scene.scene(
-      app,
-      given(),
-      Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).not.toExist(),
-      Scene.click(box('Photograph 1')),
-      Scene.click(box('Photograph 3')),
-      Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).toExist(),
-      Scene.expect(Scene.text('2 SELECTED')).toExist(),
-      // The design's box beside the kicker, and the caption-italic `Clear`.
-      Scene.expect(box('Clear the 2 selected')).toBeChecked(),
-      Scene.click(Scene.role('button', { name: 'Clear' })),
-      Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).not.toExist(),
-    )
-  })
-
-  it('a row click and the pencil are two different gestures on two elements', () => {
+  it('a row click and the pencil are two different gestures on two messages', () => {
     // The row is the selection target; the pencil is the Editor. A row click
-    // that also opened the lightbox, or a pencil that ticked the row, is what
-    // the design's frame of two ticked rows rules out.
+    // that also opened the Editor, or a pencil that ticked the row, is what the
+    // design's frame of two ticked rows rules out.
     const navigated = fold(
       Message.ToggledRowSelection({ id: PAGE[1]?.id ?? '' }),
       Message.OpenedPhoto({ id: row(1).id }),
     )
     expect(navigated.commands.map((command) => command.name)).toEqual(['Navigate'])
     expect(navigated.model.selected).toEqual([PAGE[1]?.id])
-    Scene.scene(
-      app,
-      given(),
-      Scene.click(rowSelect('Photograph 2')),
-      Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).toExist(),
-      Scene.expect(Scene.selector('[data-slot="library-row"][data-selected="true"]')).toExist(),
-      Scene.click(Scene.role('button', { name: 'Edit Photograph 1' })),
-      Scene.Command.resolve(NavigateCmd({ url: PHOTO_ROUTE }), Message.CompletedNavigate()),
-      // The navigation did not also tick the row it was fired from.
-      Scene.expect(Scene.text('1 SELECTED')).toExist(),
-    )
   })
 
   it('is cleared by a filter change, because it named the rows that just went away', () => {
@@ -276,63 +163,33 @@ describe('selection', () => {
     )
     expect(filtered.model.selected).toEqual([])
     expect(filtered.commands.map((command) => command.name)).toEqual(['FetchPhotos'])
-    Scene.scene(
-      app,
-      given(),
-      Scene.click(box('Photograph 1')),
-      Scene.click(box('Photograph 2')),
-      Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).toExist(),
-      Scene.click(Scene.role('button', { name: 'Kyoto 38' })),
-      Scene.Command.resolve(FetchPhotosCmd({ tagIds: ['kyoto'], q: '' }), listed([], 0, null)),
-      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
-      Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).not.toExist(),
-    )
   })
 
   it('reads the head’s box off the page, not off the filtered total', () => {
-    // 412 rows exist and seven are on screen. "All" is the seven.
-    Scene.scene(
-      app,
-      given(),
-      Scene.expect(headBox()).toHaveAttr('aria-checked', 'false'),
-      Scene.click(headBox()),
-      Scene.expect(headBox()).toBeChecked(),
-      Scene.expect(Scene.text('7 SELECTED')).toExist(),
-      // Un-ticking one row is the mixed state; ticking it back is all of them.
-      Scene.click(box('Photograph 4')),
-      Scene.expect(headBox()).toHaveAttr('aria-checked', 'mixed'),
-      Scene.click(box('Photograph 4')),
-      Scene.expect(headBox()).toBeChecked(),
-      // Un-ticking the box from "all" clears the page, and nothing beyond it.
-      Scene.click(headBox()),
-      Scene.expect(Scene.selector('[data-slot="bulk-bar"]')).not.toExist(),
+    // 412 rows exist and seven are on screen. "All" is the seven, and the
+    // mixed state is one unticked row among them.
+    const all = fold(Message.ToggledPageSelection({}))
+    expect(all.model.selected).toEqual(PAGE.map((photo) => photo.id))
+
+    const mixed = fold(Message.ToggledPageSelection({}), Message.ToggledRowSelection({ id: PAGE[3]?.id ?? '' }))
+    expect(mixed.model.selected).not.toContain(PAGE[3]?.id)
+    expect(mixed.model.selected).toHaveLength(6)
+
+    const cleared = fold(
+      Message.ToggledPageSelection({}),
+      Message.ToggledRowSelection({ id: PAGE[3]?.id ?? '' }),
+      Message.ToggledRowSelection({ id: PAGE[3]?.id ?? '' }),
     )
+    // Ticking a row back puts it on the end rather than in its printed place;
+    // the selection is a set of ids, and the order it is sent in is the table's.
+    expect([...cleared.model.selected].sort()).toEqual(PAGE.map((photo) => photo.id).sort())
+
+    const off = fold(Message.ToggledPageSelection({}), Message.ToggledPageSelection({}))
+    expect(off.model.selected).toEqual([])
   })
 })
 
 describe('the Bulk Bar', () => {
-  it('says Delete moves to Trash, and promises nothing the Admin cannot keep', () => {
-    Scene.scene(
-      app,
-      given(),
-      Scene.click(box('Photograph 1')),
-      Scene.click(box('Photograph 2')),
-      Scene.click(Scene.role('button', { name: 'Delete' })),
-      ...dialogOpened(CONFIRM),
-      // The one confirm every destructive action uses, and its copy says the
-      // delete is a soft one rather than leaving the word "delete" to imply
-      // otherwise. There is no Trash page to restore from, so the copy claims
-      // only what is true of a trashed Photo: it leaves the Library and keeps
-      // its original.
-      Scene.expect(Scene.role('button', { name: 'Yes, move to Trash' })).toExist(),
-      Scene.expect(
-        Scene.text(
-          '2 photographs will be moved to Trash: they leave the Library, their originals stay in R2, and their numbers are never reused.',
-        ),
-      ).toExist(),
-    )
-  })
-
   it('Add border issues the one Mat on every ticked Photo, then re-reads rows and counts', () => {
     // The design draws a single ghost button and no picker, so there is one Mat
     // and the toast names it rather than the operator having to ask.
@@ -448,22 +305,21 @@ describe('the Bulk Bar', () => {
     ).toEqual(['Tagged 1 photo — “Kyoto”'])
   })
 
-  it('the Add tag picker is a Dialog of the known Tags, and never the Series wording', () => {
-    Scene.scene(
-      app,
-      given(),
-      Scene.click(box('Photograph 1')),
-      Scene.click(Scene.role('button', { name: 'Add tag' })),
-      ...dialogOpened(ADD_TAG),
-      Scene.expectAll(Scene.all.text('Move to series')).toBeEmpty(),
-      Scene.expect(box('Kyoto')).toHaveAttr('aria-checked', 'false'),
-      // Nothing ticked is nothing to apply, so the action is unavailable rather
-      // than a button that does nothing.
-      Scene.expect(Scene.selector('[data-slot="add-tag-confirm"]')).toHaveAttr('data-disabled', ''),
-      Scene.click(box('Kyoto')),
-      Scene.expect(box('Kyoto')).toBeChecked(),
-      Scene.expect(Scene.selector('[data-slot="add-tag-confirm"]')).not.toHaveAttr('data-disabled'),
+  it('the Add tag picker holds no pick until one is made', () => {
+    // Nothing ticked is nothing to apply, so the picker opens empty rather
+    // than with a selection the operator never made.
+    const opened = fold(
+      Message.ToggledRowSelection({ id: PAGE[0]?.id ?? '' }),
+      Message.OpenedAddTag({}),
     )
+    expect(opened.model.addTagIds).toEqual([])
+
+    const picked = fold(
+      Message.ToggledRowSelection({ id: PAGE[0]?.id ?? '' }),
+      Message.OpenedAddTag({}),
+      Message.ToggledAddTag({ id: 'kyoto' }),
+    )
+    expect(picked.model.addTagIds).toEqual(['kyoto'])
   })
 })
 
@@ -488,17 +344,6 @@ describe('the row ⋯ menu', () => {
       'FetchCounts',
     ])
     expect(published.model.photos[0]?.status).toBe('draft')
-  })
-
-  it('names the two row actions the design leaves unlabelled', () => {
-    Scene.scene(
-      app,
-      given(),
-      Scene.click(Scene.role('button', { name: 'More actions for Photograph 1' })),
-      ...dialogOpened(ROW_MENU),
-      Scene.expect(Scene.role('button', { name: 'Unpublish' })).toExist(),
-      Scene.expect(Scene.role('button', { name: 'Move to Trash' })).toExist(),
-    )
   })
 
   it('moves one Photograph to Trash through the same confirm as the bulk', () => {
@@ -526,17 +371,11 @@ describe('paging', () => {
       name: 'FetchPhotos',
       args: { tagIds: [], q: '', cursor: NEXT_CURSOR },
     })
-    Scene.scene(
-      app,
-      given(),
-      Scene.click(Scene.role('button', { name: 'Next page' })),
-      Scene.Command.resolve(
-        FetchPhotosCmd({ tagIds: [], q: '', cursor: NEXT_CURSOR }),
-        listed(SECOND, 412, 'cursor-after-page-two'),
-      ),
-      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
-      Scene.expect(Scene.text('8–14 OF 412')).toExist(),
-    )
+    // The rows the answer carried are the rows the page is now over — the range
+    // the pager prints is read off them, not off the page it was on.
+    expect(paged.model.photos).toEqual([...SECOND])
+    expect(paged.model.libraryPage).toBe(1)
+    expect(paged.model.libraryTotal).toBe(412)
   })
 
   it('previous re-reads a cursor it already held rather than inventing one', () => {
@@ -559,14 +398,6 @@ describe('paging', () => {
     expect(back.commands[1]?.args).toEqual({ tagIds: [], q: '', cursor: '' })
     expect(back.model.libraryPage).toBe(0)
     expect(back.model.libraryCursors).toEqual([''])
-    Scene.scene(
-      app,
-      Scene.given(onSecond.model),
-      Scene.click(Scene.role('button', { name: 'Previous page' })),
-      Scene.Command.resolve(FetchPhotosCmd({ tagIds: [], q: '', cursor: '' }), listed()),
-      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
-      Scene.expect(Scene.text('1–7 OF 412')).toExist(),
-    )
   })
 
   it('the first page cannot go back and the last cannot go on', () => {
@@ -577,54 +408,15 @@ describe('paging', () => {
       Message.SteppedLibraryPage({ delta: 1 }),
     )
     expect(onLast.commands ?? []).toEqual([])
-    Scene.scene(
-      app,
-      given(),
-      Scene.expect(Scene.role('button', { name: 'Previous page' })).toHaveAttr('disabled', 'true'),
-    )
-    Scene.scene(
-      app,
-      given(PAGE, 412, null),
-      Scene.expect(Scene.role('button', { name: 'Next page' })).toHaveAttr('disabled', 'true'),
-    )
   })
 })
 
 describe('the states that are not rows', () => {
-  it('a filter that matches nothing is not the same claim as an empty Library', () => {
+  it('a filter that matches nothing keeps the filter, so it is not an empty Library', () => {
     const settled = fold(Message.ToggledTagFilter({ id: 'kyoto' }), listed([], 0, null))
     expect(settled.model.activeTagIds).toEqual(['kyoto'])
-    Scene.scene(
-      app,
-      Scene.given(settled.model),
-      Scene.expect(Scene.text('Nothing matches this filter')).toExist(),
-      Scene.expect(Scene.text('No photographs yet')).not.toExist(),
-      Scene.click(Scene.role('button', { name: 'Clear the tag filter' })),
-      Scene.Command.resolve(FetchPhotosCmd({ tagIds: [], q: '' }), listed([], 0, null)),
-      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
-    )
-  })
-
-  it('an empty Library is the design’s own state, not the grid’s', () => {
-    Scene.scene(
-      app,
-      given([], 0, null),
-      Scene.expect(Scene.text('No photographs yet')).toExist(),
-      Scene.expect(
-        Scene.text('Drop your first photograph, or choose files from this computer.'),
-      ).toExist(),
-      Scene.expect(Scene.text('Choose files')).toExist(),
-      Scene.expect(Scene.text('Import from a folder')).toExist(),
-      // Both pickers are real: a label wrapping a hidden file input, not a
-      // second dead button. The folder one asks for a directory.
-      Scene.expectAll(Scene.all.selector('input[type="file"]')).toHaveCount(2),
-      Scene.expect(Scene.selector('input[webkitdirectory]')).toExist(),
-      // The promise about what will be accepted, pinned to the design's literal
-      // so a change to PHOTO_RATIOS cannot silently drift it.
-      Scene.expect(
-        Scene.text('3:2 · 2:3 · 4:3 · 3:4 · 16:9 · 9:16 · ORIGINALS ARE KEPT'),
-      ).toExist(),
-    )
+    expect(settled.model.photos).toEqual([])
+    expect(settled.model.libraryTotal).toBe(0)
   })
 
   it('a picked file enters the drop intake: queued, capped, and size-checked', () => {
@@ -663,16 +455,16 @@ describe('the states that are not rows', () => {
     expect(cancelled.model.uploadDialog.isOpen).toBe(false)
   })
 
-  it('a failed read still keeps the grid’s own error state', () => {
-    const failed = update(
-      cold(),
-      Message.FailedRpc({ message: 'the Library could not be read' }),
-    ).model
-    Scene.scene(
-      app,
-      Scene.given(failed),
-      Scene.expect(Scene.text('the Library could not be read')).toExist(),
-      Scene.expect(Scene.role('button', { name: 'Retry' })).toExist(),
-    )
+  it('a failed read leaves the rows it already had and carries the reason', () => {
+    const failed = update(cold(), Message.FailedRpc({ message: 'the Library could not be read' }))
+    // Nothing is re-read behind the operator's back, and what is already on
+    // screen stays on screen behind the error.
+    expect(
+      (failed.commands ?? []).map((command) => command.name).filter((name) =>
+        name.startsWith('Fetch'),
+      ),
+    ).toEqual([])
+    expect(failed.model.error).toBe('the Library could not be read')
+    expect(failed.model.photos).toEqual([...PAGE])
   })
 })

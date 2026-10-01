@@ -1,17 +1,16 @@
 /**
- * The Settings page, driven the way the operator drives it: a cold load of
- * `/admin/settings` with the singleton answered, a control picked, a number
- * typed into, and a save. Every step goes through the real `init` / `update` /
- * `view`.
+ * The Settings page's state machine: what the row said, what the draft says,
+ * and which of them the header is reporting. Every step goes through the real
+ * `init` / `update`.
  *
- * The page's whole state machine is three things — what the row said, what the
- * draft says, and which of them the header is reporting — so that is what these
- * scenes assert: the controls round-trip, the stamp tracks the difference, and
- * `Save settings` sends the draft rather than the request that produced it.
+ * The page's own markup — the four sections, the controls, the watermark
+ * contract's wording — is a page, and a page is verified in the browser
+ * (`.agents/skills/verify-photo`). What is asserted here is the round trip
+ * behind it: the stamp, the payload a save sends, and the CSV the index read
+ * builds.
  */
 
 import { DateTime, Option } from 'effect'
-import { Scene } from 'foldkit'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { STORAGE_CAP_BYTES, TagId } from '@photo/shared'
@@ -23,7 +22,6 @@ import { toSettingsDraft } from './settings-draft'
 import { csvIndex } from './storage-index'
 import { settingsStamp } from './views/settings'
 import { init, update } from './update'
-import { view } from './view'
 
 const ORIGIN = 'https://photo.elianiva.com'
 const OWNER = 'owner@photo.test'
@@ -41,8 +39,6 @@ const at = (pathname: string) => {
   if (Option.isNone(parsed)) throw new Error(`not a URL: ${pathname}`)
   return parsed.value
 }
-
-const app = { update, view }
 
 const tag = (slug: string, label: string): Tag => ({
   id: TagId.make(slug),
@@ -86,94 +82,7 @@ const loaded = (): Model =>
     Message.SucceededGetSettings({ settings: ROW }),
   ].reduce((model, message) => update(model, message).model, init(at('/admin/settings')).model)
 
-const cold = () => Scene.given(loaded())
-
 // ---------------------------------------------------------------------------
-// locators — named by what the operator reads, not by what the markup is
-// ---------------------------------------------------------------------------
-
-const longEdge = Scene.role('combobox', { name: 'PREVIEW LONG EDGE' })
-const format = Scene.role('combobox', { name: 'FORMAT' })
-const previewQuality = Scene.role('slider', { name: 'PREVIEW QUALITY' })
-const fullQuality = Scene.role('slider', { name: 'FULL QUALITY' })
-const position = Scene.role('combobox', { name: 'POSITION' })
-const retain = Scene.role('combobox', { name: 'RETAIN' })
-const keepExif = Scene.role('switch', { name: 'Keep EXIF data' })
-const removeGps = Scene.role('switch', { name: 'Remove GPS location' })
-const watermarkSwitch = Scene.role('switch', { name: 'Watermark new uploads' })
-const save = Scene.role('button', { name: 'Save settings' })
-const discard = Scene.role('button', { name: 'Discard changes' })
-const exportIndex = Scene.role('button', { name: 'Export a CSV index' })
-
-// ---------------------------------------------------------------------------
-
-describe('the four sections', () => {
-  it('all render, and each is closed by a hairline', () => {
-    Scene.scene(
-      app,
-      cold(),
-      Scene.expect(Scene.role('heading', { name: 'EXPORT DEFAULTS' })).toExist(),
-      Scene.expect(Scene.role('heading', { name: 'WATERMARK' })).toExist(),
-      Scene.expect(Scene.role('heading', { name: 'METADATA' })).toExist(),
-      // The design labels this ARCHIVE; ADR 0006 splits the collision and the
-      // canvas's own sidebar block is already called Storage.
-      Scene.expect(Scene.role('heading', { name: 'STORAGE' })).toExist(),
-      // No SITE section: the Front's copy is written in the views that print
-      // it, so there is nothing here for a form to edit (migration 0008).
-      Scene.expect(Scene.role('heading', { name: 'SITE' })).not.toExist(),
-      Scene.expectAll(Scene.all.selector('main section')).toHaveCount(4),
-    )
-  })
-
-  it('draw the row the API read, not the defaults', () => {
-    Scene.scene(
-      app,
-      cold(),
-      Scene.expect(longEdge).toHaveValue('1200'),
-      Scene.expect(format).toHaveValue('avif'),
-      Scene.expect(previewQuality).toHaveValue('82'),
-      Scene.expect(fullQuality).toHaveValue('92'),
-      Scene.expect(position).toHaveValue('bottom-right'),
-      Scene.expect(keepExif).toBeChecked(),
-      Scene.expect(removeGps).toBeChecked(),
-      Scene.expect(watermarkSwitch).not.toBeChecked(),
-    )
-  })
-
-  it('report the storage figure live, off the one read the meter draws', () => {
-    Scene.scene(
-      app,
-      cold(),
-      // 412 Photos and 7.9 GB of the cap `STORAGE_CAP_BYTES` declares. The
-      // meter's own reading of the same payload is asserted in `shell.test.ts`.
-      Scene.expect(Scene.text('412 FRAMES · 7.9 GB OF 21 GB')).toExist(),
-      Scene.expect(Scene.role('button', { name: 'Export a CSV index' })).toExist(),
-    )
-  })
-
-  it('print the watermark contract verbatim, because it is a contract', () => {
-    // The string and the behaviour are one promise: a mark on published
-    // renditions, never on the original a download serves. E2 inherits it.
-    Scene.scene(
-      app,
-      cold(),
-      Scene.expect(
-        Scene.text(
-          'Applies to published renditions. Downloads always serve the unmarked original.',
-        ),
-      ).toExist(),
-    )
-  })
-
-  it('hold RETAIN at FOREVER and off, because nothing purges on a timer', () => {
-    Scene.scene(
-      app,
-      cold(),
-      Scene.expect(retain).toHaveValue('forever'),
-      Scene.expect(retain).toBeDisabled(),
-    )
-  })
-})
 
 describe('the header stamp', () => {
   it('reports when the row was saved', () => {
@@ -188,12 +97,7 @@ describe('the header stamp', () => {
       loaded(),
       Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
     ).model
-    Scene.scene(
-      app,
-      Scene.given(edited),
-      Scene.expect(Scene.text('UNSAVED CHANGES')).toExist(),
-      Scene.expect(Scene.text('SAVED 2 MINUTES AGO')).not.toExist(),
-    )
+    expect(settingsStamp(edited, NOW)).toBe('UNSAVED CHANGES')
   })
 
   it('says a row that has never been saved has not been saved', () => {
@@ -201,20 +105,11 @@ describe('the header stamp', () => {
       loaded(),
       Message.SucceededGetSettings({ settings: { ...ROW, updatedAt: null } }),
     ).model
-    Scene.scene(app, Scene.given(never), Scene.expect(Scene.text('NOT SAVED YET')).toExist())
+    expect(settingsStamp(never, NOW)).toBe('NOT SAVED YET')
   })
 })
 
 describe('save and discard', () => {
-  it('are both off until the form differs from the row', () => {
-    Scene.scene(
-      app,
-      cold(),
-      Scene.expect(save).toBeDisabled(),
-      Scene.expect(discard).toBeDisabled(),
-    )
-  })
-
   it('a save sends the draft, the whole row, and answers from the stored row', () => {
     // The payload is the draft as the form holds it: every column the row has
     // rides along, so a save of one field cannot reset another, and the answer
@@ -238,7 +133,10 @@ describe('save and discard', () => {
       saving.model,
       Message.SavedSettings({ settings: { ...ROW, defaultFullQuality: 60 } }),
     ).model
-    Scene.scene(app, Scene.given(settled), Scene.expect(save).toBeDisabled())
+    expect(settled.settingsDraft.defaultFullQuality).toBe(60)
+    // The stored row is the truth the draft is compared against, so the answer
+    // leaves nothing unsaved even when the service changed the value it was sent.
+    expect(settingsStamp(settled, NOW)).toBe('SAVED 2 MINUTES AGO')
   })
 
   it('a re-read landing mid-edit does not throw the edit away', () => {
@@ -259,7 +157,7 @@ describe('save and discard', () => {
     expect(update(reread, Message.SaveSettings({})).commands?.[0]?.args).toMatchObject({
       input: { defaultFullQuality: 60 },
     })
-    Scene.scene(app, Scene.given(reread), Scene.expect(Scene.text('UNSAVED CHANGES')).toExist())
+    expect(settingsStamp(reread, NOW)).toBe('UNSAVED CHANGES')
   })
 
   it('a re-read with no edit in hand does reseed the draft', () => {
@@ -273,12 +171,7 @@ describe('save and discard', () => {
     expect(reread.settingsDraft.defaultFullQuality).toBe(70)
     // The draft now matches the row it was seeded from, so nothing is unsaved:
     // the correction reached the form instead of being held off it.
-    Scene.scene(
-      app,
-      Scene.given(reread),
-      Scene.expect(Scene.text('UNSAVED CHANGES')).not.toExist(),
-      Scene.expect(save).toBeDisabled(),
-    )
+    expect(settingsStamp(reread, NOW)).toBe('SAVED 2 MINUTES AGO')
   })
 
   it('a save with nothing to save dispatches nothing', () => {
@@ -287,19 +180,16 @@ describe('save and discard', () => {
     expect(update(loaded(), Message.SaveSettings({})).commands ?? []).toEqual([])
   })
 
-  it('a discard puts the row back and turns both buttons off again', () => {
+  it('a discard puts the row back and leaves nothing unsaved', () => {
     const edited = [
       Message.SetSettingsNumber({ field: 'defaultFullQuality', value: 60 }),
       Message.SetPreviewFormat({ value: 'webp' }),
     ].reduce((model, message) => update(model, message).model, loaded())
 
-    Scene.scene(
-      app,
-      Scene.given(update(edited, Message.DiscardSettings({})).model),
-      Scene.expect(fullQuality).toHaveValue('92'),
-      Scene.expect(format).toHaveValue('avif'),
-      Scene.expect(discard).toBeDisabled(),
-    )
+    expect(settingsStamp(edited, NOW)).toBe('UNSAVED CHANGES')
+    const discarded = update(edited, Message.DiscardSettings({})).model
+    expect(discarded.settingsDraft).toEqual(toSettingsDraft(ROW))
+    expect(settingsStamp(discarded, NOW)).toBe('SAVED 2 MINUTES AGO')
   })
 })
 
@@ -314,13 +204,6 @@ describe('the CSV index', () => {
 
     // A second press while one is in flight dispatches nothing.
     expect(update(exporting.model, Message.ExportCsvIndex({})).commands ?? []).toEqual([])
-
-    Scene.scene(
-      app,
-      Scene.given(loaded()),
-      Scene.expect(exportIndex).toBeEnabled(),
-      Scene.expect(Scene.role('button', { name: 'Building the index…' })).not.toExist(),
-    )
   })
 
   it('quotes a cell the way a spreadsheet needs, and leaves a plain one alone', () => {

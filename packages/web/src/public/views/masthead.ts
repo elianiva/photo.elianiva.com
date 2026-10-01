@@ -185,58 +185,26 @@ const nameplate = (h: HtmlBuilder<Message>): Child =>
   h.div(
     [
       h.Class(
-        // The padding is asymmetric on the desktop master, and the reason is a
-        // number: the caps of Newsreader occupy 0.744em above the baseline and
-        // nothing at all below it, while the line box `type-nameplate` sets is
-        // the whole em — which is 0.268em of dead descender space the caps never
-        // reach. Equal padding is therefore not equal air: at 112px it leaves
-        // 26.7px more room under the name than over it, which is a third of the
-        // space and reads as the masthead leaning on the folio. 48 above against
-        // 32 below is the correction for that, and it lands the visible gap on
-        // the name at 56px over and 59px under. At 44px the dead space is 10.5px
-        // and the same correction is inside a rounding error, so the small
-        // master is padded evenly.
-        `${TRACKS} items-center gap-x-(--spacing-lg) gap-y-(--spacing-md) py-(--spacing-xl) desktop:pt-(--spacing-3xl) desktop:pb-(--spacing-2xl)`,
+        `${TRACKS} items-center gap-x-(--spacing-lg) gap-y-(--spacing-md) py-(--spacing-md) desktop:pt-(--spacing-lg) desktop:pb-(--spacing-lg)`,
       ),
     ],
     [
-      // The flanking rules are lifted onto the caps' own middle — see `flankRule`.
       flankRule(h),
       h.a(
         [
           h.Href(routeHref({ route: 'front' })),
           h.Class(
-            'type-nameplate-sm desktop:type-nameplate uppercase text-role-text-primary transition-opacity duration-(--motion-duration-fast) hover:opacity-70 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px]',
+            'type-nameplate-sm uppercase text-role-text-primary transition-opacity duration-(--motion-duration-fast) hover:opacity-70 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px]',
           ),
         ],
         [
-          // The tracking rides on an inner span rather than on the link, and
-          // that is not tidiness — it is the only way to set a nameplate in
-          // this system. `type-nameplate` is one composite from the design
-          // system and it declares its own `letter-spacing`; a second utility
-          // class on the *same* element is a tie in the cascade, and
-          // `tokens.css` is imported after Tailwind's own layer, so the
-          // composite wins it every time. On an inner span the two are not
-          // competing at all: an inherited value loses to any declaration on the
-          // element itself, whatever order the two were written in.
-          h.span([h.Class('tracking-[0.05em]')], ['Elianiva']),
+          h.span([h.Class('tracking-wider')], ['Elianiva']),
         ],
       ),
       flankRule(h),
     ],
   )
 
-/**
- * The Folio: `all`, then one link per Tag a visitor can go to, then `about`.
- *
- * The two ends are the site's own documents and are named here, where they
- * render — their hrefs are the route table's, so the link and the document it
- * points at cannot be spelled two ways. The middle is not authored at all: a
- * Tag is created, renamed and deleted in the Admin, and a section list written
- * in this file would name sections the archive does not have and miss the ones
- * it does, so the middle is the `folio` a public read returned — one entry per
- * Tag with a published photograph, in the read's order.
- */
 const folioLinks = (
   folio: ReadonlyArray<FolioEntry>,
 ): ReadonlyArray<{ readonly label: string; readonly href: string }> => [

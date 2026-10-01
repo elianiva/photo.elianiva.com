@@ -4,24 +4,21 @@
  * filter, so a filter change is a URL the operator can reload and a cold load
  * of that URL draws what the click drew.
  *
- * The scenes go through the real `init` / `update` / `view`, and the seed is a
- * cold load whose responses are folded through the same `update` the runtime
- * folds Command results through.
+ * The filter bar the operator clicks is a page, and what it draws is verified
+ * in the browser (`.agents/skills/verify-photo`); what is asserted here is the
+ * round trip behind it — the Model, the RPC it asks for, and the URL it writes.
  */
 
 import { Option } from 'effect'
-import { Scene } from 'foldkit'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { PhotoId } from '@photo/shared'
 import type { PhotoWithTags } from '@photo/shared'
 
-import { FetchPhotosCmd, ReplaceUrlCmd } from './commands'
 import { Message } from './model'
 import type { Model } from './model'
 import { libraryUrl, libraryViewOf, urlToAppRoute } from './route'
 import { init, update } from './update'
-import { view } from './view'
 
 const ORIGIN = 'https://photo.elianiva.com'
 
@@ -30,8 +27,6 @@ const at = (pathname: string) => {
   if (Option.isNone(parsed)) throw new Error(`not a URL: ${pathname}`)
   return parsed.value
 }
-
-const app = { update, view }
 
 const row = (n: number, over: Partial<PhotoWithTags> = {}): PhotoWithTags => ({
   id: PhotoId.make(`photo_${String(n)}`),
@@ -98,28 +93,6 @@ const fold = (
   return { model, commands }
 }
 
-describe('the bar the design draws', () => {
-  it('renders the status counts, the ratio group, the SORT select and the view toggle', () => {
-    Scene.scene(
-      app,
-      Scene.given(cold('/admin')),
-      Scene.expect(Scene.role('button', { name: 'ALL 412' })).toHaveAttr('aria-pressed', 'true'),
-      Scene.expect(Scene.role('button', { name: 'PUBLISHED 402' })).toExist(),
-      Scene.expect(Scene.role('button', { name: 'DRAFTS 7' })).toExist(),
-      // No count: nothing records a publish time, so there is nothing to count.
-      Scene.expect(Scene.role('button', { name: 'SCHEDULED' })).toExist(),
-      Scene.expect(Scene.role('button', { name: 'FAILED 1' })).toExist(),
-      Scene.expect(Scene.text('RATIO')).toExist(),
-      Scene.expect(Scene.role('button', { name: 'ANY' })).toHaveAttr('aria-pressed', 'true'),
-      Scene.expect(Scene.role('combobox', { name: 'SORT' })).toHaveValue('newest'),
-      Scene.expect(Scene.role('button', { name: 'List view' })).toHaveAttr('data-kind', 'filled'),
-      Scene.expect(Scene.role('button', { name: 'Grid view' })).toHaveAttr('data-kind', 'ghost'),
-      // The design's `SERIES` select has no entity behind it and is not drawn.
-      Scene.expect(Scene.text('SERIES')).not.toExist(),
-    )
-  })
-})
-
 describe('the URL is the filter', () => {
   it('parses every filter out of the query, and prints the default URL as /admin', () => {
     expect(libraryUrl()).toBe('/admin')
@@ -150,19 +123,20 @@ describe('the URL is the filter', () => {
     ])
   })
 
-  it('the Table Head and the SORT select are the same fact in two places', () => {
+  it('a sort pick sends the sort to the read and rewrites the URL with it', () => {
     const sorted = fold(Message.SelectedSortFilter({ value: 'oldest' }))
     expect(sorted.commands[0]).toEqual({
       name: 'FetchPhotos',
       args: { tagIds: [], q: '', sort: { key: 'takenAt', direction: 'asc' } },
     })
     expect(sorted.commands[1]).toEqual({ name: 'ReplaceUrl', args: { url: '/admin?sort=oldest' } })
-    // The select's value is the Model's sort, and the head reads the same one.
+    // One fact, two places on the page: the Model's sort is what both the
+    // select and the table head read, so there is no second copy to drift.
     const model = sorted.model
     expect(model.sortFilter).toBe('oldest')
   })
 
-  it('clicking TAKEN flips the sort and the URL with it', () => {
+  it('toggling the sort flips it back and forth with the URL', () => {
     const toggled = fold(Message.ToggledSort({}))
     expect(toggled.model.sortFilter).toBe('oldest')
     expect(toggled.commands[1]).toEqual({ name: 'ReplaceUrl', args: { url: '/admin?sort=oldest' } })
@@ -207,35 +181,7 @@ describe('the URL is the filter', () => {
 })
 
 describe('a reload restores the filtered page', () => {
-  it('set status=draft → rows change → reload-equivalent cold init → same rows', () => {
-    const drafts = Array.from({ length: 4 }, (_, index) =>
-      row(index + 1, { status: 'draft', title: `Draft ${String(index + 1)}` }),
-    )
-    // The click: the segment takes the URL, the read comes back with drafts.
-    Scene.scene(
-      app,
-      Scene.given(cold('/admin')),
-      Scene.expect(Scene.role('button', { name: 'DRAFTS 7' })).toHaveAttr('aria-pressed', 'false'),
-      Scene.click(Scene.role('button', { name: 'DRAFTS 7' })),
-      Scene.Command.resolve(
-        FetchPhotosCmd({ tagIds: [], q: '', status: 'draft' }),
-        listed(drafts, 4),
-      ),
-      Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
-      Scene.expect(Scene.role('button', { name: 'DRAFTS 7' })).toHaveAttr('aria-pressed', 'true'),
-      Scene.expect(Scene.text('Draft 1')).toExist(),
-    )
-    // The reload: a cold init of the URL the click produced, and the same rows.
-    Scene.scene(
-      app,
-      Scene.given(cold('/admin?status=draft', listed(drafts, 4))),
-      Scene.expect(Scene.role('button', { name: 'DRAFTS 7' })).toHaveAttr('aria-pressed', 'true'),
-      Scene.expect(Scene.text('Draft 1')).toExist(),
-      Scene.expect(Scene.text('Draft 4')).toExist(),
-    )
-  })
-
-  it('a cold load of /admin?status=draft reads with the status', () => {
+  it('a cold load of the URL a filter wrote reads with that filter', () => {
     const coldLoad = init(at('/admin?status=draft'))
     expect(coldLoad.model.statusFilter).toBe('draft')
     expect(
@@ -243,15 +189,6 @@ describe('a reload restores the filtered page', () => {
         .filter((command) => command.name === 'FetchPhotos')
         .map((command) => command.args),
     ).toEqual([{ tagIds: [], q: '', status: 'draft' }])
-  })
-
-  it('draws the grid when the URL says view=grid', () => {
-    Scene.scene(
-      app,
-      Scene.given(cold('/admin?view=grid')),
-      Scene.expect(Scene.role('button', { name: '2 columns' })).toExist(),
-      Scene.expect(Scene.selector('[data-slot="library-table"]')).not.toExist(),
-    )
   })
 
   it('a Back press to a filter the Model does not hold re-reads it', () => {

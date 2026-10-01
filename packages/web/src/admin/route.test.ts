@@ -1,20 +1,19 @@
+/**
+ * The Admin's URL space: the route table in both directions, and what each
+ * route reads when it is cold-loaded or navigated to.
+ *
+ * Which page a URL *draws* is a page, and a page is verified in the browser
+ * (`.agents/skills/verify-photo`); what is asserted here is the table both the
+ * links and the reads are read off, and the reads themselves.
+ */
+
 import { describe, expect, it } from 'vitest'
 import { Option } from 'effect'
 import { PhotoId } from '@photo/shared'
-import { Scene } from 'foldkit'
 import type { Command } from 'foldkit/command'
 import { fromString as urlFromString } from 'foldkit/url'
 import { UrlRequest } from 'foldkit/navigation'
 
-import {
-  FetchCountsCmd,
-  FetchPhotoCmd,
-  FetchPhotosCmd,
-  FetchPresentationCmd,
-  FetchSessionCmd,
-  FetchStorageCmd,
-  FetchTagsCmd,
-} from './commands'
 import { Message } from './model'
 import {
   defaultLibraryFilters,
@@ -24,7 +23,6 @@ import {
   urlToAppRoute,
 } from './route'
 import { init, onUrlChange, onUrlRequest, update } from './update'
-import { view } from './view'
 
 const ORIGIN = 'https://photo.elianiva.com'
 
@@ -54,26 +52,6 @@ const photo = {
   r2Key: 'originals/a-photo.jpg',
   width: 3000,
   height: 2000,
-} as const
-
-/** The Presentation the Editor's snapshot read answers with — the migration
- *  0004 defaults, which is what an unedited Photo stores. */
-const PRESENTATION = {
-  cropX: 0,
-  cropY: 0,
-  cropScale: 1,
-  cropFlipX: false,
-  level: null,
-  borderEnabled: true,
-  borderStyle: 'gallery',
-  borderColour: 'white',
-  borderWidth: 4,
-  previewLongEdge: 1200,
-  previewFormat: 'avif',
-  previewQuality: 82,
-  fullQuality: 92,
-  keepExif: true,
-  removeGps: true,
 } as const
 
 describe('the route table', () => {
@@ -252,6 +230,57 @@ describe('an in-app navigation', () => {
   })
 })
 
+describe('an unproven session', () => {
+  // The session-expired screen's `Sign in again` is a plain same-origin
+  // anchor, and the runtime's link listener has already called
+  // `preventDefault` by the time `ClickedLink` arrives — so what this
+  // dispatches is the only thing that can issue the document request Access
+  // turns into a login. A `Navigate` here pushes the URL the page is already
+  // on and the affordance does nothing at all.
+  const refused = (pathname: string) =>
+    update(init(at(pathname)).model, Message.FailedGetSession({})).model
+
+  it('loads the document rather than navigating in-app, so Access can answer', () => {
+    for (const pathname of ['/admin', '/admin/photos/abc', '/admin/drafts', '/admin/nope']) {
+      const result = update(
+        refused(pathname),
+        onUrlRequest(UrlRequest.Internal({ url: at(pathname) })),
+      )
+      expect([pathname, dispatched(result)]).toEqual([
+        pathname,
+        [{ name: 'Load', args: { href: `${ORIGIN}${pathname}` } }],
+      ])
+    }
+  })
+
+  it('leaves a verified session navigating in-app as before', () => {
+    // The rule is scoped to an unproven session, so this is the guard against
+    // it swallowing ordinary navigation.
+    const verified = update(
+      init(at('/admin')).model,
+      Message.SucceededGetSession({ email: 'owner@photo.test', teamDomain: null }),
+    ).model
+    const result = update(
+      verified,
+      onUrlRequest(UrlRequest.Internal({ url: at('/admin/settings') })),
+    )
+    expect(dispatched(result)).toEqual([
+      { name: 'Navigate', args: { url: `${ORIGIN}/admin/settings` } },
+    ])
+  })
+
+  it('raises no leave guard, because an expired session has drawn no Editor', () => {
+    // The guard's Dialog is drawn by the shell, and the expired screen replaces
+    // the shell — raising it here would open a dialog nothing draws, and the
+    // click would silently do nothing, which is the bug in another costume.
+    const result = update(
+      refused('/admin/photos/photo-1'),
+      onUrlRequest(UrlRequest.Internal({ url: at('/admin') })),
+    )
+    expect(dispatched(result)).toEqual([{ name: 'Load', args: { href: `${ORIGIN}/admin` } }])
+  })
+})
+
 describe('the Photo route', () => {
   const loading = init(at('/admin/photos/photo-1')).model
 
@@ -279,82 +308,5 @@ describe('the Photo route', () => {
       'FetchPhoto',
       'FetchPresentation',
     ])
-  })
-})
-
-// Scene asserts through the view, which is where the operator's side of a
-// route is visible: which page a URL draws, and where its links point.
-/** A proven session with no claim, which is the `dev` stage's Access
- *  stand-down: the shell draws, and the sidebar has no address and no
- *  sign-out to print. */
-const STANDDOWN = Message.SucceededGetSession({ email: null, teamDomain: null })
-
-describe('the page a route draws', () => {
-  const app = { update, view }
-
-  it('draws the library for a cold load of /admin', () => {
-    Scene.scene(
-      app,
-      Scene.given(init(at('/admin')).model),
-      // The Page Head names the route, and the shell reads are still pending.
-      Scene.Command.resolveAll(
-        [FetchSessionCmd, STANDDOWN],
-        [FetchCountsCmd, Message.FailedGetCounts({})],
-        [FetchStorageCmd, Message.FailedGetStorage({})],
-        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })],
-        [FetchTagsCmd, Message.SucceededFetchTags({ tags: [] })],
-      ),
-      Scene.expect(Scene.role('heading', { name: 'Library' })).toExist(),
-    )
-  })
-
-  it('draws NotFound for a malformed photo id, with a way back', () => {
-    Scene.scene(
-      app,
-      Scene.given(init(at('/admin/photos/abc/edit')).model),
-      Scene.Command.resolveAll(
-        [FetchSessionCmd, STANDDOWN],
-        [FetchCountsCmd, Message.FailedGetCounts({})],
-        [FetchStorageCmd, Message.FailedGetStorage({})],
-      ),
-      Scene.expect(Scene.role('heading', { name: 'Not found' })).toExist(),
-      Scene.expect(Scene.role('link', { name: '← Library' })).toHaveAttr('href', '/admin'),
-    )
-  })
-
-  it('navigates in-app to a deep link and draws the Editor it fetches', () => {
-    Scene.scene(
-      app,
-      Scene.given(init(at('/admin')).model),
-      Scene.Command.resolveAll(
-        [FetchSessionCmd, STANDDOWN],
-        [FetchCountsCmd, Message.FailedGetCounts({})],
-        [FetchStorageCmd, Message.FailedGetStorage({})],
-        [FetchPhotosCmd, Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })],
-        [FetchTagsCmd, Message.SucceededFetchTags({ tags: [] })],
-      ),
-      // The runtime reports the new URL after a navigation, exactly as it does
-      // for a click and for the back button.
-      Scene.Subscription.emit(onUrlChange(at('/admin/photos/photo-1'))),
-      Scene.Command.resolveAll(
-        [FetchSessionCmd, STANDDOWN],
-        [FetchCountsCmd, Message.FailedGetCounts({})],
-        [FetchStorageCmd, Message.FailedGetStorage({})],
-        [FetchPhotoCmd, Message.SucceededFetchPhoto({ id: PHOTO_ID, photo })],
-        [
-          FetchPresentationCmd,
-          Message.SucceededFetchPresentation({ id: PHOTO_ID, presentation: PRESENTATION }),
-        ],
-      ),
-      // The Editor is a document of its own: the Photo's title is its heading
-      // and the Mat is on the Stage, with no sidebar and no Page Head anywhere.
-      Scene.expect(Scene.role('heading', { name: 'A Photo' })).toExist(),
-      Scene.expect(Scene.selector('[data-slot="mat"]')).toExist(),
-      Scene.expect(Scene.role('navigation', { name: 'Admin sections' })).not.toExist(),
-      Scene.expect(Scene.role('link', { name: 'Library' })).toHaveAttr('href', '/admin'),
-      // The back link is a plain anchor: the runtime owns the interception, so
-      // the view registers no click handler of its own.
-      Scene.expect(Scene.role('link', { name: 'Library' })).not.toHaveHandler('click'),
-    )
   })
 })

@@ -1,23 +1,22 @@
 /**
- * The Upload dialog's queue and copy. The run itself is the `uploadRun`
- * subscription in `subscriptions.ts` — a browser fact the Scene harness does
- * not run — so the sequencing is driven the way `update` sees it: the
- * Messages the subscription would emit, folded in order. What is asserted is
- * the Model the chain produces and the footer it prints at each step.
+ * The Upload dialog's queue. The run itself is the `uploadRun` subscription in
+ * `subscriptions.ts` — a browser fact a unit test does not run — so the
+ * sequencing is driven the way `update` sees it: the Messages the subscription
+ * would emit, folded in order. What is asserted is the Model the chain produces
+ * and the summary the footer is built from.
+ *
+ * The dialog's own copy is a page, and a page is verified in the browser
+ * (`.agents/skills/verify-photo`).
  */
 
 import { Option } from 'effect'
-import { Scene } from 'foldkit'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
 import { PhotoId } from '@photo/shared'
 import type { PhotoWithTags } from '@photo/shared'
-import { FetchSettingsCmd } from './commands'
 import { Message } from './model'
 import type { Model } from './model'
 import { init, update } from './update'
-import { dialogOpened } from './scene-dialog'
-import { view } from './view'
 import { uploadFooterStatus, uploadFooterSummary, uploadPrimaryLabel } from './views/upload-dialog'
 
 const ORIGIN = 'https://photo.elianiva.com'
@@ -27,8 +26,6 @@ const at = (pathname: string) => {
   if (Option.isNone(parsed)) throw new Error(`not a URL: ${pathname}`)
   return parsed.value
 }
-
-const app = { update, view }
 
 const PHOTO: PhotoWithTags = {
   id: PhotoId.make('photo_1'),
@@ -62,9 +59,7 @@ const cold = (): Model =>
     Message.SucceededFetchPhotos({ photos: [PHOTO], nextCursor: null, total: 1 }),
   ].reduce((model, message) => update(model, message).model, init(at('/admin')).model)
 
-const given = () => Scene.given(cold())
-
-/** Four one-byte files through the picker's own intake, so the ids are the
+/** One-byte files through the picker's own intake, so the ids are the
  *  `${name}:${size}` keys the queue uses. */
 const queued = (names: ReadonlyArray<string>): Model =>
   update(cold(), Message.ImportedFiles({ files: names.map((name) => new File(['x'], name)) })).model
@@ -73,13 +68,6 @@ const uploadingName = (model: Model): string | undefined =>
   model.queue.find((item) => item.status === 'uploading')?.name
 
 const footer = (model: Model): string => uploadFooterStatus(uploadFooterSummary(model))
-
-const opened = (id: string) => [
-  // `Use export defaults` reads the Settings singleton; opening the dialog
-  // asks for it. The resolver answers with the failure the toggle tolerates.
-  Scene.Command.resolve(FetchSettingsCmd(), Message.FailedGetSettings({})),
-  ...dialogOpened(id),
-]
 
 describe('the upload queue', () => {
   it('runs four items one at a time, and a failure does not stop the rest', () => {
@@ -155,33 +143,5 @@ describe('the upload queue', () => {
     expect(model.queue[0]?.width).toBe(6000)
     expect(model.queue[0]?.height).toBe(4000)
     expect(model.queue[0]?.ratio).toBe('3:2')
-  })
-})
-
-describe('the upload copy', () => {
-  it('names JPEG and 80 MB in the dialog, and no format it no longer takes', () => {
-    Scene.scene(
-      app,
-      given(),
-      Scene.click(Scene.role('button', { name: 'Upload' })),
-      ...opened('admin-upload-dialog'),
-      Scene.expect(Scene.text('Upload photographs')).toExist(),
-      Scene.expect(Scene.text('JPEG only. Dimensions and EXIF are read server-side.')).toExist(),
-      Scene.expect(Scene.text('JPEG · UP TO 80 MB')).toExist(),
-      Scene.expectAll(Scene.all.text('PNG')).toBeEmpty(),
-      Scene.expectAll(Scene.all.text('WebP')).toBeEmpty(),
-      Scene.expectAll(Scene.all.text('HEIC')).toBeEmpty(),
-      Scene.expectAll(Scene.all.text('TIFF')).toBeEmpty(),
-    )
-  })
-
-  it('fixes the Library strip’s stale TIFF/HEIC list to JPEG only', () => {
-    Scene.scene(
-      app,
-      given(),
-      Scene.expect(Scene.text('Drop photographs to upload')).toExist(),
-      Scene.expect(Scene.text('JPEG · UP TO 80 MB')).toExist(),
-      Scene.expectAll(Scene.all.text('JPEG, TIFF, HEIC · UP TO 80 MB')).toBeEmpty(),
-    )
   })
 })

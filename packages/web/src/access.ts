@@ -28,7 +28,8 @@ import * as HttpClient from 'effect/http/HttpClient'
 
 /** The env bindings the admin gate reads. */
 export interface AccessEnv {
-  /** Alchemy stage name. `dev` is the only stage with no Access edge. */
+  /** Alchemy stage name. The `dev` prefix is the only family with no Access
+   *  edge — see {@link isLocalDevStage}. */
   readonly STAGE: string
   readonly ACCESS_TEAM_DOMAIN?: string
   readonly ACCESS_ALLOWED_EMAILS?: string
@@ -278,14 +279,30 @@ export const verifyAccessToken = (
   })
 
 /**
+ * Is this the local dev stage, where Alchemy creates no Access applications
+ * and the Admin runs ungated by design (ADR 0003)?
+ *
+ * Matches the `dev` prefix rather than the bare string, because `alchemy dev`
+ * resolves `--stage`, else `$ALCHEMY_STAGE`, else `dev_$USER` — a bare
+ * `pnpm dev` is `dev_elianiva`, and an equality check against `dev` read as
+ * "a deployed stage" on a stack that has no Access edge in front of it. That
+ * mismatch made the stand-down silently off: the real team domain reached the
+ * Workers and every admin RPC answered 401.
+ *
+ * Deliberately a prefix and not a substring — `live_dev` and `predev` are not
+ * local dev, and failing closed on those is the whole point of the check.
+ */
+export const isLocalDevStage = (stage: string): boolean =>
+  stage === 'dev' || stage.startsWith('dev_')
+
+/**
  * The admin gate every Access-protected route runs. Answers the verified
  * claims the handlers use, or the rejection that becomes their status.
  *
- * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on `dev`, where
- * Alchemy skips the Access applications (ADR 0003). On any other stage a blank
- * team domain is a misconfigured deploy and fails closed with 500, because
- * silently serving the Admin ungated is the one failure this gate must not
- * have.
+ * A blank `ACCESS_TEAM_DOMAIN` only means "no Access here" on the local dev
+ * stage ({@link isLocalDevStage}). On any other stage a blank team domain is a
+ * misconfigured deploy and fails closed with 500, because silently serving the
+ * Admin ungated is the one failure this gate must not have.
  */
 export const verifyAdminAccess = (
   request: Request,
@@ -294,7 +311,7 @@ export const verifyAdminAccess = (
   Effect.gen(function* () {
     const teamDomain = (env.ACCESS_TEAM_DOMAIN ?? '').trim()
     if (teamDomain === '') {
-      return env.STAGE === 'dev'
+      return isLocalDevStage(env.STAGE)
         ? Result.succeed<AdminClaims>({ email: null, teamDomain: null })
         : Result.fail(reject('server misconfigured: no ACCESS_TEAM_DOMAIN', 500))
     }

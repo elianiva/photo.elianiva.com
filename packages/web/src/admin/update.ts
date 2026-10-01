@@ -1216,27 +1216,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }
     },
     DiscardEditor: () => {
-      const { snapshot, draft, detailsSnapshot } = model.editor
-      if (snapshot === undefined || draft === undefined) return { model }
-      return {
-        model: modifyFields(model, {
-          // The Ratio override, the `DETAILS` record and any pan in flight go
-          // back with the draft: `Discard` is "put the snapshot back", and a
-          // half-dragged crop is not something the operator asked to keep.
-          editor: () => ({
-            ...model.editor,
-            snapshot,
-            draft: { ...snapshot },
-            ratio: undefined,
-            // The stored hash is what the composition drew before the edits, so
-            // `Discard` puts the readout back with the draft (CONTEXT.md).
-            blurhash: model.photo?.blurhash ?? undefined,
-            ...(detailsSnapshot === undefined ? {} : { detailsDraft: { ...detailsSnapshot } }),
-            cropDrag: undefined,
-            saving: false,
-          }),
-        }),
-      }
+      const reverted = discardEditorDraft(model)
+      return reverted === undefined ? { model } : { model: reverted }
     },
     RequestLeaveEditor: ({ url }) => {
       const target = url ?? editorReturnUrl(model.editor.returnRoute)
@@ -1246,9 +1227,16 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
     ConfirmedLeaveEditor: () => {
       const closed = Dialog.close(model.editor.leaveDialog)
+      // `Discard and leave` is the guard's own `DiscardEditor`: the draft has to
+      // go before the `Navigate` goes out, or the URL it lands on comes back as
+      // a `ChangedUrl` that still reads as a dirty Editor — and `ChangedUrl`
+      // undoes the step and raises this same guard again, which is what left
+      // the operator on the page they had just agreed to leave.
+      const discarded = discardEditorDraft(model)
+      const base = discarded ?? model
       return {
-        model: modifyFields(model, {
-          editor: () => ({ ...model.editor, leaveDialog: closed.model, leaveUrl: '' }),
+        model: modifyFields(base, {
+          editor: () => ({ ...base.editor, leaveDialog: closed.model, leaveUrl: '' }),
         }),
         commands: [
           NavigateCmd({ url: model.editor.leaveUrl }),
@@ -1535,6 +1523,27 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         // that one is the Admin's NotFound page, not a document to fetch.
         Internal: ({ url }) => {
           const target = urlToString(url)
+          // An unproven session has no in-app way back. Every read the
+          // navigation would dispatch is a read the gate just refused, so the
+          // only request that can change the answer is a *document* request
+          // for this same path — which is the one Access turns into a login,
+          // because Access runs at the edge, before this Worker.
+          //
+          // The runtime's link listener has already called `preventDefault`
+          // by the time this message arrives, so the browser will not make
+          // that request on its own: an in-app `Navigate` would leave the
+          // affordance inert, pushing the URL it is already on. This is the
+          // same rule the view's own comment argues for, and it is decided
+          // here because this is where a clicked anchor stops being the
+          // browser's and becomes ours.
+          //
+          // It comes before the Editor's leave guard on purpose: that guard's
+          // Dialog is drawn by the shell, and an expired session replaces the
+          // shell (`views/session.ts`), so raising it would raise a dialog
+          // nothing draws.
+          if (model.session.status === 'expired') {
+            return { model, commands: [LoadCmd({ href: target })] }
+          }
           // Leaving the Editor with unsaved changes asks first, whether the
           // link is `← Library` or anything else in the Admin's URL space.
           if (discardsTheDraft(model, urlToAppRoute(url))) {
@@ -1685,6 +1694,34 @@ const discardsTheDraft = (model: Model, next: AppRoute): boolean =>
   model.route._tag === 'Photo' &&
   (next._tag !== 'Photo' || next.id !== model.route.id) &&
   isEditorDirty(model.editor)
+
+/** Put the Editor's draft back to the snapshot it loaded, or `undefined` when
+ *  there is no draft to put back. The Ratio override, the `DETAILS` record and
+ *  any pan in flight go back with the draft: `Discard` is "put the snapshot
+ *  back", and a half-dragged crop is not something the operator asked to keep.
+ *
+ *  Shared by `DiscardEditor` and the leave guard's `Discard and leave`, because
+ *  leaving *is* discarding — and a guard that navigated with the draft still in
+ *  the model would have its own `Navigate` undone by the `ChangedUrl` it
+ *  provokes. */
+const discardEditorDraft = (model: Model): Model | undefined => {
+  const { snapshot, draft, detailsSnapshot } = model.editor
+  if (snapshot === undefined || draft === undefined) return undefined
+  return modifyFields(model, {
+    editor: () => ({
+      ...model.editor,
+      snapshot,
+      draft: { ...snapshot },
+      ratio: undefined,
+      // The stored hash is what the composition drew before the edits, so
+      // `Discard` puts the readout back with the draft (CONTEXT.md).
+      blurhash: model.photo?.blurhash ?? undefined,
+      ...(detailsSnapshot === undefined ? {} : { detailsDraft: { ...detailsSnapshot } }),
+      cropDrag: undefined,
+      saving: false,
+    }),
+  })
+}
 
 /** Raise the Editor's leave guard on `url`, or leave the model alone when it is
  *  already raised — a second `← Library` press while the dialog is up must not
