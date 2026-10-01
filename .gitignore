@@ -8,3 +8,6 @@ dist/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+
+# Verification proof: written by the verify-photo skill, never committed
+/.agents/skills/*/artifacts/

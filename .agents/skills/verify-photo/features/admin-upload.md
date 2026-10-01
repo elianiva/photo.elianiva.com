@@ -22,7 +22,7 @@ Preconditions:
 
 - App is healthy at `http://localhost:5173/admin` at http://localhost:5173/admin.
 - No Photo with slug `verify-upload` exists.
-- `.cursor/skills/verify-photo/scripts/doctor.sh` passes.
+- `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 - A small JPEG is available at `/tmp/verify-sample.jpg` (create via `scripts/seed.ts` tiny JPEG bytes or any 10KB jpeg).
 
 - **Open dialog.** Choose the header upload action. Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Upload"`. A dialog with FileDrop appears; `Add 0 to drafts` is disabled while queue is empty.
@@ -32,7 +32,7 @@ Preconditions:
 - **Cancel run.** During a multi-file run, stop the run. Run `npx agent-browser click --role button --name "Cancel"` (sends `CancelUploads`). The in-flight subscription tears down, the request aborts, and remaining items stay `pending`.
 - **Retry.** After a failure, retry one item or all failed. Run `npx agent-browser click --role button --name "Retry"` on a failed row or `Retry all (1)` — the failed row flips back to `pending` then `uploading`.
 - **Verify upload landed.** After `done`, close or keep the dialog and assert the Library now shows the uploaded title (switch to `Grid view` to see its tile). Open the new Photo in the Editor — the Stage's `<img>` loads from the API Worker's `/api/image/<r2Key>` and the title you set is visible.
-- **Proof.** Snapshot the Library and the new Photo's Editor route: `npx agent-browser snapshot > .cursor/skills/verify-photo/artifacts/admin-upload/grid.aria.txt` and `npx agent-browser screenshot .cursor/skills/verify-photo/artifacts/admin-upload/grid.png`.
+- **Proof.** Snapshot the Library and the new Photo's Editor route: `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/admin-upload/grid.aria.txt` and `npx agent-browser screenshot .agents/skills/verify-photo/artifacts/admin-upload/grid.png`.
 
 ## Gotchas
 

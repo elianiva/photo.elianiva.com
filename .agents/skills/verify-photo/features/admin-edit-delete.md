@@ -22,7 +22,7 @@ Preconditions:
 
 - App is healthy at `http://localhost:5173/admin`.
 - At least one Photo exists. Create one via upload or seed named `verify-edit` if needed.
-- `.pi/skills/verify-photo/scripts/doctor.sh` passes.
+- `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 
 - **Switch to the grid.** Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Grid view"`. The URL becomes `$BASE/admin?view=grid`, the `Grid view` button gains `aria-pressed="true"` and the `List view` button `aria-pressed="false"`, `[data-slot="library-grid"]` appears, and `[data-slot="library-table"]` disappears.
 - **Reload keeps the view.** Run `npx agent-browser open "$BASE/admin?view=grid"`. The grid renders again — the view is URL state, not a transient.
@@ -30,7 +30,7 @@ Preconditions:
 - **Open the Editor.** Run `npx agent-browser click --role button --name "Open <photo title>"` (or the table row's `Edit <photo title>`). The URL becomes `$BASE/admin/photos/<id>`, the Editor document renders (`data-slot="mat"`, no sidebar), and no dialog or overlay opens.
 - **Back to the view you left.** In the Editor, run `npx agent-browser click --role link --name "Library"`. You land back on `/admin?view=grid` — the route the Editor was opened from.
 - **Delete.** Run `npx agent-browser click --role button --name "Delete"` on a tile (or `More actions for <title>` → `Move to Trash`), then confirm with `Yes, move to Trash`. The Photo leaves the view. Reload the Library and assert the title is gone.
-- **Proof.** Capture the grid, the toggled URL, and the Editor route. Run `npx agent-browser snapshot > .pi/skills/verify-photo/artifacts/admin-library-grid/grid.aria.txt` and `npx agent-browser screenshot .pi/skills/verify-photo/artifacts/admin-library-grid/grid.png`, then the same for the Editor route.
+- **Proof.** Capture the grid, the toggled URL, and the Editor route. Run `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/admin-library-grid/grid.aria.txt` and `npx agent-browser screenshot .agents/skills/verify-photo/artifacts/admin-library-grid/grid.png`, then the same for the Editor route.
 
 ## Gotchas
 

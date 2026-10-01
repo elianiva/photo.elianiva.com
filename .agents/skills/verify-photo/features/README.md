@@ -7,7 +7,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 - Launch the dev server with `pnpm dev` — site on `http://localhost:5173`, API Worker on `http://localhost:13371` — with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated).
 - D1 `photo-elianiva` and R2 `photo-elianiva-originals` are remote and shared even in dev — never truncate tables. Seed data uses prefix `verify-`.
 - Put `agent-browser` on PATH (`curl` optional for image header checks).
-- Run `.pi/skills/verify-photo/scripts/doctor.sh` and require GET / on `http://localhost:5173` with the Foldkit app shell.
+- Run `.agents/skills/verify-photo/scripts/doctor.sh` and require GET / on `http://localhost:5173` with the Foldkit app shell.
 - Never drive an instance that was not started by this verification run. One instance at a time.
 
 ## Driving conventions
@@ -46,4 +46,5 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Tag page](./tag-page.md) covers `/tag/<slug>` as a Tag's own public document, the Folio the nav is read from, and the `404` a slug no Tag carries.
 - [Admin upload](./admin-upload.md) covers the multipart upload path, blurhash handling, tag assignment on upload, and queue behavior.
 - [Admin library views and delete](./admin-edit-delete.md) covers the list/grid toggle and its URL state, grid density persistence, opening a Photo in the Editor route, and delete confirmation.
+- [Admin Library empty state](./admin-library-empty.md) covers the zero-Photograph block, its two real file pickers, the Upload dialog they open, and the distinct filtered-empty copy.
 - [Tag management](./tag-management.md) covers creating tags from the manager, draft/upload combos, counting per-tag, and delete propagation.

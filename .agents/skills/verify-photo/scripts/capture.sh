@@ -3,7 +3,7 @@ set -euo pipefail
 
 ID="${1:-gallery-browse}"
 BASE="${BASE:-http://localhost:5173}"
-OUT=".pi/skills/verify-photo/artifacts/$ID"
+OUT=".agents/skills/verify-photo/artifacts/$ID"
 
 mkdir -p "$OUT"
 echo "capture: $ID -> $OUT (BASE=$BASE)"

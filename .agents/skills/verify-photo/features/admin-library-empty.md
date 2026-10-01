@@ -25,7 +25,7 @@ Preconditions:
 
 - App is healthy at `http://localhost:5173/admin`.
 - The Library holds zero Photographs (the block is the zero-Photograph state; a Library with rows never shows it).
-- `.cursor/skills/verify-photo/scripts/doctor.sh` passes.
+- `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 - `agent-browser set viewport 1440 900`, the design frame's own size.
 
 - **The block is the design's.** Open the Library, then read the block's own numbers back:
@@ -35,10 +35,10 @@ Preconditions:
   → two rows, both `multiple: true`, the second `webkitdirectory: true`, both with the five image types.
 - **Choose files queues and opens the dialog.** The input is `sr-only`, so `agent-browser upload` cannot reach it; set its files and fire the same event the picker fires:
   `npx agent-browser eval "(async () => { const i = document.querySelector('[data-slot=\"empty\"] input:not([webkitdirectory])'); const dt = new DataTransfer(); dt.items.add(new File([new Uint8Array(1024)], 'verify-lib-empty.png', { type: 'image/png' })); i.files = dt.files; i.dispatchEvent(new Event('change', { bubbles: true })); return 'dispatched'; })()"`
-  → the Upload dialog is open and its queue lists `verify-lib-empty.png` with a `Queued` badge. Screenshot it: `npx agent-browser screenshot .cursor/skills/verify-photo/artifacts/library-empty/dialog.png`.
+  → the Upload dialog is open and its queue lists `verify-lib-empty.png` with a `Queued` badge. Screenshot it: `npx agent-browser screenshot .agents/skills/verify-photo/artifacts/library-empty/dialog.png`.
 - **Import from a folder does the same through the directory input.** Repeat the step above with `[data-slot="empty"] input[webkitdirectory]` → same dialog, same queue rows.
 - **A cancelled picker changes nothing.** Fire `change` with an empty `DataTransfer` → no dialog opens and the queue is unchanged.
-- **Proof.** Capture the block before any pick: `npx agent-browser snapshot > .cursor/skills/verify-photo/artifacts/library-empty/empty-state.aria.txt` and `npx agent-browser screenshot .cursor/skills/verify-photo/artifacts/library-empty/empty-state.png`. Keep both pickers' dialog screenshots next to them.
+- **Proof.** Capture the block before any pick: `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/library-empty/empty-state.aria.txt` and `npx agent-browser screenshot .agents/skills/verify-photo/artifacts/library-empty/empty-state.png`. Keep both pickers' dialog screenshots next to them.
 - **The filtered-empty state is untouched.** Add one Photograph, then apply a Tag that no Photograph carries: the body reads `Nothing matches this filter` and `No frames yet` is absent.
 
 ## Gotchas
@@ -49,4 +49,4 @@ Preconditions:
 - Closing the Upload dialog without starting the batch drops the pending rows (the dialog's close releases the queue and revokes the previews). That is the Upload dialog's own behaviour, not the pickers'.
 - The block's width follows the Admin's page column, not the frame's 1128px: the frame's `Main` has different gutters from the shell the Admin renders in.
 - `$typography.exif` in `color.text.disabled` measures 3.95:1 against the page background, under WCAG AA for small text. The finishing line is one more instance of a token the sidebar and the Pager already use at that size; the design names it.
-- The remote D1/R2 will not answer without Cloudflare credentials. When they are missing, the same block can be driven over the real Worker with an empty local D1 and R2 in its place — see `.cursor/skills/verify-photo/artifacts/library-empty/README.md`.
+- The remote D1/R2 will not answer without Cloudflare credentials. When they are missing, the same block can be driven over the real Worker with an empty local D1 and R2 in its place, using `makeD1Fake` / `makeR2Fake` from `packages/api/src/testing/` in place of the `DB` and `PHOTOS` bindings with `STAGE=dev` and `ACCESS_TEAM_DOMAIN=`.

@@ -24,7 +24,7 @@ Preconditions:
 
 - App is healthy at `http://localhost:5173/admin` at http://localhost:5173/admin.
 - At least one Photo exists so counts are meaningful.
-- `.pi/skills/verify-photo/scripts/doctor.sh` passes.
+- `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 - No Tag with slug `verify-tag` exists at start.
 
 - **List tags.** Observe the filter bar. Run `npx agent-browser snapshot` — it contains one button per Tag label, each with its count in parentheses when unfiltered, ordered alphabetically by label.
@@ -35,7 +35,7 @@ Preconditions:
 - **Clear filter.** Choose the same chip again. Filter resets, chips return to count view, result line drops the `filtered by` suffix.
 - **Delete tag.** Delete the verify tag. Run `npx agent-browser click --role button --name "Delete Verify Tag"` then `npx agent-browser click --role button --name "Confirm"` — the chip disappears and Photos that only had that tag lose the chip instantly.
 - **Propagation.** After delete, no card shows the deleted Tag label. Re-filter or snapshot the grid to confirm.
-- **Proof.** Capture unfiltered and filtered states plus the manager form: `npx agent-browser snapshot > .pi/skills/verify-photo/artifacts/tag-management/unfiltered.aria.txt` and `filtered.aria.txt` with matching `npx agent-browser screenshot` .png.
+- **Proof.** Capture unfiltered and filtered states plus the manager form: `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/tag-management/unfiltered.aria.txt` and `filtered.aria.txt` with matching `npx agent-browser screenshot` .png.
 
 ## Gotchas
 

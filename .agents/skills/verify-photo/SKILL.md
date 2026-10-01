@@ -61,7 +61,7 @@ If `http://localhost:5173` is unreachable, `/health` on the API is unreachable, 
 One read-only check. Run before first drive, after any failed drive, and on every fresh dev session. Do not drive when doctor is red.
 
 ```bash
-.pi/skills/verify-photo/scripts/doctor.sh
+.agents/skills/verify-photo/scripts/doctor.sh
 # or manually:
 BASE="${BASE:-http://localhost:5173}"
 curl -sSf "$BASE/" | grep -q 'data-foldkit-app'
@@ -130,12 +130,12 @@ Capture the action and the resulting state, not just the final screen. Verify si
 
 Locations (proof survives cleanup):
 
-- `.pi/skills/verify-photo/artifacts/<feature-id>/` — ARIA snapshots (`*.aria.txt`), screenshots (`*.png`), curl transcripts where needed
+- `.agents/skills/verify-photo/artifacts/<feature-id>/` — ARIA snapshots (`*.aria.txt`), screenshots (`*.png`), curl transcripts where needed. The tree is gitignored: write proof there, never commit it.
 - Each artifact names the feature ID and entry point used
 
 Standards:
 
-- UI proof: ARIA snapshot plus screenshot with app identity visible (`photo.elianiva.com` / `Elianiva` header). `npx agent-browser snapshot > .pi/skills/verify-photo/artifacts/<id>/page.aria.txt` and `npx agent-browser screenshot .pi/skills/verify-photo/artifacts/<id>/page.png`
+- UI proof: ARIA snapshot plus screenshot with app identity visible (`photo.elianiva.com` / `Elianiva` header). `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/<id>/page.aria.txt` and `npx agent-browser screenshot .agents/skills/verify-photo/artifacts/<id>/page.png`
 - Mutation proof: drive the write in the UI, then read back via a second UI view (re-open the Editor, reload the Library, or reload the `/admin/photos/<id>` route) — a toast alone is insufficient.
 - Image proof (public gallery): open the photo's lightbox and assert the `<img src>` points at the API Worker's `/api/image/<r2Key>` and loads (alt text / network 200); the Worker's `cache-control: public, max-age=31536000, immutable` is what the response carries. The Admin's grid tiles assert their load against the same `/api/image/<r2Key>` URLs.
 - Never assert a skipped entry point as verified through a different path. Report unreachable with the attempted command and the missing precondition.
@@ -161,8 +161,7 @@ Helpers clean residue after every failed iteration too. Do not remove `artifacts
 
 Every helper is executable and its invocation is shown in this body.
 
-- `scripts/doctor.sh` — `.pi/skills/verify-photo/scripts/doctor.sh` — read-only health check (dev-site shell + typecheck hint)
-- `scripts/capture.sh` — `BASE=http://localhost:5173 .pi/skills/verify-photo/scripts/capture.sh gallery-browse` — ARIA + screenshot capture via agent-browser into `artifacts/<id>/`
-- `scripts/rpc.sh` — optional low-level RPC helper against the API Worker (`BASE=http://localhost:13371`, the default)
+- `scripts/doctor.sh` — `.agents/skills/verify-photo/scripts/doctor.sh` — read-only health check (dev-site shell + typecheck hint)
+- `scripts/capture.sh` — `BASE=http://localhost:5173 .agents/skills/verify-photo/scripts/capture.sh gallery-browse` — ARIA + screenshot capture via agent-browser into `artifacts/<id>/`
 
 See `features/README.md` for the indexed feature map. Keep it honest — a proof that drives one convenient entry point is incomplete when the map lists others.

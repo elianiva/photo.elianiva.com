@@ -25,18 +25,18 @@
  * off a position in this list.
  */
 
-import { Search } from 'lucide'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Search } from "lucide";
+import type { HtmlBuilder } from "foldkit/html";
 
-import * as NavLink from '@/components/ui/nav-link'
+import * as NavLink from "@/components/ui/nav-link";
 
-import { icon } from '@/lib/icons'
+import { icon } from "@/lib/icons";
 
-import type { FolioEntry } from '../content'
-import type { Message } from '../model'
-import { routeHref, tagPath } from '../route'
-import { mastheadRules } from './rules'
-import { BAND, type Child } from './shared'
+import type { FolioEntry } from "../content";
+import type { Message } from "../model";
+import { routeHref, tagPath } from "../route";
+import { mastheadRules } from "./rules";
+import { BAND, type Child } from "./shared";
 
 /**
  * The Folio: `ALL`, then one link per Tag a visitor can go to, then `ABOUT`.
@@ -56,65 +56,62 @@ import { BAND, type Child } from './shared'
 const folioLinks = (
   folio: ReadonlyArray<FolioEntry>,
 ): ReadonlyArray<{ readonly label: string; readonly href: string }> => [
-  { label: 'ALL', href: routeHref({ route: 'front' }) },
+  { label: "ALL", href: routeHref({ route: "front" }) },
   ...folio.map((entry) => ({ label: entry.label, href: tagPath(entry.slug) })),
-  { label: 'ABOUT', href: routeHref({ route: 'about' }) },
-]
+  { label: "ABOUT", href: routeHref({ route: "about" }) },
+];
 
 /** The two boxes flanking the desktop nameplate: same box, mirrored alignment. */
 const EAR =
-  'hidden w-[260px] shrink-0 flex-col gap-(--spacing-xs) px-(--spacing-md) py-(--spacing-sm) desktop:flex'
+  "hidden w-[260px] shrink-0 flex-col gap-(--spacing-xs) px-(--spacing-md) py-(--spacing-sm) desktop:flex";
 
 const earsStrip = (h: HtmlBuilder<Message>): Child =>
   h.div(
     [
       h.Class(
-        'flex items-center justify-center gap-(--spacing-lg) border-b border-role-hairline py-(--spacing-md)',
+        "flex items-center justify-center gap-(--spacing-lg) border-b border-role-hairline py-(--spacing-md)",
       ),
     ],
-    [h.span([h.Class('type-caption italic text-role-text-secondary')], ['photo.elianiva.com'])],
-  )
+    [h.span([h.Class("type-caption italic text-role-text-secondary")], ["photo.elianiva.com"])],
+  );
 
 const nameplateRow = (h: HtmlBuilder<Message>): Child =>
   h.div(
     [
       h.Class(
-        'flex flex-col items-center gap-(--spacing-xs) py-(--spacing-lg) desktop:flex-row desktop:items-center desktop:justify-between desktop:gap-(--spacing-xl) desktop:py-(--spacing-xl)',
+        "flex flex-col items-center gap-(--spacing-xs) py-(--spacing-lg) desktop:flex-row desktop:items-center desktop:justify-between desktop:gap-(--spacing-xl) desktop:py-(--spacing-xl)",
       ),
     ],
     [
       h.div(
         [h.Class(`${EAR} text-left`)],
         [
-          h.span([h.Class('type-kicker text-role-text-secondary uppercase')], ['from indonesia']),
+          h.span([h.Class("type-kicker text-role-text-secondary uppercase")], ["from indonesia"]),
           h.span(
-            [h.Class('type-caption italic text-role-text-primary')],
-            ['Street, mostly. Landscape, sometimes.'],
+            [h.Class("type-caption italic text-role-text-primary")],
+            ["Street, mostly. Landscape, sometimes."],
           ),
         ],
       ),
       h.span(
-        [h.Class('type-nameplate-xs text-role-text-primary desktop:type-nameplate')],
-        ['Elianiva'],
+        [h.Class("type-nameplate-xs text-role-text-primary desktop:type-nameplate")],
+        ["Elianiva"],
       ),
       h.div(
         [h.Class(`${EAR} text-right`)],
         [
-          h.span([h.Class('type-kicker text-role-text-secondary')], ['THE ARCHIVE']),
-          h.span(
-            [h.Class('type-caption italic text-role-text-primary')],
-            ['Jakarta, Istanbul, Tokyo and New York, since 2021.'],
-          ),
+          h.span([h.Class("type-kicker text-role-text-secondary")], ["PHOTOGRAPHY ARCHIVE"]),
+          h.span([h.Class("type-caption italic text-role-text-primary")], ["Indonesia"]),
         ],
       ),
       // The ears' tagline moves under the mobile nameplate; the site name it
       // sat beside is the nameplate itself.
       h.span(
-        [h.Class('type-caption italic text-role-text-secondary desktop:hidden')],
-        ['Street, mostly. Landscape, sometimes.'],
+        [h.Class("type-caption italic text-role-text-secondary desktop:hidden")],
+        ["Street, mostly. Landscape, sometimes."],
       ),
     ],
-  )
+  );
 
 const folio = (
   current: string,
@@ -124,47 +121,45 @@ const folio = (
   h.div(
     [
       h.Class(
-        'flex items-center justify-between gap-(--spacing-lg) border-b border-role-rule py-(--spacing-md) desktop:gap-(--spacing-xl)',
+        "flex items-center justify-between gap-(--spacing-lg) border-b border-role-rule py-(--spacing-md) desktop:gap-(--spacing-xl)",
       ),
     ],
     [
       h.nav(
         [
-          h.AriaLabel('Sections'),
-          h.Class('flex items-center gap-(--spacing-lg) desktop:gap-(--spacing-xl)'),
+          h.AriaLabel("Sections"),
+          h.Class("flex items-center gap-(--spacing-lg) desktop:gap-(--spacing-xl) uppercase"),
         ],
-        [
-          // The link the reader is on is the one the rule marks, so the mark is
-          // the document's own href rather than a position in this list.
-          ...folioLinks(entries).map((link) =>
-            NavLink.navLink(
-              {
-                href: link.href,
-                label: link.label,
-                state: link.href === current ? 'active' : 'default',
-              },
-              h,
-            ),
+        // The link the reader is on is the one the rule marks, so the mark is
+        // the document's own href rather than a position in this list.
+        folioLinks(entries).map((link) =>
+          NavLink.navLink(
+            {
+              href: link.href,
+              label: link.label,
+              state: link.href === current ? "active" : "default",
+            },
+            h,
           ),
-        ],
+        ),
       ),
       h.div(
-        [h.Class('flex items-center gap-(--spacing-lg) desktop:gap-(--spacing-xl)')],
+        [h.Class("flex items-center gap-(--spacing-lg) desktop:gap-(--spacing-xl)")],
         [
           // The mobile folio carries the section links and search only, so the
           // feed rides the desktop composition.
           h.nav(
-            [h.AriaLabel('Utility'), h.Class('hidden items-center desktop:flex')],
-            [NavLink.navLink({ href: '/rss.xml', label: 'RSS', state: 'default' }, h)],
+            [h.AriaLabel("Utility"), h.Class("hidden items-center desktop:flex")],
+            [NavLink.navLink({ href: "/rss.xml", label: "RSS", state: "default" }, h)],
           ),
           h.a(
-            [h.Href('/search'), h.AriaLabel('Search')],
-            [icon(h, Search, 'size-3.5 text-role-text-primary')],
+            [h.Href("/search"), h.AriaLabel("Search")],
+            [icon(h, Search, "size-3.5 text-role-text-primary")],
           ),
         ],
       ),
     ],
-  )
+  );
 
 export const masthead = (
   current: string,
@@ -172,11 +167,11 @@ export const masthead = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.header(
-    [h.Class('flex flex-col')],
+    [h.Class("flex flex-col")],
     [
       h.div(
         [h.Class(`${BAND} flex flex-col`)],
         [earsStrip(h), nameplateRow(h), mastheadRules(h), folio(current, entries, h)],
       ),
     ],
-  )
+  );

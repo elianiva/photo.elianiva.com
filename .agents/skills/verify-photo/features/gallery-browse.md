@@ -22,7 +22,7 @@ Preconditions:
 
 - App is healthy at `http://localhost:5173`.
 - At least one Photo exists (upload one via admin if the gallery shows “Nothing here yet”).
-- `.pi/skills/verify-photo/scripts/doctor.sh` passes (GET / with Foldkit app shell).
+- `.agents/skills/verify-photo/scripts/doctor.sh` passes (GET / with Foldkit app shell).
 - No filter active at start.
 
 - **Load gallery.** Open the visitor surface. Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/"` and `npx agent-browser snapshot`. The heading and TagManager chips appear and at least one Photo tile renders with its title text.
@@ -30,7 +30,7 @@ Preconditions:
 - **Load more.** When the gallery shows `Load more`, page forward. Run `npx agent-browser click --role button --name "Load more"` — new tiles append, no duplicates in the snapshot, and the button disappears when no further page exists.
 - **Open lightbox.** Choose any tile by its title. Run `npx agent-browser click --role link --name "<photo title>"` or `npx agent-browser click --role button --name "<photo title>"` depending on tile markup. URL stays at `/` but `selected` is non-null and the lightbox overlay appears with `src` pointing at the API Worker's `/api/image/<r2Key>` (original) plus no blurhash placeholder — the front does not render one.
 - **Dismiss lightbox.** Close via keyboard. Run `npx agent-browser press --key "Escape"`. Lightbox overlay disappears and snapshot no longer contains the overlay role.
-- **Proof.** Capture the populated gallery, a filtered state, and the lightbox. Run `npx agent-browser snapshot > .pi/skills/verify-photo/artifacts/gallery-browse/page.aria.txt` and `npx agent-browser screenshot .pi/skills/verify-photo/artifacts/gallery-browse/page.png` for each state (also filtered + lightbox snapshots if you branch).
+- **Proof.** Capture the populated gallery, a filtered state, and the lightbox. Run `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/gallery-browse/page.aria.txt` and `npx agent-browser screenshot .agents/skills/verify-photo/artifacts/gallery-browse/page.png` for each state (also filtered + lightbox snapshots if you branch).
 
 ## Gotchas
 
