@@ -148,15 +148,26 @@ describe('sectionsOf', () => {
 // ---------------------------------------------------------------------------
 
 describe('editionOf', () => {
-  it('leads with the newest plate and offers more while a cursor remains', () => {
+  it('carries the read as Sections and offers more while a cursor remains', () => {
     const edition = editionOf(read({ nextSectionCursor: '2025-07' }))
-    expect(edition.lead?.id).toBe('photo-1')
+    expect(edition.sections.map((section) => section.id)).toEqual(['2025-08'])
     expect(edition.tail).toBe('more')
+  })
+
+  it('names no plate of its own — no lead, nothing pinned', () => {
+    // The Edition used to carry the newest photograph as a Page One plate and
+    // the lede drew it as the site's frontispiece. The Sections are the whole
+    // of the Front's read now, so every photograph is drawn as a plate in a
+    // flow and none of them is ranked above the others.
+    const edition = editionOf(read())
+    expect(Object.keys(edition).sort()).toEqual(['sections', 'tail'])
+    expect(
+      edition.sections.flatMap((section) => section.figures).map((figure) => figure.id),
+    ).toEqual([PhotoId.make('photo-1')])
   })
 
   it('is an honest empty edition when nothing is published', () => {
     const edition = editionOf(read({ sections: [], nextSectionCursor: null }))
-    expect(edition.lead).toBeNull()
     expect(edition.sections).toEqual([])
     expect(edition.tail).toBe('empty')
   })

@@ -1,19 +1,20 @@
 /**
- * Figure: one plate with its placard. `page` is the lede's Page One plate,
- * `column` a plate inside a Section, `about` the About page's wide plate — the
- * three are the same element at three measures, so the slot only names where
- * the plate sits and only the slot changes how it is drawn.
+ * Figure: one plate with its placard. `column` is a plate inside a flow, `about`
+ * the About page's wide plate — the two are the same element at two measures,
+ * so the slot only names where the plate sits and only the slot changes how it
+ * is drawn. The lede's Page One slot is gone with the Page One plate: a
+ * photograph is drawn the same way wherever it falls in the archive.
  *
  * The About page's plate is the design's Figure at the full content measure,
  * and its placard is set one step larger there (`type-deck` at `desktop`,
  * falling back to the caption size and a two-line clamp on the mobile master),
  * so `type-deck` rides on the slot rather than on the About page wrapping this.
  *
- * `loading` is an override rather than a slot fact because the About page draws
- * its second plate only on the mobile master: a plate the desktop composition
- * never lays out must not be fetched there, and on the mobile one it sits below
- * the fold. Lazy is the answer for that plate and the slot's own eager answer
- * is wrong for it.
+ * `loading` is an override rather than a slot fact because a slot says where a
+ * plate sits, not whether the reader has scrolled to it: the About page draws
+ * its second plate only on the mobile master, where it sits below the fold and
+ * must not be fetched, and the Front's first Section fetches the plate at the
+ * head of its flow because that one is above the fold.
  *
  * The mobile Figure master (size=mobile) differs from the desktop one at every
  * level: the placard is a two-line clamped title with a zero-padded number
@@ -29,16 +30,17 @@ import { frameNo, frameNoShort, plateUrl, RATIO_VALUE, type Figure as Plate } fr
 import { Message } from '../model'
 import type { Child } from './shared'
 
-/** Where a plate sits. `page` is Page One, `column` is a Section column, and
- *  `about` is the About page's own full-measure plate. */
-export const figureSlots = ['page', 'column', 'about'] as const
+/** Where a plate sits. `column` is a plate in a flow, and `about` is the About
+ *  page's own full-measure plate. */
+export const figureSlots = ['column', 'about'] as const
 export type FigureSlot = (typeof figureSlots)[number]
 
 export type FigureConfig = Readonly<{
   plate: Plate
   slot: FigureSlot
   /** Whether the browser fetches the original now. Defaults to the slot's own
-   *  answer: a plate in a Section is below the fold, a page's lead is not. */
+   *  answer: a plate in a flow is below the fold, the About page's own plate is
+   *  the page. */
   loading?: 'eager' | 'lazy'
 }>
 

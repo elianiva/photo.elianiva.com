@@ -85,7 +85,7 @@ const renderApplication = (photos: ReadonlyArray<PhotoWithTags>) =>
         route: 'about' as const,
         // The Front's fields, empty on this document — the shape the Worker
         // hands a render of the About page.
-        edition: { lead: null, sections: [], tail: 'empty' as const },
+        edition: { sections: [], tail: 'empty' as const },
         nextSectionCursor: null,
         plates: figuresOf(photos),
         // Likewise the Tag page's: the About page is not a Tag's page.
@@ -112,15 +112,13 @@ const renderDocument = async (photos: ReadonlyArray<PhotoWithTags>): Promise<str
 describe('the rendered About page', () => {
   it("prints the page the design draws, in the design's order", async () => {
     const html = await render(read())
-    expect(html).toContain('One camera, one lens, and a lot of walking')
-    expect(html).toContain(
-      'Street photographs from Jakarta, made slowly and kept in full resolution.',
-    )
+    expect(html).toContain('the short version')
+    expect(html).toContain('Mostly Jakarta, shot on the way to things.')
     // The prose: the two desktop columns, and the mobile master's re-flowed
     // paragraph. All three are authored, so all three are in the document.
-    expect(html).toContain('I walk the same streets most mornings')
-    expect(html).toContain('The archive is the point.')
-    expect(html).toContain('Each photograph gets a number, a date, and its exposure')
+    expect(html).toContain('I shoot on the way to things')
+    expect(html).toContain('I keep everything, including the ones I do not like.')
+    expect(html).toContain('Each photograph gets a number, a date, and whatever exposure')
   })
 
   it("prints the Kit as the design's four spec rows", async () => {
@@ -130,7 +128,7 @@ describe('the rendered About page', () => {
     expect(html).toContain('25MM F/1.8')
     // `SINCE` and `OUTPUT` are labels, so assert the values they pair with.
     expect(html).toContain('2021')
-    expect(html).toContain('FULL RESOLUTION ONLY')
+    expect(html).toContain('ORIGINAL FILES ONLY')
   })
 
   it('marks ABOUT as the section the reader is on', async () => {
@@ -147,13 +145,13 @@ describe('the rendered About page', () => {
   it('carries the colophon and the masthead, the chrome both documents share', async () => {
     const html = await render(read())
     expect(html).toContain('Elianiva')
-    expect(html).toContain('BACK TO TOP')
+    expect(html).toContain('back to top')
     expect(html).toContain('Set in Newsreader, Libre Franklin and IBM Plex Mono.')
   })
 
   it('titles the page as the About page rather than the Front', async () => {
     const rendered = await renderApplication(read())
-    expect(rendered.title).toBe('photo.elianiva.com — About')
+    expect(rendered.title).toBe('photo.elianiva.com — about')
   })
 })
 
@@ -211,7 +209,7 @@ describe("the About page's plates", () => {
     const html = await render(read([]))
     // An empty read is a real state, not a broken page: the About page is words
     // and a kit, so it reads as a page with no plate on it.
-    expect(html).toContain('One camera, one lens, and a lot of walking')
+    expect(html).toContain('the short version')
     expect(html).toContain('KIT')
     expect(html).not.toContain('/api/image/')
   })

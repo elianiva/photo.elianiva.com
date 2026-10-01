@@ -30,7 +30,7 @@ const confirmCopy = (pending: PendingConfirm | undefined): string => {
       pending.count === 1 ? '' : 's'
     } will be moved to Trash: they leave the Library, their originals stay in R2, and their numbers are never reused.`
   }
-  return `Tag “${pending.label}” will be deleted and detached from all photos.`
+  return `Tag “${pending.label}” will be deleted and detached from all photographs.`
 }
 
 export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>

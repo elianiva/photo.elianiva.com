@@ -24,10 +24,10 @@ import { Message } from '../model'
 import type { Child } from './shared'
 
 const ROWS: ReadonlyArray<{ readonly label: string; readonly value: string }> = [
-  { label: 'BODY', value: 'FUJIFILM X-T20' },
+  { label: 'CAMERA', value: 'FUJIFILM X-T20' },
   { label: 'LENS', value: '25MM F/1.8' },
   { label: 'SINCE', value: '2021' },
-  { label: 'OUTPUT', value: 'FULL RESOLUTION ONLY' },
+  { label: 'OUTPUT', value: 'ORIGINAL FILES ONLY' },
 ]
 
 export const kit = (h: HtmlBuilder<Message>): Child =>

@@ -583,9 +583,7 @@ export const atomsPage = (model: Model, h: HtmlBuilder<Msg>): Html =>
       h.h1([h.Class('mt-(--spacing-2xl) type-section text-role-text-primary')], ['Atoms']),
       h.p(
         [h.Class('mt-(--spacing-xs) type-deck max-w-prose text-role-text-secondary')],
-        [
-          'Every atom of the Desk, drawn at the design’s own size. Nothing links here yet — the admin shell and its sidebar come next.',
-        ],
+        ['Every atom of the Desk, drawn at its own size. Nothing on this page links anywhere yet.'],
       ),
       segmentBand(model, h),
       statusBand(h),

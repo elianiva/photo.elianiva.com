@@ -75,7 +75,7 @@ export const libraryEmpty = (h: HtmlBuilder<Msg>): Child =>
             [icon(h, Images, 'size-8')],
             h,
           ),
-          Empty.title({}, ['No frames yet'], h),
+          Empty.title({}, ['No photographs yet'], h),
           // The design's own max is the block's full inner width, not the
           // atom's `max-w-sm`.
           Empty.description(

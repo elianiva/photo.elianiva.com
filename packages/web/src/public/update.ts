@@ -2,8 +2,8 @@
  * The public site's update core: message → model transition plus init.
  *
  * `init` is synchronous and takes what the Worker already read, because the
- * first paint is server-rendered and a reader should never watch an empty
- * broadsheet fill itself in. The one command on the site fetches the months
+ * first paint is server-rendered and a reader should never watch an empty page
+ * fill itself in. The one command on the site fetches the months
  * below the last Section when the reader asks for them; the About page and a
  * Tag page draw no Continued row, so nothing on them dispatches that command.
  */
@@ -82,14 +82,11 @@ export const init: Runtime.ApplicationInit<Model, Message, Flags> = (flags) => (
 
 /** Every figure the reader can click, in the order the page drew them: the
  *  lightbox resolves a click against the same list the plates were rendered
- *  from. The Front pages through its Edition, Page One first; the other two
+ *  from. The Front pages through its Edition's Sections; the other two
  *  documents read their photographs out of one list. */
 const figuresOf = (model: Model): ReadonlyArray<Figure> => {
   if (model.route === 'front') {
-    return [
-      ...(model.edition.lead === null ? [] : [model.edition.lead]),
-      ...model.edition.sections.flatMap((section) => section.figures),
-    ]
+    return model.edition.sections.flatMap((section) => section.figures)
   }
   return model.route === 'about' ? model.plates : model.tag.plates
 }
@@ -140,8 +137,8 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
           edition: {
             ...model.edition,
             sections: [...model.edition.sections, ...sections],
-            // The lead belongs to the Edition as it was rendered; older
-            // Sections are plates, not a new Page One.
+            // The page's head is the Section it already opened with; the
+            // Sections arriving here are older months, below it.
             tail: nextSectionCursor === null ? 'end' : 'more',
           },
         },

@@ -305,7 +305,7 @@ const stageState = (model: Model, h: HtmlBuilder<Msg>): Child =>
           ),
         ],
         [
-          h.p([], ['That Photo could not be loaded.']),
+          h.p([], ['That photograph could not be loaded.']),
           Button.button(
             { onClick: M.RetryFetchPhoto(), variant: 'secondary', className: 'mt-3' },
             'Retry',
@@ -893,7 +893,9 @@ const leaveDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
               ),
               Dialog.description(
                 { attributes: render.description },
-                ['This Photo has changes that have not been saved. Leaving now discards them.'],
+                [
+                  'This photograph has changes that have not been saved. Leaving now discards them.',
+                ],
                 innerH,
               ),
               h.div(

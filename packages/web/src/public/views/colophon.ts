@@ -11,7 +11,19 @@
  *
  * The one list here that is read is SECTIONS, because it is the Folio again: the
  * Colophon says where the site is, and a hand-written copy of the nav beside a
- * read one is two lists free to disagree.
+ * read one is two lists free to disagree. It is printed in the same kicker and
+ * the same caps as the Folio, so the two lists are the same list twice.
+ *
+ * The copyright line is the one string here that will one day be wrong: it is
+ * written out rather than derived, because the Colophon is handed the Folio and
+ * no dates. It read `2021–2025` through 2026. It is set in the site's own case
+ * rather than in capitals, like everything else the site says.
+ *
+ * ELSEWHERE is plain text, not links, and that is a known gap rather than a
+ * decision: the addresses are the photographer's to publish, so this file does
+ * not invent a destination for any of them. `/rss.xml` used to be named here
+ * and in the Folio and is not a route, so it is gone from both until a feed
+ * exists to point at.
  *
  * The mobile Colophon master (size=mobile) is a different composition: the
  * About block stands on its own above a bordered two-column row, EQUIPMENT is
@@ -25,7 +37,6 @@ import type { HtmlBuilder } from 'foldkit/html'
 
 import type { FolioEntry } from '../content'
 import { Message } from '../model'
-import { colophonRules } from './rules'
 import { BAND, type Child } from './shared'
 
 /**
@@ -45,16 +56,13 @@ const about = (h: HtmlBuilder<Message>): Child =>
     [h.Class('flex min-w-0 flex-col gap-(--spacing-md) py-(--spacing-xl) desktop:py-0')],
     [
       h.span([h.Class('type-nameplate-sm text-role-text-primary')], ['Elianiva']),
-      h.p(
-        [h.Class('type-body italic text-role-text-secondary')],
-        ['Photographs made on foot, mostly in Jakarta, usually around golden hour.'],
-      ),
+      h.p([h.Class('type-body italic text-role-text-secondary')], ['Shot on foot, usually early.']),
     ],
   )
 
 const columnLine = (line: string, mobile: boolean, h: HtmlBuilder<Message>): Child =>
   h.li(
-    [h.Class(mobile ? 'type-exif-sm text-role-text-primary' : 'type-exif text-role-text-primary')],
+    [h.Class(`${mobile ? 'type-exif-sm' : 'type-exif'} uppercase text-role-text-primary`)],
     [line],
   )
 
@@ -72,7 +80,7 @@ const colophonColumn = (
   h.div(
     [h.Class(`${column.desktopOnly === true ? 'hidden desktop:flex' : 'flex'} ${COLUMN}`)],
     [
-      h.span([h.Class('type-kicker text-role-text-secondary')], [column.label]),
+      h.span([h.Class('type-kicker text-role-text-secondary uppercase')], [column.label]),
       h.ul(
         [h.Class('flex list-none flex-col gap-1.5 desktop:hidden')],
         [...(column.linesMobile ?? column.lines).map((line) => columnLine(line, true, h))],
@@ -95,10 +103,10 @@ const baseline = (h: HtmlBuilder<Message>): Child =>
       h.span(
         [h.Class('type-kicker flex-1 text-role-text-disabled')],
         [
-          h.span([h.Class('desktop:hidden')], ['© 2021–2025 ELIANIVA']),
+          h.span([h.Class('desktop:hidden')], ['© 2021–2026 elianiva']),
           h.span(
             [h.Class('hidden desktop:inline')],
-            ['© 2021–2025 ELIANIVA · ALL RIGHTS RESERVED'],
+            ['© 2021–2026 elianiva · all rights reserved'],
           ),
         ],
       ),
@@ -106,7 +114,10 @@ const baseline = (h: HtmlBuilder<Message>): Child =>
         [h.Class('hidden type-caption italic text-role-text-disabled desktop:block')],
         ['Set in Newsreader, Libre Franklin and IBM Plex Mono.'],
       ),
-      h.a([h.Href('#top'), h.Class('type-kicker text-role-text-primary')], ['BACK TO TOP ↑']),
+      h.a(
+        [h.Href('#top'), h.Class('type-kicker text-role-text-primary uppercase')],
+        ['back to top ↑'],
+      ),
     ],
   )
 
@@ -120,10 +131,10 @@ export const colophon = (folio: ReadonlyArray<FolioEntry>, h: HtmlBuilder<Messag
   // list the masthead prints, so a Tag added in the Admin appears in both, and
   // no more or fewer of them. It has no mobile variant because the Folio has
   // none to shorten.
-  const sections = [...folio.map((entry) => entry.label), 'About']
+  const sections = [...folio.map((entry) => entry.label), 'about']
   const columns = [
     {
-      label: 'EQUIPMENT',
+      label: 'equipment',
       lines: [
         'Camera — Fujifilm X-T20',
         'Lens — 25mm f/1.8, manual',
@@ -133,22 +144,25 @@ export const colophon = (folio: ReadonlyArray<FolioEntry>, h: HtmlBuilder<Messag
       desktopOnly: true,
     },
     {
-      label: 'SECTIONS',
+      label: 'sections',
       lines: sections,
     },
     {
-      label: 'ELSEWHERE',
-      lines: ['Instagram (archive)', 'RSS feed', 'Prints on request', 'hello@elianiva.com'],
-      linesMobile: ['Instagram (archive)', 'RSS feed', 'hello@elianiva.com'],
+      label: 'elsewhere',
+      lines: ['instagram', 'prints on request', 'hello@elianiva.com'],
+      linesMobile: ['instagram', 'hello@elianiva.com'],
     },
   ]
   return h.footer(
     [h.Class('flex flex-col')],
     [
       h.div(
-        [h.Class(`${BAND} flex flex-col pt-(--spacing-3xl) desktop:pt-(--spacing-4xl)`)],
         [
-          colophonRules(h),
+          h.Class(
+            `${BAND} flex flex-col border-t border-role-hairline pt-(--spacing-3xl) desktop:pt-(--spacing-4xl)`,
+          ),
+        ],
+        [
           h.div(
             [h.Class(COLUMNS)],
             [

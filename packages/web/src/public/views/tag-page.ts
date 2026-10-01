@@ -37,7 +37,7 @@ export const tagBody = (tag: TagPage, h: HtmlBuilder<Message>): Child =>
       ),
     ],
     [
-      h.h1([h.Class('type-section-sm text-role-text-primary desktop:type-headline')], [tag.label]),
+      h.h1([h.Class('type-section text-role-text-primary')], [tag.label]),
       ...(tag.caption === null
         ? []
         : [h.p([h.Class('type-deck text-role-text-secondary')], [tag.caption])]),
@@ -59,6 +59,6 @@ export const tagBody = (tag: TagPage, h: HtmlBuilder<Message>): Child =>
       // A Tag with no published photograph under it is a page with a name and
       // no plate on it — the same honest state the About page draws for an
       // empty read, rather than an empty column of frames.
-      ...(tag.plates.length === 0 ? [] : plateColumns(tag.plates, tag.plates, h)),
+      ...(tag.plates.length === 0 ? [] : plateColumns(tag.plates, h)),
     ],
   )

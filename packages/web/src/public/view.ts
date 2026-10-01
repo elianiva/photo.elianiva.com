@@ -1,7 +1,7 @@
 /**
- * The public site's view root — the broadsheet. Editorial system: newsprint
- * paper, black ink, one display serif (Newsreader) over Libre Franklin, and
- * hairline rules as the only structure, so nothing competes with the plates.
+ * The public site's view root. One display serif (Newsreader) over Libre
+ * Franklin on newsprint, hairline rules as the only structure, and the plates
+ * carrying the page — the type is set small and stays out of their way.
  *
  * One app draws the site's public documents, and the **route** says which: the
  * Front is `/`, the About page is `/about`, a Tag page is `/tag/<slug>`, and
@@ -17,6 +17,11 @@
  * tab and every search result an issue nobody can open. A Tag page's is its
  * Tag's own label, because that is the word its own URL and the Folio both
  * carry.
+ *
+ * What follows the domain is written in the site's own case rather than the
+ * title case a title conventionally gets, because the Folio, the About kicker
+ * and every Tag label are all lowercase here and a tab that says `About` above
+ * a nav that says `ABOUT` is the site disagreeing with itself two lines apart.
  */
 
 import type { Document, Html, HtmlBuilder } from 'foldkit/html'
@@ -35,8 +40,8 @@ import { BAND } from './views/shared'
 import { tagBody } from './views/tag-page'
 
 const TITLES: Record<Exclude<Model['route'], 'tag'>, string> = {
-  front: 'photo.elianiva.com — Photography',
-  about: 'photo.elianiva.com — About',
+  front: 'photo.elianiva.com — photography',
+  about: 'photo.elianiva.com — about',
 }
 
 /** The title of the document the Model is drawing. */
@@ -87,9 +92,9 @@ const frontDocument = (model: Model, h: HtmlBuilder<Message>): Document => ({
       [h.Class('flex flex-col')],
       [
         lede(model.edition, h),
-        ...model.edition.sections.map((section, index) =>
-          editionSection(section, index === 0 ? model.edition.lead : null, h),
-        ),
+        // The first Section heads the page, so its first plate is the one the
+        // browser fetches eagerly; every other Section is below the fold.
+        ...model.edition.sections.map((section, index) => editionSection(section, index === 0, h)),
         h.div(
           [h.Id('archive'), h.Class(`${BAND} pt-(--spacing-lg) desktop:pt-(--spacing-3xl)`)],
           [continued(model.edition.tail, model.loadingSections, model.sectionsError, h)],

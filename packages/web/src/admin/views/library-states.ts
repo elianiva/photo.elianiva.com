@@ -72,7 +72,7 @@ export const libraryNoMatch = (model: Model, h: HtmlBuilder<Msg>): Child =>
           Empty.description(
             {},
             [
-              'The Library has Photographs; this filter selects none of them.',
+              'There are photographs here, this filter just does not pick any of them.',
               ...(model.activeTagIds.length > 0
                 ? [
                     h.button(
@@ -82,7 +82,7 @@ export const libraryNoMatch = (model: Model, h: HtmlBuilder<Msg>): Child =>
                           'type-caption underline underline-offset-4 hover:text-role-text-primary',
                         ),
                       ],
-                      ['Clear the Tag filter'],
+                      ['Clear the tag filter'],
                     ),
                   ]
                 : []),

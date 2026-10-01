@@ -7,6 +7,14 @@
  * `aboutCopy` column used to be a second, invisible source for two of these
  * sentences (migration 0008) and is gone.
  *
+ * The prose is written the way the rest of the site is written: short, plain,
+ * and not trying to sound like anything. It used to reach for the broadsheet's
+ * furniture instead — `The archive is the point.`, photographs `filed like a
+ * newspaper files a negative` — which made the page sound as though it were
+ * about an archive rather than about the person who walks round taking them.
+ * The headline used to be `One camera, one lens, and a lot of walking`, which
+ * is a sentence about a lifestyle rather than a page about a person.
+ *
  * The two compositions are the design's two masters, and they are not the same
  * page at a narrower measure:
  *
@@ -32,19 +40,19 @@ import { figure } from './figure'
 import { kit } from './kit'
 import { BAND, type Child } from './shared'
 
-const HEADLINE = 'One camera, one lens, and a lot of walking'
+const HEADLINE = 'the short version'
 
-const DECK = 'Street photographs from Jakarta, made slowly and kept in full resolution.'
+const DECK = 'Mostly Jakarta, shot on the way to things.'
 
 /** The desktop master's two columns, one paragraph each. */
 const COLUMNS: ReadonlyArray<string> = [
-  'I walk the same streets most mornings, early, before the traffic fills them. One body and a 25mm lens is the whole kit, so every frame is a decision about where to stand and when to wait. I do not crop, I do not stage, and I keep the full file.',
-  'The archive is the point. Each photograph gets a number, a date, and its exposure, filed like a newspaper files a negative. Jakarta is home, but the habit travels: New York, Istanbul, anywhere with a pavement and something happening on it.',
+  'I shoot on the way to things. That is most of the method, and it works fine. If the light is bad I wait a bit, or I come back the next morning.',
+  'I keep everything, including the ones I do not like. Each photograph gets a number, a date, and whatever exposure the camera reported. Nothing gets edited afterwards. This site is the whole folder, newest first.',
 ]
 
 /** The mobile master's single paragraph: the same two columns, re-flowed. */
 const PROSE_MOBILE =
-  'I walk the same streets most mornings, early, before the traffic fills them. One body and a 25mm lens is the whole kit. I do not crop, I do not stage, and I keep the full file. Each photograph gets a number, a date, and its exposure, filed like a newspaper files a negative.'
+  'I shoot on the way to things. That is most of the method. I keep everything, including the ones I do not like — each photograph gets a number, a date, and whatever exposure the camera reported, and nothing gets edited afterwards.'
 
 const paragraph = (className: string, text: string, h: HtmlBuilder<Message>): Child =>
   h.p([h.Class(className)], [text])
@@ -83,8 +91,8 @@ export const aboutBody = (figures: ReadonlyArray<Figure>, h: HtmlBuilder<Message
       ),
     ],
     [
-      h.span([h.Class('type-kicker text-role-text-secondary')], ['ABOUT']),
-      h.h1([h.Class('type-section-sm text-role-text-primary desktop:type-headline')], [HEADLINE]),
+      h.span([h.Class('type-kicker text-role-text-secondary uppercase')], ['about']),
+      h.h1([h.Class('type-section text-role-text-primary')], [HEADLINE]),
       h.p([h.Class('type-deck text-role-text-secondary')], [DECK]),
       prose(h),
       ...plates(figures, h),

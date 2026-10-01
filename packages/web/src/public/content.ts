@@ -7,7 +7,7 @@
  * What is here is what D1 knows: the plates, the months they group into,
  * whether there is another month below, the Tags a visitor can go to, and the
  * plates one Tag carries. Every line of text on the site is written in the view
- * that prints it — a masthead is the publication's voice, it is not a record,
+ * that prints it — a masthead is the site's own voice, it is not a record,
  * and the words belong beside the markup that renders them rather than in a
  * table of labels this module hands back. So the Edition has no masthead, no
  * headline, no counters, and the About page has no about copy: the only thing a
@@ -15,8 +15,10 @@
  * Tag's own label and caption.
  *
  * A Photo that is not published is not here, so a site with nothing published
- * is a real state rather than a placeholder: no lead, no Sections, and a
- * Continued row in its empty state.
+ * is a real state rather than a placeholder: no Sections, and a Continued row in
+ * its empty state. Every photograph is a plate in a Section's flow — there is no
+ * lead plate and nothing is pinned, because the archive does not rank its own
+ * photographs.
  *
  * The content types are Effect Schemas rather than bare interfaces because the
  * Model carries the Edition: it is server-rendered into the hydration stamp and
@@ -95,8 +97,6 @@ export const TailSchema = S.Literals(['more', 'end', 'empty'])
 export type Tail = typeof TailSchema.Type
 
 export const EditionSchema = S.Struct({
-  /** The Page One plate, or null when the site opens with no photograph. */
-  lead: S.NullOr(FigureSchema),
   sections: S.Array(EditionSectionSchema),
   tail: TailSchema,
 })
@@ -250,16 +250,18 @@ export const sectionsOf = (sections: ReadonlyArray<PublicSection>): ReadonlyArra
  * The Edition, from the public read.
  *
  * A site with nothing published is a state this returns honestly rather than a
- * crash or a placeholder: no lead, no Sections, and a Continued row in its
- * empty state. The Front draws that; it does not need a photograph to be a page.
+ * crash or a placeholder: no Sections, and a Continued row in its empty state.
+ * The Front draws that; it does not need a photograph to be a page.
+ *
+ * The Edition carries no plate of its own. It used to name the newest
+ * photograph the Page One plate and draw it beside the lede, which made one
+ * photograph the site's frontispiece and the same photograph the first frame of
+ * the first Section on mobile — a rank the archive never assigned, published
+ * from nothing anyone had marked. The Sections are the whole of it now.
  */
 export const editionOf = (read: FrontRead): Edition => {
   const sections = sectionsOf(read.sections)
-  // The Page One plate is the newest photograph in the newest Section, which
-  // is also the first plate of that Section's flow.
-  const lead = sections.at(0)?.figures.at(0) ?? null
   return {
-    lead,
     sections,
     tail: sections.length === 0 ? 'empty' : 'more',
   }
@@ -270,7 +272,7 @@ export const editionOf = (read: FrontRead): Edition => {
  * for an empty read, named once so the About page's Model can hold an Edition
  * it never reads without inventing a second spelling of "empty".
  */
-export const EMPTY_EDITION: Edition = { lead: null, sections: [], tail: 'empty' }
+export const EMPTY_EDITION: Edition = { sections: [], tail: 'empty' }
 
 /**
  * A Tag page, from the public read.

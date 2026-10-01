@@ -243,7 +243,7 @@ describe('the sidebar tags group', () => {
       // Tag that is about to go.
       Scene.expect(Scene.role('button', { name: 'Yes, delete' })).toExist(),
       Scene.expect(
-        Scene.text('Tag “Kyoto” will be deleted and detached from all photos.'),
+        Scene.text('Tag “Kyoto” will be deleted and detached from all photographs.'),
       ).toExist(),
     )
     // The sheet forgets its subject the moment the delete is asked for, so a

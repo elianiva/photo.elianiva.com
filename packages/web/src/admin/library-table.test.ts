@@ -598,8 +598,8 @@ describe('the states that are not rows', () => {
       app,
       Scene.given(settled.model),
       Scene.expect(Scene.text('Nothing matches this filter')).toExist(),
-      Scene.expect(Scene.text('No frames yet')).not.toExist(),
-      Scene.click(Scene.role('button', { name: 'Clear the Tag filter' })),
+      Scene.expect(Scene.text('No photographs yet')).not.toExist(),
+      Scene.click(Scene.role('button', { name: 'Clear the tag filter' })),
       Scene.Command.resolve(FetchPhotosCmd({ tagIds: [], q: '' }), listed([], 0, null)),
       Scene.Command.resolve(ReplaceUrlCmd, Message.CompletedNavigate()),
     )
@@ -609,7 +609,7 @@ describe('the states that are not rows', () => {
     Scene.scene(
       app,
       given([], 0, null),
-      Scene.expect(Scene.text('No frames yet')).toExist(),
+      Scene.expect(Scene.text('No photographs yet')).toExist(),
       Scene.expect(
         Scene.text('Drop your first photograph, or choose files from this computer.'),
       ).toExist(),

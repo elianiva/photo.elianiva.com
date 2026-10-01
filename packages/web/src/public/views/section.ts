@@ -3,15 +3,17 @@
  * into columns. The flow itself is `plateColumns` — a Tag page's run of plates
  * is the same arrangement at the same measure, so it is drawn once there.
  *
- * `pageOne` is the lede's Page One plate on the desktop Front. The mobile lede
- * has no plate, so the first section takes it as its own first frame — which
- * is why the mobile `August 2025` head counts nine frames where the desktop
- * head counts eight.
+ * The head counts the Section's own plates and the flow draws exactly those, so
+ * the count is the same fact on both masters. It used not to be: the lede held
+ * a Page One plate, the desktop composition left it out of the first Section
+ * and the mobile one took it as its own first frame, so the mobile
+ * `August 2025` head counted nine frames where the desktop head counted eight.
+ * No plate is held back now, so there is one list and one count.
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameCount, sectionCount, type EditionSection, type Figure } from '../content'
+import { frameCount, sectionCount, type EditionSection } from '../content'
 import { Message } from '../model'
 import { plateColumns } from './plates'
 import { BAND, type Child } from './shared'
@@ -48,13 +50,15 @@ const sectionHead = (
     ],
   )
 
+/** `headsDocument` is the Front's first Section — the one whose first plate is
+ *  above the fold, and so the one plate on the site the browser is told to
+ *  fetch now. */
 export const editionSection = (
   section: EditionSection,
-  pageOne: Figure | null,
+  headsDocument: boolean,
   h: HtmlBuilder<Message>,
-): Child => {
-  const mobileFigures = pageOne === null ? section.figures : [pageOne, ...section.figures]
-  return h.section(
+): Child =>
+  h.section(
     [h.Class('flex flex-col')],
     [
       h.div(
@@ -64,12 +68,9 @@ export const editionSection = (
           ),
         ],
         [
-          sectionHead(section, frameCount(mobileFigures.length), h),
-          // The mobile tree takes the Page One plate, which belongs to the
-          // first section on that master and to no section on the desktop one.
-          ...plateColumns(mobileFigures, section.figures, h),
+          sectionHead(section, frameCount(section.figures.length), h),
+          ...plateColumns(section.figures, h, headsDocument),
         ],
       ),
     ],
   )
-}

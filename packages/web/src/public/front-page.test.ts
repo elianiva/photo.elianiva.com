@@ -22,6 +22,7 @@ import { PhotoId, type PhotoWithTags, type PublicSection } from '@photo/shared'
 
 import { editionOf, EMPTY_TAG_PAGE, type FolioEntry, type FrontRead } from './content'
 import { Flags, Model } from './model'
+import { routeNamedBy } from './route'
 import { init } from './update'
 import { view } from './view'
 
@@ -226,10 +227,26 @@ describe('the rendered Front', () => {
     expect(html).not.toContain('cdn-cgi/image')
   })
 
+  it('draws every photograph as a plate in the flow, and none as a lead', async () => {
+    const html = await render(read())
+    // Three photographs, each drawn by the two masters' flows and by nothing
+    // else. The lede used to hold the newest of them as a Page One plate, so
+    // one photograph appeared beside the headline as well as in the first
+    // Section's flow — a frontispiece the archive never chose. Every plate is
+    // in a flow now, so each is drawn exactly once per master.
+    for (const id of ['momo', 'michi', 'lift']) {
+      const plates = html.split(`/api/image/originals%2F${id}.jpg`).length - 1
+      expect(plates, `${id} is drawn ${plates} times, once per master`).toBe(2)
+    }
+    // The one plate above the fold is the head of the first flow, so exactly
+    // that plate is fetched now rather than on scroll — once per master.
+    expect([...html.matchAll(/fetchpriority="high"/g)]).toHaveLength(2)
+  })
+
   it('renders an honest empty edition rather than a placeholder list', async () => {
     const html = await render(read({ sections: [], nextSectionCursor: null }))
-    expect(html).toContain('Nothing published yet.')
-    expect(html).toContain('NOTHING PUBLISHED YET')
+    expect(html).toContain('nothing here yet')
+    expect(html).toContain('nothing here yet')
   })
 })
 
@@ -259,6 +276,27 @@ describe('the Folio', () => {
     // a position in a list.
     expect(current).toEqual(['/#'])
   })
+
+  it('links only to documents the route table names', async () => {
+    // The Folio used to carry a link to `/search` and a link to `/rss.xml`.
+    // Neither is a route, so both were a 404 wearing a nav link, and nothing in
+    // the codebase noticed: the link was an `href` string, not a `PublicRoute`.
+    // Every href the Masthead prints is therefore asked of `routeNamedBy` here,
+    // so a link to a page that does not exist fails the build rather than the
+    // reader. `/#` is the Front's own href and its fragment is not a path, so
+    // the hash is dropped before the question is asked.
+    const html = await render(read())
+    const masthead = html.match(/<header.*?<\/header>/s)?.[0] ?? ''
+    const hrefs = [...masthead.matchAll(/<a[^>]*href="([^"]+)"/g)].map((match) => match[1] ?? '')
+    expect(hrefs.length).toBeGreaterThan(0)
+    for (const href of hrefs) {
+      const path = href.split('#')[0] ?? href
+      expect(
+        routeNamedBy(path),
+        `the Masthead links to ${href}, which the route table does not name`,
+      ).not.toBeNull()
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -283,7 +321,7 @@ describe('the hydration stamp', () => {
     const flags = stampedFlags(
       await renderDocument(read({ sections: [], nextSectionCursor: null })),
     )
-    expect(flags.edition.lead).toBeNull()
     expect(flags.edition.sections).toEqual([])
+    expect(flags.edition.tail).toBe('empty')
   })
 })

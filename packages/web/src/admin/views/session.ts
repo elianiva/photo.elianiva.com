@@ -62,7 +62,7 @@ export const sessionExpired = (h: HtmlBuilder<Msg>, route: AppRoute): Document =
           h.p(
             [h.Class('type-deck max-w-prose text-role-text-secondary')],
             [
-              'The Cloudflare Access session behind the Admin has ended. Sign in again to carry on.',
+              'The Cloudflare Access session behind the admin has ended. Sign in again to carry on.',
             ],
           ),
           h.div([h.Class('flex')], [signInLink(h, route)]),

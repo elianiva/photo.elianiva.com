@@ -221,7 +221,7 @@ const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
               model.tags.length === 0
                 ? Dialog.description(
                     { attributes: render.description },
-                    ['No Tags yet. Create one from the sidebar first.'],
+                    ['No tags yet. Create one from the sidebar first.'],
                     innerH,
                   )
                 : h.div(

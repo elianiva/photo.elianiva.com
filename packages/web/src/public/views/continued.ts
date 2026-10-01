@@ -6,6 +6,13 @@
  * The row words its own three states, because the state is all the Edition
  * carries: what the reader is told depends on what is left, and the sentences
  * belong beside the markup that prints them.
+ *
+ * All three states are set in the kicker, the Masthead's furniture voice, and
+ * none of them is two lines. They used to be a `type-exif` label in IBM Plex
+ * Mono carrying `END OF THE ARCHIVE` beside a `type-caption` italic sentence
+ * carrying `That is every photograph.` — two unrelated faces at two sizes, the
+ * smaller one holding the headline of the pair, saying one thing twice. The
+ * seam wants a word, not a caption.
  */
 
 import { ArrowDown, LoaderCircle } from 'lucide'
@@ -51,8 +58,8 @@ const tailBody = (
               ? icon(h, LoaderCircle, 'size-2.5 animate-spin text-role-text-secondary')
               : icon(h, ArrowDown, 'size-2.5 text-role-text-secondary'),
             h.span(
-              [h.Class('type-caption italic text-role-text-secondary')],
-              [loading ? 'LOADING' : 'LOAD MORE'],
+              [h.Class('type-kicker text-role-text-secondary uppercase')],
+              [loading ? 'loading' : 'load more'],
             ),
           ],
         ),
@@ -64,19 +71,14 @@ const tailBody = (
       ]
     case 'end':
       return [
-        h.span([h.Class('type-exif text-role-text-primary')], ['END OF THE ARCHIVE']),
         h.span(
-          [h.Class('type-caption italic text-role-text-secondary')],
-          ['That is every photograph.'],
+          [h.Class('type-kicker text-role-text-secondary uppercase')],
+          ['that is all of them'],
         ),
       ]
     case 'empty':
       return [
-        h.span([h.Class('type-exif text-role-text-primary')], ['NOTHING PUBLISHED YET']),
-        h.span(
-          [h.Class('type-caption italic text-role-text-secondary')],
-          ['The first photograph will open the front page.'],
-        ),
+        h.span([h.Class('type-kicker text-role-text-secondary uppercase')], ['nothing here yet']),
       ]
   }
 }

@@ -7,7 +7,7 @@
     "build": "turbo build",
     "check": "vp check",
     "check:node": "node scripts/check-node-version.mjs",
-    "dev": "alchemy dev --stage dev",
+    "dev": "alchemy dev",
     "fmt": "vp fmt",
     "lint": "vp lint",
     "db:seed": "tsx scripts/seed.ts",

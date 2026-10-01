@@ -136,7 +136,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 ),
               ],
               [
-                h.p([], ['That Photo could not be loaded.']),
+                h.p([], ['That photograph could not be loaded.']),
                 Button.button(
                   { onClick: M.RetryFetchPhoto(), variant: 'secondary', className: 'mt-3' },
                   'Retry',
@@ -235,7 +235,7 @@ const scheduledPage = (h: HtmlBuilder<Msg>): Child =>
       h.p(
         [h.Class('type-deck max-w-prose text-role-text-secondary')],
         [
-          'Nothing is scheduled. A scheduled Photo is a draft with a publish time, and no publish time is recorded yet — so there is no schedule to show and nothing is waiting to be published.',
+          'Nothing is scheduled. A scheduled photograph is a draft with a publish time, and none of the drafts has one yet.',
         ],
       ),
       backToLibrary('← Library', h),
@@ -268,7 +268,7 @@ export const routePage = (model: Model, h: HtmlBuilder<Msg>): Child =>
     Atoms: () => atomsPage(model, h),
     Drafts: () =>
       forthcomingPage(
-        'The drafts list is still being built. Everything not published is already counted in the sidebar.',
+        'There is no drafts list yet. Everything not published is already counted in the sidebar.',
         h,
       ),
     Scheduled: () => scheduledPage(h),

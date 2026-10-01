@@ -291,7 +291,7 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.p(
         [h.Class(captionClass)],
         [
-          'Nothing is purged on a timer. A deleted photograph keeps its original in R2 until it is purged.',
+          'Nothing is purged on a timer. A deleted photograph keeps its original in R2 until a purge runs.',
         ],
       ),
     ],
@@ -371,7 +371,7 @@ const failed = (h: HtmlBuilder<Msg>): Child =>
     [
       h.p(
         [h.Class('type-deck text-role-text-secondary')],
-        ['The settings could not be read, so nothing is drawn to edit over a row nobody has seen.'],
+        ['The settings could not be read, so there is nothing to show.'],
       ),
       Button.button({ onClick: M.RetryFetchSettings({}), variant: 'secondary' }, 'Retry', h),
     ],

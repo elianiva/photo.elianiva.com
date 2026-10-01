@@ -3,6 +3,7 @@
 - rigorous agent workflows: use `/poteto-mode` (pstack skills vendored in `.agents/skills/`)
 - UI verification: `.agents/skills/verify-photo/` (doctor: `bash .agents/skills/verify-photo/scripts/doctor.sh`)
 - image delivery: no zone image resizing (Free plan, not editable). Every image is the original from R2 via `/api/image/<key>`; there is no `thumbUrl`/`srcSet` and nothing may reintroduce `/cdn-cgi/image`.
+- don't try to kill dev server if exists, just use it, don't try to restart because it will cause problems and duplicates
 
 <!-- BEGIN:turborepo-agent-rules -->
 
