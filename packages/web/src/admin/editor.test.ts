@@ -25,8 +25,6 @@ import {
   MAT_FOOT_MULTIPLE,
   blurhashSignature,
   compositionSpec,
-  exportSavingLabel,
-  exportSavingPercent,
   withEditorExport,
 } from './editor'
 import { Message } from './model'
@@ -97,7 +95,6 @@ const shellReads: ReadonlyArray<Message> = [
     byStatus: { draft: 7, published: 402, failed: 1 },
     byTag: [],
   }),
-  Message.SucceededGetStorage({ photos: 0, bytes: 0, capBytes: 0 }),
 ]
 
 const foldIn = (model: Model, messages: ReadonlyArray<Message>): Model =>
@@ -133,9 +130,9 @@ describe('the Editor on a cold load', () => {
     // rather than whichever one failed.
     const failed = foldIn(loading(), [Message.FailedFetchPhoto({ id: PHOTO_ID, message: 'gone' })])
     expect(failed.photoStatus).toBe('error')
-    expect(dispatched(update(failed, Message.RetryFetchPhoto())).map((entry) => entry.name)).toEqual(
-      ['FetchPhoto', 'FetchPresentation'],
-    )
+    expect(
+      dispatched(update(failed, Message.RetryFetchPhoto())).map((entry) => entry.name),
+    ).toEqual(['FetchPhoto', 'FetchPresentation'])
   })
 
   it('records the route it was opened from, so `← Library` goes back there', () => {
@@ -303,17 +300,6 @@ describe('leaving the Editor', () => {
     expect(dispatched(arrived).map((entry) => entry.name)).not.toContain('Back')
     expect(arrived.model.editor.leaveDialog.isOpen).toBe(false)
     expect(arrived.model.route).toEqual(libraryRoute(defaultLibraryFilters))
-  })
-})
-
-describe('the Export helpers', () => {
-  it('derives the saving from the two byte counts, and prints nothing without them', () => {
-    expect(exportSavingPercent(18_400_000, 2_100_000)).toBe(89)
-    expect(exportSavingLabel(18_400_000, 2_100_000)).toBe('−89%')
-    expect(exportSavingPercent(18_400_000, undefined)).toBeNull()
-    expect(exportSavingPercent(18_400_000, null)).toBeNull()
-    expect(exportSavingPercent(0, 0)).toBeNull()
-    expect(exportSavingLabel(photo.bytes, null)).toBe('—')
   })
 
   it('encodes the composition from the crop, level, mirror and Mat, not the delivery facts', () => {

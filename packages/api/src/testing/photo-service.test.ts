@@ -18,7 +18,6 @@ import {
   type PhotoPresentationPatch,
   type PhotoSort,
   type PhotoUpdatePatch,
-  type StorageUsage,
 } from '../photo'
 import {
   createPhoto,
@@ -92,14 +91,6 @@ const counts = (harness: TestHarness) =>
   Effect.runPromise(
     withTestServices(
       PhotoService.use((service) => service.counts()),
-      harness,
-    ),
-  )
-
-const storageUsage = (harness: TestHarness): Promise<StorageUsage> =>
-  Effect.runPromise(
-    withTestServices(
-      PhotoService.use((service) => service.storageUsage()),
       harness,
     ),
   )
@@ -1382,32 +1373,6 @@ describe('PhotoService.counts', () => {
       { id: film.id, label: 'Film', count: 1 },
       { id: kyoto.id, label: 'Kyoto', count: 2 },
     ])
-  })
-})
-
-describe('PhotoService.storageUsage', () => {
-  it('totals the live photos and their bytes', async () => {
-    const harness = makeTestHarness()
-    await seedPhotoRow(harness, { id: 'p1', slug: 'p1', bytes: 1024 })
-    await seedPhotoRow(harness, { id: 'p2', slug: 'p2', bytes: 2048 })
-    await seedPhotoRow(harness, { id: 'p3', slug: 'p3', bytes: 4096 })
-
-    expect(await storageUsage(harness)).toEqual({ photos: 3, bytes: 7168 })
-  })
-
-  it('leaves a trashed photo out of the meter', async () => {
-    const harness = makeTestHarness()
-    const created = await seed(harness, { slug: 'sunset', title: 'Sunset' })
-    await trash(harness, created.id)
-
-    expect(await storageUsage(harness)).toEqual({ photos: 0, bytes: 0 })
-  })
-
-  it('reads zero rather than null when no row records its size', async () => {
-    const harness = makeTestHarness()
-    await seedPhotoRow(harness, { id: 'legacy', slug: 'legacy', bytes: null })
-
-    expect(await storageUsage(harness)).toEqual({ photos: 1, bytes: 0 })
   })
 })
 

@@ -68,7 +68,6 @@ import {
   editorReturnUrl,
   editorSegmentSelected,
   effectiveRatio,
-  exportSavingLabel,
   fitFrameWidth,
   frameAspect,
   isEditorDirty,
@@ -581,23 +580,17 @@ const blurhashBlock = (model: Model, h: HtmlBuilder<Msg>): Child => {
  *  columns *are* the defaults until the operator moves one, and a toggle whose
  *  off-state nothing defines is a control that lies.
  *
- *  The head's saving is derived, not stored: the original's bytes against the
- *  FULL Rendition's. Until `E6` (#35) produces that rendition there is no
- *  measurement, so it prints `—` rather than the design's `−89%`. */
+ *  The head carries no saving readout. The design's `−89%` is the original's
+ *  bytes against the FULL Rendition's, and until `E6` (#35) produces that
+ *  rendition there is no measurement — the one number the head could print was
+ *  `—`, which is a readout that says nothing. */
 const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const draft = model.editor.draft
   const disabled = draft === undefined
   return h.section(
     [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-4')],
     [
-      panelHead(
-        'EXPORT',
-        h.span(
-          [h.DataAttribute('slot', 'export-saving'), h.Class('type-exif text-role-text-disabled')],
-          [exportSavingLabel(model.photo?.bytes ?? null, null)],
-        ),
-        h,
-      ),
+      panelHead('EXPORT', undefined, h),
       Segment.segmentGroup(
         {
           selected: draft?.previewFormat ?? 'avif',
@@ -657,16 +650,13 @@ const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
         },
         h,
       ),
+      // One row, not three. The design's `PREVIEW` and `FULL` are `E6`'s (#35)
+      // rendition rows, and with no rendition there is no dimension and no byte
+      // count to print — both said `—`, which is a row that says nothing. The
+      // original's own frame is always there, so that is the one row left.
       h.dl(
         [h.DataAttribute('slot', 'export-sizes'), h.Class('flex flex-col')],
-        [
-          SpecRow.specRow({ label: 'ORIGINAL', value: originalSizeLabel(model.photo) }, h),
-          // PREVIEW and FULL are `E6`'s (#35) rendition rows. Without the
-          // columns there is no dimension and no byte count to print, so both
-          // say `—` — the design's own answer for a Photo with no rendition.
-          SpecRow.specRow({ label: 'PREVIEW', value: '—' }, h),
-          SpecRow.specRow({ label: 'FULL', value: '—' }, h),
-        ],
+        [SpecRow.specRow({ label: 'ORIGINAL', value: originalSizeLabel(model.photo) }, h)],
       ),
       blurhashBlock(model, h),
     ],

@@ -49,7 +49,6 @@ import { libraryEmpty } from './library-empty'
 import { libraryPager } from './library-pager'
 import { libraryError, libraryIsEmpty, libraryNoMatch } from './library-states'
 import type { Child } from './shared'
-import { formatBytes } from './shared'
 
 // ---------------------------------------------------------------------------
 // row values
@@ -57,23 +56,34 @@ import { formatBytes } from './shared'
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
-/** `31 AUG 2025`. `takenAt` is `YYYY-MM-DD` TEXT, so the three parts are read
- *  off the string rather than through a zone: the day a Photograph was taken
- *  must not depend on the reader's locale or offset. */
+/** `31 AUG 2025`. The three parts are read off the string rather than through a
+ *  zone: the day a Photograph was taken must not depend on the reader's locale
+ *  or offset. Only the leading `YYYY-MM-DD` is read, so a stored value that
+ *  carries a time as well — `2026-06-11T14:27`, which is what the upload writes
+ *  when the file's own EXIF names an hour — prints its day rather than a dash.
+ *  `@photo/shared`'s `dayMonth` reads the same prefix for the same reason. */
 export const formatTaken = (takenAt: string | undefined): string => {
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(takenAt ?? '')
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(takenAt?.trim() ?? '')
   if (parts === null) return '—'
   const month = MONTHS[Number(parts[2]) - 1]
   return month === undefined ? '—' : `${parts[3]} ${month} ${parts[1]}`
 }
 
+/** The leading id an upload mints for the key. The upload composes
+ *  `originals/{uuid}-{slug}.{ext}` from a fresh `crypto.randomUUID()`, so the
+ *  id is a UUID and never this Photo's own id — the name is what is left once
+ *  the whole uuid is off, not once its first dash-segment is. */
+const KEY_UUID_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i
+
 /** The operator's original filename, derived from `r2Key` rather than stored
  *  as a column: the key an upload already writes is
- *  `originals/{id}-{slug}.{ext}`, so the name is recoverable from the file that
- *  is actually in R2, and a fourth copy of it cannot drift from that. */
+ *  `originals/{uuid}-{slug}.{ext}`, so the name is recoverable from the file
+ *  that is actually in R2, and a fourth copy of it cannot drift from that. A
+ *  key that carries no uuid — a seeded row, an original placed in R2 by hand —
+ *  is already a name and is printed whole. */
 export const originalFilename = (r2Key: string): string => {
   const base = r2Key.slice(r2Key.lastIndexOf('/') + 1)
-  return base.replace(/^[0-9A-Za-z]+-/, '')
+  return base.replace(KEY_UUID_PREFIX, '')
 }
 
 /** `NO. 024 · DSCF4821.JPG · KOTA TUA, JAKARTA`, composed from the Photo
@@ -111,10 +121,12 @@ const row = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Child =>
       // box around a value the row does not carry.
       ratio: photo.ratio ?? '—',
       taken: formatTaken(photo.takenAt),
-      // The design pairs the original with the PREVIEW Rendition
-      // (`18.4 → 2.1 MB`). No column and no RPC returns the Rendition's byte
-      // count, so the cell prints the one size it can read. Named on issue #25.
-      size: photo.bytes === undefined || photo.bytes === null ? '—' : formatBytes(photo.bytes),
+      // The design's `SIZE` cell pairs the original's bytes with the PREVIEW
+      // Rendition's (`18.4 → 2.1 MB`). No read returns the Rendition's, and the
+      // original's is a column only an upload writes — every row of the Library
+      // as it stands read `—`. The measured frame is always there, so the cell
+      // prints that instead. Named on issue #25.
+      dimensions: `${String(photo.width)} × ${String(photo.height)}`,
       status: statusVariant(photo),
       onEdit: M.OpenedPhoto({ id: photo.id }),
       onMenu: M.OpenedRowMenu({ id: photo.id }),
@@ -360,7 +372,7 @@ const skeletonTable = (h: HtmlBuilder<Msg>): Child => {
         h.div([h.Class('flex min-w-0 flex-1 flex-col gap-1')], [one('h-4 w-2/3'), one('w-1/3')]),
         h.div([h.Class(cn('flex shrink-0 items-center', columnWidths.ratio))], [one('h-5 w-10')]),
         h.span([h.Class(cn('shrink-0', columnWidths.taken))], [one('w-16')]),
-        h.span([h.Class(cn('shrink-0', columnWidths.size))], [one('w-16')]),
+        h.span([h.Class(cn('shrink-0', columnWidths.dimensions))], [one('w-16')]),
         h.span([h.Class(cn('shrink-0', columnWidths.status))]),
         h.span([h.Class(tableActionsWidthClass)]),
       ],

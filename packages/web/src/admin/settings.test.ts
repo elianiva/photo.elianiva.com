@@ -13,7 +13,7 @@
 import { DateTime, Option } from 'effect'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
-import { STORAGE_CAP_BYTES, TagId } from '@photo/shared'
+import { TagId } from '@photo/shared'
 import type { Settings, Tag } from '@photo/shared'
 
 import { Message } from './model'
@@ -49,11 +49,6 @@ const tag = (slug: string, label: string): Tag => ({
 
 const TAGS: ReadonlyArray<Tag> = [tag('kyoto', 'Kyoto')]
 
-/** 412 Photos and 7.9 GB against the one cap the sidebar's meter is measured
- *  against — the same `GetStorageUsage` payload, so the block and the meter
- *  cannot report different numbers. */
-const STORAGE = { photos: 412, bytes: 7_900_000_000, capBytes: STORAGE_CAP_BYTES }
-
 const ROW: Settings = {
   updatedAt: SAVED_AT,
   defaultPreviewLongEdge: 1200,
@@ -76,7 +71,6 @@ const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null, tota
 const loaded = (): Model =>
   [
     Message.SucceededGetSession({ email: OWNER, teamDomain: TEAM }),
-    Message.SucceededGetStorage(STORAGE),
     Message.SucceededFetchTags({ tags: [...TAGS] }),
     listed,
     Message.SucceededGetSettings({ settings: ROW }),

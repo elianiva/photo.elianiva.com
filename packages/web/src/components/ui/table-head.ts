@@ -2,7 +2,11 @@
  * Table Head — the Library's column header (master `36e23128f2187522`). The
  * design fixes the widths (16 / 520 / 64 / 112 / 112 / 112 / 72 across 16px
  * gaps), so they live here once and `library-row.ts` reads the same table: a
- * head and a row that disagree on a column width are a table that jitters.
+ * head and a row that disagree on a column width are a table that jitters. The
+ * one column this table does not take from the drawing is `DIMENSIONS`, which
+ * replaces the design's `SIZE`: the byte count that cell printed came from a
+ * column only an upload writes, so every row of the Library as it stands read
+ * `—`. The measured frame is always there.
  *
  * The checkbox is tri-state over the *current page* — off, some, all. The
  * design does not say which set it covers and both readings are defensible;
@@ -25,7 +29,7 @@ export interface TableColumn {
   label: string
 }
 
-export type TableColumnKey = 'photograph' | 'ratio' | 'taken' | 'size' | 'status'
+export type TableColumnKey = 'photograph' | 'ratio' | 'taken' | 'dimensions' | 'status'
 
 /** Every column width in one table, so `library-row.ts` reads the head's
  *  widths rather than restating them: a head and a row that disagree on a
@@ -35,7 +39,7 @@ export const columnWidths = {
   photograph: 'w-130',
   ratio: 'w-16',
   taken: 'w-28',
-  size: 'w-28',
+  dimensions: 'w-28',
   status: 'w-28',
 } as const satisfies Readonly<Record<TableColumnKey, string>>
 
@@ -43,7 +47,7 @@ export const tableColumns: ReadonlyArray<TableColumn> = [
   { key: 'photograph', label: 'PHOTOGRAPH' },
   { key: 'ratio', label: 'RATIO' },
   { key: 'taken', label: 'TAKEN' },
-  { key: 'size', label: 'SIZE' },
+  { key: 'dimensions', label: 'DIMENSIONS' },
   { key: 'status', label: 'STATUS' },
 ]
 

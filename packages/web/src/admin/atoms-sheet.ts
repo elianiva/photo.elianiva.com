@@ -43,7 +43,8 @@ export interface SpecimenRow {
   fileLine: string
   ratio: string
   taken: string
-  size: string
+  /** The measured frame, which is what the Library's `DIMENSIONS` cell prints. */
+  dimensions: string
   status: Status.StatusVariant
 }
 
@@ -52,49 +53,49 @@ export const specimenRows: ReadonlyArray<SpecimenRow> = [
     fileLine: 'NO. 024 · DSCF4821.JPG · KOTA TUA, JAKARTA',
     ratio: '3:2',
     taken: '31 AUG 2025',
-    size: '18.4 → 2.1 MB',
+    dimensions: '4000 × 2667',
     status: 'published',
   },
   {
     fileLine: 'NO. 025 · DSCF4822.JPG · KOTA TUA, JAKARTA',
     ratio: '2:3',
     taken: '01 SEP 2025',
-    size: '16.1 → 1.8 MB',
+    dimensions: '2667 × 4000',
     status: 'draft',
   },
   {
     fileLine: 'NO. 026 · DSCF4830.JPG · ISTIKLAL, JAKARTA',
     ratio: '4:3',
     taken: '04 SEP 2025',
-    size: '14.7 → 1.6 MB',
+    dimensions: '4000 × 3000',
     status: 'scheduled',
   },
   {
     fileLine: 'NO. 027 · DSCF4831.JPG · ISTIKLAL, JAKARTA',
     ratio: '3:4',
     taken: '06 SEP 2025',
-    size: '15.2 → 1.7 MB',
+    dimensions: '3000 × 4000',
     status: 'published',
   },
   {
     fileLine: 'NO. 028 · DSCF4840.JPG · SURABAYA, JAWA TIMUR',
     ratio: '16:9',
     taken: '11 SEP 2025',
-    size: '12.9 → 1.4 MB',
+    dimensions: '4000 × 2250',
     status: 'failed',
   },
   {
     fileLine: 'NO. 029 · DSCF4844.JPG · SURABAYA, JAWA TIMUR',
     ratio: '9:16',
     taken: '12 SEP 2025',
-    size: '13.4 → 1.5 MB',
+    dimensions: '2250 × 4000',
     status: 'published',
   },
   {
     fileLine: 'NO. 030 · DSCF4851.JPG · UBUD, BALI',
     ratio: '3:2',
     taken: '18 SEP 2025',
-    size: '11.8 → 1.2 MB',
+    dimensions: '4000 × 2667',
     status: 'draft',
   },
 ]

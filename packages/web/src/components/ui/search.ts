@@ -3,7 +3,10 @@
  * 8px of padding around a 14px `color.text.secondary` `magnifying-glass`, the
  * typed value in `$typography.body`, and a 1px `color.outline` bottom rule.
  * The placeholder is the italic `$typography.caption` in `color.text.disabled`,
- * which is the Desk's resting voice.
+ * which is the Desk's resting voice. The keycap is `color.text.secondary` rather
+ * than `color.text.disabled`: it is a real key the operator can press, and
+ * `color.text.disabled` is 3.6:1 on the page's surface — under the 4.5:1 a 10px
+ * `$typography.exif` line needs.
  *
  * `hint` is the keycap the design prints at the right (`⌘K`), and it is an
  * argument rather than a fixed part of the atom: the hint promises a shortcut,
@@ -54,7 +57,7 @@ export const search = <M>(config: SearchConfig<M>, h: HtmlBuilder<M>): Html =>
         ? []
         : [
             h.kbd(
-              [h.AriaHidden(true), h.Class('type-exif shrink-0 text-role-text-disabled')],
+              [h.AriaHidden(true), h.Class('type-exif shrink-0 text-role-text-secondary')],
               [config.hint],
             ),
           ]),

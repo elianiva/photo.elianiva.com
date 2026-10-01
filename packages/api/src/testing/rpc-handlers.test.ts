@@ -16,7 +16,7 @@ import {
 import { RpcClient, RpcTest } from 'effect/rpc'
 import { Gateway } from '../gateway'
 import { AdminRpcHandlersLive, PublicRpcHandlersLive } from '../rpc'
-import { PhotoServiceLive, STORAGE_CAP_BYTES, type PhotoService } from '../photo'
+import { PhotoServiceLive, type PhotoService } from '../photo'
 import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
 import { AdminSession, type AdminSessionValue } from '../session'
 import { SettingsServiceLive, type SettingsService } from '../settings'
@@ -488,23 +488,6 @@ describe('GetCounts handler', () => {
         { id: unused.id, label: 'Unused', count: 0 },
       ],
     })
-  })
-})
-
-describe('GetStorageUsage handler', () => {
-  it('answers with the photos, the bytes and the bucket cap', async () => {
-    const harness = makeTestHarness()
-    await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })
-
-    const usage = await adminRpc(harness, (client) => client.GetStorageUsage({}))
-
-    // `photos`, not `frames`: ADR 0006, and the design prints `412 FRAMES`.
-    expect(usage.photos).toBe(1)
-    expect(usage.bytes).toBeGreaterThan(0)
-    // The cap rides the answer rather than being read from a Settings row: it is
-    // the one constant `STORAGE_CAP_BYTES` names, which is the 20 GiB the
-    // Settings Storage block and the sidebar's meter both draw (ADR 0006).
-    expect(usage.capBytes).toBe(STORAGE_CAP_BYTES)
   })
 })
 

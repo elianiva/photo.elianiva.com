@@ -14,7 +14,7 @@
 
 import { Effect } from 'effect'
 import { InvalidInput, PhotoAdminRpcs, PhotoPublicRpcs, PhotoNotFound } from '@photo/shared'
-import { PhotoService, STORAGE_CAP_BYTES } from './photo'
+import { PhotoService } from './photo'
 import { PublicPhotoService } from './public-photo'
 import { AdminSession } from './session'
 import { SettingsService } from './settings'
@@ -120,14 +120,6 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
       Effect.succeed({ email: session.email, teamDomain: session.teamDomain }),
     ),
   GetCounts: () => PhotoService.use((service) => service.counts()),
-  GetStorageUsage: () =>
-    Effect.map(
-      PhotoService.use((service) => service.storageUsage()),
-      (usage) => ({
-        ...usage,
-        capBytes: STORAGE_CAP_BYTES,
-      }),
-    ),
   // A dedicated admin shape rather than an overload of the public `ListPhotos`,
   // so the public contract stays small while the Library gets its Status,
   // Ratio and Tag filters.

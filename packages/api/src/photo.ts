@@ -42,12 +42,6 @@ export type Db = SqlClient.SqlClient
  *  binds that have quietly stopped lining up. */
 type Clause = Fragment | undefined
 
-// The bucket cap is a configured constant, not a Settings row, and it is
-// single-sourced in `@photo/shared` because the RPC contract and the view that
-// renders the meter both need it. It is re-exported here so the module that
-// measures storage usage is where anything reaching for the cap looks first.
-export { STORAGE_CAP_BYTES } from '@photo/shared'
-
 // ---------------------------------------------------------------------------
 // filters, sorts and results
 // ---------------------------------------------------------------------------
@@ -98,13 +92,6 @@ export interface PhotoTagCount {
   readonly id: TagId
   readonly label: string
   readonly count: number
-}
-
-export interface StorageUsage {
-  /** Live Photos. Not `frames` — that is display copy (ADR 0006). */
-  readonly photos: number
-  /** Bytes those originals take, against the bucket cap. */
-  readonly bytes: number
 }
 
 export interface PhotoUpdatePatch {
@@ -243,9 +230,6 @@ export interface PhotoServiceContract {
   /** Every live Photo as the Storage block's CSV index reads it: Photo Number
    *  order, tags resolved, place out of the metadata blob. */
   readonly index: () => Effect.Effect<ReadonlyArray<PhotoIndexRow>, StorageError>
-  /** The load-bearing aggregate: the frame count and byte total behind the
-   *  sidebar meter, the Archive bar and the SIZE column. */
-  readonly storageUsage: () => Effect.Effect<StorageUsage, StorageError>
   /** The Editor's loaded snapshot: one Photo's whole Presentation as stored, or
    *  `PhotoNotFound` for a Photo that is gone or in the Trash. `setPresentation`
    *  returns this shape too, so the snapshot a save produces and the one a
@@ -1227,22 +1211,6 @@ export const PhotoServiceLive = Layer.effect(
         })
       })
 
-    const storageUsage: PhotoServiceContract['storageUsage'] = () =>
-      Effect.mapError(
-        sql<{
-          photos: number
-          bytes: number
-        }>`SELECT COUNT(*) AS photos, COALESCE(SUM(bytes), 0) AS bytes FROM photos WHERE ${sql.literal(LIVE)}`,
-        (cause) =>
-          new StorageError({
-            message: 'Failed to read storage usage',
-            cause: describeCause(cause),
-          }),
-      ).pipe(
-        Effect.map(firstRow),
-        Effect.map((row) => ({ photos: row?.photos ?? 0, bytes: row?.bytes ?? 0 })),
-      )
-
     const presentation: PhotoServiceContract['presentation'] = (id) =>
       Effect.gen(function* () {
         // The read is scoped to live Photos, exactly as the write is: a
@@ -1334,7 +1302,6 @@ export const PhotoServiceLive = Layer.effect(
       purge,
       counts,
       index,
-      storageUsage,
       presentation,
       setPresentation,
       addTags,

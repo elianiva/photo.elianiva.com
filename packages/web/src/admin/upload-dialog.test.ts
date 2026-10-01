@@ -54,7 +54,6 @@ const cold = (): Model =>
       byStatus: { draft: 0, published: 1, failed: 0 },
       byTag: [],
     }),
-    Message.SucceededGetStorage({ photos: 1, bytes: 1000, capBytes: 1 }),
     Message.SucceededFetchTags({ tags: [] }),
     Message.SucceededFetchPhotos({ photos: [PHOTO], nextCursor: null, total: 1 }),
   ].reduce((model, message) => update(model, message).model, init(at('/admin')).model)

@@ -647,36 +647,6 @@ export const blurhashSignature = (
   return spec === undefined ? '' : JSON.stringify(spec)
 }
 
-/** The percentage the `FULL` Rendition saves against the original, or `null`
- *  when either byte count is unknown. Derived, never stored: the Export head
- *  prints it and nothing keeps it. `fullBytes` is `E6`'s (#35) to supply; until
- *  then there is no rendition to measure and no honest number to print. */
-export const exportSavingPercent = (
-  originalBytes: number | null | undefined,
-  fullBytes: number | null | undefined,
-): number | null => {
-  if (
-    originalBytes === null ||
-    originalBytes === undefined ||
-    originalBytes <= 0 ||
-    fullBytes === null ||
-    fullBytes === undefined
-  ) {
-    return null
-  }
-  return Math.round(((originalBytes - fullBytes) / originalBytes) * 100)
-}
-
-/** The Export head's readout: `−89%`, or `—` while there is no measurement.
- *  The minus is the typographic one the design draws, not a hyphen. */
-export const exportSavingLabel = (
-  originalBytes: number | null | undefined,
-  fullBytes: number | null | undefined,
-): string => {
-  const percent = exportSavingPercent(originalBytes, fullBytes)
-  return percent === null ? '—' : `−${String(percent)}%`
-}
-
 /** The frame's width, as the zoom asks for it. `FIT` is `undefined`: the frame
  *  is then sized by {@link fitFrameWidth} against the Stage's own viewport, and
  *  a percentage is that fraction of the source's own pixels, so `100%` is the
