@@ -13,7 +13,7 @@ import {
   PhotoNotFound,
   PhotoPublicRpcs,
 } from '@photo/shared'
-import { RpcClient, RpcTest } from 'effect/unstable/rpc'
+import { RpcClient, RpcTest } from 'effect/rpc'
 import { Gateway } from '../gateway'
 import { AdminRpcHandlersLive, PublicRpcHandlersLive } from '../rpc'
 import { PhotoServiceLive, STORAGE_CAP_BYTES, type PhotoService } from '../photo'

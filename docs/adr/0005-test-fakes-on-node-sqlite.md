@@ -15,7 +15,7 @@ typecheck two Node-only fakes would undo that.
 
 **Amended.** The metadata database is no longer a hand-written
 `D1DatabaseLike` reached through 52 `prepare`/`first`/`all`/`run`/`batch` sites.
-It is `effect/unstable/sql/SqlClient`, with the dialect supplied by a layer:
+It is `effect/sql/SqlClient`, with the dialect supplied by a layer:
 
 | Where           | Driver                                    | Provided by                                      |
 | --------------- | ----------------------------------------- | ------------------------------------------------ |

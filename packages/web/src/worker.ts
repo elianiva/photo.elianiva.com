@@ -1,5 +1,5 @@
 import { Context, Effect, Layer } from 'effect'
-import { Headers, HttpRouter, HttpServerResponse } from 'effect/unstable/http'
+import { Headers, HttpRouter, HttpServerResponse } from 'effect/http'
 import * as Server from 'foldkit/experimental/server'
 import type { WebsiteEnv } from '../../../alchemy.run'
 import { editionOf, EMPTY_EDITION, EMPTY_TAG_PAGE, figuresOf, tagPageOf } from './public/content'

@@ -1,5 +1,5 @@
 import { Schema as S } from 'effect'
-import { Rpc, RpcGroup } from 'effect/unstable/rpc'
+import { Rpc, RpcGroup } from 'effect/rpc'
 import {
   MatColour,
   MatStyle,

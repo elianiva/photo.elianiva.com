@@ -19,9 +19,9 @@ import { Context, Effect, Layer } from 'effect'
 // The deep path, not the barrel: `@effect/sql-d1` re-exports its own module as
 // a namespace, and a namespace's member types are not reachable through it.
 import * as D1Client from '@effect/sql-d1/D1Client'
-import * as SqlClient from 'effect/unstable/sql/SqlClient'
-import { SqlError } from 'effect/unstable/sql/SqlError'
-import type { Statement } from 'effect/unstable/sql/Statement'
+import * as SqlClient from 'effect/sql/SqlClient'
+import { SqlError } from 'effect/sql/SqlError'
+import type { Statement } from 'effect/sql/Statement'
 
 /** A statement this package hands to a batch. The batch callers are writes and
  *  never read their rows, so the row type is left open. */

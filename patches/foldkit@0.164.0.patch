@@ -1,0 +1,37 @@
+diff --git a/dist/http/http.d.ts b/dist/http/http.d.ts
+index 2b568988884708bac167b234e8bde4bce58bc03f..7bb73c19fe6711a5d9745f68beb98b666d947764 100644
+--- a/dist/http/http.d.ts
++++ b/dist/http/http.d.ts
+@@ -1,5 +1,5 @@
+ import { Layer } from 'effect';
+-import { HttpClient } from 'effect/unstable/http';
++import { HttpClient } from 'effect/http';
+ /**
+  * A Fetch-backed `HttpClient` Layer with trace header propagation disabled by
+  * default.
+diff --git a/dist/http/http.js b/dist/http/http.js
+index 1a48f8cb7ec24a7318268f119c9859bc079747ed..079e68fe60f78c2fa51446a384dd6734657c1503 100644
+--- a/dist/http/http.js
++++ b/dist/http/http.js
+@@ -1,5 +1,5 @@
+ import { Layer } from 'effect';
+-import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
++import { FetchHttpClient, HttpClient } from 'effect/http';
+ /**
+  * A Fetch-backed `HttpClient` Layer with trace header propagation disabled by
+  * default.
+diff --git a/dist/schema/index.js b/dist/schema/index.js
+index a2b2f4e6d3a49ac30acc075e0276fc15464b200f..b276f24456454a7da19669f512db4ef33ebd3253 100644
+--- a/dist/schema/index.js
++++ b/dist/schema/index.js
+@@ -103,8 +103,8 @@ const makeCallable = (tag, fields) => {
+         apply(_target, _thisArg, argumentsList) {
+             return construct(argumentsList[0]);
+         },
+-        get(_target, property, receiver) {
+-            return Reflect.get(schema, property, receiver);
++        get(_target, property) {
++            return Reflect.get(schema, property, schema);
+         },
+         has(_target, property) {
+             return Reflect.has(schema, property);

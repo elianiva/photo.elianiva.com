@@ -25,8 +25,8 @@ import {
   type PhotoWithTags,
   type Tag,
 } from '@photo/shared'
-import * as SqlClient from 'effect/unstable/sql/SqlClient'
-import type { Statement } from 'effect/unstable/sql/Statement'
+import * as SqlClient from 'effect/sql/SqlClient'
+import type { Statement } from 'effect/sql/Statement'
 import {
   DEFAULT_SORT,
   PHOTO_COLUMNS,

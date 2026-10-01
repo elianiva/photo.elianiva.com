@@ -3,7 +3,7 @@
  *
  * The metadata database is no longer a hand-rolled `D1DatabaseLike` reached
  * through 52 bespoke `prepare`/`first`/`all` sites. It is the standard
- * `effect/unstable/sql/SqlClient`, so the one place that has to know it is D1
+ * `effect/sql/SqlClient`, so the one place that has to know it is D1
  * is this file, and it is a few dozen lines instead of a type declaration and
  * 52 call sites.
  *

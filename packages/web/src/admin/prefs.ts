@@ -21,7 +21,7 @@
  */
 
 import { Context, Effect, Layer, Option, Schema as S } from 'effect'
-import * as KeyValueStore from 'effect/unstable/persistence/KeyValueStore'
+import * as KeyValueStore from 'effect/persistence/KeyValueStore'
 
 export const COLS_STORAGE_KEY = 'photo-admin:library:cols'
 

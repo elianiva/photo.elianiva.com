@@ -1,0 +1,122 @@
+diff --git a/dist/core/node/Docker.mjs b/dist/core/node/Docker.mjs
+--- a/dist/core/node/Docker.mjs
++++ b/dist/core/node/Docker.mjs
+@@ -9,8 +9,8 @@
+ import * as Layer from "effect/Layer";
+ import * as Path from "effect/Path";
+ import * as Stream from "effect/Stream";
+-import * as ChildProcess from "effect/unstable/process/ChildProcess";
+-import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
++import * as ChildProcess from "effect/process/ChildProcess";
++import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+ import * as NodeHttp from "node:http";
+ import * as NodeStream from "node:stream";
+ //#region src/core/Docker.ts
+diff --git a/dist/core/node/globals/LoopbackServer.mjs b/dist/core/node/globals/LoopbackServer.mjs
+--- a/dist/core/node/globals/LoopbackServer.mjs
++++ b/dist/core/node/globals/LoopbackServer.mjs
+@@ -8,7 +8,7 @@
+ import * as NodeHttp from "node:http";
+ import * as NodeCrypto from "node:crypto";
+ import * as MutableHashMap from "effect/MutableHashMap";
+-import * as HttpServerError from "effect/unstable/http/HttpServerError";
++import * as HttpServerError from "effect/http/HttpServerError";
+ //#region src/core/globals/LoopbackServer.ts
+ var LoopbackServer_exports = /* @__PURE__ */ __exportAll({
+ 	LoopbackServer: () => LoopbackServer,
+diff --git a/dist/core/node/platform-proxy/getPlatformProxy.mjs b/dist/core/node/platform-proxy/getPlatformProxy.mjs
+--- a/dist/core/node/platform-proxy/getPlatformProxy.mjs
++++ b/dist/core/node/platform-proxy/getPlatformProxy.mjs
+@@ -14,7 +14,7 @@
+ import * as Layer from "effect/Layer";
+ import * as Exit from "effect/Exit";
+ import * as Scope from "effect/Scope";
+-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
++import * as FetchHttpClient from "effect/http/FetchHttpClient";
+ //#region src/core/platform-proxy/getPlatformProxy.ts
+ const makeLayer = (persist) => RuntimeLive.pipe(Layer.provideMerge(layerLocalBindings()), Layer.provideMerge(layerProxy()), Layer.provide(GlobalsLive), Layer.provideMerge(layerLoopback()), Layer.provide(persist ? layerDisk(persist.directory) : layerTemp({ prefix: "platform-proxy" })), Layer.provide(InternetLive), Layer.provideMerge(RegistryProxyLive), Layer.provideMerge(RegistryLive), Layer.provideMerge(PathsLive), Layer.provideMerge(DockerLive), Layer.provide(WorkerdLive), Layer.provideMerge(Layer.mergeAll(PlatformServices, FetchHttpClient.layer)));
+ /**
+diff --git a/dist/core/node/registry/RegistryProxy.mjs b/dist/core/node/registry/RegistryProxy.mjs
+--- a/dist/core/node/registry/RegistryProxy.mjs
++++ b/dist/core/node/registry/RegistryProxy.mjs
+@@ -10,8 +10,8 @@
+ import * as Effect from "effect/Effect";
+ import * as Layer from "effect/Layer";
+ import * as Stream from "effect/Stream";
+-import * as HttpBody from "effect/unstable/http/HttpBody";
+-import * as HttpClient from "effect/unstable/http/HttpClient";
++import * as HttpBody from "effect/http/HttpBody";
++import * as HttpClient from "effect/http/HttpClient";
+ import * as NodeCrypto from "node:crypto";
+ //#region src/core/registry/RegistryProxy.ts
+ var RegistryProxy_exports = /* @__PURE__ */ __exportAll({
+diff --git a/dist/core/node/remote-bindings/Access.mjs b/dist/core/node/remote-bindings/Access.mjs
+--- a/dist/core/node/remote-bindings/Access.mjs
++++ b/dist/core/node/remote-bindings/Access.mjs
+@@ -5,8 +5,8 @@
+ import * as Effect from "effect/Effect";
+ import * as Layer from "effect/Layer";
+ import * as Stream from "effect/Stream";
+-import * as ChildProcess from "effect/unstable/process/ChildProcess";
+-import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
++import * as ChildProcess from "effect/process/ChildProcess";
++import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+ import * as Cache from "effect/Cache";
+ //#region src/core/remote-bindings/Access.ts
+ var Access_exports = /* @__PURE__ */ __exportAll({
+diff --git a/dist/core/node/remote-bindings/RemoteBindings.mjs b/dist/core/node/remote-bindings/RemoteBindings.mjs
+--- a/dist/core/node/remote-bindings/RemoteBindings.mjs
++++ b/dist/core/node/remote-bindings/RemoteBindings.mjs
+@@ -12,8 +12,8 @@
+ import * as Layer from "effect/Layer";
+ import * as Cause from "effect/Cause";
+ import * as Hash from "effect/Hash";
+-import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
+-import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
++import * as HttpServerRequest from "effect/http/HttpServerRequest";
++import * as HttpServerResponse from "effect/http/HttpServerResponse";
+ //#region src/core/remote-bindings/RemoteBindings.ts
+ var RemoteBindings_exports = /* @__PURE__ */ __exportAll({
+ 	RemoteBindings: () => RemoteBindings,
+diff --git a/dist/core/node/remote-bindings/RemoteWorker.mjs b/dist/core/node/remote-bindings/RemoteWorker.mjs
+--- a/dist/core/node/remote-bindings/RemoteWorker.mjs
++++ b/dist/core/node/remote-bindings/RemoteWorker.mjs
+@@ -6,7 +6,7 @@
+ import * as Context from "effect/Context";
+ import * as Effect from "effect/Effect";
+ import * as Layer from "effect/Layer";
+-import * as HttpClient from "effect/unstable/http/HttpClient";
++import * as HttpClient from "effect/http/HttpClient";
+ import * as NodeCrypto from "node:crypto";
+ import * as Cause from "effect/Cause";
+ import * as Result from "effect/Result";
+diff --git a/dist/vite/node/dev-server-z7SqQHnQ.mjs b/dist/vite/node/dev-server-z7SqQHnQ.mjs
+--- a/dist/vite/node/dev-server-z7SqQHnQ.mjs
++++ b/dist/vite/node/dev-server-z7SqQHnQ.mjs
+@@ -17,10 +17,10 @@
+ import * as Exit from "effect/Exit";
+ import * as Option from "effect/Option";
+ import * as Scope from "effect/Scope";
+-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+-import * as Headers from "effect/unstable/http/Headers";
+-import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
+-import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
++import * as FetchHttpClient from "effect/http/FetchHttpClient";
++import * as Headers from "effect/http/Headers";
++import * as HttpServerRequest from "effect/http/HttpServerRequest";
++import * as HttpServerResponse from "effect/http/HttpServerResponse";
+ import * as NodeFs from "node:fs/promises";
+ import * as Assets from "@alchemy.run/cloudflare-runtime/core/bindings/assets/Assets";
+ import * as Loopback$1 from "@alchemy.run/cloudflare-runtime/core/globals/Loopback";
+diff --git a/dist/vite/node/preview-server-D3yf11tl.mjs b/dist/vite/node/preview-server-D3yf11tl.mjs
+--- a/dist/vite/node/preview-server-D3yf11tl.mjs
++++ b/dist/vite/node/preview-server-D3yf11tl.mjs
+@@ -8,7 +8,7 @@
+ import * as Credentials from "@distilled.cloud/cloudflare/Credentials";
+ import * as Exit from "effect/Exit";
+ import * as Scope from "effect/Scope";
+-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
++import * as FetchHttpClient from "effect/http/FetchHttpClient";
+ import * as NodeFs from "node:fs/promises";
+ //#region src/vite/preview-server.ts
+ /**

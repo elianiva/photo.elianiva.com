@@ -20,11 +20,11 @@
  */
 
 import { Cache, Data, DateTime, Duration, Effect, Option, Result, Schema as S } from 'effect'
-import { HttpClientResponse } from 'effect/unstable/http'
+import { HttpClientResponse } from 'effect/http'
 // The namespace import is what gives the *service* its type: the barrel's
 // `HttpClient` is a `const` that merges with an interface of the same name, so
 // a named import reads as the namespace and cannot be used in type position.
-import * as HttpClient from 'effect/unstable/http/HttpClient'
+import * as HttpClient from 'effect/http/HttpClient'
 
 /** The env bindings the admin gate reads. */
 export interface AccessEnv {

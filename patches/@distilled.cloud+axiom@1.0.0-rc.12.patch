@@ -1,0 +1,12 @@
+diff --git a/lib/protocol.d.ts b/lib/protocol.d.ts
+--- a/lib/protocol.d.ts
++++ b/lib/protocol.d.ts
+@@ -1,6 +1,6 @@
+ import type * as Layer from "effect/Layer";
+-import type * as HttpClient from "effect/unstable/http/HttpClient";
+-import type * as HttpClientError from "effect/unstable/http/HttpClientError";
++import type * as HttpClient from "effect/http/HttpClient";
++import type * as HttpClientError from "effect/http/HttpClientError";
+ import type * as API from "@distilled.cloud/core/api";
+ import type { API_ERRORS, ConfigError } from "@distilled.cloud/core/errors";
+ import { Credentials } from "./credentials.ts";

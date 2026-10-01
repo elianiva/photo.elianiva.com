@@ -1,0 +1,21 @@
+diff --git a/lib/protocol.d.ts b/lib/protocol.d.ts
+--- a/lib/protocol.d.ts
++++ b/lib/protocol.d.ts
+@@ -1,6 +1,6 @@
+ import * as Layer from "effect/Layer";
+-import type * as HttpClient from "effect/unstable/http/HttpClient";
+-import type * as HttpClientError from "effect/unstable/http/HttpClientError";
++import type * as HttpClient from "effect/http/HttpClient";
++import type * as HttpClientError from "effect/http/HttpClientError";
+ import * as API from "@distilled.cloud/core/api";
+ import { ConfigError } from "@distilled.cloud/core/errors";
+ import { Credentials, type OAuthRefreshError } from "./credentials.ts";
+diff --git a/lib/traits.d.ts b/lib/traits.d.ts
+--- a/lib/traits.d.ts
++++ b/lib/traits.d.ts
+@@ -1,4 +1,4 @@
+-import type * as HttpClientError from "effect/unstable/http/HttpClientError";
++import type * as HttpClientError from "effect/http/HttpClientError";
+ import type * as Stream from "effect/Stream";
+ export { Body, Header, Query, DeepQuery, Label, Http, ResponseCode, HttpBody, FormDataFile, StringEncoded, KeyDictionary, UnionCases, applyErrorMatchers, getErrorMatchers, type HttpTrait, type ErrorMatcher, bodySymbol, headerSymbol, querySymbol, deepQuerySymbol, labelSymbol, httpSymbol, responseCodeSymbol, httpBodySymbol, formDataFileSymbol, stringEncodedSymbol, keyDictionarySymbol, unionCasesSymbol, errorMatchersSymbol, } from "@distilled.cloud/core/trait";
+ export declare const envelopePayloadRootSymbol: unique symbol;

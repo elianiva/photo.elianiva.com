@@ -14,21 +14,47 @@ allowBuilds:
 # Unpinned 2026-10-01: @aws-sdk/credential-providers 3.1143.0, undici 8.11.2.
 # @cloudflare/workers-types needs no override; it is a direct dependency.
 #
-# Effect is held at 4.0.0-rc.117 because that is the newest release foldkit runs
-# on. 4.0.0-rc.118 moved `Schema.make` to a memoizing getter on the prototype;
-# foldkit wraps schemas in a Proxy that forwards `get` with itself as the
-# receiver, so the memoization lands on the Proxy and the second read throws
-# "Cannot redefine property: make". Lift this the day foldkit ships a release
-# built against Effect 4.0.0 (`npm view foldkit peerDependencies`).
+# Effect is pinned to a single version across the workspace and every transitive
+# Effect dependency (foldkit, alchemy and its provider packages). 4.0.0 is
+# stable. Two of those dependencies still ship pre-stable code and are patched
+# to run on it; drop each patch when its upstream release is built against
+# Effect 4.0.0 (`npm view <pkg> peerDependencies`):
+#
+# - foldkit: since 4.0.0-rc.118 `Schema.make` is a memoizing getter on the
+#   schema prototype; foldkit wraps schemas in a Proxy that forwards `get` with
+#   itself as the receiver, so the memoization lands on the Proxy and a second
+#   read throws "Cannot redefine property: make". The patch makes the wrapper a
+#   transparent view of the schema.
+# - alchemy, @alchemy.run/cloudflare-runtime, @distilled.cloud/*: they
+#   import `effect/unstable/<area>` modules that graduated in 4.0.0 (`httpapi`
+#   became `effect/http-api`; the rest lost the `unstable/` segment), and the
+#   flat `effect/Encoding` base64 helpers that became `effect/encoding`'s Base64
+#   and Base64Url modules. The patches only rewrite those specifiers and calls.
 overrides:
   '@aws-sdk/credential-providers': 3.1143.0
-  '@effect/platform-browser': 4.0.0-rc.117
-  '@effect/platform-bun': 4.0.0-rc.117
-  '@effect/platform-node': 4.0.0-rc.117
-  '@effect/platform-node-shared': 4.0.0-rc.117
-  '@effect/sql-d1': 4.0.0-rc.117
-  '@effect/sql-sqlite-do': 4.0.0-rc.117
-  '@effect/sql-sqlite-node': 4.0.0-rc.117
-  '@effect/vitest': 4.0.0-rc.117
-  effect: 4.0.0-rc.117
+  '@effect/platform-browser': 4.0.0
+  '@effect/platform-bun': 4.0.0
+  '@effect/platform-node': 4.0.0
+  '@effect/platform-node-shared': 4.0.0
+  '@effect/sql-d1': 4.0.0
+  '@effect/sql-sqlite-do': 4.0.0
+  '@effect/sql-sqlite-node': 4.0.0
+  '@effect/vitest': 4.0.0
+  effect: 4.0.0
   undici: 8.11.2
+
+patchedDependencies:
+  '@alchemy.run/cloudflare-runtime@2.0.0-beta.79': patches/@alchemy.run+cloudflare-runtime@2.0.0-beta.79.patch
+  '@distilled.cloud/aws@1.0.0-rc.12': patches/@distilled.cloud+aws@1.0.0-rc.12.patch
+  '@distilled.cloud/axiom@1.0.0-rc.12': patches/@distilled.cloud+axiom@1.0.0-rc.12.patch
+  '@distilled.cloud/cloudflare@1.0.0-rc.12': patches/@distilled.cloud+cloudflare@1.0.0-rc.12.patch
+  '@distilled.cloud/core@1.0.0-rc.12': patches/@distilled.cloud+core@1.0.0-rc.12.patch
+  '@distilled.cloud/fly-io@1.0.0-rc.12': patches/@distilled.cloud+fly-io@1.0.0-rc.12.patch
+  '@distilled.cloud/hetzner@1.0.0-rc.12': patches/@distilled.cloud+hetzner@1.0.0-rc.12.patch
+  '@distilled.cloud/neon@1.0.0-rc.12': patches/@distilled.cloud+neon@1.0.0-rc.12.patch
+  '@distilled.cloud/planetscale@1.0.0-rc.12': patches/@distilled.cloud+planetscale@1.0.0-rc.12.patch
+  '@distilled.cloud/prisma@1.0.0-rc.12': patches/@distilled.cloud+prisma@1.0.0-rc.12.patch
+  '@distilled.cloud/railway@1.0.0-rc.12': patches/@distilled.cloud+railway@1.0.0-rc.12.patch
+  '@distilled.cloud/stripe@1.0.0-rc.12': patches/@distilled.cloud+stripe@1.0.0-rc.12.patch
+  alchemy@2.0.0-beta.79: patches/alchemy@2.0.0-beta.79.patch
+  foldkit@0.164.0: patches/foldkit@0.164.0.patch

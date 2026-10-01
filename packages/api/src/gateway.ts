@@ -10,7 +10,7 @@
  * file as `D1DatabaseLike` and reached through 52 hand-written
  * `prepare`/`first`/`all`/`run`/`batch` sites, each wrapped in its own
  * `Effect.tryPromise` with a bespoke `StorageError`. It is now the standard
- * `effect/unstable/sql/SqlClient`, provided by `@effect/sql-d1` in the Worker
+ * `effect/sql/SqlClient`, provided by `@effect/sql-d1` in the Worker
  * and by `@effect/sql-sqlite-node` over the same real `migrations/*.sql` in the
  * tests. That buys a typed `SqlError` in place of the flattening
  * `describeCause` existed for, a prepared-statement cache, spans carrying the

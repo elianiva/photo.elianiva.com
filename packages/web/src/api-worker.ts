@@ -1,7 +1,7 @@
 import { Effect, Layer, Option, Result, Schema as S } from 'effect'
-import * as SqlClient from 'effect/unstable/sql/SqlClient'
-import { FetchHttpClient, Headers, HttpRouter, HttpServerResponse } from 'effect/unstable/http'
-import { RpcSerialization, RpcServer } from 'effect/unstable/rpc'
+import * as SqlClient from 'effect/sql/SqlClient'
+import { FetchHttpClient, Headers, HttpRouter, HttpServerResponse } from 'effect/http'
+import { RpcSerialization, RpcServer } from 'effect/rpc'
 import type { WebsiteEnv } from '../../../alchemy.run'
 import {
   AdminRpcHandlersLive,

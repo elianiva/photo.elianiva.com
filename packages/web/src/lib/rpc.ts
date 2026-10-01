@@ -9,9 +9,9 @@
  */
 
 import { Cause, Data, Effect, Layer, ManagedRuntime, Option, Scope } from 'effect'
-import { FetchHttpClient } from 'effect/unstable/http'
-import { RpcSerialization } from 'effect/unstable/rpc'
-import { layerProtocolHttp, make as makeRpcClient } from 'effect/unstable/rpc/RpcClient'
+import { FetchHttpClient } from 'effect/http'
+import { RpcSerialization } from 'effect/rpc'
+import { layerProtocolHttp, make as makeRpcClient } from 'effect/rpc/RpcClient'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
 import { ADMIN_RPC_PATH, RPC_PATH, apiOrigin } from './api'
 

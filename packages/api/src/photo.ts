@@ -5,8 +5,8 @@
  */
 
 import { Context, DateTime, Effect, Layer, Schema as S } from 'effect'
-import * as SqlClient from 'effect/unstable/sql/SqlClient'
-import type { Fragment } from 'effect/unstable/sql/Statement'
+import * as SqlClient from 'effect/sql/SqlClient'
+import type { Fragment } from 'effect/sql/Statement'
 import {
   DbPhotoRow,
   InvalidInput,

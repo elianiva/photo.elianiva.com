@@ -1,0 +1,79 @@
+diff --git a/lib/api.d.ts b/lib/api.d.ts
+--- a/lib/api.d.ts
++++ b/lib/api.d.ts
+@@ -6,10 +6,10 @@
+ import type * as Stream from "effect/Stream";
+ import * as Pagination from "./pagination.ts";
+ import { type Policy as RetryPolicy } from "./retry.ts";
+-import * as HttpClient from "effect/unstable/http/HttpClient";
+-import type * as HttpClientError from "effect/unstable/http/HttpClientError";
+-import type * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
+-import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
++import * as HttpClient from "effect/http/HttpClient";
++import type * as HttpClientError from "effect/http/HttpClientError";
++import type * as HttpClientRequest from "effect/http/HttpClientRequest";
++import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+ /**
+  * The view of an operation's config that protocols receive on every
+  * encode/decode call. The object is the same memoized config instance for
+diff --git a/lib/api.js b/lib/api.js
+--- a/lib/api.js
++++ b/lib/api.js
+@@ -9,7 +9,7 @@
+ import { SingleShotGen } from "effect/Utils";
+ import * as Pagination from "./pagination.js";
+ import { makeDefault } from "./retry.js";
+-import * as HttpClient from "effect/unstable/http/HttpClient";
++import * as HttpClient from "effect/http/HttpClient";
+ /**
+  * The Protocol service knows how to turn a value into an HTTP request using
+  * only the input schema's trait annotations, and how to turn a response back
+diff --git a/lib/category.js b/lib/category.js
+--- a/lib/category.js
++++ b/lib/category.js
+@@ -20,7 +20,7 @@
+  */
+ import * as Effect from "effect/Effect";
+ import * as Predicate from "effect/Predicate";
+-import * as HttpClientError from "effect/unstable/http/HttpClientError";
++import * as HttpClientError from "effect/http/HttpClientError";
+ // ============================================================================
+ // Error Category Constants
+ // ============================================================================
+diff --git a/lib/codegen/cli.js b/lib/codegen/cli.js
+--- a/lib/codegen/cli.js
++++ b/lib/codegen/cli.js
+@@ -14,8 +14,8 @@
+ import { Console, Effect } from "effect";
+ import * as FileSystem from "effect/FileSystem";
+ import * as Path from "effect/Path";
+-import { Flag } from "effect/unstable/cli";
+-import { Command } from "effect/unstable/cli";
++import { Flag } from "effect/cli";
++import { Command } from "effect/cli";
+ import { barrel } from "./emit.js";
+ import { formatGenerated } from "./format.js";
+ import { generateService } from "./generator.js";
+diff --git a/lib/protocol-http.d.ts b/lib/protocol-http.d.ts
+--- a/lib/protocol-http.d.ts
++++ b/lib/protocol-http.d.ts
+@@ -9,7 +9,7 @@
+  * {@link matchTypedError}).
+  */
+ import type * as AST from "effect/SchemaAST";
+-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
++import * as HttpClientRequest from "effect/http/HttpClientRequest";
+ import { type ErrorMatcher, type KeyDictionaryEntries } from "./trait.ts";
+ export declare const getProps: (ast: AST.AST) => readonly AST.PropertySignature[];
+ export declare const getAnn: (ast: AST.AST, symbol: symbol) => unknown;
+diff --git a/lib/protocol-http.js b/lib/protocol-http.js
+--- a/lib/protocol-http.js
++++ b/lib/protocol-http.js
+@@ -1,5 +1,5 @@
+-import * as HttpBody from "effect/unstable/http/HttpBody";
+-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
++import * as HttpBody from "effect/http/HttpBody";
++import * as HttpClientRequest from "effect/http/HttpClientRequest";
+ import { bodySymbol, deepQuerySymbol, formDataFileSymbol, getErrorMatchers, headerSymbol, httpBodySymbol, httpSymbol, keyDictionarySymbol, labelSymbol, querySymbol, stringEncodedSymbol, unionCasesSymbol, } from "./trait.js";
+ //#region AST helpers (survive S.optional / Suspend / transforms)
+ export const getProps = (ast) => {

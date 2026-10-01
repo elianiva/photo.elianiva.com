@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Effect, Layer } from 'effect'
-import { RpcClient, RpcTest } from 'effect/unstable/rpc'
+import { RpcClient, RpcTest } from 'effect/rpc'
 import { InvalidInput, PhotoAdminRpcs, type Settings, type SettingsInput } from '@photo/shared'
 import { SettingsService, SettingsServiceLive } from './settings'
 import { AdminRpcHandlersLive } from './rpc'

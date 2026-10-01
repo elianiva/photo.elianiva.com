@@ -4,7 +4,7 @@ Accepted.
 
 ## The contract is RPC, not REST
 
-All client↔server traffic is `effect/unstable/rpc` over HTTP POST. The groups
+All client↔server traffic is `effect/rpc` over HTTP POST. The groups
 live in `packages/shared` beside the schemas; the handler services live in
 `packages/api`; the server registers one POST route per group via
 `RpcServer.layerHttp({ protocol: 'http' })` on an Effect `HttpRouter` rendered

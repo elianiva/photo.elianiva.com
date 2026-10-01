@@ -16,7 +16,7 @@
  */
 
 import { Effect, Option, Result, Schema as S } from 'effect'
-import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from 'effect/unstable/http'
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from 'effect/http'
 import { UploadResponseBody, isUploadError } from '@photo/shared'
 
 // ---------------------------------------------------------------------------

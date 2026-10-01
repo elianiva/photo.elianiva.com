@@ -16,14 +16,14 @@
     "infra:deploy": "alchemy deploy --stage prod --yes"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-rc.117",
+    "@effect/platform-node": "4.0.0",
     "@photo/shared": "workspace:*",
     "alchemy": "2.0.0-beta.79",
-    "effect": "4.0.0-rc.117"
+    "effect": "4.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261001.1",
-    "@effect/platform-bun": "4.0.0-rc.117",
+    "@effect/platform-bun": "4.0.0",
     "@foldkit/oxlint-plugin": "^0.15.1",
     "@types/node": "^26.6.3",
     "agent-browser": "^0.38.1",

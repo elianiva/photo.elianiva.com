@@ -10,10 +10,10 @@
  * deterministic under a `TestClock` and the production path has no way to read
  * a time that is not the one the runtime reports.
  *
- * **Why this is not `effect/unstable/persistence/RateLimiter`.** That module is
+ * **Why this is not `effect/persistence/RateLimiter`.** That module is
  * the obvious candidate — a per-key fixed-window counter over an in-memory
- * store — and it does work at the pinned `effect@4.0.0-rc.116` (its subpath is
- * `effect/unstable/persistence/…`, not `effect/persistence/…`). It is not used
+ * store — and it does work on the pinned `effect@4.0.0`, which graduated it
+ * to `effect/persistence/…`. It is not used
  * because its `"fixed-window"` algorithm is a *leaky bucket*, not a window, and
  * the two answer differently on a route that fronts an auth gate:
  *
