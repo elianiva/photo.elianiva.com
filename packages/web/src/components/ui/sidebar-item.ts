@@ -45,11 +45,12 @@ const labelClasses: Record<SidebarItemState, string> = {
 }
 
 /** The count is information, not a disabled control, so it cannot be drawn in
- *  `color.text.disabled`: that token is `#7c766b`, which is 3.6:1 on the rail's
+ *  `color.text.disabled`: that token is 3.6:1 on the rail's
  *  `color.surface.container` — under the 4.5:1 a 10px `$typography.exif` line
  *  needs. `color.text.secondary` is 5.6:1 there. The row still reads as two
  *  weights because the label is `$typography.ui` and the count is
- *  `$typography.exif`, and both go to `color.text.primary` on the active row. */
+ *  `$typography.exif`, and both go to `color.text.primary` on the active row.
+ *  Both tokens are now tuned per branch for exactly this; see `theme.css`. */
 const countClasses: Record<SidebarItemState, string> = {
   active: 'text-role-text-primary',
   default: 'text-role-text-secondary',
