@@ -8,12 +8,12 @@ allowBuilds:
   sharp: true
   workerd: true
 
-# This repo holds every dependency back 24 hours from its publish date. Pin a
-# transitive back to the last proven version when a newer one lands inside that
-# window, then unpin it on the next dep bump (`npm view <pkg> time`).
-# Unpinned 2026-10-01: @aws-sdk/credential-providers 3.1143.0, undici 8.11.2.
-# @cloudflare/workers-types needs no override; it is a direct dependency.
-#
+# pnpm 11 refuses to install a version published in the last 24 hours
+# (minimumReleaseAge defaults to 1440 minutes) and re-checks every lockfile
+# entry against that cutoff on each install, which breaks CI as soon as a fresh
+# release lands. This repo takes whatever is newest, so the wait is zero.
+minimumReleaseAge: 0
+
 # Effect is pinned to a single version across the workspace and every transitive
 # Effect dependency (foldkit, alchemy and its provider packages). 4.0.0 is
 # stable. Two of those dependencies still ship pre-stable code and are patched
@@ -31,7 +31,6 @@ allowBuilds:
 #   flat `effect/Encoding` base64 helpers that became `effect/encoding`'s Base64
 #   and Base64Url modules. The patches only rewrite those specifiers and calls.
 overrides:
-  '@aws-sdk/credential-providers': 3.1143.0
   '@effect/platform-browser': 4.0.0
   '@effect/platform-bun': 4.0.0
   '@effect/platform-node': 4.0.0
@@ -41,6 +40,8 @@ overrides:
   '@effect/sql-sqlite-node': 4.0.0
   '@effect/vitest': 4.0.0
   effect: 4.0.0
+  # alchemy asks for undici 7; this flattens the tree onto the current line
+  # instead of carrying a second copy of undici.
   undici: 8.11.2
 
 patchedDependencies:

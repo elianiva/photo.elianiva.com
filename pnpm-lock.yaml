@@ -5,7 +5,6 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@aws-sdk/credential-providers': 3.1143.0
   '@effect/platform-browser': 4.0.0
   '@effect/platform-bun': 4.0.0
   '@effect/platform-node': 4.0.0

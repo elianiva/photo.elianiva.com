@@ -113,8 +113,7 @@ const FLANK = 'h-(--stroke-width-subtle) bg-role-hairline'
 const FOLD = 'h-(--stroke-width-bold) bg-role-accent'
 
 /** A rule, drawn rather than typed. */
-const rule = (className: string, h: HtmlBuilder<Message>): Child =>
-  h.div([h.Class(className)], [])
+const rule = (className: string, h: HtmlBuilder<Message>): Child => h.div([h.Class(className)], [])
 
 /**
  * A stack of rules separated by bare stock, which is the gap a compositor

@@ -197,11 +197,31 @@ export default Alchemy.Stack(
     if (!isLocalDev) {
       yield* adminApp
     }
-    // Data resources always converge the real cloud, even during `alchemy
-    // dev` — Alchemy.remote() opts them out of local emulation so local dev
+
+    // Data resources converge the real cloud, even during `alchemy dev` —
+    // Alchemy.remote() opts them out of local emulation so local dev
     // reads/writes the same photos as production.
-    yield* PhotoBucket.pipe(Alchemy.remote())
-    yield* PhotoDb.pipe(Alchemy.remote())
+    //
+    // Optional, and remote unless it is switched off: with
+    // `PHOTO_REMOTE_RESOURCES=false` the pin is removed and `alchemy dev`
+    // follows its own default, which is Alchemy's local emulation for both —
+    // a `dev:`-prefixed bucket and database keyed into `.alchemy/local/`,
+    // with `./migrations` still applied to the local database. That is a
+    // throwaway dataset, which is the point: production's photos and metadata
+    // are then unreachable from a dev server that can drop them.
+    //
+    // Absent means remote, so every stage that never sets the variable behaves
+    // exactly as it did before the flag existed, and a value that is present
+    // but not a boolean fails the plan rather than silently picking a side.
+    // There is nothing to opt out of during `alchemy deploy` — everything is
+    // remote there — so the flag can only change what `alchemy dev` converges
+    // against.
+    const remoteResources = yield* Config.Boolean('PHOTO_REMOTE_RESOURCES').pipe(
+      Config.withDefault(true),
+    )
+
+    yield* PhotoBucket.pipe(Alchemy.remote(remoteResources))
+    yield* PhotoDb.pipe(Alchemy.remote(remoteResources))
 
     const website = yield* Website
     yield* ApiWorker

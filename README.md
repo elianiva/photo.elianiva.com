@@ -20,6 +20,8 @@ pnpm lint
 
 The two dev servers have fixed ports (`dev.port` in `alchemy.run.ts`) and fail to start when either is taken, so run one instance at a time per machine. Keep `ACCESS_ALLOWED_EMAILS` and `ACCESS_TEAM_DOMAIN` in a local `.env` (see `.env.example`); both are required on every non-dev stage, and `ACCESS_ALLOWED_EMAILS` on `dev` too, although the admin gate stands down on `dev` before either is consulted — `alchemy.run.ts` forces the _binding_ to `''` on that stage, so carrying the real team domain locally does not gate local development.
 
+`PHOTO_REMOTE_RESOURCES` is the one optional variable, and it defaults to `true`. R2 and D1 are pinned to the real cloud with `Alchemy.remote()`, so `pnpm dev` reads and writes the same photos as production. Set it to `false` and the pin comes off: `pnpm dev` follows `alchemy dev`'s own default instead, which is Alchemy's local emulation for both — a `dev:`-prefixed bucket and database keyed into `.alchemy/local/`, with `./migrations` still applied to the local database. That is the way to work against a throwaway dataset, since nothing in a local dev server can then drop production's originals or metadata.
+
 ## Deploy
 
 ```sh
