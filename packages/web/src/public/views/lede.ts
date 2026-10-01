@@ -65,7 +65,7 @@ export const lede = (edition: Edition, h: HtmlBuilder<Message>): Child => {
             : [
                 h.div(
                   [h.Class('hidden flex-col desktop:flex desktop:flex-2')],
-                  [figure(edition.lead, 'page', h)],
+                  [figure({ plate: edition.lead, slot: 'page' }, h)],
                 ),
               ]),
         ],

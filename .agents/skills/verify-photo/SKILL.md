@@ -93,7 +93,8 @@ UI handles that actually exist in this repo:
 - Tag filter (sidebar): one row per tag labeled `tag.label` with its count and `aria-pressed`; the row toggles the filter in place
 - Upload dialog: `FileDrop` + `Multi` combo for tag ids + `takenAt` input, queue rows by `QueueItem.id` (`${name}:${size}`)
 - Editor route `/admin/photos/<id>`: Top Bar, Stage (`data-slot="mat"`), 360px Inspector; `← Library` returns to the view it was opened from
-- Lightbox (public gallery only): keyboard `Escape` dismisses it (`home/subscriptions.ts`); the Admin has no lightbox any more
+- Lightbox (public gallery only): keyboard `Escape` dismisses it (`public/subscriptions.ts`); the Admin has no lightbox any more
+- About page: the second public document at `/about`, server-rendered; the Folio marks `ABOUT` as the current section and `ALL` returns to the Front
 
 Generic recipes:
 

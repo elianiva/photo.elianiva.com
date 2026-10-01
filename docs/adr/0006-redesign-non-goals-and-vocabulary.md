@@ -66,13 +66,22 @@ These frames are a different chain from the one being built — admin desktop pl
 the public Front — and several will not be built as drawn, per the two sections
 above: `Lightbox — Desktop` / `— Mobile` (`27821e1abb5aa9d4` /
 `82991e981ed194a3`), `Photo` (`9a4c10e3399c7af3` / `08d2d4553da7ae6c`), `Zoom`
-(`3545605e80259537` / `97f228badc9dccdc`), `About` (`b6d1dcfc0e6dad2a` /
-`ffc9476fb7c57fbf`), `Search` (`38dcb73b9fa6dee3` / `18721083a4fbc8c2`), `404`
+(`3545605e80259537` / `97f228badc9dccdc`), `Search` (`38dcb73b9fa6dee3` / `18721083a4fbc8c2`), `404`
 (`faa7c63900307915` / `1c537000448369ac`), `Social preview — 1200`
 (`b72424d104daedcd`), `Series` (`07577b396e2f00bf` / `73ca2068f3588260`),
 `Series detail` (`c419f7cc479a9dd3` / `7b5110d9cc51496a`), and `Desk — Mobile`
 (`7cfe407cb0cc6138` / `039e080efb3efef8` / `9f2aabeb97f9e5ae` /
 `d4026205feefed4d` / `feb54b4108b6b59c`).
+
+`About` (`b6d1dcfc0e6dad2a` / `ffc9476fb7c57fbf`) has left that list: the
+public page at `/about` is built, as a route of the public site's one app beside
+the Front. Its two masters are two compositions rather than one page at two
+widths — two prose columns and one plate on the desktop, one re-flowed paragraph
+and two plates on the mobile — and the plate the mobile master adds is drawn
+`lazy` and hidden at `desktop`, because a plate no layout draws must not fetch a
+Photo's original on a zone with no resizer (ADR 0002). The design's plate is a
+stock asset numbered `No. 001`; the page shows the newest published photographs
+instead, because a stock photograph is not a work this site publishes.
 
 ## Consequences
 
@@ -82,9 +91,18 @@ above: `Lightbox — Desktop` / `— Mobile` (`27821e1abb5aa9d4` /
   even disabled, because History is not built.
 - The fourth Settings section is the Storage section; there is no
   history-retention control in it.
-- The public page keeps `ARCHIVE` in its kicker and its Folio nav entry.
-- `CONTEXT.md` gains Photo Number, Status, Ratio, Rendition, Frame, Archive and
-  Storage, and keeps _Admin_ as the term with the _Dashboard / CMS / Studio /
-  Backend / The Desk_ line.
+- The public page keeps `ARCHIVE` in its kicker, and the Folio's other entries
+  are the site's Tags rather than the design's `STREET` / `LANDSCAPE` / `SERIES`
+  words.
+- `/about` and `/tag/<slug>` are public routes in `public/route.ts`, so they are
+  Worker-first paths and the sitemap names them (ADR 0004). The Folio is a read
+  (`PublicPhotoService.folio`): one link per Tag with a published Photo, and each
+  link is a Tag page that renders — which is how the design's `SERIES` reaches the
+  site without a Series entity. `ARCHIVE` is still a nav word without a page, so
+  it is not in the Folio until its chain lands, and a `/tag/<slug>` naming no Tag
+  answers `404`.
+- `CONTEXT.md` gains Photo Number, Status, Ratio, Rendition, Frame, Archive,
+  Folio, Tag page and Storage, and keeps _Admin_ as the term with the
+  _Dashboard / CMS / Studio / Backend / The Desk_ line.
 - Image delivery is a separate decision and lives in ADR 0002: no `IMAGES`
   binding, no zone resizer, and no `thumbUrl`/`srcSet` anywhere.

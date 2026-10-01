@@ -1,13 +1,7 @@
 /**
  * A section of the edition: the month under a rule, then its plates flowed
- * into columns. Desktop flows them into three columns with a hairline between
- * them; mobile flows them into two, without rules, at a 12px beat. The flow is
- * computed per breakpoint because the column count changes the assignment, so
- * the section draws both trees and lets the `desktop` breakpoint pick one. The
- * columns are not authored — `flowColumns` drops each plate into the shortest
- * column — and the hairline between the desktop columns is a sibling rather
- * than a border, so it stretches to the tallest column and stops where that
- * column stops.
+ * into columns. The flow itself is `plateColumns` — a Tag page's run of plates
+ * is the same arrangement at the same measure, so it is drawn once there.
  *
  * `pageOne` is the lede's Page One plate on the desktop Front. The mobile lede
  * has no plate, so the first section takes it as its own first frame — which
@@ -17,11 +11,9 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { gridColumns, gridColumnsMobile } from '@/lib/design-tokens'
-
-import { flowColumns, frameCount, sectionCount, type EditionSection, type Figure } from '../content'
+import { frameCount, sectionCount, type EditionSection, type Figure } from '../content'
 import { Message } from '../model'
-import { figure } from './figure'
+import { plateColumns } from './plates'
 import { BAND, type Child } from './shared'
 
 const sectionHead = (
@@ -56,34 +48,6 @@ const sectionHead = (
     ],
   )
 
-const column = (figures: ReadonlyArray<Figure>, gap: string, h: HtmlBuilder<Message>): Child =>
-  h.div(
-    [h.Class(`flex min-w-0 flex-1 flex-col ${gap}`)],
-    [...figures.map((plate) => figure(plate, 'column', h))],
-  )
-
-const columnsDesktop = (figures: ReadonlyArray<Figure>, h: HtmlBuilder<Message>): Child => {
-  const flowed = flowColumns(figures, gridColumns)
-  const children: Array<Child> = []
-  flowed.forEach((columnFigures, index) => {
-    children.push(column(columnFigures, 'gap-(--spacing-lg)', h))
-    if (index < flowed.length - 1) {
-      children.push(h.div([h.Class('w-px shrink-0 bg-role-hairline')], []))
-    }
-  })
-  return h.div([h.Class('hidden items-stretch gap-(--spacing-lg) desktop:flex')], children)
-}
-
-const columnsMobile = (figures: ReadonlyArray<Figure>, h: HtmlBuilder<Message>): Child =>
-  h.div(
-    [h.Class('flex items-stretch gap-(--spacing-lg) desktop:hidden')],
-    [
-      ...flowColumns(figures, gridColumnsMobile).map((columnFigures) =>
-        column(columnFigures, 'gap-(--spacing-md)', h),
-      ),
-    ],
-  )
-
 export const editionSection = (
   section: EditionSection,
   pageOne: Figure | null,
@@ -101,8 +65,9 @@ export const editionSection = (
         ],
         [
           sectionHead(section, frameCount(mobileFigures.length), h),
-          columnsMobile(mobileFigures, h),
-          columnsDesktop(section.figures, h),
+          // The mobile tree takes the Page One plate, which belongs to the
+          // first section on that master and to no section on the desktop one.
+          ...plateColumns(mobileFigures, section.figures, h),
         ],
       ),
     ],

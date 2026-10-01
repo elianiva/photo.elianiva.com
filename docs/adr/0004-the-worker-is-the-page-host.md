@@ -32,7 +32,7 @@ workerd. `GET /nope` with `Accept: text/html` returning a Worker 404 is what
 proved the Worker was the only page host that had ever answered.
 
 So `assets.runWorkerFirst` in `alchemy.run.ts` is
-`['/', '/index.html', '/admin', '/admin/*']` ahead of
+`['/', '/index.html', '/about', '/admin', '/admin/*']` ahead of
 `notFoundHandling: 'none'`: the Worker's page paths run first, and everything
 else keeps the asset layer's own assets-first order, so a hashed bundle, a font
 and a Vite module never enter the Worker. `/index.html` is in that list and
@@ -40,6 +40,18 @@ answers with a 308 to `/` — it is the Front's own URL under its old spelling,
 and the one thing the asset layer can serve for a page is a template no client
 can boot. **A page path added later is a Worker-first path too**, or the asset
 layer answers it with the template.
+
+The public site is one app with more than one document, and that is what makes
+the rule mechanical rather than a memory test. `public/route.ts` declares the
+documents — the Front, `About` and a Tag page — and the Worker answers a path
+from that table alone, so `/about` is a Worker-first path because the table says
+it is a page and not because anyone remembered to add it to a list, and so is
+every `/tag/<slug>` the Folio prints. A path the table names none of is not a
+public document and falls through to the asset layer, which has no page to serve
+for it. One case is answered inside the Worker rather than by the asset layer: a
+`/tag/<slug>` whose slug names no Tag gets a `404` status from the Worker rather
+than the template, because serving the Front at a URL the Folio does not link to
+is a page the site does not have.
 
 `foldkit({ ssr: { serverEntry } })` is gone, and with it `src/entry.server.ts`
 and the `readFrontOverHttp` read it needed. A foldkit server entry takes only a

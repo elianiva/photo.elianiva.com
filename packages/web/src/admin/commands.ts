@@ -28,7 +28,8 @@ import {
   PhotoDetails,
   Storage,
 } from './model'
-import type { Counts as CountsType, GridCols as GridColsType, LibraryPage } from './model'
+import type { Counts as CountsType, LibraryPage } from './model'
+import { GridPrefs, GridPrefsLive } from './prefs'
 
 /** `ListLibraryRows` as the wire delivers it: the page's rows under `items`,
  *  the cursor that would follow, and the filtered total behind both. */
@@ -237,24 +238,26 @@ export const SetRowStatusCmd = Command.define('SetRowStatus', {
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
-export const COLS_STORAGE_KEY = 'photo-admin:library:cols'
-const COL_CHOICES = [2, 3, 4, 5, 6] as const
-const DEFAULT_COLS = 4
-
-/** Restore the persisted column count; falls back to the default when
- *  nothing (or something invalid) is stored. */
-export const readStoredCols = (): GridColsType => {
-  if (typeof window === 'undefined') return DEFAULT_COLS
-  const saved = window.localStorage.getItem(COLS_STORAGE_KEY)
-  return COL_CHOICES.find((cols) => String(cols) === saved) ?? DEFAULT_COLS
-}
-
+/** The grid's column count, persisted across sessions.
+ *
+ *  The read lives in `./prefs` as a synchronous function because Foldkit's
+ *  `init` is synchronous by contract; the write is a command, so it goes through
+ *  the `GridPrefs` service and the `KeyValueStore` under it. Both paths share one
+ *  decode, so they cannot disagree about what a valid column count is. */
 export const PersistColsCmd = Command.define('PersistCols', {
   args: { cols: GridCols },
   messages: [Message.CompletedPersistCols],
   execute: ({ cols }) =>
-    Effect.try(() => localStorage.setItem(COLS_STORAGE_KEY, String(cols))).pipe(
-      Effect.map(() => Message.CompletedPersistCols()),
+    GridPrefs.use((prefs) => prefs.setCols(cols)).pipe(
+      // Provided here rather than by an app layer: the Admin's runtime is built
+      // by Foldkit with no layer stack, and every other command closes over what
+      // it needs the same way. The store is a layer over the platform's
+      // `Storage`, so this is a lookup rather than a reimplementation.
+      Effect.provide(GridPrefsLive),
+      Effect.as(Message.CompletedPersistCols()),
+      // A preference that cannot be remembered is not something the operator can
+      // act on, so a failing store still completes the command and the grid
+      // keeps the columns it was just given.
       Effect.catch(() => Effect.succeed(Message.CompletedPersistCols())),
     ),
 })

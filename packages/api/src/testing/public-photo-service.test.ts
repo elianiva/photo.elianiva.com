@@ -74,6 +74,14 @@ const byTag = (harness: TestHarness, slug: string) =>
     ),
   )
 
+const folio = (harness: TestHarness) =>
+  Effect.runPromise(
+    withPublicRead(
+      PublicPhotoService.use((service) => service.folio()),
+      harness,
+    ),
+  )
+
 const slugsOf = (photos: ReadonlyArray<{ readonly slug: string }>): ReadonlyArray<string> =>
   photos.map((photo) => photo.slug)
 
@@ -237,6 +245,55 @@ describe('PublicPhotoService.frontStats', () => {
     await trashPhoto(harness, last.id)
 
     expect((await frontStats(harness)).number).toBe(6)
+  })
+})
+
+describe('PublicPhotoService.folio', () => {
+  it('answers the tags with a published photo under them, in label order', async () => {
+    const harness = makeTestHarness()
+    await seed(harness)
+    const night = await createTag(harness, 'night', 'Night')
+    const street = await createTag(harness, 'street', 'Street')
+    await createTag(harness, 'kyoto', 'Kyoto')
+    const drafts = await createTag(harness, 'draft-only', 'Draft Only')
+    await createPhoto(harness, {
+      slug: 'august-03',
+      title: 'A third August frame.',
+      takenAt: '2025-08-14',
+      tagIds: [street.id],
+    })
+    await createPhoto(harness, {
+      slug: 'august-04',
+      title: 'A fourth August frame.',
+      takenAt: '2025-08-19',
+      tagIds: [night.id, street.id],
+    })
+    const draft = await createPhoto(harness, {
+      slug: 'september-draft',
+      title: 'A draft.',
+      takenAt: '2025-09-02',
+      tagIds: [drafts.id],
+    })
+    await setPhotoStatus(harness, draft.id, 'draft')
+
+    // `Kyoto` and `Draft Only` are Tags with nothing to visit, so they are not
+    // links; the rest are in the Admin's own tag-list order.
+    expect((await folio(harness)).map((tag) => tag.label)).toEqual(['Night', 'Street'])
+  })
+
+  it('drops a tag from the nav when its last published photo is trashed', async () => {
+    const harness = makeTestHarness()
+    await seed(harness)
+    const night = await createTag(harness, 'night', 'Night')
+    const tagged = await createPhoto(harness, {
+      slug: 'august-03',
+      title: 'A third August frame.',
+      takenAt: '2025-08-14',
+      tagIds: [night.id],
+    })
+    await trashPhoto(harness, tagged.id)
+
+    expect(await folio(harness)).toEqual([])
   })
 })
 

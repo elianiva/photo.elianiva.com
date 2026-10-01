@@ -6,7 +6,9 @@
  * the generated token module rather than restated here.
  */
 
+import { Cache, Data, Duration, Effect, Exit, Option, Result, Schema as S } from 'effect'
 import { decode, encode } from 'blurhash'
+import { MatColour } from '@photo/shared'
 
 import { imageBlurhashX, imageBlurhashY } from './design-tokens'
 
@@ -60,34 +62,42 @@ export const encodeBlurhash = async (
  *  dimension: the design's own `4 × 3` is `image.blurhash.x` / `.y`. */
 export const blurhashComponentLabel = (): string => `${imageBlurhashX} × ${imageBlurhashY}`
 
+/** The Mat, when the draft has one. `side` is the top/left/right thickness and
+ *  `foot` the bottom, both as fractions of the frame's width. The three colours
+ *  are `MatColour` in `@photo/shared`, read here rather than re-spelled. */
+const CompositionMat = S.Struct({
+  colour: MatColour,
+  side: S.Number,
+  foot: S.Number,
+})
+
 /** The composition a Blurhash is encoded from, in the terms the Stage draws
  *  it: the frame's proportion, the source's pan and zoom inside it, the
  *  straighten and the mirror, and the Mat around it. It is deliberately not a
  *  `PhotoPresentation` — the delivery facts (quality, format, EXIF policy)
  *  cannot change the pixels, so they are not here, and the readout does not
- *  re-encode when one of them moves. */
-export interface CompositionSpec {
-  readonly source: { readonly width: number; readonly height: number }
+ *  re-encode when one of them moves.
+ *
+ *  A Schema rather than an interface because the Editor round-trips it through
+ *  a `signature` string to decide whether a re-encode is needed, and a spec
+ *  read back out of that string is untrusted text until something checks it. */
+export const CompositionSpec = S.Struct({
+  source: S.Struct({ width: S.Number, height: S.Number }),
   /** The frame's proportion, width / height — the authored Ratio or the
    *  source's own when none is stored. */
-  readonly frameAspect: number
+  frameAspect: S.Number,
   /** The source's position inside the frame, as the `object-position`
    *  percentages the Stage uses: `50` is centred. */
-  readonly panX: number
-  readonly panY: number
+  panX: S.Number,
+  panY: S.Number,
   /** The crop zoom, with the straighten's own cover scale already folded in. */
-  readonly scale: number
+  scale: S.Number,
   /** The straighten angle, in degrees. */
-  readonly rotation: number
-  readonly flipX: boolean
-  /** The Mat, when the draft has one. `side` is the top/left/right thickness
-   *  and `foot` the bottom, both as fractions of the frame's width. */
-  readonly mat?: {
-    readonly colour: 'white' | 'paper' | 'ink'
-    readonly side: number
-    readonly foot: number
-  }
-}
+  rotation: S.Number,
+  flipX: S.Boolean,
+  mat: S.optional(CompositionMat),
+})
+export type CompositionSpec = typeof CompositionSpec.Type
 
 /** Where one composition's parts land in an output box, and the transform its
  *  source is drawn with. Pure, so the geometry the canvas draws and the
@@ -238,25 +248,59 @@ export const drawCompositionPixels = (
   }
 }
 
+/** The original could not be fetched or decoded. Not a failure the Editor has to
+ *  report — the stored hash stands — so it never leaves this module; it exists
+ *  so the cache can be told a lookup did not produce a bitmap. A tagged error
+ *  rather than a bare class because it is `yield*`ed, not thrown. */
+class SourceUnavailable extends Data.TaggedError('SourceUnavailable') {}
+
+/** Fetch and decode one original. */
+const loadSource = (url: string): Effect.Effect<ImageBitmap, SourceUnavailable> =>
+  Effect.gen(function* () {
+    const response = yield* Effect.tryPromise({
+      try: () => fetch(url, { credentials: 'include' }),
+      catch: () => new SourceUnavailable(),
+    })
+    if (!response.ok) return yield* new SourceUnavailable()
+    const blob = yield* Effect.tryPromise({
+      try: () => response.blob(),
+      catch: () => new SourceUnavailable(),
+    })
+    return yield* Effect.tryPromise({
+      try: () => createImageBitmap(blob),
+      catch: () => new SourceUnavailable(),
+    })
+  })
+
 /** The decoded originals this module has already fetched, keyed by URL, so a
  *  re-encode after every committed crop change costs one draw and no network.
- *  The bitmap is deliberately never closed: it is shared by every encode in
- *  the session, and the browser evicts it with the page. */
-const sources = new Map<string, Promise<ImageBitmap | undefined>>()
+ *  The bitmap is deliberately never closed: it is shared by every encode in the
+ *  session, and the browser evicts it with the page.
+ *
+ *  A load that did not produce a bitmap is **not** kept. The map this replaced
+ *  stored the settled promise, so one unreachable fetch made that URL
+ *  undecodable for the rest of the session and no later re-encode could recover
+ *  from it; the time-to-live is a function of the lookup's `Exit` precisely so
+ *  that "a failure expires immediately" is a rule rather than a comment.
+ *
+ *  `capacity` bounds the session's originals the way the old eviction bound did,
+ *  and unlike that bound it evicts the least recently used rather than the
+ *  oldest inserted — which is the one an Editor wants, since the Photo on
+ *  screen is the one being re-encoded. */
+const sourceCache: Cache.Cache<string, ImageBitmap, SourceUnavailable> = Effect.runSync(
+  Cache.makeWith(loadSource, {
+    capacity: 16,
+    timeToLive: (exit) => (Exit.isSuccess(exit) ? '1 hour' : Duration.zero),
+  }),
+)
 
-/** Fetch and decode an original once. Resolves to undefined when the bytes are
- *  unreachable or the browser cannot decode them, which is a re-encode that is
- *  skipped rather than a failure the Editor has to report. */
-export const compositionSource = (url: string): Promise<ImageBitmap | undefined> => {
-  const cached = sources.get(url)
-  if (cached !== undefined) return cached
-  const loaded = fetch(url, { credentials: 'include' })
-    .then((response) => (response.ok ? response.blob() : undefined))
-    .then((blob) => (blob === undefined ? undefined : createImageBitmap(blob)))
-    .catch(() => undefined)
-  sources.set(url, loaded)
-  return loaded
-}
+/** The decoded original for a URL, or `None` when the bytes are unreachable or
+ *  the browser cannot decode them — a re-encode that is skipped rather than a
+ *  failure the Editor has to report. */
+export const compositionSource = (url: string): Effect.Effect<Option.Option<ImageBitmap>> =>
+  Effect.map(Effect.result(Cache.get(sourceCache, url)), (result) =>
+    Result.isSuccess(result) ? Option.some(result.success) : Option.none(),
+  )
 
 /** Encode a composition's Blurhash from an already-decoded original. */
 export const encodeCompositionBlurhash = (
@@ -272,7 +316,21 @@ export const encodeCompositionBlurhash = (
   }
 }
 
+/** The decoded placeholders this module has already drawn, keyed by hash — one
+ *  decode per Photo, ever. A hash the decoder rejects is not kept, so a failure
+ *  is recomputed rather than remembered.
+ *
+ *  A plain Map, not an Effect `Cache`: both readers are synchronous foldkit view
+ *  builders on the grid's render path, and a memo that has to be read as an
+ *  `Effect` would put a fiber in the middle of drawing a tile. What the Map was
+ *  missing is a bound — every hash ever rendered kept a base64 PNG alive for the
+ *  life of the tab — so it is capped at {@link CACHE_CAP}, dropping the least
+ *  recently drawn hash, which is the one a reader scrolling back up is least
+ *  likely to want. */
 const cache = new Map<string, string>()
+
+/** Distinct hashes held before the least recently drawn is dropped. */
+const CACHE_CAP = 256
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256)
@@ -395,11 +453,24 @@ const rgbaToPngDataUrl = (
 }
 
 /** Decode a blurhash to a small PNG data-URL for CSS background-image use.
- *  Memoized per hash — one decode per Photo, ever. Returns null for hashes
- *  the decoder rejects (not cached — failures are recomputed). */
+ *  Returns null for a hash the decoder rejects. Memoized in {@link cache}. */
+/** Drop the least recently drawn hash once the memo is full. A `Map` iterates
+ *  in insertion order, and a read re-inserts below, so the first key is the
+ *  least recently used. */
+const evictIfFull = (): void => {
+  if (cache.size <= CACHE_CAP) return
+  const oldest = cache.keys().next()
+  if (!oldest.done) cache.delete(oldest.value)
+}
+
 export const placeholderDataUrl = (hash: string): string | null => {
   const cached = cache.get(hash)
-  if (cached !== undefined) return cached
+  if (cached !== undefined) {
+    // Re-insert so a hash the reader keeps coming back to is not the one evicted.
+    cache.delete(hash)
+    cache.set(hash, cached)
+    return cached
+  }
   try {
     const pixels = decode(hash, SAMPLE_SIZE, SAMPLE_SIZE)
     const rgba = new Uint8ClampedArray(pixels.length)
@@ -420,6 +491,7 @@ export const placeholderDataUrl = (hash: string): string | null => {
       }
     }
     if (dataUrl === null) dataUrl = rgbaToPngDataUrl(SAMPLE_SIZE, SAMPLE_SIZE, rgba)
+    evictIfFull()
     cache.set(hash, dataUrl)
     return dataUrl
   } catch {

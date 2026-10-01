@@ -1,12 +1,13 @@
-import { Effect, Layer } from 'effect'
-import { HttpRouter } from 'effect/unstable/http'
+import { Effect, Layer, Option, Result, Schema as S } from 'effect'
+import * as SqlClient from 'effect/unstable/sql/SqlClient'
+import { FetchHttpClient, Headers, HttpRouter, HttpServerResponse } from 'effect/unstable/http'
 import { RpcSerialization, RpcServer } from 'effect/unstable/rpc'
 import type { WebsiteEnv } from '../../../alchemy.run'
 import {
   AdminRpcHandlersLive,
   AdminSession,
   extractImageMeta,
-  GatewayLive,
+  MetadataLive,
   PhotoService,
   PhotoServiceLive,
   PublicPhotoServiceLive,
@@ -14,24 +15,50 @@ import {
   SettingsService,
   SettingsServiceLive,
   TagServiceLive,
-  type AdminSessionValue,
 } from '@photo/api'
 import {
+  Blurhash,
   InvalidInput,
   PhotoAdminRpcs,
   PhotoPublicRpcs,
+  TagIdList,
+  UploadErrorBody,
+  UploadSuccessBody,
   hasJpegMagic,
   isJpegUpload,
 } from '@photo/shared'
-import { verifyAdminAccess } from './access'
+import { rejectionResponse, verifyAdminAccess } from './access'
 import { ADMIN_RPC_PATH, HEALTH_PATH, IMAGE_PATH, RPC_PATH, UPLOAD_PATH } from './lib/api'
-import { clientKey, createRateLimiter, type RateLimiter } from './rate-limit'
+import { WorkerLoggerLive } from './lib/logger'
+import { RateLimit, RateLimitLive, clientKey } from './rate-limit'
 
 // The stage arrives as a binding because the admin gate is stage-dependent:
 // blank `ACCESS_TEAM_DOMAIN` means unauthenticated on `dev` and a hard failure
 // anywhere else. See `verifyAdminAccess` in ./access. Both Workers take the
 // same bindings, so they share one env type rather than declaring it twice.
 type ApiEnv = WebsiteEnv
+
+/** The Access gate's HTTP transport, over the platform's own `fetch`.
+ *
+ *  `FetchHttpClient.layer` alone would resolve `FetchHttpClient.Fetch` — a
+ *  `Context.Reference`, which memoises its default on the reference object at
+ *  first read for the lifetime of the module. Naming `globalThis.fetch` here
+ *  pins nothing: the lookup happens per call, so the gate reads the platform's
+ *  fetch as it is at the moment it makes the request. That is the same fetch the
+ *  bare call this replaced used, and it is what lets the gate's tests stand a
+ *  JWKS in its place.
+ *
+ *  `async`, and awaiting the call rather than returning it: the transport needs
+ *  a settled promise of a `Response` to read, and handing it the call's return
+ *  value directly leaves it with whatever the implementation handed back. */
+const gateHttpLayer = Layer.provide(
+  FetchHttpClient.layer,
+  Layer.succeed(
+    FetchHttpClient.Fetch,
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+      globalThis.fetch(input, init),
+  ),
+)
 
 const slugify = (input: string): string =>
   input
@@ -52,19 +79,21 @@ const jsonResponse = (data: unknown, init?: ResponseInit): Response =>
     ...init,
   })
 
+/** A rejection body on the upload route, through the declared
+ *  {@link UploadErrorBody}. The upload dialog's failed row prints `message`,
+ *  so every refusal the Admin can reach answers with the one shape it knows how
+ *  to read — including a rate limit, which the queue renders the same way. */
+const uploadError = (message: string, status: number, headers?: HeadersInit): Response =>
+  jsonResponse(UploadErrorBody.make({ message }), {
+    status,
+    ...(headers === undefined ? {} : { headers }),
+  })
+
 const securityHeaders = (): Record<string, string> => ({
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()',
 })
-
-const withSecurity = (response: Response): Response => {
-  const out = new Response(response.body, response)
-  for (const [k, v] of Object.entries(securityHeaders())) {
-    if (!out.headers.has(k)) out.headers.set(k, v)
-  }
-  return out
-}
 
 // 80 MB. The Workers request-body cap is 100 MB on Free/Pro (200 MB Business,
 // 500 MB Enterprise), and a zone's Maximum Upload Size can lower it further, so
@@ -84,53 +113,41 @@ const sanitizeError = (error: unknown): string => {
   return 'internal error'
 }
 
-// Per-isolate fixed windows: uploads are expensive (R2 + D1), RPCs are cheap reads.
-// Ten uploads a minute at 80 MB is an 800 MB/min ceiling for the single
-// Access-gated operator. That is above what a home uplink sustains, so the
-// window is a burst guard against a runaway client rather than the real
-// throughput limit, and ten still admits the design's four-file batch in one
-// run. The request-body cap, not the window, is what actually bounds memory.
-const uploadLimiter = createRateLimiter(10, 60_000)
-const adminRpcLimiter = createRateLimiter(60, 60_000)
-const publicRpcLimiter = createRateLimiter(180, 60_000)
+/** `JSON.parse` as a total function: `None` for text that is not JSON, rather
+ *  than a `try`/`catch` at each of the three call sites below. The parsed value
+ *  is `unknown` and the *shape* is the Schema's job, so parse and validate
+ *  stay two separable steps. */
+const parseJson = Option.liftThrowable((raw: string): unknown => JSON.parse(raw))
 
-const rateLimited = (limiter: RateLimiter, request: Request): Response | null => {
-  const result = limiter.check(clientKey(request))
-  if (result.allowed) return null
-  return jsonResponse(
-    { message: 'rate limit exceeded' },
-    { status: 429, headers: { 'retry-after': String(result.retryAfter) } },
-  )
-}
+/** Parse a multipart text field and decode it as `schema`, in one step.
+ *  `None` for a field that is absent, empty, not JSON, or not the declared
+ *  shape — a body the client got wrong is answered from the fallback, never
+ *  with a failure the operator cannot act on. */
+const decodeJsonField = <A>(
+  schema: S.ConstraintDecoder<A>,
+  raw: FormDataEntryValue | null,
+): Option.Option<A> =>
+  typeof raw === 'string' && raw !== ''
+    ? S.decodeUnknownOption(schema)(Option.getOrElse(parseJson(raw), () => null))
+    : Option.none()
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
+/** The Blurhash the browser encoded off the composition, decoded against the
+ *  one {@link Blurhash} definition the `UpdatePhoto` payload also enforces, so
+ *  an upload and a later Editor save cannot disagree about what a hash is. */
+const parseBlurhash = (raw: FormDataEntryValue | null): string | undefined =>
+  typeof raw === 'string'
+    ? Option.getOrUndefined(S.decodeUnknownOption(Blurhash)(raw.trim()))
+    : undefined
 
-const BLURHASH_ALPHABET =
-  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~'
-
-const parseBlurhash = (raw: FormDataEntryValue | null): string | undefined => {
-  if (typeof raw !== 'string') return undefined
-  const hash = raw.trim()
-  if (hash.length < 6 || hash.length > 64) return undefined
-  for (const char of hash) {
-    if (!BLURHASH_ALPHABET.includes(char)) return undefined
-  }
-  return hash
-}
-
-const parseMetadataObject = (raw: FormDataEntryValue | null): Record<string, unknown> => {
-  if (typeof raw !== 'string' || raw === '') return {}
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return isRecord(parsed) ? parsed : {}
-  } catch {
-    return {}
-  }
-}
+/** The free-form `metadata` blob the dialog sends. Kept as a JSON object
+ *  rather than decoded to `PhotoMetadata`: the four keys the upload merges are
+ *  picked from it below, and a body carrying keys the merge does not read is
+ *  stored as nothing rather than as a failure. */
+const parseMetadataObject = (raw: FormDataEntryValue | null): Record<string, unknown> =>
+  Option.getOrElse(decodeJsonField(S.JsonObject, raw), () => ({}))
 
 const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
-  const program = Effect.gen(function* () {
+  const upload = Effect.fn('api.upload')(function* () {
     const form: FormData = yield* Effect.tryPromise({
       try: () => request.formData(),
       catch: () => new Error('invalid multipart form'),
@@ -138,14 +155,14 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     const file = form.get('file')
     const titleRaw = form.get('title')
     if (!(file instanceof File) || typeof titleRaw !== 'string' || titleRaw.trim() === '') {
-      return jsonResponse({ message: 'file and title are required' }, { status: 400 })
+      return uploadError('file and title are required', 400)
     }
     const title = titleRaw.trim().slice(0, 200)
     if (file.size <= 0 || file.size > UPLOAD_MAX_BYTES) {
-      return jsonResponse({ message: 'file must be non-empty and under 80MB' }, { status: 413 })
+      return uploadError('file must be non-empty and under 80MB', 413)
     }
     if (!isJpegUpload(file.name, file.type)) {
-      return jsonResponse({ message: 'unsupported image — JPEG only' }, { status: 415 })
+      return uploadError('unsupported image — JPEG only', 415)
     }
     const takenAtRaw = form.get('takenAt')
     // The dialog's two Toggle Rows. `Publish when ready` off (the default)
@@ -153,16 +170,14 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     // from the Settings singleton rather than from the schema defaults.
     const publishWhenReady = form.get('publishWhenReady') === 'true'
     const useExportDefaults = form.get('useExportDefaults') === 'true'
-    const tagIdsRaw = form.get('tagIds')
-    let tagIds: ReadonlyArray<string> = []
-    if (typeof tagIdsRaw === 'string' && tagIdsRaw.trim() !== '') {
-      try {
-        const parsed: unknown = JSON.parse(tagIdsRaw)
-        if (Array.isArray(parsed)) tagIds = parsed.filter((v): v is string => typeof v === 'string')
-      } catch {
-        tagIds = []
-      }
-    }
+    // The same `TagIdList` the `UpdatePhoto` payload is bounded by, so an
+    // upload and an edit cap the same selection the same way. A body over the
+    // bound is the client's own picker misbehaving; the upload proceeds with
+    // no tags rather than failing a file that is otherwise fine.
+    const tagIds: ReadonlyArray<string> = Option.getOrElse(
+      decodeJsonField(TagIdList, form.get('tagIds')),
+      () => [],
+    )
 
     const bytes: ArrayBuffer = yield* Effect.tryPromise({
       try: () => file.arrayBuffer(),
@@ -173,12 +188,12 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     // the type. The bytes' own SOI marker is the second, unforgeable check, so
     // only a real JPEG ever reaches `extractImageMeta` and R2.
     if (!hasJpegMagic(new Uint8Array(bytes))) {
-      return jsonResponse({ message: 'unsupported image — JPEG only' }, { status: 415 })
+      return uploadError('unsupported image — JPEG only', 415)
     }
 
     const meta = yield* extractImageMeta(bytes).pipe(Effect.catch(() => Effect.succeed(undefined)))
     if (meta === undefined) {
-      return jsonResponse({ message: 'not a readable image' }, { status: 400 })
+      return uploadError('not a readable image', 400)
     }
 
     const userMeta = parseMetadataObject(form.get('metadata'))
@@ -236,40 +251,65 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
         blurhash: parseBlurhash(form.get('blurhash')),
         contentType: 'image/jpeg',
         bytes,
-        tagIds: tagIds.slice(0, 32),
+        tagIds,
       }),
     )
-    return jsonResponse(created, { status: 201 })
-  }).pipe(
-    Effect.provide(
-      Layer.mergeAll(PhotoServiceLive, SettingsServiceLive).pipe(Layer.provide(gatewayLayer(env))),
-    ),
-    // A rejection the operator can act on (an unsupported ratio) is a 400 with
-    // its own message; everything else is an opaque 500. The failed Upload Item
-    // prints the message, so the ratio reason reaches it from here.
-    Effect.catch((error: unknown) =>
-      Effect.succeed(
-        jsonResponse(
-          { message: sanitizeError(error) },
-          { status: error instanceof InvalidInput ? 400 : 500 },
-        ),
+    // `renditionsPending` is declared rather than sniffed for: regeneration is
+    // not built yet (CONTEXT.md `Rendition`, #35), so nothing an upload stores
+    // owes a Rendition, and the Admin's queue holds a `true` here at
+    // `processing` rather than publishing a Photo still waiting for one.
+    return jsonResponse(UploadSuccessBody.make({ ...created, renditionsPending: false }), {
+      status: 201,
+    })
+  })
+
+  return Effect.runPromise(
+    upload().pipe(
+      Effect.provide(
+        Layer.mergeAll(PhotoServiceLive, SettingsServiceLive).pipe(Layer.provide(metadataLayer(env))),
+      ),
+      // The upload's span is only reported if something reads it; the Worker's
+      // logger is what turns it into a line `wrangler tail` prints.
+      Effect.provide(WorkerLoggerLive),
+      // A rejection the operator can act on (an unsupported ratio) is a 400 with
+      // its own message; everything else is an opaque 500. The failed Upload Item
+      // prints the message, so the ratio reason reaches it from here.
+      Effect.catch((error: unknown) =>
+        Effect.succeed(uploadError(sanitizeError(error), error instanceof InvalidInput ? 400 : 500)),
       ),
     ),
   )
-  return Effect.runPromise(program)
 }
 
-const gatewayLayer = (env: ApiEnv) => {
+/** The metadata stack: the `SqlClient` over D1, D1's own atomic `Batch`, and
+ *  the R2 `Gateway`. A Worker deployed without a binding cannot answer
+ *  anything, so the missing binding is a startup error. */
+const metadataLayer = (env: ApiEnv) => {
   if (env.DB === undefined || env.DB === null || env.PHOTOS === undefined || env.PHOTOS === null) {
     throw new Error('missing D1 or R2 binding')
   }
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return GatewayLive({ db: env.DB as never, photos: env.PHOTOS as never })
+  return MetadataLive({ db: env.DB, photos: env.PHOTOS })
 }
 
-const handleImageProxy = async (env: ApiEnv, request: Request): Promise<Response> => {
-  const url = new URL(request.url)
-  const r2Key = decodeURIComponent(url.pathname.slice(IMAGE_PATH.length + 1))
+/** The D1 liveness probe behind `/api/health`. A `Result`, not a failure: a
+ *  database that is not answering is the health endpoint reporting `503`, which
+ *  is the one route whose whole job is to answer with that. */
+const healthProbe = Effect.fn('api.health')(function* () {
+  const sql = yield* SqlClient.SqlClient
+  const rows = yield* Effect.result(sql`SELECT 1 AS ok`)
+  return Result.isSuccess(rows)
+})
+
+/** The R2 proxy behind `/api/image/<key>`. The key is checked before R2 is
+ *  touched, so a traversal attempt costs a string comparison rather than a
+ *  bucket read.
+ *
+ *  The key arrives from the router as a path parameter, which is why it is
+ *  decoded here rather than sliced out of the URL: the route owns the prefix and
+ *  this owns the shape of what follows it. A key spanning more than one segment
+ *  never matches the route at all, which is a stronger answer than a check. */
+const imageProxy = Effect.fn('api.imageProxy')(function* (env: ApiEnv, rawKey: string) {
+  const r2Key = decodeURIComponent(rawKey)
   if (
     r2Key === '' ||
     r2Key.length > 256 ||
@@ -277,166 +317,310 @@ const handleImageProxy = async (env: ApiEnv, request: Request): Promise<Response
     !r2Key.startsWith('originals/') ||
     r2Key.includes('\0')
   ) {
-    return jsonResponse({ message: 'not found' }, { status: 404 })
+    // Not an upload rejection: nothing decodes an image proxy's 404, so it
+    // answers the same message shape without borrowing the upload contract.
+    return yield* HttpServerResponse.json({ message: 'not found' }, { status: 404 })
   }
-  const object = await env.PHOTOS.get(r2Key)
-  if (!object) return jsonResponse({ message: 'not found' }, { status: 404 })
-  const headers = new Headers()
+  const object = yield* Effect.tryPromise({
+    try: () => env.PHOTOS.get(r2Key),
+    // An R2 that is not answering is a 404 to the caller — a plate that cannot
+    // be fetched is a missing plate — and the span records that it happened.
+    catch: () => null,
+  })
+  // An object read with a precondition carries no stream, and there is no
+  // precondition here, so this is unreachable in practice — answered rather than
+  // handed to `Response` as a body it cannot use.
+  if (object === null || object === undefined || object.body === null || object.body === undefined) {
+    return yield* HttpServerResponse.json({ message: 'not found' }, { status: 404 })
+  }
+  const headers = new globalThis.Headers()
   headers.set('content-type', object.httpMetadata?.contentType ?? 'image/jpeg')
   headers.set('cache-control', 'public, max-age=31536000, immutable')
-  return new Response(object.body, { headers })
-}
+  return HttpServerResponse.fromWeb(new globalThis.Response(object.body, { headers }))
+})
 
-/** The claims `verifyAdminAccess` just verified, provided into the admin
- *  handler layer per request, so a handler that reads the session reads the
- *  one the gate checked. The public route has no gate, so it provides the
- *  stand-down shape and the admin group is unreachable there. */
-const buildRpcHandler = (
-  env: ApiEnv,
-  session: AdminSessionValue,
-): ((request: Request) => Promise<Response>) => {
-  const routerLayer = HttpRouter.layer
-  const handlersLayer = Layer.merge(
-    PublicRpcHandlersLive,
-    Layer.provide(AdminRpcHandlersLive, Layer.succeed(AdminSession, session)),
-  ).pipe(
+/**
+ * The Access gate, as middleware on the routes that need it.
+ *
+ * It provides `AdminSession` for the request that passed, so a handler that
+ * reads the session reads the one the gate checked. As middleware the gate sits
+ * *on* the route rather than in front of it: a route mounted without it is
+ * ungated by construction, which is the opposite of what a chain of `if`s can
+ * promise.
+ *
+ * The bindings and the web `Request` are closed over rather than read from the
+ * context. `HttpRouter.middleware` may only require services the router itself
+ * provides, and these are the two it cannot — they are an argument of `fetch`.
+ * Closing over them is sound because the middleware is built per request, from
+ * those same arguments, and the comment on `handlerFor` says so.
+ */
+const adminGate = (env: ApiEnv, request: globalThis.Request) =>
+  HttpRouter.middleware<{ provides: AdminSession }>()((httpEffect) =>
+    Effect.gen(function* () {
+      const gate = yield* verifyAdminAccess(request, env).pipe(Effect.provide(gateHttpLayer))
+      if (Result.isFailure(gate)) {
+        // The reason is eight-way specific and the caller is told nothing but
+        // the status, so it is logged here rather than in the body.
+        yield* Effect.logWarning(gate.failure.reason)
+        return HttpServerResponse.fromWeb(rejectionResponse(gate.failure))
+      }
+      return yield* Effect.provide(
+        httpEffect,
+        Layer.succeed(AdminSession, {
+          email: gate.success.email,
+          teamDomain: gate.success.teamDomain,
+        }),
+      )
+    }),
+  ).layer
+
+/**
+ * The three per-route windows.
+ *
+ * Per-isolate fixed windows: uploads are expensive (R2 + D1), RPCs are cheap
+ * reads. Ten uploads a minute at 80 MB is an 800 MB/min ceiling for the single
+ * Access-gated operator — above what a home uplink sustains, so the window is a
+ * burst guard against a runaway client rather than the real throughput limit,
+ * and ten still admits the design's four-file batch in one run. The request-body
+ * cap, not the window, is what actually bounds memory.
+ *
+ * As middleware so the limit is declared next to the route it bounds: the three
+ * differ by two orders of magnitude, and as three names inside a dispatcher that
+ * difference is easy to attach to the wrong branch. The limiter itself is built
+ * per request for the same reason the gate closes over its arguments — a
+ * middleware cannot require a layer-provided service — which is also what the
+ * hand-written dispatcher did.
+ */
+export type RouteName = 'upload' | 'adminRpc' | 'publicRpc'
+
+const limited = (route: RouteName, limit: number, windowMs: number, request: globalThis.Request) =>
+  HttpRouter.middleware((httpEffect) =>
+    Effect.gen(function* () {
+      const refusal = yield* Effect.gen(function* () {
+        const limiter = yield* RateLimit
+        const result = yield* limiter.check(clientKey(request))
+        if (result.allowed) return null
+        // The queue renders a spent window through the upload contract, so a
+        // 429 from any route is the one body shape the Admin knows how to read.
+        return uploadError('rate limit exceeded', 429, {
+          'retry-after': String(result.retryAfter),
+        })
+      }).pipe(Effect.provide(RateLimitLive(limit, windowMs)))
+      if (refusal === null) return yield* httpEffect
+      return HttpServerResponse.fromWeb(refusal)
+    }),
+  ).layer
+
+/** The upload route. Gated and limited, and the body is read once, here. */
+const uploadRoute = (env: ApiEnv, request: globalThis.Request) =>
+  HttpRouter.add('POST', UPLOAD_PATH, () =>
+    Effect.map(
+      Effect.promise(() => handleUpload(env, request)),
+      HttpServerResponse.fromWeb,
+    ),
+  ).pipe(Layer.provide(adminGate(env, request)), Layer.provide(limited('upload', 10, 60_000, request)))
+
+/** The admin group. The gate is what makes it reachable, and it is mounted under
+ *  its own path so the public route cannot name it. */
+const adminRpcRoute = (env: ApiEnv, request: globalThis.Request) =>
+  RpcServer.layerHttp({ group: PhotoAdminRpcs, path: ADMIN_RPC_PATH, protocol: 'http' }).pipe(
+    Layer.provide(adminGate(env, request)),
+    Layer.provide(limited('adminRpc', 60, 60_000, request)),
+    Layer.provide(
+      Layer.provide(
+        AdminRpcHandlersLive,
+        // Provided by the gate for the request that passed; the stand-down
+        // shape is unreachable, because this route is not mounted anywhere the
+        // gate does not run.
+        Layer.succeed(AdminSession, { email: null, teamDomain: null }),
+      ),
+    ),
+    Layer.provide(RpcSerialization.layerJson),
+    Layer.provide(HttpRouter.layer),
+  )
+
+/** The public group. Cheap reads, and the only thing the public site calls. */
+const publicRpcRoute = (env: ApiEnv, request: globalThis.Request) =>
+  RpcServer.layerHttp({ group: PhotoPublicRpcs, path: RPC_PATH, protocol: 'http' }).pipe(
+    Layer.provide(limited('publicRpc', 180, 60_000, request)),
+    Layer.provide(PublicRpcHandlersLive),
     Layer.provide(
       Layer.mergeAll(PhotoServiceLive, PublicPhotoServiceLive, TagServiceLive, SettingsServiceLive),
     ),
-    Layer.provide(gatewayLayer(env)),
+    Layer.provide(metadataLayer(env)),
+    Layer.provide(RpcSerialization.layerJson),
+    Layer.provide(HttpRouter.layer),
   )
-  // The two groups are mounted on the same paths the hand-written matcher below
-  // compares against, so the router and the matcher cannot name different URLs.
-  const appLayer = Layer.mergeAll(
-    RpcServer.layerHttp({ group: PhotoPublicRpcs, path: RPC_PATH, protocol: 'http' }).pipe(
-      Layer.provide(routerLayer),
-      Layer.provide(RpcSerialization.layerJson),
-    ),
-    RpcServer.layerHttp({ group: PhotoAdminRpcs, path: ADMIN_RPC_PATH, protocol: 'http' }).pipe(
-      Layer.provide(routerLayer),
-      Layer.provide(RpcSerialization.layerJson),
-    ),
-    routerLayer,
-  ).pipe(Layer.provide(handlersLayer))
 
-  const webHandler = HttpRouter.toWebHandler(appLayer, { disableLogger: true })
-  const handler = (request: Request): Promise<Response> => webHandler.handler(request)
-  return handler
-}
+/**
+ * The image proxy.
+ *
+ * A trailing `/*` rather than a `:key`, and that is not a style choice. Every
+ * key this route serves is `originals/<id>.jpg` — it contains a slash — and a
+ * `:key` matches one segment, so the route would 404 every image in the bucket.
+ * The wildcard is the whole remainder of the path; `imageProxy` then does what
+ * the old `startsWith` did and decides what is an acceptable key, because that
+ * check is about R2 rather than about routing.
+ */
+const imageRoute = (env: ApiEnv) => HttpRouter.add('*', `${IMAGE_PATH}/*`, () =>
+  Effect.gen(function* () {
+    const params = yield* HttpRouter.params
+    return yield* imageProxy(env, params['*'] ?? '')
+  }),
+)
 
 /**
  * The only origins that get CORS headers: the two localhost ports the dev
  * server runs on. In production the Admin and the API share a hostname, so
- * nothing is cross-origin and this list is never consulted — which is the
- * point, because a cross-origin preflight is exactly what Cloudflare Access
- * used to answer with a bare 403. See `./lib/api` for the whole story.
+ * nothing is cross-origin and this list is never consulted — which is the point,
+ * because a cross-origin preflight is exactly what Cloudflare Access used to
+ * answer with a bare 403. See `./lib/api` for the whole story.
+ *
+ * `b3` and `traceparent` are named in the allowed headers and are not
+ * decoration: Effect's HTTP client stamps both onto every request it makes, so
+ * the dev preflight asks for them by name. A preflight that does not answer with
+ * the headers it asked for is a failed preflight, and the browser then drops the
+ * POST without ever showing the Worker a response — which reads, in the Admin,
+ * exactly like an unproven session: every read fails, `GetSession` is refused,
+ * and the whole shell is replaced by the sign-in affordance. Nothing in
+ * production is preflighted (the API is a route on the site's own hostname), so
+ * this list is dev-only and its job is to match what the client actually sends.
+ *
+ * One behaviour did change, and it is the preflight for a disallowed origin: it
+ * now answers `204` without `access-control-allow-origin` where the hand-written
+ * dispatcher answered `403`. The refusal is the absent header in both cases, and
+ * that is the part a browser enforces.
  */
-const DEV_ORIGINS = new Set(['http://localhost:5173', 'http://localhost:13371'])
+const corsLayer = HttpRouter.cors({
+  allowedOrigins: ['http://localhost:5173', 'http://localhost:13371'],
+  allowedMethods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: [
+    'content-type',
+    'authorization',
+    'cf-access-jwt-assertion',
+    'b3',
+    'traceparent',
+  ],
+  credentials: true,
+  maxAge: 86_400,
+})
 
 /**
- * The request headers a dev browser is allowed to send.
+ * The 404, as a route.
  *
- * `b3` and `traceparent` are not decoration: Effect's HTTP client stamps both
- * onto every request it makes, so the dev preflight asks for them by name. A
- * preflight that does not answer with the headers it asked for is a failed
- * preflight, and the browser then drops the POST without ever showing the
- * Worker a response — which reads, in the Admin, exactly like an unproven
- * session: every read fails, `GetSession` is refused, and the whole shell is
- * replaced by the sign-in affordance. Nothing in production is preflighted (the
- * API is a route on the site's own hostname), so this list is dev-only and its
- * job is to match what the client actually sends.
+ * The router will 404 an unmatched path on its own, and that answer is produced
+ * before any route is matched — so global middleware never sees it, and the
+ * security headers the hand-written dispatcher put on every response would go
+ * missing on exactly the answer nobody is looking at. Declaring the catch-all
+ * last makes the 404 a route like any other, with the same headers and the same
+ * logging, and the specific routes above still win because the matcher prefers
+ * them over a wildcard.
  */
-const DEV_ALLOWED_REQUEST_HEADERS =
-  'content-type, authorization, cf-access-jwt-assertion, b3, traceparent'
+const notFoundRoute = HttpRouter.add(
+  '*',
+  '/*',
+  HttpServerResponse.text('Not found', { status: 404 }),
+)
 
-const corsHeaders = (request: Request): Record<string, string> => {
-  const origin = request.headers.get('origin')
-  if (origin === null) return {}
-  if (!DEV_ORIGINS.has(origin)) return {}
-  return {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': DEV_ALLOWED_REQUEST_HEADERS,
-    'access-control-allow-credentials': 'true',
-    'access-control-max-age': '86400',
-    vary: 'Origin',
-  }
-}
+/**
+ * Security headers on every answer, including the refusals and the 404.
+ *
+ * Global middleware, so a route that answers early — a spent window, a rejected
+ * gate, the catch-all above — comes back with them rather than without. The
+ * hand-written dispatcher applied these to the final `Response`; this is the
+ * router's way of making the same promise, and `notFoundRoute` exists because
+ * the one answer no route produces is the one that would otherwise be bare.
+ */
+const securityLayer = HttpRouter.middleware(
+  (httpEffect) =>
+    Effect.map(
+      httpEffect,
+      HttpServerResponse.setHeaders(Headers.fromRecordUnsafe(securityHeaders())),
+    ),
+  { global: true },
+)
 
-const withCors = (request: Request, response: Response): Response => {
-  const headers = corsHeaders(request)
-  if (Object.keys(headers).length === 0) return response
-  const out = new Response(response.body, response)
-  for (const [k, v] of Object.entries(headers)) out.headers.set(k, v)
-  return out
-}
+/** The health probe, as a route. */
+const healthRoute = (env: ApiEnv) => HttpRouter.add('GET', HEALTH_PATH, () =>
+  Effect.gen(function* () {
+    const healthy = yield* healthProbe().pipe(Effect.provide(metadataLayer(env)))
+    // A `Result`, not a failure: a database that is not answering is the health
+    // endpoint reporting `503`, which is the one route whose whole job is to
+    // answer with that.
+    return healthy
+      ? yield* HttpServerResponse.json({ ok: true })
+      : yield* HttpServerResponse.json({ ok: false }, { status: 503 })
+  }),
+)
+
+/**
+ * Every route, and the three layers the whole app needs.
+ *
+ * The services and the router are merged into the app rather than wrapped
+ * around it, so a missing dependency is a type error at the point the route is
+ * declared rather than a "service not found" at request time — which is how the
+ * hand-written `if`-chain failed, twice, during the SQL migration.
+ */
+const appLayer = (env: ApiEnv, request: globalThis.Request) =>
+  Layer.mergeAll(
+    healthRoute(env),
+    uploadRoute(env, request),
+    adminRpcRoute(env, request),
+    publicRpcRoute(env, request),
+    imageRoute(env),
+    notFoundRoute,
+    corsLayer,
+    securityLayer,
+  ).pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(PhotoServiceLive, PublicPhotoServiceLive, TagServiceLive, SettingsServiceLive),
+    ),
+    // The one place the metadata stack is named: the `SqlClient` over D1, D1's
+    // atomic `Batch`, and the R2 `Gateway`. Provided around the whole app so a
+    // route cannot reach a service without it.
+    Layer.provideMerge(metadataLayer(env)),
+    Layer.provideMerge(RpcSerialization.layerJson),
+    // The router the RPC groups registered their routes with. Merged in as well
+    // so it is the same instance the handler dispatches through.
+    Layer.provideMerge(HttpRouter.layer),
+    Layer.provideMerge(WorkerLoggerLive),
+  )
+
+/**
+ * The router, wired to one set of bindings.
+ *
+ * Built per request, which is what the hand-written dispatcher did too: the
+ * bindings are an argument of `fetch`, and Effect's `Context.Reference`
+ * memoises its default process-wide on first read, so a module-scoped layer
+ * could not see the second Worker's `env` — or a test's. The cost is a
+ * `D1Client` and its prepared-statement cache per request, against a database
+ * that is a network call anyway; the alternative is a `WeakMap` keyed on `env`
+ * and a module-level cache that outlives the Worker it was built for.
+ *
+ * `ignoreTrailingSlash` is load-bearing rather than cosmetic: Effect's HTTP RPC
+ * client appends a slash to the URL it is given, so the app asks for
+ * `/api/rpc/` where the route is declared `/api/rpc`. The hand-written
+ * dispatcher normalised the trailing slash away by hand; the router does it for
+ * every route instead of the one that needed it.
+ */
+/**
+ * Security headers on every answer.
+ *
+ * At the server chain rather than as route middleware, because the answers that
+ * matter most here are the ones no route produced: the router's own 404, CORS's
+ * preflight, and a rate-limit refusal. Route middleware cannot reach any of
+ * them — the 404 in particular is generated before a route is matched — and the
+ * hand-written dispatcher applied these to the final `Response`, so this keeps
+ * that promise.
+ */
+const handlerFor = (env: ApiEnv, request: globalThis.Request) =>
+  HttpRouter.toWebHandler(appLayer(env, request), {
+    disableLogger: true,
+    routerConfig: { ignoreTrailingSlash: true },
+  }).handler
 
 export default {
-  async fetch(request: Request, env: ApiEnv, _ctx: unknown): Promise<Response> {
-    const respond = (res: Response): Response => withSecurity(withCors(request, res))
-    if (request.method === 'OPTIONS') {
-      const headers = corsHeaders(request)
-      if (Object.keys(headers).length > 0) {
-        return withSecurity(new Response(null, { status: 204, headers: new Headers(headers) }))
-      }
-      return withSecurity(new Response(null, { status: 403 }))
-    }
-
-    const url = new URL(request.url)
-    // Effect's HTTP RPC client appends a slash to the URL it is given, so the
-    // app itself asks for `/api/rpc/` and `/api/admin/rpc/`. Every path below is
-    // matched by hand against this string, so the trailing slash is dropped
-    // once here instead of being spelled into each comparison — otherwise the
-    // site's own client gets the Not found below from every read.
-    const pathname = url.pathname.replace(/\/+$/, '')
-
-    if (pathname === HEALTH_PATH) {
-      try {
-        const row = await env.DB.prepare('SELECT 1 as ok').first<{ ok: number }>()
-        if (row === null) throw new Error('db probe failed')
-        return respond(jsonResponse({ ok: true }))
-      } catch {
-        return respond(jsonResponse({ ok: false }, { status: 503 }))
-      }
-    }
-
-    if (pathname === UPLOAD_PATH && request.method === 'POST') {
-      const limited = rateLimited(uploadLimiter, request)
-      if (limited !== null) return respond(limited)
-      // The upload is edge-gated, not identified: nothing it writes carries
-      // the operator's email, so the verified address is read and dropped.
-      const gate = await verifyAdminAccess(request, env)
-      if (!gate.ok) return respond(gate.response)
-      const res = await handleUpload(env, request)
-      return respond(res)
-    }
-
-    if (pathname === ADMIN_RPC_PATH) {
-      const limited = rateLimited(adminRpcLimiter, request)
-      if (limited !== null) return respond(limited)
-      const gate = await verifyAdminAccess(request, env)
-      if (!gate.ok) return respond(gate.response)
-      const res = await buildRpcHandler(env, {
-        email: gate.email,
-        teamDomain: gate.teamDomain,
-      })(request)
-      return respond(res)
-    }
-
-    if (url.pathname.startsWith(`${IMAGE_PATH}/`)) {
-      const res = await handleImageProxy(env, request)
-      return respond(res)
-    }
-
-    if (pathname === RPC_PATH) {
-      const limited = rateLimited(publicRpcLimiter, request)
-      if (limited !== null) return respond(limited)
-      // The admin group is mounted on `/admin/rpc`, which this path never
-      // matches, so the session it carries is unreachable from here.
-      const res = await buildRpcHandler(env, { email: null, teamDomain: null })(request)
-      return respond(res)
-    }
-
-    return respond(new Response('Not found', { status: 404 }))
+  fetch(request: globalThis.Request, env: ApiEnv): Promise<globalThis.Response> {
+    return handlerFor(env, request)(request)
   },
 }

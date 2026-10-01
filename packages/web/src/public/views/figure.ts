@@ -1,8 +1,19 @@
 /**
  * Figure: one plate with its placard. `page` is the lede's Page One plate,
- * `column` a plate inside a section — the two are otherwise identical, so the
- * variant only names the slot it occupies and only the slot changes how the
- * bytes are fetched.
+ * `column` a plate inside a Section, `about` the About page's wide plate — the
+ * three are the same element at three measures, so the slot only names where
+ * the plate sits and only the slot changes how it is drawn.
+ *
+ * The About page's plate is the design's Figure at the full content measure,
+ * and its placard is set one step larger there (`type-deck` at `desktop`,
+ * falling back to the caption size and a two-line clamp on the mobile master),
+ * so `type-deck` rides on the slot rather than on the About page wrapping this.
+ *
+ * `loading` is an override rather than a slot fact because the About page draws
+ * its second plate only on the mobile master: a plate the desktop composition
+ * never lays out must not be fetched there, and on the mobile one it sits below
+ * the fold. Lazy is the answer for that plate and the slot's own eager answer
+ * is wrong for it.
  *
  * The mobile Figure master (size=mobile) differs from the desktop one at every
  * level: the placard is a two-line clamped title with a zero-padded number
@@ -18,8 +29,31 @@ import { frameNo, frameNoShort, plateUrl, RATIO_VALUE, type Figure as Plate } fr
 import { Message } from '../model'
 import type { Child } from './shared'
 
-export const figure = (plate: Plate, variant: 'page' | 'column', h: HtmlBuilder<Message>): Child =>
-  h.figure(
+/** Where a plate sits. `page` is Page One, `column` is a Section column, and
+ *  `about` is the About page's own full-measure plate. */
+export const figureSlots = ['page', 'column', 'about'] as const
+export type FigureSlot = (typeof figureSlots)[number]
+
+export type FigureConfig = Readonly<{
+  plate: Plate
+  slot: FigureSlot
+  /** Whether the browser fetches the original now. Defaults to the slot's own
+   *  answer: a plate in a Section is below the fold, a page's lead is not. */
+  loading?: 'eager' | 'lazy'
+}>
+
+/** The placard title's measure. The mobile master clamps the caption to two
+ *  lines; the desktop masters print it whole, at the caption's size in a
+ *  Section and at the deck's on the About page. */
+const titleClass = (slot: FigureSlot): string =>
+  slot === 'about'
+    ? 'type-caption italic text-role-text-primary line-clamp-2 desktop:line-clamp-none desktop:type-deck'
+    : 'type-caption italic text-role-text-primary line-clamp-2 desktop:line-clamp-none'
+
+export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => {
+  const { plate, slot } = config
+  const loading = config.loading ?? (slot === 'column' ? 'lazy' : 'eager')
+  return h.figure(
     [h.Key(plate.id), h.Class('flex flex-col gap-(--spacing-sm) desktop:gap-(--spacing-md)')],
     [
       h.button(
@@ -45,7 +79,7 @@ export const figure = (plate: Plate, variant: 'page' | 'column', h: HtmlBuilder<
             // The placard below is the plate's accessible name; a second reading
             // of the same sentence would only make the figure noisier.
             h.Alt(''),
-            ...(variant === 'page'
+            ...(loading === 'eager'
               ? [h.Loading('eager'), h.Fetchpriority('high')]
               : [h.Loading('lazy'), h.Decoding('async')]),
           ]),
@@ -58,14 +92,7 @@ export const figure = (plate: Plate, variant: 'page' | 'column', h: HtmlBuilder<
           ),
         ],
         [
-          h.span(
-            [
-              h.Class(
-                'type-caption italic text-role-text-primary line-clamp-2 desktop:line-clamp-none',
-              ),
-            ],
-            [plate.title],
-          ),
+          h.span([h.Class(titleClass(slot))], [plate.title]),
           // The mobile placard number is bare, not "No. 024".
           h.span(
             [h.Class('type-exif whitespace-nowrap text-role-text-secondary desktop:hidden')],
@@ -94,3 +121,4 @@ export const figure = (plate: Plate, variant: 'page' | 'column', h: HtmlBuilder<
           ]),
     ],
   )
+}

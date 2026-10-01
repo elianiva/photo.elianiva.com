@@ -1,16 +1,18 @@
 /**
  * The Edition: the photographs the Front shows, plus the pure helpers the views
- * read off them. This module is the front page's only data seam — `view` takes
- * the `edition` out of the Model and nothing in `home/` reaches for another
- * source of content.
+ * read off them. This module is the public site's only data seam — the views
+ * take the `edition` or the `plates` out of the Model and nothing in `public/`
+ * reaches for another source of content.
  *
- * What is here is what D1 knows: the plates, the months they group into, and
- * whether there is another month below. Every line of text on the page is
- * written in the view that prints it — a masthead is the publication's voice,
- * it is not a record, and the words belong beside the markup that renders them
- * rather than in a table of labels this module hands back. So the Edition has
- * no masthead, no headline, no counters: the only thing a read contributes is
- * photographs.
+ * What is here is what D1 knows: the plates, the months they group into,
+ * whether there is another month below, the Tags a visitor can go to, and the
+ * plates one Tag carries. Every line of text on the site is written in the view
+ * that prints it — a masthead is the publication's voice, it is not a record,
+ * and the words belong beside the markup that renders them rather than in a
+ * table of labels this module hands back. So the Edition has no masthead, no
+ * headline, no counters, and the About page has no about copy: the only thing a
+ * read contributes is photographs, and the only words it contributes are a
+ * Tag's own label and caption.
  *
  * A Photo that is not published is not here, so a site with nothing published
  * is a real state rather than a placeholder: no lead, no Sections, and a
@@ -101,6 +103,40 @@ export const EditionSchema = S.Struct({
 export type Edition = typeof EditionSchema.Type
 
 // ---------------------------------------------------------------------------
+// the Folio and a Tag page
+// ---------------------------------------------------------------------------
+
+/** One entry in the Folio nav. A Tag is the section, so an entry is the Tag's
+ *  own `slug` and `label` and nothing else — the link is the Tag page's path,
+ *  printed by `tagPath` in `../route`, because a URL is the route table's to
+ *  write down. The label is printed as the operator wrote it, the way the
+ *  Admin's tag group prints it. */
+export const FolioEntrySchema = S.Struct({
+  slug: S.String,
+  label: S.String,
+})
+export type FolioEntry = typeof FolioEntrySchema.Type
+
+/** A Tag page: the Tag's own three fields and the plates a read returned for
+ *  it. Earliest first, so the cover is the head of the list (ADR 0006 — a
+ *  Series page is a Tag page ordered by `takenAt`). */
+export const TagPageSchema = S.Struct({
+  slug: S.String,
+  label: S.String,
+  /** The one-line sentence the page prints under the name. Null for a Tag
+   *  nobody has captioned, never `''`. */
+  caption: S.NullOr(S.String),
+  plates: S.Array(FigureSchema),
+})
+export type TagPage = typeof TagPageSchema.Type
+
+/** The Tag page of a document that is not a Tag page, named once so the
+ *  Front's and the About page's Models can hold the field they never read
+ *  without inventing a second spelling of "no Tag here". Its slug is empty, so
+ *  a page that is not a Tag page points at no Tag page at all. */
+export const EMPTY_TAG_PAGE: TagPage = { slug: '', label: '', caption: null, plates: [] }
+
+// ---------------------------------------------------------------------------
 // the read model → the Edition
 // ---------------------------------------------------------------------------
 
@@ -111,6 +147,20 @@ export type Edition = typeof EditionSchema.Type
 export interface FrontRead {
   readonly sections: ReadonlyArray<PublicSection>
   readonly nextSectionCursor: string | null
+}
+
+/** The public read of a Tag page: the Tag and the published Photos carrying
+ *  it, exactly as `PublicPhotoService.byTag` shapes one. The Tag's own three
+ *  fields and its photographs are the whole of it — the page's words are
+ *  authored in `views/tag-page.ts`, and a Tag's caption is the only sentence a
+ *  read contributes. */
+export interface TagRead {
+  readonly tag: {
+    readonly slug: string
+    readonly label: string
+    readonly caption: string | null
+  }
+  readonly photos: ReadonlyArray<PhotoWithTags>
 }
 
 /** `2025-08` -> `August`. The Section's own heading name, off the key so it
@@ -161,10 +211,21 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
   }
 }
 
+/**
+ * Photographs as plates, dropping any that cannot be drawn.
+ *
+ * Exported because both public documents map a read with it: the Front maps a
+ * month's photographs inside {@link sectionOf}, and the About page maps the
+ * photographs it read straight into the plates it draws — so a Photo that
+ * cannot be drawn is dropped by one rule rather than by two.
+ */
+export const figuresOf = (photos: ReadonlyArray<PhotoWithTags>): ReadonlyArray<Figure> =>
+  photos.map(figureOf).filter((figure): figure is Figure => figure !== null)
+
 /** A Section's plates, in the order the read returned them, minus any Photo
  *  that cannot be drawn. A Section left with none is dropped with it. */
 const sectionOf = (section: PublicSection): EditionSection | null => {
-  const figures = section.photos.map(figureOf).filter((figure): figure is Figure => figure !== null)
+  const figures = figuresOf(section.photos)
   if (figures.length === 0) return null
   return {
     id: section.month,
@@ -203,6 +264,29 @@ export const editionOf = (read: FrontRead): Edition => {
     tail: sections.length === 0 ? 'empty' : 'more',
   }
 }
+
+/**
+ * The Edition of a site with nothing published — the shape `editionOf` returns
+ * for an empty read, named once so the About page's Model can hold an Edition
+ * it never reads without inventing a second spelling of "empty".
+ */
+export const EMPTY_EDITION: Edition = { lead: null, sections: [], tail: 'empty' }
+
+/**
+ * A Tag page, from the public read.
+ *
+ * A Tag whose published photographs are all undrawable is a page with a name
+ * and no plate on it, the same honest state the About page draws for an empty
+ * read: a Tag nobody has published anything under is not a destination, so the
+ * Folio does not link to it, but a reader holding the URL is answered with the
+ * Tag's own page rather than a different site.
+ */
+export const tagPageOf = (read: TagRead): TagPage => ({
+  slug: read.tag.slug,
+  label: read.tag.label,
+  caption: read.tag.caption,
+  plates: figuresOf(read.photos),
+})
 
 // ---------------------------------------------------------------------------
 // derived lines

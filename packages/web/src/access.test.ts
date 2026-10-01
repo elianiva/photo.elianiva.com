@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { verifyAdminAccess, type AccessEnv, type AdminGate } from './access'
+import { Effect, Layer, Result } from 'effect'
+import { FetchHttpClient } from 'effect/unstable/http'
+import { verifyAdminAccess as verifyAdminAccessEffect, type AccessEnv, type AdminGate } from './access'
 import worker from './api-worker'
+
+/** The gate, run over the same fetch-backed HTTP client the Worker's own layer
+ *  provides. Shadowed under the old name so every assertion below reads the
+ *  same as it did before the gate became an `Effect`. */
+const verifyAdminAccess = (request: Request, accessEnv: AccessEnv): Promise<AdminGate> =>
+  Effect.runPromise(verifyAdminAccessEffect(request, accessEnv).pipe(Effect.provide(httpLayer)))
 
 const TEAM_DOMAIN = 'https://team.test'
 
@@ -62,12 +70,39 @@ const signAssertion = async (
   return `${header}.${body}.${base64Url(new Uint8Array(signature))}`
 }
 
-/** Serve the team's JWKS, the only network call JWT verification makes. */
+/** Serve the team's JWKS, the only network call JWT verification makes.
+ *
+ *  Two paths reach it, and each needs the transport named differently:
+ *
+ *  - A direct call to the gate below is handed `Fetch` explicitly, because
+ *    `FetchHttpClient.Fetch` is a `Context.Reference` and a Reference memoises
+ *    its default value on the reference object at first read, for the lifetime
+ *    of the module (`Context.ts`, `defaultValueCacheKey`). A
+ *    `vi.stubGlobal('fetch', …)` after the first request would be invisible to
+ *    it, and every test after the first would be handed the first test's key.
+ *  - A call that goes through `worker.fetch` reads `globalThis.fetch` per call
+ *    (see `gateHttpLayer` in `api-worker.ts`), so the global stub is what that
+ *    path sees.
+ *
+ *  Both read the same `currentJwk`, so one `serveJwks` drives both. */
+let currentJwk: { kid: string; kty: string; n: string; e: string; alg: string } | undefined
+
+const jwksBody = (): Response =>
+  currentJwk === undefined
+    ? new Response('no key configured', { status: 500 })
+    : new Response(JSON.stringify({ keys: [currentJwk] }))
+
+const jwksFetch = async (): Promise<Response> => jwksBody()
+
+/** The same transport the Worker's own layer builds, over the stub above. */
+const httpLayer = Layer.provide(
+  FetchHttpClient.layer,
+  Layer.succeed(FetchHttpClient.Fetch, jwksFetch),
+)
+
 const serveJwks = (key: SigningKey): void => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response(JSON.stringify({ keys: [key.publicJwk] }))),
-  )
+  currentJwk = key.publicJwk
+  vi.stubGlobal('fetch', vi.fn(jwksBody))
 }
 
 const adminRequest = (token?: string): Request =>
@@ -83,7 +118,7 @@ const env = (overrides: Partial<AccessEnv>): AccessEnv => ({
 })
 
 const outcome = (gate: AdminGate): number | 'allowed' =>
-  gate.ok ? 'allowed' : gate.response.status
+  Result.isSuccess(gate) ? 'allowed' : gate.failure.status
 
 /** Fails the test if an admin route reads a binding after the gate should have rejected. */
 const unbound = (): never => {
@@ -94,12 +129,17 @@ const unbound = (): never => {
 const workerEnv = (overrides: Partial<AccessEnv>): Parameters<typeof worker.fetch>[1] => ({
   STAGE: 'prod',
   ACCESS_TEAM_DOMAIN: '',
-  DB: { prepare: unbound, batch: unbound },
-  PHOTOS: { get: unbound, put: unbound, delete: unbound },
+  // Every member the binding contracts are listed, not just the ones a test
+  // happens to call: a member missing from this object would be a hole in the
+  // env type rather than a failing test, and the gate is what has to stop any
+  // of them being read.
+  DB: { prepare: unbound, batch: unbound, exec: unbound, withSession: unbound, dump: unbound },
+  PHOTOS: { get: unbound, head: unbound, list: unbound, put: unbound, delete: unbound },
   ...overrides,
 })
 
 afterEach(() => {
+  currentJwk = undefined
   vi.unstubAllGlobals()
 })
 
@@ -112,7 +152,7 @@ describe('admin access gate', () => {
     expect(outcome(gate)).toBe('allowed')
     // The dev stand-down is the one admitted state with no claims: there is no
     // Access assertion to read, and no signed-out state to report (ADR 0003).
-    expect(gate).toEqual({ ok: true, email: null, teamDomain: null })
+    expect(gate).toEqual(Result.succeed({ email: null, teamDomain: null }))
   })
 
   it('fails closed on a blank team domain off the dev stage', async () => {
@@ -168,11 +208,9 @@ describe('the claims the gate hands back', () => {
       env({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
     )
 
-    expect(gate).toEqual({
-      ok: true,
-      email: 'owner@photo.test',
-      teamDomain: key.teamDomain,
-    })
+    expect(gate).toEqual(
+      Result.succeed({ email: 'owner@photo.test', teamDomain: key.teamDomain }),
+    )
   })
 
   it('carries an allowlisted address, and withholds one that is not', async () => {
@@ -204,7 +242,9 @@ describe('the claims the gate hands back', () => {
       team,
     )
 
-    expect(allowed).toEqual({ ok: true, email: 'second@photo.test', teamDomain: key.teamDomain })
+    expect(allowed).toEqual(
+      Result.succeed({ email: 'second@photo.test', teamDomain: key.teamDomain }),
+    )
     expect(outcome(refused)).toBe(403)
   })
 
@@ -220,7 +260,7 @@ describe('the claims the gate hands back', () => {
 
     // The sidebar's `Sign out` row needs the team even with no address to
     // print, so the two claims stand or fall apart.
-    expect(gate).toEqual({ ok: true, email: null, teamDomain: key.teamDomain })
+    expect(gate).toEqual(Result.succeed({ email: null, teamDomain: key.teamDomain }))
   })
 
   it('falls back to the configured team when the assertion carries no issuer', async () => {
@@ -234,7 +274,9 @@ describe('the claims the gate hands back', () => {
     )
 
     // An `iss` is optional in the verifier, and a session is never half-read.
-    expect(gate).toEqual({ ok: true, email: 'owner@photo.test', teamDomain: key.teamDomain })
+    expect(gate).toEqual(
+      Result.succeed({ email: 'owner@photo.test', teamDomain: key.teamDomain }),
+    )
   })
 })
 
@@ -244,7 +286,6 @@ describe('admin routes wired to the gate', () => {
       const response = await worker.fetch(
         new Request(`https://photo-api.test${path}`, { method: 'POST' }),
         workerEnv({ STAGE: 'prod', ACCESS_TEAM_DOMAIN: '' }),
-        {},
       )
       expect([path, response.status]).toEqual([path, 500])
     }
@@ -274,7 +315,6 @@ describe('admin routes wired to the gate', () => {
         }),
       }),
       workerEnv({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
-      {},
     )
 
     expect(response.status).toBe(200)
@@ -323,7 +363,6 @@ describe('the paths the app asks for', () => {
           }),
         }),
         workerEnv({ ACCESS_TEAM_DOMAIN: key.teamDomain }),
-        {},
       )
 
       expect([path, response.status]).toEqual([path, 200])
@@ -347,7 +386,6 @@ describe('the paths the app asks for', () => {
         // The dev stand-down: no team domain, so the public route answers
         // without an assertion.
         workerEnv({ STAGE: 'dev', ACCESS_TEAM_DOMAIN: '' }),
-        {},
       )
       return { status: response.status, body: await response.json() }
     }
@@ -382,7 +420,7 @@ describe('CORS for the two dev origins', () => {
     })
 
   it('answers the dev site origin', async () => {
-    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}), {})
+    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}))
     expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
     expect(response.headers.get('access-control-allow-headers')).toContain('content-type')
@@ -395,7 +433,7 @@ describe('CORS for the two dev origins', () => {
     // that does not answer with the headers it was asked about is a failed
     // preflight: the browser drops the POST, the Worker never sees it, and the
     // Admin reads it as an unproven session rather than as a CORS failure.
-    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}), {})
+    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}))
     const allowed = (response.headers.get('access-control-allow-headers') ?? '')
       .split(',')
       .map((header) => header.trim().toLowerCase())
@@ -410,16 +448,25 @@ describe('CORS for the two dev origins', () => {
         headers: { origin: 'http://localhost:5173' },
       }),
       workerEnv({}),
-      {},
     )
     expect(response.status).toBe(404)
     expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
   })
 
   it('refuses a preflight from an origin outside the list', async () => {
-    const response = await worker.fetch(preflight('https://not-photo.test'), workerEnv({}), {})
-    expect(response.status).toBe(403)
+    const response = await worker.fetch(preflight('https://not-photo.test'), workerEnv({}))
+    // The refusal is the absent header, and that is the part a browser
+    // enforces: a preflight answered without `access-control-allow-origin`
+    // fails whatever its status. The status did change — the router's CORS
+    // middleware answers every preflight `204` and leaves the origin decision
+    // to the headers, where the hand-written dispatcher used to answer `403` —
+    // so it is asserted here as `204` to keep the change visible rather than
+    // silently accepted.
+    expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBeNull()
+    // `vary: Origin` still has to be there, or a cache could hand one origin's
+    // allowance to another.
+    expect(response.headers.get('vary')).toContain('Origin')
   })
 
   it('emits nothing for the site itself, which is same-origin and needs none', async () => {
@@ -427,8 +474,8 @@ describe('CORS for the two dev origins', () => {
     // API mounted on a route of the site's own hostname there is no cross-origin
     // exchange in production, and a CORS header here would only be a second
     // description of a topology that no longer exists.
-    const response = await worker.fetch(preflight('https://photo.elianiva.com'), workerEnv({}), {})
-    expect(response.status).toBe(403)
+    const response = await worker.fetch(preflight('https://photo.elianiva.com'), workerEnv({}))
+    expect(response.status).toBe(204)
     expect(response.headers.get('access-control-allow-origin')).toBeNull()
   })
 })

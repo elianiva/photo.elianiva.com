@@ -28,7 +28,7 @@ import {
   setPhotoStatus,
   trashPhoto,
 } from './fixtures'
-import { makeTestHarness, type TestHarness } from './harness'
+import { makeTestHarness, queryRow, queryRows, type TestHarness } from './harness'
 
 /**
  * The handler layer over the services it talks to, and all of them over the
@@ -70,15 +70,18 @@ const publicRpc = <A, E>(
   harness: TestHarness,
   call: (client: PublicClient) => Effect.Effect<A, E>,
 ): Promise<A> =>
+  // `harness.run` closes the `SqlClient` and `Batch` the handler stack needs.
   Effect.runPromise(
-    Effect.provide(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const client = yield* makePublicClient
-          return yield* call(client)
-        }),
+    harness.run(
+      Effect.provide(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const client = yield* makePublicClient
+            return yield* call(client)
+          }),
+        ),
+        stackOver(harness, PublicRpcHandlersLive),
       ),
-      stackOver(harness, PublicRpcHandlersLive),
     ),
   )
 
@@ -99,15 +102,18 @@ const VERIFIED_SESSION: AdminSessionValue = {
 }
 
 const deletePhoto = (harness: TestHarness, id: string) =>
+  // `harness.run` closes the `SqlClient` and `Batch` the handler stack needs.
   Effect.runPromise(
-    Effect.provide(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const client = yield* RpcTest.makeClient(PhotoAdminRpcs)
-          return yield* client.DeletePhoto({ id })
-        }),
+    harness.run(
+      Effect.provide(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const client = yield* RpcTest.makeClient(PhotoAdminRpcs)
+            return yield* client.DeletePhoto({ id })
+          }),
+        ),
+        adminStackOver(harness, VERIFIED_SESSION),
       ),
-      adminStackOver(harness, VERIFIED_SESSION),
     ),
   )
 
@@ -131,38 +137,35 @@ const adminRpc = <A, E>(
   call: (client: AdminClient) => Effect.Effect<A, E>,
   session: AdminSessionValue = VERIFIED_SESSION,
 ): Promise<A> =>
+  // `harness.run` closes the `SqlClient` and `Batch` the handler stack needs.
   Effect.runPromise(
-    Effect.provide(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const client = yield* makeAdminClient
-          return yield* call(client)
-        }),
+    harness.run(
+      Effect.provide(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const client = yield* makeAdminClient
+            return yield* call(client)
+          }),
+        ),
+        adminStackOver(harness, session),
       ),
-      adminStackOver(harness, session),
     ),
   )
 
 const slugsIn = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
-  harness.db
-    .prepare('SELECT slug FROM photos')
-    .all<{ slug: string }>()
-    .then((raw) => raw.results?.map((row) => row.slug) ?? [])
+  queryRows<{ slug: string }>(harness, (sql) => sql`SELECT slug FROM photos`).then((rows) =>
+    rows.map((row) => row.slug),
+  )
 
-const matOf = async (harness: TestHarness, id: string) => {
-  const row = await harness.db
-    .prepare(
-      'SELECT borderEnabled, borderStyle, borderColour, borderWidth FROM photos WHERE id = ?',
-    )
-    .bind(id)
-    .first<{
-      borderEnabled: number
-      borderStyle: string | null
-      borderColour: string | null
-      borderWidth: number | null
-    }>()
-  return row
-}
+const matOf = (harness: TestHarness, id: string) =>
+  queryRow<{
+    borderEnabled: number
+    borderStyle: string | null
+    borderColour: string | null
+    borderWidth: number | null
+  } | null>(harness, (sql) =>
+    sql`SELECT borderEnabled, borderStyle, borderColour, borderWidth FROM photos WHERE id = ${id}`,
+  )
 
 describe('ListPhotos handler', () => {
   it('finds a tag whose slug was typed with different case and spacing', async () => {
@@ -202,10 +205,9 @@ describe('ListPhotos handler', () => {
     const harness = makeTestHarness()
     const kept = await createPhoto(harness, { slug: 'kept', title: 'Kept' })
     const binned = await createPhoto(harness, { slug: 'binned', title: 'Binned' })
-    await harness.db
-      .prepare(`UPDATE photos SET deletedAt = '2026-01-01' WHERE id = ?`)
-      .bind(binned.id)
-      .run()
+    await queryRows(harness, (sql) =>
+      sql`UPDATE photos SET deletedAt = '2026-01-01' WHERE id = ${binned.id}`,
+    )
 
     const page = await listPhotos(harness, { limit: 60 })
 
@@ -269,10 +271,10 @@ interface Hidden {
 }
 
 const numberOf = async (harness: TestHarness, id: string): Promise<number> => {
-  const row = await harness.db
-    .prepare('SELECT number FROM photos WHERE id = ?')
-    .bind(id)
-    .first<{ number: number }>()
+  const row = await queryRow<{ number: number } | null>(
+    harness,
+    (sql) => sql`SELECT number FROM photos WHERE id = ${id}`,
+  )
   if (row === null) throw new Error(`no photo ${id}`)
   return row.number
 }

@@ -1,19 +1,31 @@
 # Test fakes: a real SQLite engine, not miniflare
 
-Accepted.
+Accepted. Amended 2026-09 to replace the hand-rolled D1 fake with Effect SQL.
 
 ## Decision
 
-`packages/api`'s services are tested against an in-memory D1 backed by
-`node:sqlite` and an in-memory R2 backed by a `Map`, both built behind the
-structural `D1DatabaseLike` / `R2BucketLike` contracts in
-`packages/api/src/gateway.ts` and provided through the `withGateway` seam. The
+`packages/api`'s services are tested against a real SQLite engine — `node:sqlite`
+via `@effect/sql-sqlite-node` — and an in-memory R2 backed by a `Map`. The
 harness lives in `packages/api/src/testing/` and is not re-exported from the
-package index, so `node:sqlite` never reaches a Worker bundle. `node:sqlite` is
-a stable Node builtin at the repo's floor (Node 24+), with a scoped ambient
-declaration for the handful of members the fakes use rather than a
-`@types/node` dev dependency: `@photo/api` is Worker-typed on purpose, and
-pulling in Node types to typecheck two Node-only fakes would undo that.
+package index, so `node:sqlite` never reaches a Worker bundle. `node:sqlite` is a
+stable Node builtin at the repo's floor (Node 24+), with a scoped ambient
+declaration for the handful of members used rather than a `@types/node` dev
+dependency: `@photo/api` is Worker-typed on purpose, and pulling in Node types to
+typecheck two Node-only fakes would undo that.
+
+**Amended.** The metadata database is no longer a hand-written
+`D1DatabaseLike` reached through 52 `prepare`/`first`/`all`/`run`/`batch` sites.
+It is `effect/unstable/sql/SqlClient`, with the dialect supplied by a layer:
+
+| Where | Driver | Provided by |
+|---|---|---|
+| Worker | `@effect/sql-d1` | `MetadataLive` in `packages/api/src/metadata.ts` |
+| Tests | `@effect/sql-sqlite-node` | `makeTestHarness` |
+| D1 driver tests | `@effect/sql-d1` over a D1-shaped binding | `makeD1Fake` |
+
+`Gateway` is R2-only. Atomic multi-statement writes are the `Batch` service in
+`packages/api/src/batch.ts`, satisfied in production by D1's own `batch` and in
+tests by `SqlClient.withTransaction`.
 
 ## Why
 
@@ -22,28 +34,49 @@ affinity, `WITHOUT ROWID` tables, foreign keys (`photo_tags` carries
 `ON DELETE CASCADE`), and unique/partial indexes. The aggregate and
 keyset-paginated queries the product actually issues are exactly the ones where
 those differences decide whether a test passes. The alternatives were a
-hand-written `D1DatabaseLike` stub — which would have to re-implement constraint
+hand-written `D1DatabaseLike` stub — which had to re-implement constraint
 enforcement to be worth anything, and whose mistakes read as false greens — and
 `@cloudflare/vitest-pool-workers` (miniflare), the most faithful option and the
 heaviest: a new dev dependency and a custom vitest pool per package, with
 Node-only utilities like the image-metadata path and `node:fs` unable to run
 inside workerd.
 
-`node:sqlite` loads the actual `migrations/*.sql`, so the schema under test is
-the schema that ships.
+Going to `SqlClient` is the part this amendment records. It was not a preference
+between styles: 52 call sites each wrapped their own `Effect.tryPromise` with a
+bespoke `StorageError` and a `describeCause` flattening, which is a re-implemented
+`SqlError` that threw away the query, the parameters and the engine's reason. It
+also bought a prepared-statement cache and spans that carry the query text, which
+no amount of hand-wrapping was going to give.
+
+`Batch` exists because D1 has no transactions. Its atomic primitive is `batch`,
+which the generic `SqlClient` deliberately does not expose — no dialect promises
+it. Putting atomicity behind a service means the two callers that need it name the
+guarantee rather than the driver, and the tests can satisfy the same guarantee
+with a real transaction.
 
 ## Consequences
 
 - A migration that does not apply, or a query that only works under a permissive
   stub, fails in CI instead of in production. `migrations/*.sql` is load-bearing
-  for the test run, not just for deploy: a migration that is not valid
-  standalone SQLite breaks the suite.
+  for the test run, not just for deploy.
+- `D1DatabaseLike` is gone. `MetadataLive` is the one place that knows the
+  metadata database is D1.
+- **D1's `batch` is not a transaction and `@effect/sql-d1` does not support
+  `withTransaction`.** Any future write that needs rollback-and-retry semantics,
+  or `updateValues`, must be written against `Batch` or not at all.
 - `R2BucketLike` gained `head` and `list`, and `R2ObjectLike` gained `key`,
   `size` and `uploaded`, so byte counts and storage totals are expressible
   against the contract rather than only against a real binding.
 - The fakes are Node-only. Anything that must run under workerd is not covered
-  by this harness.
-- If the fakes diverge from D1 in a way that matters, swapping in
-  `@cloudflare/vitest-pool-workers` is contained to
-  `packages/api/src/testing/` plus one vitest pool config; the contracts in
-  `gateway.ts` and every service stay as they are.
+  by this harness — which is why `BatchD1Live` has its own test over a D1-shaped
+  binding rather than relying on the SQLite harness to stand in for it.
+- `WebsiteEnv['PHOTOS']` in `alchemy.run.ts` and `R2BucketLike` in
+  `packages/api/src/gateway.ts` are two declarations that must agree, and the env
+  shape cannot import the contract. `packages/web/src/env-bindings.test.ts` is a
+  bidirectional assignability check between them, so drift is a type error.
+- The platform's `R2Bucket` is not assignable to `R2BucketLike`, and that is not
+  fixable: the platform ships its own `ReadableStream`, which is mutually
+  unassignable with the DOM one the services hand to `new Response`. The Worker
+  declares the structural shape instead, which is what the real binding satisfies
+  at runtime. `D1` does not have this problem, so `WebsiteEnv['DB']` is the real
+  `D1Database`.

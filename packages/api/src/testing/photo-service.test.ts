@@ -28,7 +28,7 @@ import {
   PRESENTATION_DEFAULTS,
   type PhotoSeed,
 } from './fixtures'
-import { makeTestHarness, withTestServices, type TestHarness } from './harness'
+import { makeTestHarness, queryRow, queryRows, withTestServices, type TestHarness } from './harness'
 
 const OLDEST_FIRST: PhotoSort = { key: 'takenAt', direction: 'asc' }
 
@@ -139,49 +139,39 @@ const removeTags = (
 /** A photo's tag links as slugs, ordered by label: ids are UUIDs, so an
  *  assertion written over them is a coin toss. */
 const linkedTagsOf = (harness: TestHarness, id: string): Promise<ReadonlyArray<string>> =>
-  harness.db
-    .prepare(
-      `SELECT t.slug AS slug FROM photo_tags pt JOIN tags t ON t.id = pt.tagId
-         WHERE pt.photoId = ? ORDER BY t.label`,
-    )
-    .bind(id)
-    .all<{ slug: string }>()
-    .then((raw) => raw.results?.map((row) => row.slug) ?? [])
+  queryRows<{ slug: string }>(harness, (sql) =>
+    sql`SELECT t.slug AS slug FROM photo_tags pt JOIN tags t ON t.id = pt.tagId
+        WHERE pt.photoId = ${id} ORDER BY t.label`,
+  ).then((rows) => rows.map((row) => row.slug))
 
 /** How many Photos carry a Tag. The chunk tests need the total, because a
  *  per-row spot check cannot see a link that was written to the wrong id. */
 const countLinks = (harness: TestHarness, tagId: string): Promise<number> =>
-  harness.db
-    .prepare('SELECT COUNT(*) AS n FROM photo_tags WHERE tagId = ?')
-    .bind(tagId)
-    .first<{ n: number }>()
-    .then((row) => row?.n ?? 0)
+  queryRow<{ n: number }>(harness, (sql) =>
+    sql`SELECT COUNT(*) AS n FROM photo_tags WHERE tagId = ${tagId}`,
+  ).then((row) => row?.n ?? 0)
 
 /** The crop and mat columns, straight off the row: the assertion that the
  *  second save really left them alone. */
 const presentationColumnsOf = (harness: TestHarness, id: string) =>
-  harness.db
-    .prepare(
-      `SELECT cropX, cropY, cropScale, level, borderEnabled, borderStyle, borderColour, borderWidth
-         FROM photos WHERE id = ?`,
-    )
-    .bind(id)
-    .first<{
-      cropX: number
-      cropY: number
-      cropScale: number
-      level: number | null
-      borderEnabled: number
-      borderStyle: string | null
-      borderColour: string | null
-      borderWidth: number | null
-    }>()
+  queryRow<{
+    cropX: number
+    cropY: number
+    cropScale: number
+    level: number | null
+    borderEnabled: number
+    borderStyle: string | null
+    borderColour: string | null
+    borderWidth: number | null
+  }>(harness, (sql) =>
+    sql`SELECT cropX, cropY, cropScale, level, borderEnabled, borderStyle, borderColour, borderWidth
+        FROM photos WHERE id = ${id}`,
+  )
 
 /** A bucket whose `put` fails, to exercise the rollback `create` owes. */
 const withFailingPut = (harness: TestHarness): TestHarness => ({
   ...harness,
   gateway: Gateway.of({
-    db: harness.db,
     photos: {
       ...harness.photos,
       put: () => Promise.reject(new Error('R2 is unreachable')),
@@ -190,29 +180,24 @@ const withFailingPut = (harness: TestHarness): TestHarness => ({
 })
 
 const slugsIn = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
-  harness.db
-    .prepare('SELECT slug FROM photos ORDER BY slug')
-    .all<{ slug: string }>()
-    .then((raw) => raw.results?.map((row) => row.slug) ?? [])
+  queryRows<{ slug: string }>(harness, (sql) =>
+    sql`SELECT slug FROM photos ORDER BY slug`,
+  ).then((rows) => rows.map((row) => row.slug))
 
 const numbersIn = (harness: TestHarness): Promise<ReadonlyArray<number | null>> =>
-  harness.db
-    .prepare('SELECT number FROM photos ORDER BY number')
-    .all<{ number: number | null }>()
-    .then((raw) => raw.results?.map((row) => row.number) ?? [])
+  queryRows<{ number: number | null }>(harness, (sql) =>
+    sql`SELECT number FROM photos ORDER BY number`,
+  ).then((rows) => rows.map((row) => row.number))
 
 const linkedPhotoIds = (harness: TestHarness): Promise<ReadonlyArray<string>> =>
-  harness.db
-    .prepare('SELECT photoId FROM photo_tags ORDER BY photoId, tagId')
-    .all<{ photoId: string }>()
-    .then((raw) => raw.results?.map((row) => row.photoId) ?? [])
+  queryRows<{ photoId: string }>(harness, (sql) =>
+    sql`SELECT photoId FROM photo_tags ORDER BY photoId, tagId`,
+  ).then((rows) => rows.map((row) => row.photoId))
 
 const deletedAtOf = (harness: TestHarness, id: string): Promise<string | null> =>
-  harness.db
-    .prepare('SELECT deletedAt FROM photos WHERE id = ?')
-    .bind(id)
-    .first<{ deletedAt: string | null }>()
-    .then((row) => row?.deletedAt ?? null)
+  queryRow<{ deletedAt: string | null }>(harness, (sql) =>
+    sql`SELECT deletedAt FROM photos WHERE id = ${id}`,
+  ).then((row) => row?.deletedAt ?? null)
 
 /** The bytes behind an R2 key, or null when the key is empty. */
 const bytesAt = async (harness: TestHarness, key: string): Promise<Uint8Array | null> => {
@@ -247,33 +232,18 @@ interface PhotoRowSeed {
 
 /** Rows the service API cannot produce: a fixed id, an undated Photo, or a
  *  trashed one. */
-const seedPhotoRow = async (db: TestHarness['db'], row: PhotoRowSeed): Promise<void> => {
-  await db
-    .prepare(
-      `INSERT INTO photos (id, slug, title, r2Key, width, height, status, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      row.id,
-      row.slug,
-      row.slug,
-      `originals/${row.id}.jpg`,
-      row.width ?? 1200,
-      row.height ?? 800,
-      row.status ?? 'published',
-      row.ratio === undefined ? '3:2' : row.ratio,
-      row.bytes ?? null,
-      row.takenAt ?? null,
-      '{}',
-      null,
-      row.deletedAt ?? null,
-    )
-    .run()
+const seedPhotoRow = async (harness: TestHarness, row: PhotoRowSeed): Promise<void> => {
+  await queryRows(harness, (sql) =>
+    sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
+        VALUES (${row.id}, ${row.slug}, ${row.slug}, ${`originals/${row.id}.jpg`},
+                ${row.width ?? 1200}, ${row.height ?? 800}, ${row.status ?? 'published'},
+                ${row.ratio === undefined ? '3:2' : row.ratio}, ${row.bytes ?? null},
+                ${row.takenAt ?? null}, ${'{}'}, ${null}, ${row.deletedAt ?? null})`,
+  )
   for (const tagId of row.tagIds ?? []) {
-    await db
-      .prepare('INSERT INTO photo_tags (photoId, tagId) VALUES (?, ?)')
-      .bind(row.id, tagId)
-      .run()
+    await queryRows(harness, (sql) =>
+      sql`INSERT INTO photo_tags (photoId, tagId) VALUES (${row.id}, ${tagId})`,
+    )
   }
 }
 
@@ -282,9 +252,9 @@ const seed = (harness: TestHarness, seedValue: PhotoSeed) => createPhoto(harness
 describe('PhotoService.list', () => {
   it('orders by takenAt descending, then by id descending', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'photo_a', slug: 'alpha', takenAt: '2024-03-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_b', slug: 'bravo', takenAt: '2024-03-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_c', slug: 'charlie', takenAt: '2024-01-01' })
+    await seedPhotoRow(harness, { id: 'photo_a', slug: 'alpha', takenAt: '2024-03-01' })
+    await seedPhotoRow(harness, { id: 'photo_b', slug: 'bravo', takenAt: '2024-03-01' })
+    await seedPhotoRow(harness, { id: 'photo_c', slug: 'charlie', takenAt: '2024-01-01' })
 
     const page = await list(harness, {})
 
@@ -295,9 +265,9 @@ describe('PhotoService.list', () => {
 
   it('sorts undated photos last, newest id first among them', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'photo_z', slug: 'zulu', takenAt: '2024-02-02' })
-    await seedPhotoRow(harness.db, { id: 'photo_u1', slug: 'undated-one', takenAt: null })
-    await seedPhotoRow(harness.db, { id: 'photo_u2', slug: 'undated-two' })
+    await seedPhotoRow(harness, { id: 'photo_z', slug: 'zulu', takenAt: '2024-02-02' })
+    await seedPhotoRow(harness, { id: 'photo_u1', slug: 'undated-one', takenAt: null })
+    await seedPhotoRow(harness, { id: 'photo_u2', slug: 'undated-two' })
 
     const page = await list(harness, {})
 
@@ -307,9 +277,9 @@ describe('PhotoService.list', () => {
 
   it('sorts undated photos last ascending too, not first', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'photo_a', slug: 'a', takenAt: '2024-01-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_b', slug: 'b', takenAt: '2024-05-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_c', slug: 'c', takenAt: null })
+    await seedPhotoRow(harness, { id: 'photo_a', slug: 'a', takenAt: '2024-01-01' })
+    await seedPhotoRow(harness, { id: 'photo_b', slug: 'b', takenAt: '2024-05-01' })
+    await seedPhotoRow(harness, { id: 'photo_c', slug: 'c', takenAt: null })
 
     const page = await list(harness, { sort: OLDEST_FIRST })
 
@@ -404,9 +374,9 @@ describe('PhotoService.list', () => {
 
   it('narrows to a ratio', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'photo_tall', slug: 'tall', ratio: '2:3' })
-    await seedPhotoRow(harness.db, { id: 'photo_wide', slug: 'wide', ratio: '16:9' })
-    await seedPhotoRow(harness.db, { id: 'photo_unset', slug: 'unset', ratio: null })
+    await seedPhotoRow(harness, { id: 'photo_tall', slug: 'tall', ratio: '2:3' })
+    await seedPhotoRow(harness, { id: 'photo_wide', slug: 'wide', ratio: '16:9' })
+    await seedPhotoRow(harness, { id: 'photo_unset', slug: 'unset', ratio: null })
 
     expect((await list(harness, { ratio: '2:3' })).items.map((item) => item.id)).toEqual([
       'photo_tall',
@@ -489,11 +459,11 @@ describe('PhotoService.list', () => {
 
   it('pages across the takenAt IS NULL tail', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'photo_1', slug: 'p1', takenAt: '2024-06-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_2', slug: 'p2', takenAt: '2024-05-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_3', slug: 'p3', takenAt: '2024-04-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_u1', slug: 'pu1', takenAt: null })
-    await seedPhotoRow(harness.db, { id: 'photo_u2', slug: 'pu2', takenAt: null })
+    await seedPhotoRow(harness, { id: 'photo_1', slug: 'p1', takenAt: '2024-06-01' })
+    await seedPhotoRow(harness, { id: 'photo_2', slug: 'p2', takenAt: '2024-05-01' })
+    await seedPhotoRow(harness, { id: 'photo_3', slug: 'p3', takenAt: '2024-04-01' })
+    await seedPhotoRow(harness, { id: 'photo_u1', slug: 'pu1', takenAt: null })
+    await seedPhotoRow(harness, { id: 'photo_u2', slug: 'pu2', takenAt: null })
 
     const first = await list(harness, { limit: 2 })
     expect(first.items.map((item) => item.id)).toEqual(['photo_1', 'photo_2'])
@@ -508,11 +478,11 @@ describe('PhotoService.list', () => {
 
   it('pages oldest first just as exactly', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'photo_1', slug: 'p1', takenAt: '2024-06-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_2', slug: 'p2', takenAt: '2024-05-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_3', slug: 'p3', takenAt: '2024-04-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_4', slug: 'p4', takenAt: '2024-03-01' })
-    await seedPhotoRow(harness.db, { id: 'photo_5', slug: 'p5', takenAt: null })
+    await seedPhotoRow(harness, { id: 'photo_1', slug: 'p1', takenAt: '2024-06-01' })
+    await seedPhotoRow(harness, { id: 'photo_2', slug: 'p2', takenAt: '2024-05-01' })
+    await seedPhotoRow(harness, { id: 'photo_3', slug: 'p3', takenAt: '2024-04-01' })
+    await seedPhotoRow(harness, { id: 'photo_4', slug: 'p4', takenAt: '2024-03-01' })
+    await seedPhotoRow(harness, { id: 'photo_5', slug: 'p5', takenAt: null })
 
     const first = await list(harness, { limit: 2, sort: OLDEST_FIRST })
     expect(first.items.map((item) => item.id)).toEqual(['photo_4', 'photo_3'])
@@ -586,12 +556,11 @@ describe('PhotoService.list', () => {
     const harness = makeTestHarness()
     const film = await createTag(harness, 'film', 'Film')
     for (let index = 0; index < 81; index += 1) {
-      await seedPhotoRow(harness.db, { id: `photo_${String(index)}`, slug: `p${index}` })
+      await seedPhotoRow(harness, { id: `photo_${String(index)}`, slug: `p${index}` })
     }
-    await harness.db
-      .prepare('INSERT INTO photo_tags (photoId, tagId) SELECT photos.id, ? FROM photos')
-      .bind(film.id)
-      .run()
+    await queryRows(harness, (sql) =>
+      sql`INSERT INTO photo_tags (photoId, tagId) SELECT photos.id, ${film.id} FROM photos`,
+    )
 
     const page = await list(harness, { limit: 100 })
 
@@ -766,10 +735,10 @@ describe('PhotoService.create', () => {
     })
     expect((await get(harness, portrait.id)).ratio).toBe('2:3')
 
-    const row = await harness.db
-      .prepare('SELECT ratio, bytes, mime FROM photos WHERE id = ?')
-      .bind(landscape.id)
-      .first<{ ratio: string | null; bytes: number | null; mime: string | null }>()
+    const row = await queryRow<{ ratio: string | null; bytes: number | null; mime: string | null }>(
+      harness,
+      (sql) => sql`SELECT ratio, bytes, mime FROM photos WHERE id = ${landscape.id}`,
+    )
     expect(row).toEqual({ ratio: '3:2', bytes: 4, mime: 'image/jpeg' })
   })
 
@@ -834,21 +803,18 @@ describe('PhotoService.create', () => {
       ),
     )
 
-    const row = await harness.db
-      .prepare(
-        `SELECT status, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps
-           FROM photos WHERE id = ?`,
-      )
-      .bind(created.id)
-      .first<{
-        status: string
-        previewLongEdge: number
-        previewFormat: string
-        previewQuality: number
-        fullQuality: number
-        keepExif: number
-        removeGps: number
-      }>()
+    const row = await queryRow<{
+      status: string
+      previewLongEdge: number
+      previewFormat: string
+      previewQuality: number
+      fullQuality: number
+      keepExif: number
+      removeGps: number
+    }>(harness, (sql) =>
+      sql`SELECT status, previewLongEdge, previewFormat, previewQuality, fullQuality, keepExif, removeGps
+          FROM photos WHERE id = ${created.id}`,
+    )
 
     expect(row).toEqual({
       status: 'draft',
@@ -867,10 +833,10 @@ describe('PhotoService.create', () => {
     const created = await seed(harness, { slug: 'plain', title: 'Plain' })
 
     expect((await harness.photos.head(created.r2Key))?.httpMetadata?.contentType).toBe('image/jpeg')
-    const row = await harness.db
-      .prepare('SELECT mime FROM photos WHERE id = ?')
-      .bind(created.id)
-      .first<{ mime: string }>()
+    const row = await queryRow<{ mime: string }>(
+      harness,
+      (sql) => sql`SELECT mime FROM photos WHERE id = ${created.id}`,
+    )
     expect(row?.mime).toBe('image/jpeg')
   })
 
@@ -1407,9 +1373,9 @@ describe('PhotoService.counts', () => {
 describe('PhotoService.storageUsage', () => {
   it('totals the live photos and their bytes', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'p1', slug: 'p1', bytes: 1024 })
-    await seedPhotoRow(harness.db, { id: 'p2', slug: 'p2', bytes: 2048 })
-    await seedPhotoRow(harness.db, { id: 'p3', slug: 'p3', bytes: 4096 })
+    await seedPhotoRow(harness, { id: 'p1', slug: 'p1', bytes: 1024 })
+    await seedPhotoRow(harness, { id: 'p2', slug: 'p2', bytes: 2048 })
+    await seedPhotoRow(harness, { id: 'p3', slug: 'p3', bytes: 4096 })
 
     expect(await storageUsage(harness)).toEqual({ photos: 3, bytes: 7168 })
   })
@@ -1424,7 +1390,7 @@ describe('PhotoService.storageUsage', () => {
 
   it('reads zero rather than null when no row records its size', async () => {
     const harness = makeTestHarness()
-    await seedPhotoRow(harness.db, { id: 'legacy', slug: 'legacy', bytes: null })
+    await seedPhotoRow(harness, { id: 'legacy', slug: 'legacy', bytes: null })
 
     expect(await storageUsage(harness)).toEqual({ photos: 1, bytes: 0 })
   })
@@ -1641,7 +1607,7 @@ describe('PhotoService.addTags', () => {
     for (let index = 0; index < LINK_BIND_BUDGET + 6; index += 1) {
       const id = `photo_${index}`
       ids.push(id)
-      await seedPhotoRow(harness.db, { id, slug: id })
+      await seedPhotoRow(harness, { id, slug: id })
     }
 
     await addTags(harness, ids, [kyoto.id])
@@ -1716,7 +1682,7 @@ describe('PhotoService.removeTags', () => {
     for (let index = 0; index < LINK_BIND_BUDGET + 6; index += 1) {
       const id = `photo_${index}`
       ids.push(id)
-      await seedPhotoRow(harness.db, { id, slug: id, tagIds: [kyoto.id] })
+      await seedPhotoRow(harness, { id, slug: id, tagIds: [kyoto.id] })
     }
 
     await removeTags(harness, ids, [kyoto.id])

@@ -5,7 +5,7 @@
  * inside the service, so a caller cannot forget the filter and a draft or a
  * trashed Photo cannot leak to a visitor. `PhotoService` is the Admin's read
  * model and deliberately answers for drafts, failed uploads and the Trash;
- * this is the other audience, over the same `Gateway` and through the same row
+ * this is the other audience, over the same `SqlClient` and through the same row
  * decoder, so the two cannot disagree about what a Photo is.
  *
  * Grouping is SQL. `takenAt` is `YYYY-MM-DD` TEXT, so `substr(takenAt, 1, 7)`
@@ -25,22 +25,30 @@ import {
   type PhotoWithTags,
   type Tag,
 } from '@photo/shared'
-import { Gateway } from './gateway'
+import * as SqlClient from 'effect/unstable/sql/SqlClient'
+import type { Statement } from 'effect/unstable/sql/Statement'
 import {
   DEFAULT_SORT,
   PHOTO_COLUMNS,
+  firstRow,
   orderBy,
   pagePhotos,
   slugify,
   tagsForPhotos,
   toPhotoWithTags,
+  type Db,
 } from './photo'
 
 /**
- * The predicate every public read carries. One string, so `frontPage` and
- * `bySlug` cannot drift into disagreeing about who is visible.
+ * The predicate every public read carries, as a function of the table's alias,
+ * so a read that joins a second table spells the same filter rather than a
+ * second copy of it: `frontPage` and `bySlug` cannot drift into disagreeing
+ * about who is visible, and neither can the Folio's own read.
  */
-const PUBLIC = "status = 'published' AND deletedAt IS NULL"
+const publicWhere = (alias: string): string =>
+  `${alias}.status = 'published' AND ${alias}.deletedAt IS NULL`
+
+const PUBLIC = publicWhere('photos')
 
 /** A month key, `2025-08`. The Front walks backwards through these. */
 const MONTH_KEY = /^\d{4}-(?:0[1-9]|1[0-2])$/
@@ -141,8 +149,13 @@ export interface PublicPhotoServiceContract {
     input?: FrontPageInput,
   ) => Effect.Effect<FrontPage, StorageError | InvalidInput>
   /** The Front's counters. The site's copy is not here: the Masthead, the
-   *  lede, the Colophon and the Folio nav are authored text, not a read. */
+   *  lede and the Colophon are authored text, not a read. */
   readonly frontStats: () => Effect.Effect<FrontStats, StorageError | InvalidInput>
+  /** The Folio's entries — the Tags that have a published Photo, in nav order.
+   *  The public nav is this read and not a list of words in a view: a Tag is
+   *  created, renamed and deleted in the Admin, and a nav written beside the
+   *  masthead would outlive every one of those. */
+  readonly folio: () => Effect.Effect<ReadonlyArray<Tag>, StorageError>
   /** A public Photo by slug, or null when none is published under it. */
   readonly bySlug: (slug: string) => Effect.Effect<PhotoWithTags | null, StorageError>
   /** A public Photo by id, or null when the id names no published Photo. The
@@ -236,17 +249,21 @@ interface MonthPhoto {
 /** The Sections themselves: their key, their frame count and their number
  *  range, all SQL aggregates over the month's published set. One month beyond
  *  the page is asked for so the cursor is exact rather than guessed from a
- *  full page, and asking costs a row here rather than a month of Photos. */
-const SECTIONS_SQL = `
+ *  full page, and asking costs a row here rather than a month of Photos.
+ *
+ *  A function rather than a constant with a bind list beside it: the cursor and
+ *  the limit are the two values the query takes, and naming them in the
+ *  template is what keeps them from being read in the wrong order. */
+const sectionsSql = <Row extends object>(sql: Db, cursor: string, limit: number) => sql<Row>`
   SELECT substr(takenAt, 1, 7) AS month,
          COUNT(*) AS frames,
          MIN(number) AS numberFrom,
          MAX(number) AS numberTo
     FROM photos
-   WHERE ${PUBLIC} AND takenAt IS NOT NULL AND substr(takenAt, 1, 7) < ?
+   WHERE ${sql.literal(PUBLIC)} AND takenAt IS NOT NULL AND substr(takenAt, 1, 7) < ${cursor}
    GROUP BY month
    ORDER BY month DESC
-   LIMIT ?`
+   LIMIT ${limit}`
 
 interface StatsRow {
   readonly total: number
@@ -258,56 +275,65 @@ const STATS_SQL = `
   SELECT COUNT(*) AS total, MAX(number) AS number, MAX(takenAt) AS latestTakenAt
     FROM photos WHERE ${PUBLIC}`
 
-const rows = <Row>(
-  db: (typeof Gateway.Service)['db'],
-  sql: string,
-  message: string,
-  binds: ReadonlyArray<unknown> = [],
-): Effect.Effect<ReadonlyArray<Row>, StorageError> =>
-  Effect.tryPromise({
-    try: () =>
-      db
-        .prepare(sql)
-        .bind(...binds)
-        .all<Row>(),
-    catch: (cause) => new StorageError({ message, cause: describeCause(cause) }),
-  }).pipe(Effect.map((raw) => raw.results ?? []))
+/**
+ * The Folio's rows: the Tags a visitor can actually go to.
+ *
+ * A Tag with no published, non-trashed Photo is not a destination, so it is not
+ * a link — the nav is a list of places that exist, and an `EXISTS` over the
+ * published set is what decides that in one pass rather than a count per Tag.
+ * The order is the label's, which is the same order the Admin's tag list is in,
+ * so a Tag renamed in the Admin moves in both navs.
+ */
+const FOLIO_SQL = `
+  SELECT t.id, t.slug, t.label, t.caption
+    FROM tags t
+   WHERE EXISTS (
+           SELECT 1
+             FROM photo_tags pt
+             JOIN photos p ON p.id = pt.photoId
+            WHERE pt.tagId = t.id AND ${publicWhere('p')})
+   ORDER BY t.label`
 
-const row = <Row>(
-  db: (typeof Gateway.Service)['db'],
-  sql: string,
+/** Run a statement and name the read it was, so a storage failure says which
+ *  query failed the way the hand-written `try`/`catch` pair used to. */
+const rows = <Row>(
+  sql: Db,
+  statement: Statement<Row>,
   message: string,
-  binds: ReadonlyArray<unknown> = [],
+): Effect.Effect<ReadonlyArray<Row>, StorageError> =>
+  Effect.mapError(statement, (cause) => new StorageError({ message, cause: describeCause(cause) }))
+
+/** One row, or null. */
+const row = <Row>(
+  sql: Db,
+  statement: Statement<Row>,
+  message: string,
 ): Effect.Effect<Row | null, StorageError> =>
-  Effect.tryPromise({
-    try: () =>
-      db
-        .prepare(sql)
-        .bind(...binds)
-        .first<Row>(),
-    catch: (cause) => new StorageError({ message, cause: describeCause(cause) }),
-  })
+  rows(sql, statement, message).pipe(Effect.map(firstRow))
 
 /** The Photos of those Sections, each still carrying the month SQL grouped it
  *  under. The nesting happens in JavaScript; the grouping does not. */
 const photosForMonths = (
-  db: (typeof Gateway.Service)['db'],
+  sql: Db,
   months: ReadonlyArray<string>,
 ): Effect.Effect<ReadonlyArray<MonthPhoto>, StorageError> =>
   Effect.gen(function* () {
     if (months.length === 0) return []
-    const placeholders = months.map(() => '?').join(', ')
     const found = yield* rows<DbPhotoRow & { readonly month: string }>(
-      db,
-      `SELECT ${PHOTO_COLUMNS}, substr(takenAt, 1, 7) AS month
+      sql,
+      // The left-hand side is an expression, not a column, so the months are
+      // bound into a plain `IN` list rather than through `sql.in(column, …)`,
+      // which escapes its argument as an identifier and would turn
+      // `substr(takenAt, 1, 7)` into a quoted name.
+      sql<DbPhotoRow & { readonly month: string }>`SELECT ${sql.literal(PHOTO_COLUMNS)}, substr(takenAt, 1, 7) AS month
          FROM photos
-        WHERE ${PUBLIC} AND substr(takenAt, 1, 7) IN (${placeholders})
+        WHERE ${sql.literal(PUBLIC)}
+          AND substr(takenAt, 1, 7) IN (${sql.join(', ', false)(months.map((month) => sql`${month}`))})
         ORDER BY substr(takenAt, 1, 7) DESC, takenAt DESC, number DESC`,
       'Failed to read the front page',
-      months,
     )
     const tagged = yield* tagsForPhotos(
-      db,
+      sql,
       found.map((found) => found.id),
     )
     return found.map((found) => ({
@@ -317,32 +343,31 @@ const photosForMonths = (
   })
 
 const withTags = (
-  db: (typeof Gateway.Service)['db'],
+  sql: Db,
   found: ReadonlyArray<DbPhotoRow>,
 ): Effect.Effect<ReadonlyArray<PhotoWithTags>, StorageError> =>
   Effect.gen(function* () {
     if (found.length === 0) return []
     const tagged = yield* tagsForPhotos(
-      db,
+      sql,
       found.map((one) => one.id),
     )
     return found.map((one) => toPhotoWithTags(one, tagged.get(one.id) ?? []))
   })
 
 const publishedBy = (
-  db: (typeof Gateway.Service)['db'],
+  sql: Db,
   column: 'id' | 'slug' | 'number',
   key: string | number,
 ): Effect.Effect<PhotoWithTags | null, StorageError> =>
   Effect.gen(function* () {
     const found = yield* row<DbPhotoRow>(
-      db,
-      `SELECT ${PHOTO_COLUMNS} FROM photos WHERE ${PUBLIC} AND ${column} = ?`,
+      sql,
+      sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos WHERE ${sql.literal(PUBLIC)} AND ${sql.literal(column)} = ${key}`,
       `Failed to get the public photo ${column} ${String(key)}`,
-      [key],
     )
     if (found === null) return null
-    const [photo] = yield* withTags(db, [found])
+    const [photo] = yield* withTags(sql, [found])
     return photo ?? null
   })
 
@@ -355,14 +380,13 @@ const publishedBy = (
  * the published one.
  */
 const tagBySlug = (
-  db: (typeof Gateway.Service)['db'],
+  sql: Db,
   slug: string,
 ): Effect.Effect<Tag | null, StorageError> =>
   row<Tag>(
-    db,
-    `SELECT id, slug, label, caption FROM tags WHERE slug = ?`,
+    sql,
+    sql<Tag>`SELECT id, slug, label, caption FROM tags WHERE slug = ${slug}`,
     `Failed to get the tag ${slug}`,
-    [slug],
   )
 
 // ---------------------------------------------------------------------------
@@ -372,8 +396,7 @@ const tagBySlug = (
 export const PublicPhotoServiceLive = Layer.effect(
   PublicPhotoService,
   Effect.gen(function* () {
-    const gateway = yield* Gateway
-    const db = gateway.db
+    const sql = yield* SqlClient.SqlClient
 
     const list: PublicPhotoServiceContract['list'] = (input) =>
       Effect.gen(function* () {
@@ -384,17 +407,17 @@ export const PublicPhotoServiceLive = Layer.effect(
         // `slugify` is what the write side applied, so the read side applies
         // it too: a filter typed `Istanbul` finds the Tag stored as
         // `istanbul`.
-        const tag = requested === '' ? null : yield* tagBySlug(db, slugify(requested))
+        const tag = requested === '' ? null : yield* tagBySlug(sql, slugify(requested))
         // A slug nobody carries is a filter that matches nothing, which is a
         // different answer from not filtering at all.
         if (requested !== '' && tag === null) return { items: [], nextCursor: null }
-        const { rows, nextCursor } = yield* pagePhotos(db, PUBLIC, {
+        const { rows, nextCursor } = yield* pagePhotos(sql, sql.literal(PUBLIC), {
           q: input?.q,
           limit: input?.limit,
           cursor: input?.cursor,
           tagIds: tag === null ? [] : [tag.id],
         })
-        return { items: yield* withTags(db, rows), nextCursor }
+        return { items: yield* withTags(sql, rows), nextCursor }
       })
 
     const frontPage: PublicPhotoServiceContract['frontPage'] = (input) =>
@@ -402,10 +425,9 @@ export const PublicPhotoServiceLive = Layer.effect(
         const cursor = yield* decodeSectionCursor(input?.sectionCursor)
         const sectionCount = clampSectionCount(input?.sectionCount)
         const found = yield* rows<SectionRow>(
-          db,
-          SECTIONS_SQL,
+          sql,
+          sectionsSql<SectionRow>(sql, cursor, sectionCount + 1),
           'Failed to read the front page sections',
-          [cursor, String(sectionCount + 1)],
         )
         // The month past the page is the answer to "are there older Sections",
         // and it is dropped: a page that rendered a month the caller did not
@@ -413,7 +435,7 @@ export const PublicPhotoServiceLive = Layer.effect(
         const page = found.slice(0, sectionCount)
         const byMonth = new Map<string, Array<PhotoWithTags>>()
         for (const { month, photo } of yield* photosForMonths(
-          db,
+          sql,
           page.map((section) => section.month),
         )) {
           const list = byMonth.get(month)
@@ -437,7 +459,11 @@ export const PublicPhotoServiceLive = Layer.effect(
 
     const frontStats: PublicPhotoServiceContract['frontStats'] = () =>
       Effect.gen(function* () {
-        const found = yield* row<StatsRow>(db, STATS_SQL, 'Failed to read the front page stats')
+        const found = yield* row<StatsRow>(
+          sql,
+          sql<StatsRow>`${sql.literal(STATS_SQL)}`,
+          'Failed to read the front page stats',
+        )
         return {
           number: found?.number ?? null,
           total: found?.total ?? 0,
@@ -445,51 +471,54 @@ export const PublicPhotoServiceLive = Layer.effect(
         }
       })
 
+    const folio: PublicPhotoServiceContract['folio'] = () =>
+      rows<Tag>(sql, sql<Tag>`${sql.literal(FOLIO_SQL)}`, 'Failed to read the folio')
+
     const bySlug: PublicPhotoServiceContract['bySlug'] = (slug) =>
       Effect.gen(function* () {
         const key = urlSlug(slug)
-        return key === null ? null : yield* publishedBy(db, 'slug', key)
+        return key === null ? null : yield* publishedBy(sql, 'slug', key)
       })
 
-    const byId: PublicPhotoServiceContract['byId'] = (id) => publishedBy(db, 'id', id)
+    const byId: PublicPhotoServiceContract['byId'] = (id) => publishedBy(sql, 'id', id)
 
     const byNumber: PublicPhotoServiceContract['byNumber'] = (number) =>
-      Number.isFinite(number) ? publishedBy(db, 'number', number) : Effect.succeed(null)
+      Number.isFinite(number) ? publishedBy(sql, 'number', number) : Effect.succeed(null)
 
     const archive: PublicPhotoServiceContract['archive'] = () =>
       Effect.gen(function* () {
         const found = yield* rows<DbPhotoRow>(
-          db,
-          `SELECT ${PHOTO_COLUMNS} FROM photos WHERE ${PUBLIC} ORDER BY ${orderBy(DEFAULT_SORT)}`,
+          sql,
+          sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos WHERE ${sql.literal(PUBLIC)} ORDER BY ${orderBy(sql, DEFAULT_SORT)}`,
           'Failed to read the archive',
         )
-        return yield* withTags(db, found)
+        return yield* withTags(sql, found)
       })
 
     const byTag: PublicPhotoServiceContract['byTag'] = (slug) =>
       Effect.gen(function* () {
         const key = urlSlug(slug)
         if (key === null) return null
-        const tag = yield* tagBySlug(db, key)
+        const tag = yield* tagBySlug(sql, key)
         if (tag === null) return null
         // Earliest first: a Series page leads with the earliest published
         // Photo (ADR 0006), so the cover is the head of the list.
         const found = yield* rows<DbPhotoRow>(
-          db,
-          `SELECT ${PHOTO_COLUMNS} FROM photos
-            WHERE ${PUBLIC}
-              AND id IN (SELECT photoId FROM photo_tags WHERE tagId = ?)
+          sql,
+          sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos
+            WHERE ${sql.literal(PUBLIC)}
+              AND id IN (SELECT photoId FROM photo_tags WHERE tagId = ${tag.id})
             ORDER BY takenAt, number`,
           `Failed to read the series ${key}`,
-          [tag.id],
         )
-        return { tag, photos: yield* withTags(db, found) }
+        return { tag, photos: yield* withTags(sql, found) }
       })
 
     return PublicPhotoService.of({
       list,
       frontPage,
       frontStats,
+      folio,
       bySlug,
       byId,
       byNumber,

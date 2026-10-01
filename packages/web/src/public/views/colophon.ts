@@ -3,11 +3,15 @@
  * where else to find them, and the copyright line. The nameplate repeats at
  * half size because the colophon is the last thing on the page.
  *
- * Every word is written here, where it renders, and none of it is read: a
- * colophon is a statement about how the work was made, which is the one thing
- * a settings row cannot know. The Admin's settings page used to author a
- * copyright line and an about paragraph that this column never printed, so
- * there was a second, invisible source for both.
+ * Every word is written here, where it renders: a colophon is a statement about
+ * how the work was made, which is the one thing a settings row cannot know. The
+ * Admin's settings page used to author a copyright line and an about paragraph
+ * that this column never printed, so there was a second, invisible source for
+ * both.
+ *
+ * The one list here that is read is SECTIONS, because it is the Folio again: the
+ * Colophon says where the site is, and a hand-written copy of the nav beside a
+ * read one is two lists free to disagree.
  *
  * The mobile Colophon master (size=mobile) is a different composition: the
  * About block stands on its own above a bordered two-column row, EQUIPMENT is
@@ -19,6 +23,7 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 
+import type { FolioEntry } from '../content'
 import { Message } from '../model'
 import { colophonRules } from './rules'
 import { BAND, type Child } from './shared'
@@ -105,10 +110,17 @@ const baseline = (h: HtmlBuilder<Message>): Child =>
     ],
   )
 
-export const colophon = (h: HtmlBuilder<Message>): Child => {
+export const colophon = (folio: ReadonlyArray<FolioEntry>, h: HtmlBuilder<Message>): Child => {
   // The three lists the Colophon prints, written here rather than in a table
   // the whole app reads: `linesMobile` is the plainer list, and `desktopOnly`
   // drops EQUIPMENT on mobile because the master has no room for it.
+  //
+  // SECTIONS is the exception and is read: it is the Folio's own entries, in
+  // the order the Folio draws them, with the About page after them — the same
+  // list the masthead prints, so a Tag added in the Admin appears in both, and
+  // no more or fewer of them. It has no mobile variant because the Folio has
+  // none to shorten.
+  const sections = [...folio.map((entry) => entry.label), 'About']
   const columns = [
     {
       label: 'EQUIPMENT',
@@ -122,8 +134,7 @@ export const colophon = (h: HtmlBuilder<Message>): Child => {
     },
     {
       label: 'SECTIONS',
-      lines: ['Street', 'Landscape', 'Series', 'About', 'Archive'],
-      linesMobile: ['Street', 'Landscape', 'About', 'Archive'],
+      lines: sections,
     },
     {
       label: 'ELSEWHERE',

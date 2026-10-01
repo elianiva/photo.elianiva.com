@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createTag, SETTINGS_DEFAULTS } from './fixtures'
-import { makeTestHarness, repoMigrations, type TestHarness } from './harness'
+import { describeFailure, makeTestHarness, queryRows, repoMigrations, type TestHarness } from './harness'
 
 /** The default-row insert, taken from the migration that ships it, so this
  *  asserts the SQL that runs in production rather than a copy of it. */
@@ -16,13 +16,8 @@ const defaultRowInsert = (): string => {
   return statement
 }
 
-const settingsRows = async (
-  harness: TestHarness,
-): Promise<ReadonlyArray<Record<string, unknown>>> =>
-  harness.db
-    .prepare('SELECT * FROM settings')
-    .all<Record<string, unknown>>()
-    .then((raw) => raw.results ?? [])
+const settingsRows = (harness: TestHarness): Promise<ReadonlyArray<Record<string, unknown>>> =>
+  queryRows<Record<string, unknown>>(harness, (sql) => sql`SELECT * FROM settings`)
 
 const settingsRow = async (harness: TestHarness): Promise<Record<string, unknown>> => {
   const row = (await settingsRows(harness))[0]
@@ -59,7 +54,9 @@ describe('migration 0005 — the settings singleton', () => {
     const harness = makeTestHarness()
     const before = await settingsRow(harness)
 
-    await harness.db.prepare(defaultRowInsert()).run()
+    // `unsafe` rather than a template: the statement is lifted verbatim out of
+    // the migration file, and this asserts the SQL that ships.
+    await queryRows(harness, (sql) => sql.unsafe(defaultRowInsert()))
 
     expect(await settingsRows(harness)).toEqual([before])
   })
@@ -67,11 +64,16 @@ describe('migration 0005 — the settings singleton', () => {
   it('refuses a second row', async () => {
     const harness = makeTestHarness()
 
-    await expect(
-      harness.db
-        .prepare(`INSERT INTO settings (id, updatedAt) VALUES (2, '2026-01-01T00:00:00.000Z')`)
-        .run(),
-    ).rejects.toThrow(/CHECK constraint failed/)
+    // The `SqlError`'s own message is the driver's ("Failed to execute
+    // statement"); the CHECK is the engine's and sits underneath it, so the
+    // assertion reads the whole failure.
+    const refused = await queryRows(harness, (sql) =>
+      sql`INSERT INTO settings (id, updatedAt) VALUES (2, '2026-01-01T00:00:00.000Z')`,
+    ).then(
+      () => null,
+      (error: unknown) => describeFailure(error),
+    )
+    expect(refused).toMatch(/CHECK constraint failed/)
     expect(await settingsRows(harness)).toHaveLength(1)
   })
 })
@@ -79,16 +81,16 @@ describe('migration 0005 — the settings singleton', () => {
 describe('migration 0005 — tag captions', () => {
   it('reads null, never an empty string, for a tag that predates the column', async () => {
     const harness = makeTestHarness()
-    await harness.db
-      .prepare(`INSERT INTO tags (id, slug, label) VALUES ('tag_legacy', 'kyoto', 'Kyoto')`)
-      .run()
+    await queryRows(harness, (sql) =>
+      sql`INSERT INTO tags (id, slug, label) VALUES ('tag_legacy', 'kyoto', 'Kyoto')`,
+    )
     await createTag(harness, 'film', 'Film')
 
-    const rows = await harness.db
-      .prepare('SELECT slug, caption FROM tags ORDER BY slug')
-      .all<{ slug: string; caption: string | null }>()
+    const rows = await queryRows<{ slug: string; caption: string | null }>(harness, (sql) =>
+      sql`SELECT slug, caption FROM tags ORDER BY slug`,
+    )
 
-    expect(rows.results).toEqual([
+    expect(rows).toEqual([
       { slug: 'film', caption: null },
       { slug: 'kyoto', caption: null },
     ])

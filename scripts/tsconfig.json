@@ -1,0 +1,20 @@
+{
+  // The seed script runs under tsx, in Node, and imports the workspace's shared
+  // contract. It gets its own config because the root one is NodeNext with no
+  // DOM lib and no Node types — a Worker-shaped base that `alchemy.run.ts` and
+  // the packages need and a CLI does not, and one the packages must not inherit
+  // Node globals from (ADR 0005).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "noEmit": true,
+    "paths": {
+      "@photo/shared": ["../packages/shared/src/index.ts"],
+      "@photo/api": ["../packages/api/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts"]
+}

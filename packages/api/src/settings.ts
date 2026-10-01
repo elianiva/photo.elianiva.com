@@ -20,7 +20,8 @@ import {
   WatermarkPosition,
   describeCause,
 } from '@photo/shared'
-import { Gateway } from './gateway'
+import * as SqlClient from 'effect/unstable/sql/SqlClient'
+import { firstRow } from './photo'
 
 // ---------------------------------------------------------------------------
 // the singleton row
@@ -91,18 +92,16 @@ export class SettingsService extends Context.Service<SettingsService, SettingsSe
 export const SettingsServiceLive = Layer.effect(
   SettingsService,
   Effect.gen(function* () {
-    const gateway = yield* Gateway
-    const db = gateway.db
+    const sql = yield* SqlClient.SqlClient
 
+    /** The single Settings row, or null when nothing has ever been saved. The
+     *  defaults are the caller's answer for that, not a row inserted here. */
     const readRow = () =>
-      Effect.tryPromise({
-        try: () =>
-          db
-            .prepare(`SELECT ${SETTINGS_COLUMNS} FROM settings WHERE id = 1`)
-            .first<DbSettingsRow>(),
-        catch: (cause) =>
+      Effect.mapError(
+        sql<DbSettingsRow>`SELECT ${sql.literal(SETTINGS_COLUMNS)} FROM settings WHERE id = 1`,
+        (cause) =>
           new StorageError({ message: 'Failed to read settings', cause: describeCause(cause) }),
-      })
+      ).pipe(Effect.map(firstRow))
 
     const read: SettingsServiceContract['read'] = Effect.gen(function* () {
       const row = yield* readRow()
@@ -142,33 +141,22 @@ export const SettingsServiceLive = Layer.effect(
         const validated = yield* S.decodeUnknownEffect(SettingsInput)(input).pipe(
           Effect.mapError((error) => new InvalidInput({ message: `settings: ${error.message}` })),
         )
-        yield* Effect.tryPromise({
-          try: () =>
-            db
-              .prepare(
-                `UPDATE settings SET updatedAt = ?, defaultPreviewLongEdge = ?, defaultPreviewFormat = ?,
-                    defaultPreviewQuality = ?, defaultFullQuality = ?, watermarkEnabled = ?,
-                    watermarkColour = ?, watermarkPosition = ?, defaultKeepExif = ?, defaultRemoveGps = ?,
-                    retainForever = ?
-                  WHERE id = 1`,
-              )
-              .bind(
-                DateTime.formatIso(DateTime.nowUnsafe()),
-                validated.defaultPreviewLongEdge,
-                validated.defaultPreviewFormat,
-                validated.defaultPreviewQuality,
-                validated.defaultFullQuality,
-                validated.watermarkEnabled ? 1 : 0,
-                validated.watermarkColour,
-                validated.watermarkPosition,
-                validated.defaultKeepExif ? 1 : 0,
-                validated.defaultRemoveGps ? 1 : 0,
-                validated.retainForever ? 1 : 0,
-              )
-              .run(),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          sql`UPDATE settings SET updatedAt = ${DateTime.formatIso(DateTime.nowUnsafe())},
+                defaultPreviewLongEdge = ${validated.defaultPreviewLongEdge},
+                defaultPreviewFormat = ${validated.defaultPreviewFormat},
+                defaultPreviewQuality = ${validated.defaultPreviewQuality},
+                defaultFullQuality = ${validated.defaultFullQuality},
+                watermarkEnabled = ${validated.watermarkEnabled ? 1 : 0},
+                watermarkColour = ${validated.watermarkColour},
+                watermarkPosition = ${validated.watermarkPosition},
+                defaultKeepExif = ${validated.defaultKeepExif ? 1 : 0},
+                defaultRemoveGps = ${validated.defaultRemoveGps ? 1 : 0},
+                retainForever = ${validated.retainForever ? 1 : 0}
+              WHERE id = 1`.raw,
+          (cause) =>
             new StorageError({ message: 'Failed to update settings', cause: describeCause(cause) }),
-        })
+        )
         return yield* read
       })
 

@@ -4,7 +4,10 @@
 
 import { Context, Effect, Layer, Schema as S } from 'effect'
 import { InvalidInput, SlugConflict, StorageError, describeCause, Tag } from '@photo/shared'
-import { Gateway } from './gateway'
+import * as SqlClient from 'effect/unstable/sql/SqlClient'
+import type { Fragment } from 'effect/unstable/sql/Statement'
+import { Batch } from './batch'
+import { firstRow } from './photo'
 import { slugify } from './photo'
 
 export interface TagUpdatePatch {
@@ -36,50 +39,42 @@ export class TagService extends Context.Service<TagService, TagServiceContract>(
 export const TagServiceLive = Layer.effect(
   TagService,
   Effect.gen(function* () {
-    const gateway = yield* Gateway
-    const db = gateway.db
+    const sql = yield* SqlClient.SqlClient
+    const batch = yield* Batch
 
-    const list: TagServiceContract['list'] = Effect.tryPromise({
-      try: () => db.prepare(`SELECT id, slug, label, caption FROM tags ORDER BY label`).all<Tag>(),
-      catch: (cause) =>
+    const list: TagServiceContract['list'] = Effect.mapError(
+      sql<Tag>`SELECT id, slug, label, caption FROM tags ORDER BY label`,
+      (cause) =>
         new StorageError({ message: 'Failed to list tags', cause: describeCause(cause) }),
-    }).pipe(Effect.map((raw) => raw.results ?? []))
+    )
 
     const create: TagServiceContract['create'] = (input) =>
       Effect.gen(function* () {
         const slug = slugify(input.slug)
         const id = crypto.randomUUID()
-        const existing = yield* Effect.tryPromise({
-          try: () => db.prepare(`SELECT id FROM tags WHERE slug = ?`).bind(slug).first(),
-          catch: (cause) =>
+        const existing = yield* Effect.mapError(
+          sql<{ id: string }>`SELECT id FROM tags WHERE slug = ${slug}`,
+          (cause) =>
             new StorageError({ message: 'Failed to check tag slug', cause: describeCause(cause) }),
-        })
+        ).pipe(Effect.map(firstRow))
         if (existing !== null) {
           return yield* Effect.fail(new SlugConflict({ slug }))
         }
-        yield* Effect.tryPromise({
-          try: () =>
-            db
-              .prepare(`INSERT INTO tags (id, slug, label) VALUES (?, ?, ?)`)
-              .bind(id, slug, input.label)
-              .run(),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          sql`INSERT INTO tags (id, slug, label) VALUES (${id}, ${slug}, ${input.label})`.raw,
+          (cause) =>
             new StorageError({ message: 'Failed to insert tag', cause: describeCause(cause) }),
-        })
+        )
         // Decode brands the freshly-generated id through the shared schema.
         return S.decodeSync(Tag)({ id, slug, label: input.label, caption: null })
       })
 
     const rowById = (id: string) =>
-      Effect.tryPromise({
-        try: () =>
-          db
-            .prepare(`SELECT id, slug, label, caption FROM tags WHERE id = ?`)
-            .bind(id)
-            .first<Tag>(),
-        catch: (cause) =>
+      Effect.mapError(
+        sql<Tag>`SELECT id, slug, label, caption FROM tags WHERE id = ${id}`,
+        (cause) =>
           new StorageError({ message: `Failed to get tag ${id}`, cause: describeCause(cause) }),
-      })
+      ).pipe(Effect.map(firstRow))
 
     const update: TagServiceContract['update'] = (id, patch) =>
       Effect.gen(function* () {
@@ -88,29 +83,18 @@ export const TagServiceLive = Layer.effect(
         if ((yield* rowById(id)) === null) {
           return yield* Effect.fail(new InvalidInput({ message: `no tag with id ${id}` }))
         }
-        const fields: Array<string> = []
-        const binds: Array<string | null> = []
-        if (patch.label !== undefined) {
-          fields.push('label = ?')
-          binds.push(patch.label)
-        }
-        if (patch.caption !== undefined) {
-          fields.push('caption = ?')
-          binds.push(patch.caption)
-        }
-        if (fields.length > 0) {
-          yield* Effect.tryPromise({
-            try: () =>
-              db
-                .prepare(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`)
-                .bind(...binds, id)
-                .run(),
-            catch: (cause) =>
+        const assignments: Array<Fragment> = []
+        if (patch.label !== undefined) assignments.push(sql`label = ${patch.label}`)
+        if (patch.caption !== undefined) assignments.push(sql`caption = ${patch.caption}`)
+        if (assignments.length > 0) {
+          yield* Effect.mapError(
+            sql`UPDATE tags SET ${sql.join(', ', false)(assignments)} WHERE id = ${id}`.raw,
+            (cause) =>
               new StorageError({
                 message: `Failed to update tag ${id}`,
                 cause: describeCause(cause),
               }),
-          })
+          )
         }
         const row = yield* rowById(id)
         if (row === null) {
@@ -121,18 +105,14 @@ export const TagServiceLive = Layer.effect(
 
     const remove: TagServiceContract['remove'] = (id) =>
       Effect.gen(function* () {
-        yield* Effect.tryPromise({
-          try: () =>
-            db.batch([
-              db.prepare(`DELETE FROM photo_tags WHERE tagId = ?`).bind(id),
-              db.prepare(`DELETE FROM tags WHERE id = ?`).bind(id),
-            ]),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          batch.run([sql`DELETE FROM photo_tags WHERE tagId = ${id}`, sql`DELETE FROM tags WHERE id = ${id}`]),
+          (cause) =>
             new StorageError({
               message: `Failed to delete tag ${id}`,
               cause: describeCause(cause),
             }),
-        })
+        )
         return true
       })
 

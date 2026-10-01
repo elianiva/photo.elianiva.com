@@ -23,11 +23,17 @@
 
 import { Effect, Option, Queue, Schema as S, Stream } from 'effect'
 import { Subscription } from 'foldkit'
-import { PhotoId, formatMeasuredRatio, nearestRatio } from '@photo/shared'
+import {
+  PhotoId,
+  UploadErrorBody,
+  UploadSuccessBody,
+  formatMeasuredRatio,
+  nearestRatio,
+} from '@photo/shared'
 
 import { UPLOAD_PATH, apiUrl } from '@/lib/api'
 import { compositionSource, encodeBlurhash, encodeCompositionBlurhash } from '@/lib/blurhash'
-import type { CompositionSpec } from '@/lib/blurhash'
+import { CompositionSpec } from '@/lib/blurhash'
 import { originalUrl } from '@/lib/image'
 
 import { Message, fileStore } from './model'
@@ -79,25 +85,41 @@ const inFlightUploadId = (model: Model): Option.Option<string> =>
 const ratioLabel = (width: number, height: number): string =>
   nearestRatio(width, height) ?? formatMeasuredRatio(width, height)
 
-const uploadSuccessIsPending = (xhr: XMLHttpRequest): boolean => {
-  try {
-    const parsed: { renditionsPending?: unknown } = JSON.parse(xhr.responseText)
-    return parsed.renditionsPending === true
-  } catch {
-    return false
-  }
-}
+/** `JSON.parse` as a total function: `None` for a response body that is not
+ *  JSON at all. The parsed value is `unknown`; the shape is the contract's
+ *  job, so parse and validate stay two separable steps. */
+const parseJson = Option.liftThrowable((raw: string): unknown => JSON.parse(raw))
 
-const uploadErrorMessage = (xhr: XMLHttpRequest): string => {
-  let message: string | undefined
-  try {
-    const parsed: { message?: unknown } = JSON.parse(xhr.responseText)
-    if (typeof parsed.message === 'string') message = parsed.message
-  } catch {
-    message = undefined
-  }
-  return message ?? `upload failed (${String(xhr.status)})`
-}
+/** The upload route's body, decoded as the contract `@photo/shared` declares.
+ *  `None` for a response that is not JSON, or is JSON the contract does not
+ *  describe — an error page from something between here and the Worker, most
+ *  often, which carries no message the operator could act on. */
+const decodeUploadBody = (
+  xhr: XMLHttpRequest,
+): Option.Option<typeof UploadSuccessBody.Type | typeof UploadErrorBody.Type> =>
+  Option.flatMap(parseJson(xhr.responseText), (parsed) =>
+    Option.orElse(
+      S.decodeUnknownOption(UploadSuccessBody)(parsed),
+      () => S.decodeUnknownOption(UploadErrorBody)(parsed),
+    ),
+  )
+
+/** E6's `processing` hold: a stored Photo that still owes a Rendition is not
+ *  published yet. Read off the declared field rather than sniffed for, so a
+ *  Worker that starts sending it is honoured the day it does. */
+const uploadSuccessIsPending = (xhr: XMLHttpRequest): boolean =>
+  Option.filter(decodeUploadBody(xhr), S.is(UploadSuccessBody)).pipe(
+    Option.map((body) => body.renditionsPending),
+    Option.getOrElse(() => false),
+  )
+
+/** What the failed Upload Item prints: the Worker's own reason when it gave
+ *  one, and the bare status when it did not. */
+const uploadErrorMessage = (xhr: XMLHttpRequest): string =>
+  Option.filter(decodeUploadBody(xhr), S.is(UploadErrorBody)).pipe(
+    Option.map((body) => body.message),
+    Option.getOrElse(() => `upload failed (${String(xhr.status)})`),
+  )
 
 /**
  * One queue item's upload, as a stream of Messages: the decoded frame, a
@@ -235,15 +257,15 @@ const cropFrameRect = (target: EventTarget | null): DOMRect | null => {
  *  re-encodes never re-fetch or re-decode the original. */
 const blurhashStream = (id: string, sourceUrl: string, signature: string): Stream.Stream<Message> =>
   Stream.fromEffect(
-    Effect.promise(async () => {
-      try {
-        const source = await compositionSource(sourceUrl)
-        if (source === undefined) return undefined
-        const spec: CompositionSpec = JSON.parse(signature)
-        return encodeCompositionBlurhash(source, spec)
-      } catch {
-        return undefined
-      }
+    Effect.gen(function* () {
+      const source = yield* compositionSource(sourceUrl)
+      if (Option.isNone(source)) return undefined
+      // The signature came back out of the Model as text, so it is decoded
+      // rather than trusted: a spec that does not match what the Encoder writes
+      // is a re-encode that is skipped, not a canvas handed nonsense.
+      const spec = S.decodeUnknownOption(CompositionSpec)(signature)
+      if (Option.isNone(spec)) return undefined
+      return encodeCompositionBlurhash(source.value, spec.value)
     }),
   ).pipe(
     Stream.flatMap((blurhash) =>

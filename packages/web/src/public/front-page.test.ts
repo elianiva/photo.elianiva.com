@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
 
 import { PhotoId, type PhotoWithTags, type PublicSection } from '@photo/shared'
 
-import { editionOf, type FrontRead } from './content'
+import { editionOf, EMPTY_TAG_PAGE, type FolioEntry, type FrontRead } from './content'
 import { Flags, Model } from './model'
 import { init } from './update'
 import { view } from './view'
@@ -121,9 +121,24 @@ const stampedFlags = (document: string): typeof Flags.Type => {
   return S.decodeUnknownSync(Flags)(JSON.parse(body))
 }
 
+/** Two Tags the Folio read returned, in the read's order. */
+const FOLIO: ReadonlyArray<FolioEntry> = [
+  { slug: 'night', label: 'Night' },
+  { slug: 'street', label: 'Street' },
+]
+
 const frontFlags = (front: FrontRead) => ({
+  route: 'front' as const,
   edition: editionOf(front),
   nextSectionCursor: front.nextSectionCursor,
+  // The About page's field, empty on this document — the shape the Worker
+  // hands a render of the Front.
+  plates: [],
+  // Likewise the Tag page's: the Front is not a Tag's page.
+  tag: EMPTY_TAG_PAGE,
+  // The Folio is the one read every document carries, so the Front is handed
+  // one rather than an empty nav.
+  folio: FOLIO,
 })
 
 // ---------------------------------------------------------------------------
@@ -182,9 +197,9 @@ describe('the rendered Front', () => {
     // whole utility list: the classes around it are the responsive layout and
     // are free to change, and a test that breaks when a margin moves is a test
     // that gets deleted instead of fixed.
-    const exifSpans = [
-      ...html.matchAll(/<span class="[^"]*\btype-exif\b[^"]*">([^<]*)</g),
-    ].map((match) => match[1] ?? '')
+    const exifSpans = [...html.matchAll(/<span class="[^"]*\btype-exif\b[^"]*">([^<]*)</g)].map(
+      (match) => match[1] ?? '',
+    )
     // `type-exif` also types the section year and the colophon, so the
     // photographic lines are the ones carrying a fact of its own.
     const lines = exifSpans.filter((line) => line.includes('ISO'))
@@ -215,6 +230,34 @@ describe('the rendered Front', () => {
     const html = await render(read({ sections: [], nextSectionCursor: null }))
     expect(html).toContain('Nothing published yet.')
     expect(html).toContain('NOTHING PUBLISHED YET')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// the Folio is the read
+// ---------------------------------------------------------------------------
+
+describe('the Folio', () => {
+  it('is ALL, one link per Tag the read returned, and ABOUT — in that order', async () => {
+    const html = await render(read())
+    // The whole Folio, as hrefs, read out of the nav the Masthead labels
+    // `Sections` — the ears print a Nav Link of their own. Asserted as a list
+    // rather than as `toContain` so that a Tag missing *and* a stale static
+    // section surviving both fail here: the Folio is the read, and the read is
+    // the whole of it.
+    const nav = html.match(/<nav[^>]*aria-label="Sections"[^>]*>.*?<\/nav>/s)?.[0] ?? ''
+    const hrefs = [...nav.matchAll(/<a[^>]*href="([^"]+)"/g)].map((match) => match[1])
+    expect(hrefs).toEqual(['/#', '/tag/night', '/tag/street', '/about'])
+  })
+
+  it('marks the document the reader is on by its own href', async () => {
+    const html = await render(read())
+    const current = [...html.matchAll(/<a[^>]*aria-current="page"[^>]*href="([^"]+)"/g)].map(
+      (match) => match[1],
+    )
+    // `ALL` is the Front's own href, `/#` — the mark is the document's URL, not
+    // a position in a list.
+    expect(current).toEqual(['/#'])
   })
 })
 

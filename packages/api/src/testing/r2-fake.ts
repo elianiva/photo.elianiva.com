@@ -22,9 +22,16 @@ interface StoredObject {
   readonly uploaded: Date
 }
 
-const toBytes = async (value: ArrayBuffer | ReadableStream | string): Promise<Uint8Array> => {
+/** Every shape the real bucket's `put` accepts. `null` and `Blob` come from
+ *  the platform's signature rather than from anything a service does, and both
+ *  have to be handled here rather than narrowed away at the interface. */
+const toBytes = async (
+  value: ArrayBuffer | ArrayBufferView | Blob | ReadableStream | string | null,
+): Promise<Uint8Array> => {
+  if (value === null) return new Uint8Array(0)
   if (typeof value === 'string') return new TextEncoder().encode(value)
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
   return new Uint8Array(await new Response(value).arrayBuffer())
 }
 
@@ -88,8 +95,9 @@ export const makeR2Fake = (): R2BucketLike => {
       store.set(key, object)
       return describe(key, object, null)
     },
-    delete: async (key) => {
-      store.delete(key)
+    delete: async (keys) => {
+      // R2 deletes in bulk; the services only ever pass one key.
+      for (const key of typeof keys === 'string' ? [keys] : keys) store.delete(key)
     },
   }
 }

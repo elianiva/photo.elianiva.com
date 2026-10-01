@@ -30,6 +30,8 @@
 > | `GET /api/health`        | api     | D1 probe                                                            | open                   |
 > | `/admin*`                | website | the Admin SPA                                                       | Access                 |
 > | `/`                      | website | the public Front, server-rendered from D1                           | open                   |
+> | `/about`                 | website | the About page, server-rendered from D1 (the public route table)    | open                   |
+> | `/tag/<slug>`            | website | a Tag's page, server-rendered from D1; the Folio's own entries      | open                   |
 > | `/sitemap.xml`           | website | the crawler route                                                   | open                   |
 > | everything else          | website | static assets                                                       | open                   |
 >
@@ -48,7 +50,7 @@ Build a **single-user admin** inside the same monorepo instead of adopting Sanit
   │
   ├─ /admin*          —Cloudflare Access gate→  website Worker
   │                                          ├─ the Admin SPA
-  │                                          └─ / (SSR from D1), /sitemap.xml
+  │                                          └─ / , /about , /tag/<slug> (SSR from D1), /sitemap.xml
   │
   └─ /api/*           —Cloudflare Access gate→  API Worker  (route, not a hostname)
                                              ├─ POST /api/upload       (multipart → R2 + D1)

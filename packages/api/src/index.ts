@@ -1,3 +1,5 @@
+export * from './batch'
+export * from './metadata'
 export * from './gateway'
 export * from './photo'
 export * from './public-photo'

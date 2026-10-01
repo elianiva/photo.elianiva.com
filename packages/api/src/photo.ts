@@ -5,6 +5,8 @@
  */
 
 import { Context, DateTime, Effect, Layer, Schema as S } from 'effect'
+import * as SqlClient from 'effect/unstable/sql/SqlClient'
+import type { Fragment } from 'effect/unstable/sql/Statement'
 import {
   DbPhotoRow,
   InvalidInput,
@@ -26,7 +28,19 @@ import {
   type PhotoWithTags,
   type Tag,
 } from '@photo/shared'
+import { Batch, type BatchContract, type BatchStatement } from './batch'
 import { Gateway } from './gateway'
+
+/** The metadata database. The standard Effect SQL client, so the Worker
+ *  provides `@effect/sql-d1` over its D1 binding and the tests provide
+ *  `@effect/sql-sqlite-node` over the same `migrations/*.sql` — one
+ *  data-access style, one set of tests, no re-declared D1 surface. */
+export type Db = SqlClient.SqlClient
+
+/** A WHERE clause, or nothing. The values it binds live inside the fragment,
+ *  so a query cannot be assembled from a clause and a parallel list of
+ *  binds that have quietly stopped lining up. */
+type Clause = Fragment | undefined
 
 // The bucket cap is a configured constant, not a Settings row, and it is
 // single-sourced in `@photo/shared` because the RPC contract and the view that
@@ -355,10 +369,15 @@ const SORTS: Record<PhotoSortKey, { readonly columns: ReadonlyArray<SortColumn> 
 
 const sortLabel = (sort: PhotoSort): string => `${sort.key}:${sort.direction}`
 
-export const orderBy = (sort: PhotoSort): string =>
-  SORTS[sort.key].columns
-    .map((column) => `${column.sql} ${columnDirection(column, sort)}`)
-    .join(', ')
+/** The ORDER BY, as a fragment. The text is this module's own — a closed set
+ *  of column expressions from {@link SORTS} — so it is a literal; the sort the
+ *  caller picked is what chose it, never anything a payload carried. */
+export const orderBy = (sql: Db, sort: PhotoSort): Fragment =>
+  sql.literal(
+    SORTS[sort.key].columns
+      .map((column) => `${column.sql} ${columnDirection(column, sort)}`)
+      .join(', '),
+  )
 
 /**
  * The keyset predicate: "strictly past the cursor, in this order". Built from
@@ -367,23 +386,26 @@ export const orderBy = (sort: PhotoSort): string =>
  * binds cannot drift apart.
  */
 export const keysetWhere = (
+  sql: Db,
   sort: PhotoSort,
   key: ReadonlyArray<number | string | null>,
-): { readonly sql: string; readonly values: ReadonlyArray<number | string | null> } => {
+): Fragment => {
   const columns = SORTS[sort.key].columns
   // Each branch parenthesised: `AND` binds tighter than `OR`, so the
   // lexicographic chain only reads as one if it is written down.
   const branches = columns.map((column, index) => {
-    const sameAsCursor = columns.slice(0, index).map((earlier) => `${earlier.sql} = ?`)
+    // The earlier columns pinned to the cursor's own values, then this column
+    // compared past it. Branch `index` therefore reads the first `index + 1`
+    // key parts, and it does so by naming them rather than by shipping a
+    // parallel list — a branch's placeholders and its binds cannot drift,
+    // because there is no second list to drift.
+    const pinned = columns
+      .slice(0, index)
+      .map((earlier, position) => sql`${sql.literal(earlier.sql)} = ${key[position]}`)
     const comparison = columnDirection(column, sort) === 'asc' ? '>' : '<'
-    return `(${[...sameAsCursor, `${column.sql} ${comparison} ?`].join(' AND ')})`
+    return sql`(${sql.and([...pinned, sql`${sql.literal(column.sql)} ${sql.literal(comparison)} ${key[index]}`])})`
   })
-  return {
-    sql: `(${branches.join(' OR ')})`,
-    // Branch `index` compares the first `index + 1` columns against the
-    // cursor, and the query reads its placeholders left to right.
-    values: columns.flatMap((_column, index) => key.slice(0, index + 1)),
-  }
+  return sql`(${sql.or(branches)})`
 }
 
 export interface PhotoCursor {
@@ -433,7 +455,7 @@ interface TagRowWithPhotoId extends Tag {
   readonly photoId: string
 }
 
-export const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyArray<string>) =>
+export const tagsForPhotos = (sql: Db, ids: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const map = new Map<string, Array<Tag>>()
     for (const id of ids) map.set(id, [])
@@ -441,22 +463,15 @@ export const tagsForPhotos = (db: (typeof Gateway.Service)['db'], ids: ReadonlyA
 
     // Chunk IN lists to stay well under D1's ~100 bind limit
     for (const chunk of chunkOf(ids, 80)) {
-      const placeholders = chunk.map(() => '?').join(', ')
-      const raw = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .prepare(
-              `SELECT t.id, t.slug, t.label, t.caption, pt.photoId as photoId FROM tags t JOIN photo_tags pt ON pt.tagId = t.id WHERE pt.photoId IN (${placeholders}) ORDER BY t.label`,
-            )
-            .bind(...chunk)
-            .all<TagRowWithPhotoId>(),
-        catch: (cause) =>
-          new StorageError({
-            message: `Failed to load tags for batch`,
-            cause: describeCause(cause),
-          }),
-      })
-      for (const row of raw.results ?? []) {
+      const raw = yield* Effect.mapError(
+        sql<TagRowWithPhotoId>`SELECT t.id, t.slug, t.label, t.caption, pt.photoId as photoId FROM tags t JOIN photo_tags pt ON pt.tagId = t.id WHERE ${sql.in(
+          'pt.photoId',
+          chunk,
+        )} ORDER BY t.label`,
+        (cause) =>
+          new StorageError({ message: 'Failed to load tags', cause: describeCause(cause) }),
+      )
+      for (const row of raw) {
         const list = map.get(row.photoId)
         if (list) list.push({ id: row.id, slug: row.slug, label: row.label, caption: row.caption })
       }
@@ -491,25 +506,26 @@ export const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): Phot
  * `scope: 'any'` is for the lifecycle operations, which have to find a Photo
  * the soft delete has already hidden.
  */
-const rowById = (db: (typeof Gateway.Service)['db'], id: string, scope: 'live' | 'any' = 'live') =>
-  Effect.gen(function* () {
-    const raw = yield* Effect.tryPromise({
-      try: () =>
-        db
-          .prepare(
-            `SELECT ${PHOTO_COLUMNS} FROM photos WHERE id = ?${
-              scope === 'live' ? ` AND ${LIVE}` : ''
-            }`,
-          )
-          .bind(id)
-          .first<DbPhotoRow>(),
+/** One row, or null. D1's `.first()` said "at most one"; a statement answers
+ *  with an array, and what makes it at-most-one is the `WHERE` above it.
+ *  Exported because the public read model asks the same question of its own
+ *  statements. */
+export const firstRow = <A>(rows: ReadonlyArray<A>): A | null => rows[0] ?? null
 
-      catch: (cause) =>
-        new StorageError({ message: `Failed to get photo ${id}`, cause: describeCause(cause) }),
-    })
-    if (!raw) return null
-    return raw
-  })
+/** One row by id, or null. `scope: 'any'` is for the lifecycle operations,
+ *  which have to find a Photo the soft delete has already hidden; everything
+ *  else takes the live scope.
+ *
+ *  The audience predicate is composed *before* the template rather than
+ *  interpolated conditionally: a missing fragment inside `${}` binds as a
+ *  parameter, so the conditional form compiled to `WHERE id = ??`. */
+const rowById = (sql: Db, id: string, scope: 'live' | 'any' = 'live') =>
+  Effect.mapError(
+    sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos WHERE id = ${id}${
+      scope === 'live' ? sql.literal(` AND ${LIVE}`) : sql.literal('')
+    }`,
+    (cause) => new StorageError({ message: `Failed to get photo ${id}`, cause: describeCause(cause) }),
+  ).pipe(Effect.map(firstRow))
 
 /** The row an operation is about to act on, or `PhotoNotFound`. Every method
  *  in this layer resolves its Photo through here, so a Photo that is gone and
@@ -525,9 +541,9 @@ const requireRow = <A>(
   )
 
 /** The row with its Tags attached — what every read operation returns. */
-const withTags = (db: (typeof Gateway.Service)['db'], row: DbPhotoRow) =>
+const withTags = (sql: Db, row: DbPhotoRow) =>
   Effect.gen(function* () {
-    const tagMap = yield* tagsForPhotos(db, [row.id])
+    const tagMap = yield* tagsForPhotos(sql, [row.id])
     return toPhotoWithTags(row, tagMap.get(row.id) ?? [])
   })
 
@@ -577,30 +593,26 @@ const toPhotoPresentation = (row: DbPresentationRow): PhotoPresentation => ({
   removeGps: row.removeGps !== 0,
 })
 
-const presentationRow = (db: (typeof Gateway.Service)['db'], id: string) =>
-  Effect.tryPromise({
-    try: () =>
-      db
-        .prepare(`SELECT ${PRESENTATION_COLUMNS} FROM photos WHERE id = ? AND ${LIVE}`)
-        .bind(id)
-        .first<DbPresentationRow>(),
-    catch: (cause) =>
+const presentationRow = (sql: Db, id: string) =>
+  Effect.mapError(
+    sql<DbPresentationRow>`SELECT ${sql.literal(PRESENTATION_COLUMNS)} FROM photos WHERE id = ${id} AND ${sql.literal(LIVE)}`,
+    (cause) =>
       new StorageError({
         message: `Failed to get presentation for photo ${id}`,
         cause: describeCause(cause),
       }),
-  })
+  ).pipe(Effect.map(firstRow))
 
 /** Only the supplied columns, in the order the four groups are named. An empty
  *  result is an empty patch, which is an error rather than a no-op UPDATE. */
-const presentationColumns = (
-  patch: PhotoPresentationPatch,
-): { fields: Array<string>; binds: Array<unknown> } => {
-  const fields: Array<string> = []
-  const binds: Array<unknown> = []
+/** The presentation columns a patch sets, as `column = value` fragments. The
+ *  shape this replaces returned the columns and their values as two parallel
+ *  lists, so a column added to one and not the other wrote the wrong value into
+ *  the wrong column; a list of assignments cannot be split like that. */
+const presentationAssignments = (sql: Db, patch: PhotoPresentationPatch): Array<Fragment> => {
+  const assignments: Array<Fragment> = []
   const set = (column: string, value: unknown): void => {
-    fields.push(`${column} = ?`)
-    binds.push(value)
+    assignments.push(sql`${sql(column)} = ${value}`)
   }
   if (patch.crop !== undefined) {
     set('cropX', patch.crop.x)
@@ -624,7 +636,7 @@ const presentationColumns = (
     if (settings.keepExif !== undefined) set('keepExif', settings.keepExif ? 1 : 0)
     if (settings.removeGps !== undefined) set('removeGps', settings.removeGps ? 1 : 0)
   }
-  return { fields, binds }
+  return assignments
 }
 
 // ---------------------------------------------------------------------------
@@ -642,21 +654,16 @@ const linkPhotoChunks = (photoIds: ReadonlyArray<string>): ReadonlyArray<Readonl
 
 /** An unknown id is a failure rather than a silent no-op, so a Bulk Bar move
  *  over a stale selection cannot report success for a Photo that is gone. */
-const assertLivePhotos = (db: (typeof Gateway.Service)['db'], photoIds: ReadonlyArray<string>) =>
+const assertLivePhotos = (sql: Db, photoIds: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const found = new Set<string>()
     for (const chunk of chunkOf(photoIds, LINK_BIND_BUDGET)) {
-      const placeholders = chunk.map(() => '?').join(', ')
-      const raw = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .prepare(`SELECT id FROM photos WHERE ${LIVE} AND id IN (${placeholders})`)
-            .bind(...chunk)
-            .all<{ id: string }>(),
-        catch: (cause) =>
+      const raw = yield* Effect.mapError(
+        sql<{ id: string }>`SELECT id FROM photos WHERE ${sql.literal(LIVE)} AND ${sql.in('id', chunk)}`,
+        (cause) =>
           new StorageError({ message: 'Failed to check photos', cause: describeCause(cause) }),
-      })
-      for (const row of raw.results ?? []) found.add(row.id)
+      )
+      for (const row of raw) found.add(row.id)
     }
     const missing = photoIds.find((id) => !found.has(id))
     if (missing !== undefined) return yield* Effect.fail(new PhotoNotFound({ id: missing }))
@@ -668,21 +675,16 @@ const assertLivePhotos = (db: (typeof Gateway.Service)['db'], photoIds: Readonly
  *  the operator is told D1 is broken. The whole set is one batch, so without
  *  the check ahead of it a single stale Tag rolls back every good link in the
  *  call. */
-const assertTagsExist = (db: (typeof Gateway.Service)['db'], tagIds: ReadonlyArray<string>) =>
+const assertTagsExist = (sql: Db, tagIds: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const found = new Set<string>()
     for (const chunk of chunkOf(tagIds, LINK_BIND_BUDGET)) {
-      const placeholders = chunk.map(() => '?').join(', ')
-      const raw = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .prepare(`SELECT id FROM tags WHERE id IN (${placeholders})`)
-            .bind(...chunk)
-            .all<{ id: string }>(),
-        catch: (cause) =>
+      const raw = yield* Effect.mapError(
+        sql<{ id: string }>`SELECT id FROM tags WHERE ${sql.in('id', chunk)}`,
+        (cause) =>
           new StorageError({ message: 'Failed to check tags', cause: describeCause(cause) }),
-      })
-      for (const row of raw.results ?? []) found.add(row.id)
+      )
+      for (const row of raw) found.add(row.id)
     }
     const missing = tagIds.find((id) => !found.has(id))
     if (missing !== undefined) {
@@ -700,72 +702,55 @@ const assertTagsExist = (db: (typeof Gateway.Service)['db'], tagIds: ReadonlyArr
  * of a count. That leaves the row query and the count query reading the same
  * filters, which is the whole point of it being one function.
  */
-export const filterWhere = (
-  filter: PhotoListFilter,
-): { readonly sql: string; readonly binds: ReadonlyArray<string | number | null> } => {
-  const clauses: Array<string> = []
-  const binds: Array<string | number | null> = []
+export const filterWhere = (sql: Db, filter: PhotoListFilter): Clause => {
+  const clauses: Array<Fragment> = []
   if (filter.status !== undefined) {
-    clauses.push('status = ?')
-    binds.push(filter.status)
+    clauses.push(sql`status = ${filter.status}`)
   }
   if (filter.ratio !== undefined) {
-    clauses.push('ratio = ?')
-    binds.push(filter.ratio)
+    clauses.push(sql`ratio = ${filter.ratio}`)
   }
   const tagIds = filter.tagIds ?? []
   if (tagIds.length > 0) {
-    const placeholders = tagIds.map(() => '?').join(', ')
-    clauses.push(`id IN (SELECT photoId FROM photo_tags WHERE tagId IN (${placeholders}))`)
-    binds.push(...tagIds)
+    clauses.push(sql`id IN (SELECT photoId FROM photo_tags WHERE ${sql.in('tagId', tagIds)})`)
   }
   const q = filter.q?.trim().slice(0, 120) ?? ''
   if (q !== '') {
+    // One bound needle, read three times: the escape runs over the searcher's
+    // own text, so `100%` cannot match every title containing `100`.
     const needle = `%${escapeLike(q.toLowerCase())}%`
     clauses.push(
-      `(LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(slug) LIKE ? ESCAPE '\\' OR LOWER(metadata) LIKE ? ESCAPE '\\')`,
+      sql`(LOWER(title) LIKE ${needle} ESCAPE '\\' OR LOWER(slug) LIKE ${needle} ESCAPE '\\' OR LOWER(metadata) LIKE ${needle} ESCAPE '\\')`,
     )
-    binds.push(needle, needle, needle)
   }
-  return { sql: clauses.join(' AND '), binds }
+  return clauses.length === 0 ? undefined : sql.and(clauses)
 }
 
 /** The audience predicate AND the filters. An unfiltered query is the
  *  predicate on its own rather than a dangling `AND`. */
-const andFilter = (predicate: string, filterSql: string): string =>
-  filterSql === '' ? predicate : `${predicate} AND ${filterSql}`
+const andFilter = (sql: Db, predicate: Fragment, filters: Clause): Fragment =>
+  filters === undefined ? predicate : sql.and([predicate, filters])
 
 const selectPhotoRows = (
-  db: (typeof Gateway.Service)['db'],
-  predicate: string,
+  sql: Db,
+  predicate: Fragment,
   filter: PhotoListFilter,
   sort: PhotoSort,
   cursor: PhotoCursor | null,
 ): Effect.Effect<{ rows: ReadonlyArray<DbPhotoRow>; nextCursor: string | null }, StorageError> =>
   Effect.gen(function* () {
-    const filters = filterWhere(filter)
-    const where: Array<string> = [andFilter(predicate, filters.sql)]
-    const binds: Array<string | number | null> = [...filters.binds]
+    const where = [andFilter(sql, predicate, filterWhere(sql, filter))]
     if (cursor !== null) {
-      const keyset = keysetWhere(sort, cursor.key)
-      where.push(keyset.sql)
-      binds.push(...keyset.values)
+      where.push(keysetWhere(sql, sort, cursor.key))
     }
     const limit = clampLimit(filter.limit)
-    const raw = yield* Effect.tryPromise({
-      try: () =>
-        db
-          .prepare(
-            `SELECT ${PHOTO_COLUMNS} FROM photos WHERE ${where.join(
-              ' AND ',
-            )} ORDER BY ${orderBy(sort)} LIMIT ?`,
-          )
-          .bind(...binds, String(limit))
-          .all<DbPhotoRow>(),
-      catch: (cause) =>
-        new StorageError({ message: 'Failed to list photos', cause: describeCause(cause) }),
-    })
-    const rows = raw.results ?? []
+    const rows = yield* Effect.mapError(
+      sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos WHERE ${sql.and(where)} ORDER BY ${orderBy(
+        sql,
+        sort,
+      )} LIMIT ${limit}`,
+      (cause) => new StorageError({ message: 'Failed to list photos', cause: describeCause(cause) }),
+    )
     const nextCursor = rows.length === limit ? encodeCursor(rows[rows.length - 1]!, sort) : null
     return { rows, nextCursor }
   })
@@ -781,8 +766,8 @@ const selectPhotoRows = (
  * hand-kept copies that can start paging differently.
  */
 export const pagePhotos = (
-  db: (typeof Gateway.Service)['db'],
-  predicate: string,
+  sql: Db,
+  predicate: Fragment,
   filter: PhotoListFilter,
 ): Effect.Effect<
   { rows: ReadonlyArray<DbPhotoRow>; nextCursor: string | null },
@@ -806,57 +791,48 @@ export const pagePhotos = (
         }),
       )
     }
-    return yield* selectPhotoRows(db, predicate, filter, sort, cursor)
+    return yield* selectPhotoRows(sql, predicate, filter, sort, cursor)
   })
 
 /** Replace a Photo's tag links. The delete and the inserts go in one batch so
  *  the links are never half-written. */
 const linkTags = (
-  db: (typeof Gateway.Service)['db'],
+  sql: Db,
   photoId: string,
   tagIds: ReadonlyArray<string>,
-) => [
-  db.prepare(`DELETE FROM photo_tags WHERE photoId = ?`).bind(photoId),
+): ReadonlyArray<BatchStatement> => [
+  sql`DELETE FROM photo_tags WHERE photoId = ${photoId}`,
   ...tagIds.map((tagId) =>
-    db
-      .prepare(`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (?, ?)`)
-      .bind(photoId, tagId),
+    sql`INSERT OR IGNORE INTO photo_tags (photoId, tagId) VALUES (${photoId}, ${tagId})`,
   ),
 ]
 
 /** A Photo's row and its links. `photo_tags` cascades in D1; the explicit
  *  delete keeps this correct on an engine with foreign keys off. */
-const deletePhoto = (db: (typeof Gateway.Service)['db'], photoId: string) => [
-  db.prepare(`DELETE FROM photo_tags WHERE photoId = ?`).bind(photoId),
-  db.prepare(`DELETE FROM photos WHERE id = ?`).bind(photoId),
+const deletePhoto = (sql: Db, photoId: string): ReadonlyArray<BatchStatement> => [
+  sql`DELETE FROM photo_tags WHERE photoId = ${photoId}`,
+  sql`DELETE FROM photos WHERE id = ${photoId}`,
 ]
 
 /** True when no other photo owns this slug. Trashed Photos are in scope: a
  *  slug stays taken while its Photo is in the Trash, or a restore could hand
  *  two Photos the same one. */
-const slugAvailable = (db: (typeof Gateway.Service)['db'], slug: string, exceptPhotoId?: string) =>
-  Effect.gen(function* () {
-    const row = yield* Effect.tryPromise({
-      try: () =>
-        db
-          .prepare(`SELECT id FROM photos WHERE slug = ? AND (? IS NULL OR id != ?)`)
-          .bind(slug, exceptPhotoId ?? null, exceptPhotoId ?? '')
-          .first<{ id: string }>(),
-      catch: (cause) =>
-        new StorageError({ message: 'Failed to check slug', cause: describeCause(cause) }),
-    })
-    return row === null
-  })
+const slugAvailable = (sql: Db, slug: string, exceptPhotoId?: string) =>
+  Effect.mapError(
+    sql<{ id: string }>`SELECT id FROM photos WHERE slug = ${slug} AND (${exceptPhotoId ?? null} IS NULL OR id != ${exceptPhotoId ?? ''})`,
+    (cause) =>
+      new StorageError({ message: 'Failed to check slug', cause: describeCause(cause) }),
+  ).pipe(Effect.map(firstRow), Effect.map((row) => row === null))
 
 /**
  * Drops a row this call inserted, best effort. Keyed by id and never by
  * `r2Key`: the id is this Photo's, so a rollback can only ever undo itself.
  */
-const dropRow = (db: (typeof Gateway.Service)['db'], id: string) =>
-  Effect.tryPromise({
-    try: () => db.batch(deletePhoto(db, id)),
-    catch: () => undefined,
-  }).pipe(Effect.orElseSucceed(() => undefined))
+/** Best effort, and silent by design: a rollback that cannot roll back has
+ *  nothing useful to say, and failing the call it was undoing would report the
+ *  original write as lost when the row is still there. */
+const dropRow = (batch: BatchContract, sql: Db, id: string): Effect.Effect<void> =>
+  batch.run(deletePhoto(sql, id)).pipe(Effect.orElseSucceed(() => undefined), Effect.asVoid)
 
 // ---------------------------------------------------------------------------
 // aggregates
@@ -919,14 +895,14 @@ const NO_STATUSES: Record<PhotoStatus, number> = { draft: 0, published: 0, faile
 export const PhotoServiceLive = Layer.effect(
   PhotoService,
   Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
+    const batch = yield* Batch
     const gateway = yield* Gateway
-    const db = gateway.db
 
     const list: PhotoServiceContract['list'] = (filter) =>
       Effect.gen(function* () {
-        const { rows, nextCursor } = yield* pagePhotos(db, LIVE, filter)
-        const tagMap = yield* tagsForPhotos(
-          db,
+        const { rows, nextCursor } = yield* pagePhotos(sql, sql.literal(LIVE), filter)
+        const tagMap = yield* tagsForPhotos(sql,
           rows.map((row) => row.id),
         )
         const items = rows.map((row) => toPhotoWithTags(row, tagMap.get(row.id) ?? []))
@@ -938,26 +914,25 @@ export const PhotoServiceLive = Layer.effect(
     // answer a question nobody asked.
     const count: PhotoServiceContract['count'] = (filter) =>
       Effect.gen(function* () {
-        const { sql, binds } = filterWhere(filter)
-        const row = yield* Effect.tryPromise({
-          try: () =>
-            db
-              .prepare(`SELECT COUNT(*) AS n FROM photos WHERE ${andFilter(LIVE, sql)}`)
-              .bind(...binds)
-              .first<{ n: number }>(),
-          catch: (cause) =>
+        const row = yield* Effect.mapError(
+          sql<{ n: number }>`SELECT COUNT(*) AS n FROM photos WHERE ${andFilter(
+            sql,
+            sql.literal(LIVE),
+            filterWhere(sql, filter),
+          )}`,
+          (cause) =>
             new StorageError({
               message: 'Failed to count filtered photos',
               cause: describeCause(cause),
             }),
-        })
+        ).pipe(Effect.map(firstRow))
         return row?.n ?? 0
       })
 
     const get: PhotoServiceContract['get'] = (id) =>
       Effect.gen(function* () {
-        const row = yield* requireRow(rowById(db, id), id)
-        return yield* withTags(db, row)
+        const row = yield* requireRow(rowById(sql, id), id)
+        return yield* withTags(sql, row)
       })
 
     const create: PhotoServiceContract['create'] = (input) =>
@@ -975,7 +950,7 @@ export const PhotoServiceLive = Layer.effect(
           )
         }
         let slug = slugify(input.slug)
-        if (!(yield* slugAvailable(db, slug))) {
+        if (!(yield* slugAvailable(sql, slug))) {
           // deterministic suffix keeps retries stable without a second round-trip
           slug = `${slug}-${crypto.randomUUID().slice(0, 8)}`
         }
@@ -993,99 +968,64 @@ export const PhotoServiceLive = Layer.effect(
         // `status` and the export columns are only listed when the caller
         // supplied them; otherwise the migration's column defaults apply, which
         // is what every `create` that is not the Upload dialog relies on.
-        const columns = [
-          'id',
-          'slug',
-          'title',
-          'r2Key',
-          'width',
-          'height',
-          'number',
-          'ratio',
-          'bytes',
-          'mime',
-          'aperture',
-          'shutter',
-          'iso',
-          'focalLength',
-          'takenAt',
-          'metadata',
-          'blurhash',
-        ]
-        const values = [
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-          '(SELECT value FROM photo_number_counter WHERE id = 1)',
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-          '?',
-        ]
-        const binds: Array<unknown> = [
-          id,
-          slug,
-          input.title,
-          input.r2Key,
-          input.width,
-          input.height,
-          ratio,
-          input.bytes.byteLength,
-          contentType,
-          input.aperture ?? null,
-          input.shutter ?? null,
-          input.iso ?? null,
-          input.focalLength ?? null,
-          input.takenAt ?? null,
-          input.metadata,
-          input.blurhash ?? null,
+        // A column and its value, side by side. The shape this replaces was
+        // three parallel arrays — columns, `?` placeholders, binds — and a
+        // column added in one and forgotten in another wrote a row with every
+        // value after it shifted by one. Pairs cannot drift: the columns below
+        // and the values beside them are read as one list.
+        const columns: Array<{ readonly column: string; readonly value: Fragment }> = [
+          { column: 'id', value: sql`${id}` },
+          { column: 'slug', value: sql`${slug}` },
+          { column: 'title', value: sql`${input.title}` },
+          { column: 'r2Key', value: sql`${input.r2Key}` },
+          { column: 'width', value: sql`${input.width}` },
+          { column: 'height', value: sql`${input.height}` },
+          // The Photo Number is the counter's own row, read inside the same
+          // batch that increments it, so two concurrent uploads cannot be
+          // handed the same one.
+          {
+            column: 'number',
+            value: sql.literal('(SELECT value FROM photo_number_counter WHERE id = 1)'),
+          },
+          { column: 'ratio', value: sql`${ratio}` },
+          { column: 'bytes', value: sql`${input.bytes.byteLength}` },
+          { column: 'mime', value: sql`${contentType}` },
+          { column: 'aperture', value: sql`${input.aperture ?? null}` },
+          { column: 'shutter', value: sql`${input.shutter ?? null}` },
+          { column: 'iso', value: sql`${input.iso ?? null}` },
+          { column: 'focalLength', value: sql`${input.focalLength ?? null}` },
+          { column: 'takenAt', value: sql`${input.takenAt ?? null}` },
+          { column: 'metadata', value: sql`${input.metadata}` },
+          { column: 'blurhash', value: sql`${input.blurhash ?? null}` },
         ]
         if (input.status !== undefined) {
-          columns.push('status')
-          values.push('?')
-          binds.push(input.status)
+          columns.push({ column: 'status', value: sql`${input.status}` })
         }
         if (input.exportDefaults !== undefined) {
-          const exportDefaults = input.exportDefaults
+          const d = input.exportDefaults
           columns.push(
-            'previewLongEdge',
-            'previewFormat',
-            'previewQuality',
-            'fullQuality',
-            'keepExif',
-            'removeGps',
-          )
-          values.push('?', '?', '?', '?', '?', '?')
-          binds.push(
-            exportDefaults.previewLongEdge,
-            exportDefaults.previewFormat,
-            exportDefaults.previewQuality,
-            exportDefaults.fullQuality,
-            exportDefaults.keepExif ? 1 : 0,
-            exportDefaults.removeGps ? 1 : 0,
+            { column: 'previewLongEdge', value: sql`${d.previewLongEdge}` },
+            { column: 'previewFormat', value: sql`${d.previewFormat}` },
+            { column: 'previewQuality', value: sql`${d.previewQuality}` },
+            { column: 'fullQuality', value: sql`${d.fullQuality}` },
+            { column: 'keepExif', value: sql`${d.keepExif ? 1 : 0}` },
+            { column: 'removeGps', value: sql`${d.removeGps ? 1 : 0}` },
           )
         }
-        yield* Effect.tryPromise({
-          try: () =>
-            db.batch([
-              db.prepare(`UPDATE photo_number_counter SET value = value + 1 WHERE id = 1`),
-              db
-                .prepare(`INSERT INTO photos (${columns.join(', ')}) VALUES (${values.join(', ')})`)
-                .bind(...binds),
-              ...linkTags(db, id, input.tagIds),
-            ]),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          batch.run([
+            sql`UPDATE photo_number_counter SET value = value + 1 WHERE id = 1`,
+            // The column list is this module's own names, joined into one
+            // literal; the values beside them are bound, one per column, by the
+            // same list — which is why they cannot come out shifted.
+            sql`INSERT INTO photos (${sql.literal(
+              columns.map((entry) => entry.column).join(', '),
+            )}) VALUES (${sql.join(', ', false)(columns.map((entry) => entry.value))})`,
+            ...linkTags(sql, id, input.tagIds),
+          ]),
+          (cause) =>
             new StorageError({ message: 'Failed to insert photo', cause: describeCause(cause) }),
-        })
+        )
         // R2 after the row, never before it. A duplicate r2Key now fails the
         // insert, which leaves the pre-existing Photo's original untouched;
         // a failed put takes the new row back down with it, so no row is ever
@@ -1098,77 +1038,71 @@ export const PhotoServiceLive = Layer.effect(
               message: 'Failed to store original in R2',
               cause: describeCause(cause),
             }),
-        }).pipe(Effect.tapError(() => dropRow(db, id)))
+        }).pipe(Effect.tapError(() => dropRow(batch, sql, id)))
 
         return { id, slug, r2Key: input.r2Key }
       })
 
     const update: PhotoServiceContract['update'] = (id, patch) =>
       Effect.gen(function* () {
-        yield* requireRow(rowById(db, id), id)
-        const fields: Array<string> = []
-        const binds: Array<string | null> = []
+        yield* requireRow(rowById(sql, id), id)
+        // `column = value` pairs, so a field and its bind cannot drift apart.
+        const assignments: Array<Fragment> = []
         if (patch.title !== undefined) {
-          fields.push('title = ?')
-          binds.push(patch.title)
+          assignments.push(sql`title = ${patch.title}`)
         }
         if (patch.slug !== undefined) {
           const nextSlug = slugify(patch.slug)
-          if (!(yield* slugAvailable(db, nextSlug, id))) {
+          if (!(yield* slugAvailable(sql, nextSlug, id))) {
             return yield* Effect.fail(new SlugConflict({ slug: nextSlug }))
           }
-          fields.push('slug = ?')
-          binds.push(nextSlug)
+          assignments.push(sql`slug = ${nextSlug}`)
         }
         if (patch.takenAt !== undefined) {
-          fields.push('takenAt = ?')
-          binds.push(patch.takenAt === '' ? null : patch.takenAt)
+          assignments.push(sql`takenAt = ${patch.takenAt === '' ? null : patch.takenAt}`)
         }
         if (patch.ratio !== undefined) {
-          fields.push('ratio = ?')
-          binds.push(patch.ratio)
+          assignments.push(sql`ratio = ${patch.ratio}`)
         }
         if (patch.blurhash !== undefined) {
-          fields.push('blurhash = ?')
-          binds.push(patch.blurhash)
+          assignments.push(sql`blurhash = ${patch.blurhash}`)
         }
         if (patch.metadata !== undefined) {
-          fields.push('metadata = ?')
-          binds.push(JSON.stringify(patch.metadata))
+          assignments.push(sql`metadata = ${JSON.stringify(patch.metadata)}`)
         }
         // Columns and tag links in one batch, which D1 runs as one
         // transaction: a tag insert that fails must not leave the row
         // half-updated.
-        const statements = [
-          ...(fields.length > 0
-            ? [db.prepare(`UPDATE photos SET ${fields.join(', ')} WHERE id = ?`).bind(...binds, id)]
+        const statements: Array<BatchStatement> = [
+          ...(assignments.length > 0
+            ? [sql`UPDATE photos SET ${sql.join(', ', false)(assignments)} WHERE id = ${id}`]
             : []),
-          ...(patch.tagIds === undefined ? [] : linkTags(db, id, patch.tagIds)),
+          ...(patch.tagIds === undefined ? [] : linkTags(sql, id, patch.tagIds)),
         ]
         if (statements.length > 0) {
-          yield* Effect.tryPromise({
-            try: () => db.batch(statements),
-            catch: (cause) =>
+          yield* Effect.mapError(
+            batch.run(statements),
+            (cause) =>
               new StorageError({ message: 'Failed to update photo', cause: describeCause(cause) }),
-          })
+          )
         }
-        const row = yield* requireRow(rowById(db, id), id)
-        return yield* withTags(db, row)
+        const row = yield* requireRow(rowById(sql, id), id)
+        return yield* withTags(sql, row)
       })
 
     const setStatus: PhotoServiceContract['setStatus'] = (id, status) =>
       Effect.gen(function* () {
-        yield* requireRow(rowById(db, id), id)
-        yield* Effect.tryPromise({
-          try: () => db.prepare(`UPDATE photos SET status = ? WHERE id = ?`).bind(status, id).run(),
-          catch: (cause) =>
+        yield* requireRow(rowById(sql, id), id)
+        yield* Effect.mapError(
+          sql`UPDATE photos SET status = ${status} WHERE id = ${id}`.raw,
+          (cause) =>
             new StorageError({
               message: 'Failed to set photo status',
               cause: describeCause(cause),
             }),
-        })
-        const row = yield* requireRow(rowById(db, id), id)
-        return yield* withTags(db, row)
+        )
+        const row = yield* requireRow(rowById(sql, id), id)
+        return yield* withTags(sql, row)
       })
 
     const trash: PhotoServiceContract['trash'] = (id) =>
@@ -1176,44 +1110,40 @@ export const PhotoServiceLive = Layer.effect(
         // Any row, live or not: trashing a trashed Photo is the end state it
         // is already in, and re-stamping the date would make the Trash's
         // ordering depend on how many times it was clicked.
-        const row = yield* requireRow(rowById(db, id, 'any'), id)
+        const row = yield* requireRow(rowById(sql, id, 'any'), id)
         if (row.deletedAt !== null) return
-        yield* Effect.tryPromise({
-          try: () =>
-            db
-              .prepare(`UPDATE photos SET deletedAt = ? WHERE id = ? AND ${LIVE}`)
-              // `YYYY-MM-DD`, the format #14 gives `deletedAt` and `takenAt`.
-              .bind(DateTime.formatIsoDateUtc(DateTime.nowUnsafe()), id)
-              .run(),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          // `YYYY-MM-DD`, the format #14 gives `deletedAt` and `takenAt`.
+          sql`UPDATE photos SET deletedAt = ${DateTime.formatIsoDateUtc(DateTime.nowUnsafe())} WHERE id = ${id} AND ${sql.literal(LIVE)}`.raw,
+          (cause) =>
             new StorageError({ message: 'Failed to trash photo', cause: describeCause(cause) }),
-        })
+        )
       })
 
     const restore: PhotoServiceContract['restore'] = (id) =>
       Effect.gen(function* () {
-        const row = yield* requireRow(rowById(db, id, 'any'), id)
+        const row = yield* requireRow(rowById(sql, id, 'any'), id)
         if (row.deletedAt === null) return
-        yield* Effect.tryPromise({
-          try: () => db.prepare(`UPDATE photos SET deletedAt = NULL WHERE id = ?`).bind(id).run(),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          sql`UPDATE photos SET deletedAt = NULL WHERE id = ${id}`.raw,
+          (cause) =>
             new StorageError({ message: 'Failed to restore photo', cause: describeCause(cause) }),
-        })
+        )
       })
 
     const purge: PhotoServiceContract['purge'] = (id) =>
       Effect.gen(function* () {
-        const row = yield* requireRow(rowById(db, id, 'any'), id)
+        const row = yield* requireRow(rowById(sql, id, 'any'), id)
         if (row.deletedAt === null) {
           return yield* Effect.fail(
             new InvalidInput({ message: 'only a trashed photo can be purged' }),
           )
         }
-        yield* Effect.tryPromise({
-          try: () => db.batch(deletePhoto(db, id)),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          batch.run(deletePhoto(sql, id)),
+          (cause) =>
             new StorageError({ message: 'Failed to purge photo', cause: describeCause(cause) }),
-        })
+        )
         yield* Effect.tryPromise({
           try: () => gateway.photos.delete(row.r2Key),
           catch: (cause) =>
@@ -1223,16 +1153,16 @@ export const PhotoServiceLive = Layer.effect(
 
     const counts: PhotoServiceContract['counts'] = () =>
       Effect.gen(function* () {
-        const raw = yield* Effect.tryPromise({
-          try: () => db.prepare(COUNTS_SQL).all<CountRow>(),
-          catch: (cause) =>
+        const raw = yield* Effect.mapError(
+          sql<CountRow>`${sql.literal(COUNTS_SQL)}`,
+          (cause) =>
             new StorageError({ message: 'Failed to count photos', cause: describeCause(cause) }),
-        })
+        )
         const byStatus: Record<PhotoStatus, number> = { ...NO_STATUSES }
         const byTag: Array<PhotoTagCount> = []
         let total = 0
         let trashed = 0
-        const rows = raw.results ?? []
+        const rows = raw
         for (const status of PHOTO_STATUSES) {
           const row = rows.find(
             (candidate) => candidate.kind === 'status' && candidate.key === status,
@@ -1256,25 +1186,16 @@ export const PhotoServiceLive = Layer.effect(
 
     const index: PhotoServiceContract['index'] = () =>
       Effect.gen(function* () {
-        const raw = yield* Effect.tryPromise({
-          try: () =>
-            db
-              .prepare(
-                `SELECT id, number, title, slug, ratio, takenAt, bytes, metadata
-                   FROM photos WHERE ${LIVE} ORDER BY ${INDEX_ORDER}`,
-              )
-              .all<DbPhotoIndexRow>(),
-          catch: (cause) =>
+        const rows = yield* Effect.mapError(
+          sql<DbPhotoIndexRow>`SELECT id, number, title, slug, ratio, takenAt, bytes, metadata
+             FROM photos WHERE ${sql.literal(LIVE)} ORDER BY ${sql.literal(INDEX_ORDER)}`,
+          (cause) =>
             new StorageError({
               message: 'Failed to read the photo index',
               cause: describeCause(cause),
             }),
-        })
-        const rows = raw.results ?? []
-        const tagMap = yield* tagsForPhotos(
-          db,
-          rows.map((row) => row.id),
         )
+        const tagMap = yield* tagsForPhotos(sql, rows.map((row) => row.id))
         return rows.map((row) => {
           const location = parseMetadataObject(row.metadata)?.['location']
           return {
@@ -1291,34 +1212,32 @@ export const PhotoServiceLive = Layer.effect(
       })
 
     const storageUsage: PhotoServiceContract['storageUsage'] = () =>
-      Effect.tryPromise({
-        try: () =>
-          db
-            .prepare(
-              `SELECT COUNT(*) AS photos, COALESCE(SUM(bytes), 0) AS bytes FROM photos WHERE ${LIVE}`,
-            )
-            .first<{ photos: number; bytes: number }>(),
-        catch: (cause) =>
+      Effect.mapError(
+        sql<{ photos: number; bytes: number }>`SELECT COUNT(*) AS photos, COALESCE(SUM(bytes), 0) AS bytes FROM photos WHERE ${sql.literal(LIVE)}`,
+        (cause) =>
           new StorageError({
             message: 'Failed to read storage usage',
             cause: describeCause(cause),
           }),
-      }).pipe(Effect.map((row) => ({ photos: row?.photos ?? 0, bytes: row?.bytes ?? 0 })))
+      ).pipe(
+        Effect.map(firstRow),
+        Effect.map((row) => ({ photos: row?.photos ?? 0, bytes: row?.bytes ?? 0 })),
+      )
 
     const presentation: PhotoServiceContract['presentation'] = (id) =>
       Effect.gen(function* () {
         // The read is scoped to live Photos, exactly as the write is: a
         // trashed Photo has a stored Presentation, and the Editor is not where
         // the Trash is edited.
-        const row = yield* requireRow(presentationRow(db, id), id)
+        const row = yield* requireRow(presentationRow(sql, id), id)
         return toPhotoPresentation(row)
       })
 
     const setPresentation: PhotoServiceContract['setPresentation'] = (id, patch) =>
       Effect.gen(function* () {
-        yield* requireRow(rowById(db, id), id)
-        const { fields, binds } = presentationColumns(patch)
-        if (fields.length === 0) {
+        yield* requireRow(rowById(sql, id), id)
+        const assignments = presentationAssignments(sql, patch)
+        if (assignments.length === 0) {
           return yield* Effect.fail(new InvalidInput({ message: 'empty presentation patch' }))
         }
         // The column carries no CHECK, and a crop scale of zero is not a tight
@@ -1330,68 +1249,56 @@ export const PhotoServiceLive = Layer.effect(
         if (patch.level !== undefined && patch.level !== null && !Number.isFinite(patch.level)) {
           return yield* Effect.fail(new InvalidInput({ message: 'level must be a finite angle' }))
         }
-        yield* Effect.tryPromise({
-          try: () =>
-            db
-              .prepare(`UPDATE photos SET ${fields.join(', ')} WHERE id = ?`)
-              .bind(...binds, id)
-              .run(),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          sql`UPDATE photos SET ${sql.join(', ', false)(assignments)} WHERE id = ${id}`.raw,
+          (cause) =>
             new StorageError({
               message: 'Failed to update photo presentation',
               cause: describeCause(cause),
             }),
-        })
+        )
         // The whole presentation, not the patch: a save returns the stored
         // truth so the Editor never has to guess what it did not send.
-        const row = yield* requireRow(presentationRow(db, id), id)
+        const row = yield* requireRow(presentationRow(sql, id), id)
         return toPhotoPresentation(row)
       })
 
     const addTags: PhotoServiceContract['addTags'] = (photoIds, tagIds) =>
       Effect.gen(function* () {
-        yield* assertLivePhotos(db, photoIds)
-        yield* assertTagsExist(db, tagIds)
+        yield* assertLivePhotos(sql, photoIds)
+        yield* assertTagsExist(sql, tagIds)
         // One statement per Tag over a chunk of Photos: a link names exactly
         // one `tagId`, so the Tag ids are the loop and the Photo ids are the
         // binds inside one statement.
         const statements = tagIds.flatMap((tagId) =>
-          linkPhotoChunks(photoIds).map((chunk) => {
-            const placeholders = chunk.map(() => '?').join(', ')
-            return db
-              .prepare(
-                `INSERT OR IGNORE INTO photo_tags (photoId, tagId)
-                   SELECT id, ? FROM photos WHERE ${LIVE} AND id IN (${placeholders})`,
-              )
-              .bind(tagId, ...chunk)
-          }),
+          linkPhotoChunks(photoIds).map((chunk) =>
+            sql`INSERT OR IGNORE INTO photo_tags (photoId, tagId)
+                SELECT id, ${tagId} FROM photos WHERE ${sql.literal(LIVE)} AND ${sql.in('id', chunk)}`,
+          ),
         )
         if (statements.length === 0) return
-        yield* Effect.tryPromise({
-          try: () => db.batch(statements),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          batch.run(statements),
+          (cause) =>
             new StorageError({ message: 'Failed to add tags', cause: describeCause(cause) }),
-        })
+        )
       })
 
     const removeTags: PhotoServiceContract['removeTags'] = (photoIds, tagIds) =>
       Effect.gen(function* () {
-        yield* assertLivePhotos(db, photoIds)
-        yield* assertTagsExist(db, tagIds)
+        yield* assertLivePhotos(sql, photoIds)
+        yield* assertTagsExist(sql, tagIds)
         const statements = tagIds.flatMap((tagId) =>
-          linkPhotoChunks(photoIds).map((chunk) => {
-            const placeholders = chunk.map(() => '?').join(', ')
-            return db
-              .prepare(`DELETE FROM photo_tags WHERE tagId = ? AND photoId IN (${placeholders})`)
-              .bind(tagId, ...chunk)
-          }),
+          linkPhotoChunks(photoIds).map((chunk) =>
+            sql`DELETE FROM photo_tags WHERE tagId = ${tagId} AND ${sql.in('photoId', chunk)}`,
+          ),
         )
         if (statements.length === 0) return
-        yield* Effect.tryPromise({
-          try: () => db.batch(statements),
-          catch: (cause) =>
+        yield* Effect.mapError(
+          batch.run(statements),
+          (cause) =>
             new StorageError({ message: 'Failed to remove tags', cause: describeCause(cause) }),
-        })
+        )
       })
 
     return PhotoService.of({

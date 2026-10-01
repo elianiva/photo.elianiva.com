@@ -10,7 +10,7 @@ import { PublicPhotoServiceLive } from './public-photo'
 import { AdminSession } from './session'
 import { TagServiceLive } from './tag'
 import { createPhoto, createTag, fail, SETTINGS_DEFAULTS, trashPhoto } from './testing/fixtures'
-import { makeTestHarness, withTestServices, type TestHarness } from './testing/harness'
+import { makeTestHarness, queryRow, queryRows, withTestServices, type TestHarness } from './testing/harness'
 
 const ISO_STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 
@@ -41,20 +41,18 @@ const tryUpdate = (harness: TestHarness, input: SettingsInput) =>
 /** The columns as SQLite holds them, which is the only place a boolean and an
  *  integer can be told apart. */
 const flagColumnsOf = (harness: TestHarness) =>
-  harness.db
-    .prepare(
-      `SELECT watermarkEnabled, defaultKeepExif, defaultRemoveGps, retainForever
-         FROM settings WHERE id = 1`,
-    )
-    .first<{
-      watermarkEnabled: number
-      defaultKeepExif: number
-      defaultRemoveGps: number
-      retainForever: number
-    }>()
+  queryRow<{
+    watermarkEnabled: number
+    defaultKeepExif: number
+    defaultRemoveGps: number
+    retainForever: number
+  }>(harness, (sql) =>
+    sql`SELECT watermarkEnabled, defaultKeepExif, defaultRemoveGps, retainForever
+        FROM settings WHERE id = 1`,
+  )
 
 const stampOf = (harness: TestHarness, stamp: string): Promise<unknown> =>
-  harness.db.prepare('UPDATE settings SET updatedAt = ? WHERE id = 1').bind(stamp).run()
+  queryRows(harness, (sql) => sql`UPDATE settings SET updatedAt = ${stamp} WHERE id = 1`)
 
 describe('SettingsService', () => {
   it('reads the column defaults off a freshly migrated row', async () => {
@@ -170,7 +168,7 @@ describe('SettingsService', () => {
 
   it('reads the column defaults when the singleton row is missing', async () => {
     const harness = makeTestHarness()
-    await harness.db.prepare('DELETE FROM settings WHERE id = 1').run()
+    await queryRows(harness, (sql) => sql`DELETE FROM settings WHERE id = 1`)
 
     // A row the migration never wrote is a fresh page, not a broken one, and it
     // has never been saved — so the
@@ -194,34 +192,18 @@ interface IndexRowSeed {
 
 /** Rows the service API cannot produce: a fixed id, a Photo Number the counter
  *  never spent, and a metadata blob with a place in it. */
-const seedIndexRow = async (db: TestHarness['db'], row: IndexRowSeed): Promise<void> => {
-  await db
-    .prepare(
-      `INSERT INTO photos (id, slug, title, r2Key, width, height, status, number, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      row.id,
-      row.slug,
-      row.title ?? row.slug,
-      `originals/${row.id}.jpg`,
-      1200,
-      800,
-      'published',
-      row.number ?? null,
-      row.ratio === undefined ? '3:2' : row.ratio,
-      row.bytes ?? null,
-      row.takenAt ?? null,
-      row.metadata ?? '{}',
-      null,
-      row.deletedAt ?? null,
-    )
-    .run()
+const seedIndexRow = async (harness: TestHarness, row: IndexRowSeed): Promise<void> => {
+  await queryRows(harness, (sql) =>
+    sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, number, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
+        VALUES (${row.id}, ${row.slug}, ${row.title ?? row.slug}, ${`originals/${row.id}.jpg`},
+                1200, 800, 'published', ${row.number ?? null},
+                ${row.ratio === undefined ? '3:2' : row.ratio}, ${row.bytes ?? null},
+                ${row.takenAt ?? null}, ${row.metadata ?? '{}'}, ${null}, ${row.deletedAt ?? null})`,
+  )
   for (const tagId of row.tagIds ?? []) {
-    await db
-      .prepare('INSERT INTO photo_tags (photoId, tagId) VALUES (?, ?)')
-      .bind(row.id, tagId)
-      .run()
+    await queryRows(harness, (sql) =>
+      sql`INSERT INTO photo_tags (photoId, tagId) VALUES (${row.id}, ${tagId})`,
+    )
   }
 }
 
@@ -263,15 +245,19 @@ const adminRpc = <A, E>(
   harness: TestHarness,
   call: (client: AdminClient) => Effect.Effect<A, E>,
 ): Promise<A> =>
+  // `harness.run` is what closes the `SqlClient` and `Batch` the service stack
+  // needs — the same seam the service tests above it uses.
   Effect.runPromise(
-    Effect.provide(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const client = yield* makeAdminClient
-          return yield* call(client)
-        }),
+    harness.run(
+      Effect.provide(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const client = yield* makeAdminClient
+            return yield* call(client)
+          }),
+        ),
+        adminStackOver(harness),
       ),
-      adminStackOver(harness),
     ),
   )
 
@@ -333,7 +319,7 @@ describe('the CSV index', () => {
 
   it('lists a photo with no number and no tags as null and an empty list', async () => {
     const harness = makeTestHarness()
-    await seedIndexRow(harness.db, {
+    await seedIndexRow(harness, {
       id: 'photo_unnumbered',
       slug: 'unnumbered',
       title: 'Unnumbered',
@@ -357,14 +343,14 @@ describe('the CSV index', () => {
 
   it('reads place out of the metadata blob, and leaves null when there is none', async () => {
     const harness = makeTestHarness()
-    await seedIndexRow(harness.db, {
+    await seedIndexRow(harness, {
       id: 'photo_named',
       slug: 'ferries',
       title: 'Ferries',
       number: 1,
       metadata: '{"caption":"Golden hour","location":"Istiklal"}',
     })
-    await seedIndexRow(harness.db, {
+    await seedIndexRow(harness, {
       id: 'photo_captured',
       slug: 'captured',
       title: 'Captured',
@@ -372,7 +358,7 @@ describe('the CSV index', () => {
       metadata: '{"caption":"No place recorded"}',
     })
     // The blob holds whatever the extraction wrote; only a string is a place.
-    await seedIndexRow(harness.db, {
+    await seedIndexRow(harness, {
       id: 'photo_coords',
       slug: 'coords',
       title: 'Coords',
@@ -387,11 +373,11 @@ describe('the CSV index', () => {
 
   it('orders by Photo Number, unnumbered rows last', async () => {
     const harness = makeTestHarness()
-    await seedIndexRow(harness.db, { id: 'photo_three', slug: 'three', number: 3 })
-    await seedIndexRow(harness.db, { id: 'photo_one', slug: 'one', number: 1 })
-    await seedIndexRow(harness.db, { id: 'photo_two', slug: 'two', number: 2 })
-    await seedIndexRow(harness.db, { id: 'photo_u1', slug: 'undated-one' })
-    await seedIndexRow(harness.db, { id: 'photo_u2', slug: 'undated-two' })
+    await seedIndexRow(harness, { id: 'photo_three', slug: 'three', number: 3 })
+    await seedIndexRow(harness, { id: 'photo_one', slug: 'one', number: 1 })
+    await seedIndexRow(harness, { id: 'photo_two', slug: 'two', number: 2 })
+    await seedIndexRow(harness, { id: 'photo_u1', slug: 'undated-one' })
+    await seedIndexRow(harness, { id: 'photo_u2', slug: 'undated-two' })
 
     const rows = await indexRows(harness)
 
@@ -422,7 +408,7 @@ describe('the CSV index', () => {
     const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
     const film = await createTag(harness, 'film', 'Film')
     const alley = await createTag(harness, 'mmm', 'Alley')
-    await seedIndexRow(harness.db, {
+    await seedIndexRow(harness, {
       id: 'photo_tagged',
       slug: 'sunset',
       title: 'Sunset',
@@ -431,7 +417,7 @@ describe('the CSV index', () => {
       takenAt: '2025-08-31',
       tagIds: [kyoto.id, film.id, alley.id],
     })
-    await seedIndexRow(harness.db, { id: 'photo_bare', slug: 'bare', title: 'Bare', number: 8 })
+    await seedIndexRow(harness, { id: 'photo_bare', slug: 'bare', title: 'Bare', number: 8 })
 
     const rows = await indexRows(harness)
 

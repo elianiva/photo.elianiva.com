@@ -1,3 +1,4 @@
+import type { D1Database } from '@cloudflare/workers-types'
 import * as Alchemy from 'alchemy'
 import { Stage } from 'alchemy'
 import * as Cloudflare from 'alchemy/Cloudflare'
@@ -148,11 +149,16 @@ export default Alchemy.Stack(
         // find a server-rendered root` error, in dev and deployed alike.
         //
         // The Worker is the site's page host in both stages: it renders the
-        // Front, serves the Admin shell, and reads the client template through
-        // the ASSETS binding to fill it. `/index.html` is the same page under
-        // its old spelling, so the Worker answers it with a redirect rather
-        // than with the bare template.
-        runWorkerFirst: ['/', '/index.html', '/admin', '/admin/*'],
+        // public documents, serves the Admin shell, and reads the client
+        // template through the ASSETS binding to fill it. `/index.html` is the
+        // Front under its old spelling, so the Worker answers it with a
+        // redirect rather than with the bare template.
+        //
+        // **A public page path added later is a Worker-first path too.** The
+        // list is the public route table's paths spelled out, because the asset
+        // layer would otherwise answer `/about` with the client template: an
+        // empty `#root` that no public document's `Runtime.hydrate` will adopt.
+        runWorkerFirst: ['/', '/index.html', '/about', '/admin', '/admin/*'],
       },
       domain: SITE_DOMAIN,
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
@@ -213,32 +219,57 @@ export default Alchemy.Stack(
 )
 
 // Worker env shape — Website is inside the Stack so we can't use InferEnv.
-// Keep structural bindings the Worker actually uses (PHOTOS.get/put/delete, DB.prepare/batch).
+//
+// The two bindings get different treatment, for a reason worth writing down.
+//
+// D1 is the platform's own `D1Database`, because `@effect/sql-d1` demands
+// exactly that type and nothing narrower will do. The hand-written subset that
+// used to be here was wrong twice over: it drifted from the real binding, and it
+// was narrow enough that the driver rejected it, so the call sites had to be
+// handed the binding with an `as never` cast.
+//
+// R2 stays structural, and stays *this* file's own declaration rather than an
+// import of the contract in `@photo/api`: `alchemy.run.ts` is resolved by
+// NodeNext at the workspace root, which has no path mapping for the workspace
+// packages. The platform ships its own `ReadableStream`, and it is not
+// assignable to the DOM one the services hand to `new Response` — they declare
+// `getReader` differently — so naming `R2Bucket` here would move the cast
+// rather than remove it. `R2BucketBinding` is a member-for-member copy of
+// `R2BucketLike`, and the two are checked against each other by
+// `env-bindings.test.ts`, which is what keeps them from drifting apart again —
+// which is how the binding came to be missing `head` and `list` in the first
+// place.
+export type R2ObjectBinding = {
+  readonly key: string
+  readonly size: number
+  readonly uploaded: Date
+  readonly httpMetadata?: { readonly contentType?: string } | undefined
+  readonly body?: ReadableStream | null | undefined
+}
+
+export type R2BucketBinding = {
+  get(key: string, options?: unknown): Promise<R2ObjectBinding | null>
+  head(key: string): Promise<R2ObjectBinding | null>
+  list(options?: {
+    readonly prefix?: string | undefined
+    readonly limit?: number | undefined
+    readonly cursor?: string | undefined
+  }): Promise<{
+    readonly objects: ReadonlyArray<R2ObjectBinding>
+    readonly truncated: boolean
+    readonly cursor?: string | undefined
+  }>
+  put(
+    key: string,
+    value: ArrayBuffer | ArrayBufferView | Blob | ReadableStream | string | null,
+    options?: { httpMetadata?: { contentType?: string } },
+  ): Promise<unknown>
+  delete(keys: string | ReadonlyArray<string>): Promise<unknown>
+}
+
 export type WebsiteEnv = {
-  readonly PHOTOS: {
-    get(
-      key: string,
-    ): Promise<{ httpMetadata?: { contentType?: string }; body: ReadableStream | null } | null>
-    put(
-      key: string,
-      value: ArrayBuffer | ReadableStream | string,
-      options?: { httpMetadata?: { contentType?: string } },
-    ): Promise<unknown>
-    delete(key: string): Promise<unknown>
-  }
-  readonly DB: {
-    prepare(query: string): {
-      bind(...values: ReadonlyArray<unknown>): {
-        first<T = unknown>(): Promise<T | null>
-        all<T = unknown>(): Promise<{ results?: ReadonlyArray<T> }>
-        run(): Promise<unknown>
-      }
-      first<T = unknown>(): Promise<T | null>
-      all<T = unknown>(): Promise<{ results?: ReadonlyArray<T> }>
-      run(): Promise<unknown>
-    }
-    batch(statements: ReadonlyArray<unknown>): Promise<ReadonlyArray<unknown>>
-  }
+  readonly PHOTOS: R2BucketBinding
+  readonly DB: D1Database
   readonly STAGE: string
   readonly ACCESS_TEAM_DOMAIN: string
   readonly ACCESS_ALLOWED_EMAILS?: string

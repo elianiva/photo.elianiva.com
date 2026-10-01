@@ -1,17 +1,38 @@
-import { Effect } from 'effect'
+import { Context, Effect, Layer } from 'effect'
+import { Headers, HttpRouter, HttpServerResponse } from 'effect/unstable/http'
 import * as Server from 'foldkit/experimental/server'
 import type { WebsiteEnv } from '../../../alchemy.run'
-import { isAdminPath } from './admin/route'
-import { editionOf } from './home/content'
-import { Flags, Model as HomeModel } from './home/model'
-import { init as homeInit } from './home/update'
-import { view as homeView } from './home/view'
-import { readFront, renderSitemap } from './lib/public-site'
+import { editionOf, EMPTY_EDITION, EMPTY_TAG_PAGE, figuresOf, tagPageOf } from './public/content'
+import { Flags, Model as PublicModel } from './public/model'
+import type { PublicLocation } from './public/route'
+import { init as publicInit } from './public/update'
+import { view as publicView } from './public/view'
+import { readAbout, readFolio, readFront, readTag, renderSitemap } from './lib/public-site'
+import { WorkerLoggerLive } from './lib/logger'
 import { themeDocument, themeForUrl } from './lib/theme'
 
 type WorkerEnvWithAssets = WebsiteEnv & {
   ASSETS: { fetch: typeof fetch }
 }
+
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  'x-frame-options': 'DENY',
+} as const
+
+
+/**
+ * The incoming web `Request`, as a service.
+ *
+ * `HttpServerRequest` is what the router matches on, and it is the right model
+ * for that — but the asset binding, the SSR renderer and `renderSitemap` all
+ * take the platform's `Request`, and rebuilding one per route would mean
+ * reimplementing the body and headers it already holds. It is provided into the
+ * request that came from it, which is why the app is built per request.
+ */
+class WebRequest extends Context.Service<WebRequest, Request>()('photo/PageWebRequest') {}
 
 /**
  * The id this deployment stamps on the page it renders, and the id the client
@@ -48,30 +69,87 @@ const fetchTemplate = async (
   return FALLBACK_TEMPLATE
 }
 
-const renderHomeSsr = async (
+/** The public site's render, per document. One config, because the Front, the
+ *  About page and a Tag page are three routes of one app rather than three
+ *  apps: the Model carries the route, and the Worker hands each one the read
+ *  its view draws. */
+const publicConfig = {
+  Model: PublicModel,
+  Flags,
+  init: publicInit,
+  view: publicView,
+}
+
+/** The read each document is rendered from, before the render. The Folio is
+ *  read for every document — it is the Masthead's, and the Masthead is the
+ *  chrome all three share — so the two reads that are not the Folio's run
+ *  beside it rather than after it.
+ *
+ *  A Tag page whose slug names no Tag is null: the site has no `404` document
+ *  of its own yet (ADR 0006), so the Worker answers that URL with a 404 status
+ *  rather than with the Front. */
+const readFor = async (
+  env: WorkerEnvWithAssets,
+  location: PublicLocation,
+): Promise<Flags | null> => {
+  const folio = await readFolio(env)
+  if (location.route === 'tag') {
+    const read = await readTag(env, location.tagSlug)
+    return read === null
+      ? null
+      : {
+          route: 'tag',
+          edition: EMPTY_EDITION,
+          nextSectionCursor: null,
+          plates: [],
+          tag: tagPageOf(read),
+          folio,
+        }
+  }
+  if (location.route === 'about') {
+    return {
+      route: 'about',
+      edition: EMPTY_EDITION,
+      nextSectionCursor: null,
+      plates: figuresOf(await readAbout(env)),
+      tag: EMPTY_TAG_PAGE,
+      folio,
+    }
+  }
+  const front = await readFront(env)
+  return {
+    route: 'front',
+    edition: editionOf(front),
+    nextSectionCursor: front.nextSectionCursor,
+    plates: [],
+    tag: EMPTY_TAG_PAGE,
+    folio,
+  }
+}
+
+const renderPublicSsr = async (
   env: WorkerEnvWithAssets,
   request: Request,
-): Promise<Response | null> => {
+  location: PublicLocation,
+): Promise<Response | 'not-found' | null> => {
   const template = await fetchTemplate(env, request)
   if (template === null) return null
-  const homeConfig = {
-    Model: HomeModel,
-    Flags,
-    init: homeInit,
-    view: homeView,
-  }
   let rendered: Server.RenderedApplication | null = null
   try {
-    // The Edition is read here, before the render, and handed to `init` as
+    // The photographs are read here, before the render, and handed to `init` as
     // Flags. `init` is synchronous, so this is the only place a read can happen
     // — and doing it here is what puts the photographs in the HTML the reader
-    // receives rather than behind a request they watch the page make.
-    const read = await readFront(env)
+    // receives rather than behind a request they watch the page make. The
+    // Fields are the whole Flags struct: the other documents' reads are the
+    // empty ones, and `init` drops them.
+    const flags = await readFor(env, location)
+    // A Tag page's slug naming no Tag is the one answer here that is not a
+    // fault: the URL is a real path and there is no document at it.
+    if (flags === null) return 'not-found'
     rendered = await Effect.runPromise(
-      Server.renderToString(homeConfig, {
-        buildId: BUILD_ID,
-        flags: { edition: editionOf(read), nextSectionCursor: read.nextSectionCursor },
-      }),
+      Server.renderToString(publicConfig, { buildId: BUILD_ID, flags }).pipe(
+        Effect.provide(WorkerLoggerLive),
+      ),
     )
   } catch {
     return null
@@ -84,21 +162,6 @@ const renderHomeSsr = async (
   }
 }
 
-const withSecurityHeaders = (response: Response): Response => {
-  const out = new Response(response.body, response)
-  out.headers.set('x-content-type-options', 'nosniff')
-  out.headers.set('referrer-policy', 'strict-origin-when-cross-origin')
-  out.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()')
-  out.headers.set('x-frame-options', 'DENY')
-  return out
-}
-
-export default {
-  fetch(request: Request, env: WorkerEnvWithAssets, _ctx: unknown): Promise<Response> {
-    return main(request, env).then(withSecurityHeaders)
-  },
-}
-
 /** Asset-like paths served from static storage (hashed bundles, fonts, robots). */
 const isAssetPath = (pathname: string): boolean =>
   pathname.startsWith('/assets/') ||
@@ -108,55 +171,193 @@ const isAssetPath = (pathname: string): boolean =>
   pathname === '/favicon.ico' ||
   /\/[^/]+\.[a-z0-9]+$/i.test(pathname)
 
-const main = async (request: Request, env: WorkerEnvWithAssets): Promise<Response> => {
-  const url = new URL(request.url)
+/**
+ * Security headers on every answer, including the 404 and the redirect.
+ *
+ * Middleware rather than a wrapper around the final `Response`, so an answer
+ * that never reaches a route — the catch-all 404 — carries them too. The
+ * hand-written dispatcher applied these to whatever came back; this is the
+ * router's way of making the same promise.
+ */
+const securityLayer = HttpRouter.middleware(
+  (httpEffect) =>
+    Effect.map(
+      httpEffect,
+      HttpServerResponse.setHeaders(Headers.fromRecordUnsafe(SECURITY_HEADERS)),
+    ),
+  { global: true },
+)
 
-  // The client template under its old spelling. It is a built asset, so the
-  // asset layer would answer it with the unfilled `#root` — a document the
-  // front page's `Runtime.hydrate` refuses. The canonical URL is `/`, so this
-  // says so instead of serving a page that cannot boot (ADR 0004).
-  if (url.pathname === '/index.html') {
-    const canonical = new URL(url)
-    canonical.pathname = '/'
-    return Response.redirect(canonical, 308)
-  }
+/** The client template under its old spelling. It is a built asset, so the asset
+ *  layer would answer it with the unfilled `#root` — a document the front page's
+ *  `Runtime.hydrate` refuses. The canonical URL is `/`, so this says so instead
+ *  of serving a page that cannot boot (ADR 0004). */
+const canonicalRoute = HttpRouter.add('*', '/index.html', () =>
+  Effect.service(WebRequest).pipe(
+    Effect.map((request) => {
+      const canonical = new URL(request.url)
+      canonical.pathname = '/'
+      return HttpServerResponse.redirect(canonical, { status: 308 })
+    }),
+  ),
+)
 
-  // Public front page: SSR per the foldkit server-rendering contract.
-  if ((url.pathname === '/' || url.pathname === '') && request.method === 'GET') {
-    const ssr = await renderHomeSsr(env, request)
-    if (ssr !== null) return ssr
-    return new Response('Not found', { status: 500 })
-  }
+/** Sitemap: the crawler route (robots.txt points here). */
+/** Sitemap: the crawler route (robots.txt points here). `renderSitemap` already
+ *  answers a `Response` with its own content type, so the route only has to
+ *  carry the span. */
+const sitemapRoute = (env: WorkerEnvWithAssets) =>
+  HttpRouter.add('GET', '/sitemap.xml', () =>
+    Effect.map(
+      Effect.provide(renderSitemap(env), WorkerLoggerLive),
+      HttpServerResponse.fromWeb,
+    ),
+  )
 
-  // Sitemap: the only crawler route besides `/` (robots.txt points here).
-  if (url.pathname === '/sitemap.xml' && request.method === 'GET') {
-    return renderSitemap(env)
-  }
+/** The asset binding, as a service. It is a `fetch`, so the route handlers
+ *  cannot close over the one in `env` without threading it through each of
+ *  them. */
+class Assets extends Context.Service<Assets, WorkerEnvWithAssets['ASSETS']>()('photo/PageAssets') {}
 
-  // Admin: SPA shell for every path in the Admin's URL space, so a deep route
-  // boots the app. The client parses the route and draws NotFound for a path
-  // that names none. The shell is the same `index.html` the Front gets, with
-  // one difference: the theme branch is named on `<html>`, because the Editor
-  // is dark and the first paint happens before any of this app has run. This
-  // Worker is the page host in development too — the Cloudflare Vite plugin
-  // backs the `ssr` environment with workerd, so `@foldkit/vite-plugin` stands
-  // its own dev middleware down and hands page requests here (ADR 0004).
-  if (isAdminPath(url.pathname)) {
-    if (request.method === 'GET') {
-      const shell = await env.ASSETS.fetch(
-        new Request(new URL('/index.html', request.url).toString()),
-      )
-      if (!shell.ok) return new Response('Not found', { status: 404 })
-      const headers = new Headers(shell.headers)
-      headers.set('content-type', 'text/html; charset=utf-8')
-      return new Response(themeDocument(await shell.text(), themeForUrl(request.url)), { headers })
+/**
+ * A public document, served by SSR per the foldkit server-rendering contract.
+ *
+ * Declared as the three patterns the route table names, rather than by asking
+ * `routeNamedBy` whether an arbitrary path is one. The route table and the
+ * Worker's match then cannot disagree about what a path means: a pattern that
+ * stops matching a real page is a 404 a test can see, where the hand-written
+ * chain asked the table and fell through on `null`.
+ *
+ * A path no pattern names is not a public document, and falls through to the
+ * asset layer, which has no page to serve for it.
+ */
+/**
+ * A public document rendered by SSR, as an `HttpServerResponse`.
+ *
+ * `null` from the render is this Worker's fault, not the reader's — the template
+ * would not boot, or the render threw — so it answers `500` rather than falling
+ * through to the asset layer, which would serve a page that cannot run.
+ */
+const ssrResponse = (env: WorkerEnvWithAssets, location: PublicLocation) =>
+  Effect.gen(function* () {
+    const request = yield* Effect.service(WebRequest)
+    const rendered = yield* Effect.promise(() => renderPublicSsr(env, request, location))
+    // Three answers, and each is a different party's fault: the document names a
+    // Tag that is not there, or the plate behind it is gone; the template would
+    // not boot or the render threw; or it rendered.
+    if (rendered === 'not-found') {
+      return HttpServerResponse.text('Not found', { status: 404 })
     }
-    return new Response('Not found', { status: 404 })
-  }
+    if (rendered === null) {
+      return HttpServerResponse.text('Internal error', { status: 500 })
+    }
+    return HttpServerResponse.fromWeb(rendered)
+  })
 
-  if (isAssetPath(url.pathname)) {
-    const asset = await env.ASSETS.fetch(request)
-    if (asset.status !== 404) return asset
-  }
-  return new Response('Not found', { status: 404 })
+/** The Front, the About page, and a Tag's page — the three the route table names.
+ *
+ * `/tag/:slug` is a path parameter rather than the table's regex, and the slug
+ * arrives already decoded by the matcher. A slug containing a slash cannot reach
+ * the handler at all, which is a stronger answer than matching and refusing.
+ */
+const publicRoutes = (env: WorkerEnvWithAssets) =>
+  Layer.mergeAll(
+    HttpRouter.add('GET', '/', () => ssrResponse(env, { route: 'front' })),
+    HttpRouter.add('GET', '/about', () => ssrResponse(env, { route: 'about' })),
+    HttpRouter.add('GET', '/tag/:slug', () =>
+      Effect.gen(function* () {
+        const params = yield* HttpRouter.params
+        const tagSlug = params.slug
+        if (tagSlug === undefined) {
+          return HttpServerResponse.text('Not found', { status: 404 })
+        }
+        return yield* ssrResponse(env, { route: 'tag', tagSlug })
+      }),
+    ),
+  )
+
+/** The Admin's URL space: the SPA shell for every path in it, so a deep route
+ *  boots the app. The client parses the route and draws NotFound for a path that
+ *  names none. The shell is the same `index.html` the Front gets, with one
+ *  difference: the theme branch is named on `<html>`, because the Editor is dark
+ *  and the first paint happens before any of this app has run. This Worker is
+ *  the page host in development too — the Cloudflare Vite plugin backs the `ssr`
+ *  environment with workerd, so `@foldkit/vite-plugin` stands its own dev
+ *  middleware down and hands page requests here (ADR 0004). */
+const adminRoute = HttpRouter.add('*', '/admin/*', () =>
+  Effect.gen(function* () {
+    const request = yield* Effect.service(WebRequest)
+    const assets = yield* Assets
+    const shell = yield* Effect.promise(() =>
+      assets.fetch(new Request(new URL('/index.html', request.url).toString())),
+    )
+    if (!shell.ok) return HttpServerResponse.text('Not found', { status: 404 })
+    return HttpServerResponse.text(
+      themeDocument(yield* Effect.promise(() => shell.text()), themeForUrl(request.url)),
+      { headers: { 'content-type': 'text/html; charset=utf-8' } },
+    )
+  }),
+)
+
+/** Everything else: the asset binding, and a 404 when it has nothing. */
+const assetRoute = HttpRouter.add('*', '/*', () =>
+  Effect.gen(function* () {
+    const request = yield* Effect.service(WebRequest)
+    if (isAssetPath(new URL(request.url).pathname)) {
+      const assets = yield* Assets
+      const asset = yield* Effect.promise(() => assets.fetch(request))
+      if (asset.status !== 404) return HttpServerResponse.fromWeb(asset)
+    }
+    return HttpServerResponse.text('Not found', { status: 404 })
+  }),
+)
+
+
+/**
+ * Every route, and the one layer the whole app needs.
+ *
+ * The order is the routing table: the specific documents, the crawler's sitemap,
+ * the Admin's URL space, and a catch-all that asks the asset binding and 404s
+ * when it has nothing. Registered in that order because the catch-all is a
+ * wildcard and would otherwise answer for all of them.
+ */
+const appLayer = (env: WorkerEnvWithAssets) =>
+  Layer.mergeAll(
+    publicRoutes(env),
+    sitemapRoute(env),
+    canonicalRoute,
+    adminRoute,
+    assetRoute,
+    securityLayer,
+  ).pipe(Layer.provideMerge(HttpRouter.layer), Layer.provideMerge(WorkerLoggerLive))
+
+/**
+ * The router, wired to one set of bindings.
+ *
+ * Built per request for the same reason the API Worker's is: the bindings are an
+ * argument of `fetch` and the route handlers close over them, and Effect's
+ * `Context.Reference` memoises its default process-wide on first read, so a
+ * module-scoped layer could not see a second Worker's `env`.
+ *
+ * `ignoreTrailingSlash` is load-bearing rather than cosmetic. The route table
+ * says a trailing slash names the same document — `/about/` and `/about` are
+ * one path, and the root is the one path a slash may not be stripped from — and
+ * the hand-written chain did that normalisation itself, for the public routes
+ * only. The router does it for every route.
+ */
+const handlerFor = (env: WorkerEnvWithAssets, request: Request) =>
+  HttpRouter.toWebHandler(
+    HttpRouter.provideRequest(
+      Layer.mergeAll(
+        Layer.succeed(Assets, env.ASSETS),
+        Layer.succeed(WebRequest, request),
+      ),
+    )(appLayer(env)),
+    { disableLogger: true, routerConfig: { ignoreTrailingSlash: true } },
+  ).handler
+
+export default {
+  fetch(request: Request, env: WorkerEnvWithAssets, _ctx: unknown): Promise<Response> {
+    return handlerFor(env, request)(request)
+  },
 }

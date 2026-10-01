@@ -42,6 +42,8 @@ Keep implementation details out of the map. Name only user paths, stable handles
 ## Features
 
 - [Public gallery browse](./gallery-browse.md) covers visitor gallery, tag-filtered view, load-more pagination, and lightbox.
+- [About page](./about-page.md) covers the second public document at `/about`, its two compositions, its plates, and the Folio's current-section mark.
+- [Tag page](./tag-page.md) covers `/tag/<slug>` as a Tag's own public document, the Folio the nav is read from, and the `404` a slug no Tag carries.
 - [Admin upload](./admin-upload.md) covers the multipart upload path, blurhash handling, tag assignment on upload, and queue behavior.
 - [Admin library views and delete](./admin-edit-delete.md) covers the list/grid toggle and its URL state, grid density persistence, opening a Photo in the Editor route, and delete confirmation.
 - [Tag management](./tag-management.md) covers creating tags from the manager, draft/upload combos, counting per-tag, and delete propagation.

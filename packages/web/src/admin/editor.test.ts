@@ -911,4 +911,3 @@ describe('the Export copy', () => {
     expect(compositionSpec(photo, dragging)).toBeUndefined()
   })
 })
-

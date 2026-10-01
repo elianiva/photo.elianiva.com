@@ -9,6 +9,7 @@
 import { Option } from 'effect'
 import { Multi } from '@foldkit/ui/combobox'
 import { modifyFields } from 'foldkit/struct'
+import { storedCols } from './prefs'
 import { Runtime } from 'foldkit'
 import { Transition } from 'foldkit/route'
 import { UrlRequest } from 'foldkit/navigation'
@@ -46,7 +47,6 @@ import {
   SetRowStatusCmd,
   UpdateEditorCmd,
   listArgsOf,
-  readStoredCols,
 } from './commands'
 import {
   foldAddTag,
@@ -154,7 +154,7 @@ const initialModel = (route: AppRoute): Model => {
     ratioFilter: filters.ratio,
     sortFilter: filters.sort,
     activeTagIds: [...filters.tagIds],
-    cols: readStoredCols(),
+    cols: storedCols(),
     segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
     atoms: initAtomsState(),
     photoStatus: 'loading',
