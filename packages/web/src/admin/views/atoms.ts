@@ -407,7 +407,7 @@ const tableBand = (model: Model, h: HtmlBuilder<Msg>): Html => {
               fileLine: row.fileLine,
               ratio: row.ratio,
               taken: row.taken,
-              size: row.size,
+              dimensions: row.dimensions,
               status: row.status,
             },
             h,

@@ -46,9 +46,10 @@ import { blurhashSignature, isEditorDirty } from './editor'
 export const SEARCH_INPUT_ID = 'admin-search'
 
 /** The keycap the Page Head prints. The design's is the Mac one; printing it
- *  on a PC keyboard would name a key the operator does not have. */
+ *  on a PC keyboard would name a key the operator does not have, so the Mac
+ *  branch prints `⌘K` and every other platform prints `Ctrl K`. */
 export const searchShortcutLabel = (): string =>
-  typeof navigator === 'undefined' || /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+  typeof navigator === 'undefined' || !/Mac|iPhone|iPad|iPod/.test(navigator.platform)
     ? 'Ctrl K'
     : '⌘K'
 

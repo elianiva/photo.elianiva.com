@@ -20,6 +20,7 @@ import { atomsPage } from './atoms'
 import { libraryFilterBar } from './filter-bar'
 import { grid } from './grid'
 import { libraryTable } from './library-table'
+import { libraryIsEmpty } from './library-states'
 import { settingsPage } from './settings'
 import { Message as M, UPLOAD_ACCEPT, UPLOAD_CONSTRAINTS } from '../model'
 import type { Model, Msg } from '../model'
@@ -83,11 +84,15 @@ const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
         : []),
       libraryFilterBar(model, h),
       // The design's Drop Zone strip sits between the Filter Bar and the rows,
-      // and only over a Library that has rows: the zero-Photograph state has
-      // its own pickers (`library-empty.ts`), so a second drop target there
-      // would be the same affordance twice. Copy is JPEG-only (decision 6).
-      ...(model.photos.length > 0
-        ? [
+      // and over any Library that holds a Photograph: the zero-Photograph state
+      // has its own pickers (`library-empty.ts`), so a second drop target there
+      // would be the same affordance twice. It is the Library's strip and not
+      // the page's, so a filter that hides every row hides the rows only — an
+      // operator who has narrowed the list to nothing can still drop the
+      // photographs they came to upload. Copy is JPEG-only (decision 6).
+      ...(libraryIsEmpty(model)
+        ? []
+        : [
             h.submodel({
               slotId: 'admin-library-file-drop',
               model: model.fileDrop,
@@ -104,8 +109,7 @@ const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
               ),
               toParentMessage: (message) => M.GotFileDropMessage({ message }),
             }),
-          ]
-        : []),
+          ]),
       view === 'grid' ? grid(model, h) : libraryTable(model, h),
     ],
   )

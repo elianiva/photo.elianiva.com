@@ -3,7 +3,9 @@
  * vendored `file-drop` dressed as one: a 1px dashed `color.outline` box with no
  * fill and no corner radius, holding a 16px `color.text.secondary` upload mark,
  * the italic `$typography.caption` line in `color.text.primary`, and the
- * `$typography.exif` constraints in `color.text.disabled`.
+ * `$typography.exif` constraints in `color.text.secondary` — the rules a file
+ * has to meet, which are information rather than a disabled control, and
+ * `color.text.disabled` is 3.6:1 on the page's surface.
  *
  * The atom owns the strip's composition, not its copy: `message` and
  * `constraints` are the caller's, so the upload rules (JPEG only, the size
@@ -36,7 +38,7 @@ export const dropZoneContent = <M>(
 ): ReadonlyArray<Child> => [
   icon(h, Upload, 'size-4 shrink-0 text-role-text-secondary'),
   h.span([h.Class('type-caption italic text-role-text-primary')], [config.message]),
-  h.span([h.Class('type-exif text-role-text-disabled')], [config.constraints]),
+  h.span([h.Class('type-exif text-role-text-secondary')], [config.constraints]),
 ]
 
 /** View inputs for the vendored FileDrop, drawn as the design's strip. */

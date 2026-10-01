@@ -97,9 +97,8 @@ export class ListTags extends Rpc.make('ListTags', {
  *  July and August. A page-weight tradeoff, not an accident: a Section is a
  *  whole month of Photos with its Blurhash tiles, so a third one is a
  *  noticeably heavier HTML document, and the `Continued` row fetches older
- *  months on demand instead. Single-sourced here for the reason
- *  `STORAGE_CAP_BYTES` is: the contract, the service that defaults it and the
- *  call site that names it all live in this package. */
+ *  months on demand instead. Declared here, in the package the contract, the
+ *  service that defaults it and the call site that names it all live in. */
 export const FRONT_SECTION_COUNT = 2
 
 /** One Edition Section: a month of published Photos and the numbers it spans
@@ -288,22 +287,6 @@ export class GetCounts extends Rpc.make('GetCounts', {
     byStatus: S.Struct({ draft: S.Number, published: S.Number, failed: S.Number }),
     byTag: S.Array(S.Struct({ id: TagId, label: S.String, count: S.Number })),
   }),
-  error: StorageError,
-}) {}
-
-/** The bucket cap, single-sourced here because the contract and every reader
- *  of it live in this package. A configured constant, not a Settings row.
- *
- *  The design disagrees with itself — the sidebar meter says `7.9 / 50 GB` and
- *  the Settings Storage block says `4.2 GB OF 20 GB` — so one number serves
- *  both, and 20 GiB is the Storage block's, which is the block that pairs the
- *  count with the byte total `GetStorageUsage` returns (ADR 0006). Change this
- *  one constant and #24's meter and #37's block follow. */
-export const STORAGE_CAP_BYTES = 20 * 1024 * 1024 * 1024
-
-export class GetStorageUsage extends Rpc.make('GetStorageUsage', {
-  payload: {},
-  success: S.Struct({ photos: S.Number, bytes: S.Number, capBytes: S.Number }),
   error: StorageError,
 }) {}
 
@@ -512,7 +495,6 @@ export const PhotoAdminRpcs = RpcGroup.make(
   DeleteTag,
   GetSession,
   GetCounts,
-  GetStorageUsage,
   ListLibraryRows,
   SetPhotoStatus,
   UpdatePhotoPresentation,

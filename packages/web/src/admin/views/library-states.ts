@@ -59,7 +59,11 @@ export const libraryError = (model: Model, h: HtmlBuilder<Msg>): Child =>
 /** Nothing for the current filter. Not the same claim as an empty Library: this
  *  one says the query is wrong and offers the way back, so it gets its own
  *  copy rather than the empty Library's. One state for both views — the design
- *  draws the same words and the same clear, whatever arrangement is behind it. */
+ *  draws the same words and the same clear, whatever arrangement is behind it.
+ *
+ *  The way back is `Clear all filters`, one move for every field: a link that
+ *  cleared the Tag set alone left a Status or a search that matched nothing with
+ *  no way out of it at all. */
 export const libraryNoMatch = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('mt-12')],
@@ -70,19 +74,22 @@ export const libraryNoMatch = (model: Model, h: HtmlBuilder<Msg>): Child =>
           Empty.header({}, [], h),
           Empty.title({}, ['Nothing matches this filter'], h),
           Empty.description(
-            {},
+            // The sentence and the way back stack rather than running on as
+            // one line: an inline action after a full stop reads as part of
+            // the sentence.
+            { className: 'flex flex-col items-center gap-2' },
             [
               'There are photographs here, this filter just does not pick any of them.',
-              ...(model.activeTagIds.length > 0
+              ...(libraryHasFilter(model)
                 ? [
                     h.button(
                       [
-                        h.OnClick(M.ToggledTagFilter({ id: model.activeTagIds[0] ?? '' })),
+                        h.OnClick(M.ClearedLibraryFilters()),
                         h.Class(
                           'type-caption underline underline-offset-4 hover:text-role-text-primary',
                         ),
                       ],
-                      ['Clear the tag filter'],
+                      ['Clear all filters'],
                     ),
                   ]
                 : []),

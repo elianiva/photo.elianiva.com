@@ -13,12 +13,13 @@
 import { Option } from 'effect'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
-import { PhotoId, STORAGE_CAP_BYTES, TagId } from '@photo/shared'
+import { PhotoId, TagId } from '@photo/shared'
 import type { PhotoWithTags, Tag } from '@photo/shared'
 
 import { Message, UPLOAD_LIMITS } from './model'
 import type { Counts, Model } from './model'
 import { init, update } from './update'
+import { fileLine, formatTaken, originalFilename } from './views/library-table'
 
 const ORIGIN = 'https://photo.elianiva.com'
 const TEAM = 'https://team.elianivaaccess.test'
@@ -48,8 +49,6 @@ const COUNTS: Counts = {
     { id: TagId.make('nyc'), label: 'New York', count: 52 },
   ],
 }
-
-const STORAGE = { photos: 412, bytes: 7_900_000_000, capBytes: STORAGE_CAP_BYTES }
 
 /** One row's worth of the design's data, so a scene asserts against the values
  *  the canvas draws rather than against whatever a fixture happened to hold. */
@@ -95,7 +94,6 @@ const cold = (
   [
     Message.SucceededGetSession({ email: OWNER, teamDomain: TEAM }),
     Message.SucceededGetCounts(COUNTS),
-    Message.SucceededGetStorage(STORAGE),
     Message.SucceededFetchTags({ tags: [...TAGS] }),
     listed(photos, total, nextCursor),
   ].reduce((model, message) => update(model, message).model, init(at('/admin')).model)
@@ -171,7 +169,10 @@ describe('selection', () => {
     const all = fold(Message.ToggledPageSelection({}))
     expect(all.model.selected).toEqual(PAGE.map((photo) => photo.id))
 
-    const mixed = fold(Message.ToggledPageSelection({}), Message.ToggledRowSelection({ id: PAGE[3]?.id ?? '' }))
+    const mixed = fold(
+      Message.ToggledPageSelection({}),
+      Message.ToggledRowSelection({ id: PAGE[3]?.id ?? '' }),
+    )
     expect(mixed.model.selected).not.toContain(PAGE[3]?.id)
     expect(mixed.model.selected).toHaveLength(6)
 
@@ -460,11 +461,56 @@ describe('the states that are not rows', () => {
     // Nothing is re-read behind the operator's back, and what is already on
     // screen stays on screen behind the error.
     expect(
-      (failed.commands ?? []).map((command) => command.name).filter((name) =>
-        name.startsWith('Fetch'),
-      ),
+      (failed.commands ?? [])
+        .map((command) => command.name)
+        .filter((name) => name.startsWith('Fetch')),
     ).toEqual([])
     expect(failed.model.error).toBe('the Library could not be read')
     expect(failed.model.photos).toEqual([...PAGE])
+  })
+})
+
+describe('the values one row prints', () => {
+  // The two formatters behind the row's `TAKEN` cell and its `NO. …` line.
+  // What the cells *draw* is a page (`.agents/skills/verify-photo`); what is
+  // asserted here is the string each one composes, which is where both of them
+  // read the stored value wrong.
+
+  it('prints the day of a takenAt that carries a time as well', () => {
+    // The upload stores the hour when the file's own EXIF names one, so the
+    // stored value is `2026-06-11T14:27` as often as it is `2026-06-11`. Both
+    // print their day; neither prints a dash.
+    expect(formatTaken('2026-06-11T14:27')).toBe('11 JUN 2026')
+    expect(formatTaken('2026-06-11')).toBe('11 JUN 2026')
+    expect(formatTaken('2025-08-31')).toBe('31 AUG 2025')
+    expect(formatTaken(undefined)).toBe('—')
+    expect(formatTaken('not a date')).toBe('—')
+    expect(formatTaken('2025-13-01')).toBe('—')
+  })
+
+  it('takes the whole upload id off a key, not its first dash-segment', () => {
+    // The upload writes `originals/{uuid}-{slug}.{ext}` from a freshly minted
+    // `crypto.randomUUID()`, so the id is a uuid and the name is what is left
+    // once all of it is off.
+    expect(
+      originalFilename('originals/0648870a-7ff5-4790-9e04-6b2265858b3a-2026-06-11-4.jpg'),
+    ).toBe('2026-06-11-4.jpg')
+    // A key that carries no uuid — a seeded row, an original placed in R2 by
+    // hand — is already a name.
+    expect(originalFilename('originals/kyoto-1.jpg')).toBe('kyoto-1.jpg')
+  })
+
+  it('composes the number, the filename and the place, and only the parts it has', () => {
+    const pipin: PhotoWithTags = {
+      ...row(1),
+      number: 5,
+      r2Key: 'originals/0648870a-7ff5-4790-9e04-6b2265858b3a-2026-06-11-4.jpg',
+      metadata: { location: 'Kota Tua, Jakarta' },
+    }
+    expect(fileLine(pipin)).toBe('NO. 005 · 2026-06-11-4.jpg · KOTA TUA, JAKARTA')
+    // A Photograph carrying only some of them prints only those, rather than a
+    // line of separators with gaps in it.
+    expect(fileLine({ ...pipin, metadata: {} })).toBe('NO. 005 · 2026-06-11-4.jpg')
+    expect(fileLine({ ...pipin, number: undefined, metadata: {} })).toBe('2026-06-11-4.jpg')
   })
 })

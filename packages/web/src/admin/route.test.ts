@@ -133,10 +133,14 @@ describe('the admin URL space', () => {
   })
 })
 
-/** The three reads the shell itself needs, on every route and every
- *  navigation. Nothing is cached across a route change: a session can expire
- *  between two pages, and a count is a fact about the moment it was read. */
-const SHELL_READS = ['FetchSession', 'FetchCounts', 'FetchStorage']
+/** The three reads the shell itself needs, on every route and every navigation.
+ *  Nothing is cached across a route change: a session can expire between two
+ *  pages, and a count or a Tag list is a fact about the moment it was read. The
+ *  Tags are here rather than on the Library alone because the sidebar is the
+ *  shell's chrome on every route, and a `TAGS` group that emptied itself the
+ *  moment the operator left the Library was a list of nothing under a heading
+ *  that had just held four. */
+const SHELL_READS = ['FetchSession', 'FetchCounts', 'FetchTags']
 
 const listReads = (result: { readonly commands?: ReadonlyArray<Command<Message>> }) =>
   dispatched(result).filter((entry) => !SHELL_READS.includes(entry.name))
@@ -145,7 +149,7 @@ describe('a cold load', () => {
   it('fetches the shell and the library on a cold load of the library', () => {
     const cold = init(at('/admin'))
     expect(cold.model.route).toEqual(libraryRoute())
-    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
+    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos'])
   })
 
   it('applies the Library view from the URL on a cold load of that URL', () => {
@@ -153,7 +157,7 @@ describe('a cold load', () => {
     expect(cold.model.route).toEqual(libraryRoute({ ...defaultLibraryFilters, view: 'grid' }))
     // The cold load reads the list whatever the view: the grid and the table
     // are two arrangements of one read.
-    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
+    expect(commandNames(cold.commands)).toEqual([...SHELL_READS, 'FetchPhotos'])
   })
 
   it('fetches the shell, the photo and its presentation on a cold load of a deep link', () => {
@@ -186,7 +190,7 @@ describe('an in-app navigation', () => {
     const onAPhoto = init(at('/admin/photos/photo-1')).model
     const result = update(onAPhoto, onUrlChange(at('/admin')))
     expect(result.model.route).toEqual(libraryRoute())
-    expect(commandNames(result.commands)).toEqual([...SHELL_READS, 'FetchPhotos', 'FetchTags'])
+    expect(commandNames(result.commands)).toEqual([...SHELL_READS, 'FetchPhotos'])
   })
 
   it('re-reads the shell but not the list when the route stays', () => {

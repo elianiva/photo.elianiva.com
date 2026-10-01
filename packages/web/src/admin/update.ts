@@ -36,7 +36,6 @@ import {
   FetchPresentationCmd,
   FetchSessionCmd,
   FetchSettingsCmd,
-  FetchStorageCmd,
   FetchTagsCmd,
   LoadCmd,
   NavigateCmd,
@@ -77,10 +76,12 @@ import { AdminToast, BULK_BORDER_MAT, libraryFiltersOfModel, Message } from './m
 import type { LibraryPage, Message as Msg, Model } from './model'
 import {
   appRouteToUrl,
+  defaultLibraryFilters,
   isAdminPath,
   libraryFiltersOf,
   libraryRoute,
   libraryUrl,
+  libraryViewOf,
   sameLibraryFilterSet,
   sameLibraryFilters,
   urlToAppRoute,
@@ -146,7 +147,6 @@ const initialModel = (route: AppRoute): Model => {
     loadingMore: false,
     session: { status: 'loading', email: null, teamDomain: null },
     counts: { total: 0, trashed: 0, byStatus: { draft: 0, published: 0, failed: 0 }, byTag: [] },
-    storage: { photos: 0, bytes: 0, capBytes: 0 },
     searchQuery: filters.q,
     // The committed search, which is the URL's `q` as of the last load.
     appliedQuery: filters.q,
@@ -197,11 +197,13 @@ const initialModel = (route: AppRoute): Model => {
  *  `ChangedUrl` alone never fires on a direct visit or a reload. */
 const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => {
   // Every navigation re-reads the session and the sidebar's two aggregates,
-  // cold load included. None of the three is cached across a route change: a
-  // session can expire between two pages, and a count is a fact about the
-  // moment it was read, not about the moment the Admin booted.
-  const shellCommands: Commands = [FetchSessionCmd(), FetchCountsCmd(), FetchStorageCmd()]
-  const enteringLibrary = Transition.isEntering(transition, 'Library')
+  // cold load included. None of them is cached across a route change: a session
+  // can expire between two pages, and a count or a Tag list is a fact about the
+  // moment it was read, not about the moment the Admin booted. The Tags ride
+  // here rather than on entering the Library because the sidebar is the shell's
+  // chrome on every route: read only on the Library, a cold load of Settings
+  // drew `No tags yet.` under a `TAGS` heading the Library had just listed.
+  const shellCommands: Commands = [FetchSessionCmd(), FetchCountsCmd(), FetchTagsCmd()]
   const nextRoute = transition.nextRoute
   // The Settings page is a form over a row, and a form over a row is only
   // truthful if the row behind it is current. Fetched on entering, never
@@ -292,7 +294,6 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
         libraryCommands.push(...libraryLoadCommand(next, filters))
       }
     }
-    if (enteringLibrary) libraryCommands.push(FetchTagsCmd())
   }
   const commands = [...shellCommands, ...libraryCommands, ...settingsCommands, ...photoCommands]
   return commands.length > 0 ? { model: next, commands } : { model: next }
@@ -630,9 +631,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // zero: a zero would read as "you have no photos", which is a claim this
     // failure cannot make.
     FailedGetCounts: () => ({ model }),
-    SucceededGetStorage: (storage) => ({ model: modifyFields(model, { storage: () => storage }) }),
-    FailedGetStorage: () => ({ model }),
-
     // ----- filter bar -----------------------------------------------------------
     RetryFetch: () => {
       const filters = libraryFiltersOfModel(model)
@@ -656,6 +654,15 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           sort: model.sortFilter === 'newest' ? 'oldest' : 'newest',
           page: 0,
         },
+        true,
+      ),
+    // Every filter back to its opening value in one move. The view is kept:
+    // whether the Library is read as a table or as tiles is how the operator is
+    // looking at it, not which rows it holds.
+    ClearedLibraryFilters: () =>
+      libraryFilterChange(
+        model,
+        { ...defaultLibraryFilters, view: libraryViewOf(model.route) },
         true,
       ),
     // A view is not a query: the rows are the rows already on screen, so this

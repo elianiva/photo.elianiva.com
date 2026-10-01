@@ -2,7 +2,7 @@
  * Library Row — one Photo in the Library table (master `d8102c6e776b1223`), the
  * most complex atom in the set: a select box, a 64×64 thumb, the Title Block
  * (title over `NO. 024 · DSCF4821.JPG · KOTA TUA, JAKARTA`), the boxed Ratio, the
- * taken date, the size, the Status, and two ghost Icon Buttons.
+ * taken date, the frame's dimensions, the Status, and two ghost Icon Buttons.
  *
  * Two states. Default is a `color.hairline` rule under the row; selected fills
  * `color.surface.container` and lifts the thumb onto `color.surface`. The row's
@@ -54,7 +54,9 @@ export type LibraryRowInputs<M> = Readonly<{
   fileLine: string
   ratio: string
   taken: string
-  size: string
+  /** `3000 × 2000` — the measured frame. Always known, unlike the byte count
+   *  the design's `SIZE` cell printed, which only an upload writes. */
+  dimensions: string
   status: StatusVariant
   onEdit?: M
   onMenu?: M
@@ -156,10 +158,10 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
       h.span(
         [
           h.Class(
-            cn('type-exif shrink-0 tabular-nums text-role-text-secondary', columnWidths.size),
+            cn('type-exif shrink-0 tabular-nums text-role-text-secondary', columnWidths.dimensions),
           ),
         ],
-        [inputs.size],
+        [inputs.dimensions],
       ),
       h.div(
         [h.Class(cn('flex shrink-0 items-center', columnWidths.status))],

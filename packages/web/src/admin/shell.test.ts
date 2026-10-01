@@ -14,7 +14,7 @@
 import { Option } from 'effect'
 import { fromString as urlFromString } from 'foldkit/url'
 import { describe, expect, it } from 'vitest'
-import { STORAGE_CAP_BYTES, TagId } from '@photo/shared'
+import { TagId } from '@photo/shared'
 import type { Tag } from '@photo/shared'
 
 import { Message } from './model'
@@ -50,11 +50,6 @@ const COUNTS: Counts = {
   ],
 }
 
-/** 7.9 GB and 412 Photos against the one cap `STORAGE_CAP_BYTES` declares,
- *  which is the same constant the Storage block is measured against and the
- *  same read the sidebar's meter draws. */
-const STORAGE = { photos: 412, bytes: 7_900_000_000, capBytes: STORAGE_CAP_BYTES }
-
 const listed = Message.SucceededFetchPhotos({ photos: [], nextCursor: null, total: 0 })
 
 /** A cold load of `pathname` with the operator signed in and the library
@@ -64,7 +59,6 @@ const signedIn = (pathname: string): Model =>
   [
     Message.SucceededGetSession({ email: OWNER, teamDomain: TEAM }),
     Message.SucceededGetCounts(COUNTS),
-    Message.SucceededGetStorage(STORAGE),
     Message.SucceededFetchTags({ tags: [...TAGS] }),
     listed,
   ].reduce((model, message) => update(model, message).model, init(at(pathname)).model)
@@ -158,7 +152,10 @@ describe('the sidebar tags group', () => {
   it('a delete forgets its subject the moment it is asked for', () => {
     // The confirm the delete opens outlives the sheet that asked for it, so the
     // sheet cannot act on a Tag the operator has moved on from.
-    const asked = update(signedIn('/admin'), Message.RequestDeleteTag({ id: 'kyoto', label: 'Kyoto' }))
+    const asked = update(
+      signedIn('/admin'),
+      Message.RequestDeleteTag({ id: 'kyoto', label: 'Kyoto' }),
+    )
     expect(asked.model.tagActionsId).toBeUndefined()
     expect(asked.model.pendingConfirm).toEqual({ kind: 'tag', id: 'kyoto', label: 'Kyoto' })
   })
@@ -192,13 +189,16 @@ describe('the session', () => {
   })
 })
 
-describe('the storage meter', () => {
-  it('reports the real aggregate against the one cap, never a placeholder', () => {
-    // 7.9 GB of the 20 GiB `STORAGE_CAP_BYTES` declares, off the one read both
-    // the meter and the Storage block are measured against.
-    const { storage } = signedIn('/admin')
-    expect(storage.photos).toBe(412)
-    expect(storage.bytes).toBe(7_900_000_000)
-    expect(storage.capBytes).toBe(STORAGE_CAP_BYTES)
+describe('the rail\u2019s meter', () => {
+  it('is measured from the counts the nav and the Storage block read', () => {
+    // The rail, the nav's rows and the Settings Storage block all draw the one
+    // `GetCounts` payload, so the fraction the meter fills and the numbers
+    // beside it cannot come from two different reads. There is no byte total
+    // here: `bytes` is a column only an upload writes, so a meter over it read
+    // zero for the whole of an existing Library.
+    const { counts } = signedIn('/admin')
+    expect(counts.total).toBe(COUNTS.total)
+    expect(counts.trashed).toBe(COUNTS.trashed)
+    expect(counts.byStatus.published).toBe(COUNTS.byStatus.published)
   })
 })

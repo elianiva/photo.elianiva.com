@@ -20,8 +20,9 @@
  * The canvas contradicts itself — its own sidebar block is already called
  * `Storage` — and ADR 0006 split the collision.
  *
- * The block reads `GetStorageUsage`, the same payload the sidebar's meter reads,
- * so the frame count, the byte total and the cap cannot come to disagree.
+ * The block reads `GetCounts`, the same payload the sidebar's meter and the
+ * nav's rows read, so the frame count, the Trash count and the Library's own
+ * total cannot come to disagree.
  */
 
 import { DateTime, Option } from 'effect'
@@ -38,7 +39,6 @@ import type { WatermarkPosition } from '@photo/shared'
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
 import { PREVIEW_LONG_EDGES, settingsUnsaved } from '../settings-draft'
-import { storageFigure } from '../storage-index'
 import type { Child } from './shared'
 
 /** The watermark's three colours, named the way the operator reads them. The
@@ -239,28 +239,23 @@ const metadata = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // STORAGE
 // ---------------------------------------------------------------------------
 
-/** The design's 4px bar: a `color.rule` fill over a track the `Free` half of
- *  it draws invisibly. Hidden from assistive tech because the sentence above it
- *  says the same fraction in words. A cap of zero is an aggregate that could
- *  not be read rather than a full bucket; dividing by it would be NaN, and a
- *  NaN width silently vanishes. */
-const storageBar = (usedPercent: number, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.AriaHidden(true), h.Class('h-1 w-full overflow-hidden bg-transparent')],
-    [h.div([h.Class('h-full bg-role-rule'), h.Style({ width: `${usedPercent.toFixed(2)}%` })], [])],
-  )
+/** The block's one figure: what the Library holds and how much of it is out of
+ *  sight. Both numbers come from `GetCounts`, which counts rows — the design's
+ *  `4.2 GB OF 20 GB` came from `SUM(bytes)`, a column only an upload writes, so
+ *  it read `0.0 GB` for every Photograph older than the column. The Trash count
+ *  is the half of this block that is new information: nothing else in the Admin
+ *  lists the Trash, so this is the one place the operator can see that three
+ *  photographs are waiting there. */
+const storageFigure = (model: Model): string => {
+  const { total, trashed } = model.counts
+  return `${String(total)} FRAMES · ${String(trashed)} IN TRASH`
+}
 
-const storage = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const { bytes, capBytes } = model.storage
-  const usedPercent = capBytes > 0 ? Math.min(100, Math.max(0, (bytes / capBytes) * 100)) : 0
-  return section(
+const storage = (model: Model, h: HtmlBuilder<Msg>): Child =>
+  section(
     'STORAGE',
     [
-      h.p(
-        [h.Class('type-exif text-role-text-primary')],
-        [storageFigure({ photos: model.storage.photos, bytes, capBytes })],
-      ),
-      storageBar(usedPercent, h),
+      h.p([h.Class('type-exif text-role-text-primary')], [storageFigure(model)]),
       Button.button(
         {
           onClick: M.ExportCsvIndex({}),
@@ -293,7 +288,6 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child => {
     ],
     h,
   )
-}
 
 const draftRetainValue = (model: Model): string =>
   model.settingsDraft.retainForever ? 'forever' : 'never'

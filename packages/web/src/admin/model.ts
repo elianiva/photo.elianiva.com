@@ -177,19 +177,6 @@ const countsFields = {
 export const Counts = S.Struct(countsFields)
 export type Counts = typeof Counts.Type
 
-/** The sidebar meter's aggregate, from `GetStorageUsage`. `photos` rides in
- *  the same payload and is drawn by #37's Storage block; the sidebar reads the
- *  byte fraction and leaves the count to the block that prints it beside the
- *  byte total. One payload, one Model field, so the frame count the block
- *  reports and the fraction the meter draws cannot come from two reads. */
-const storageFields = {
-  photos: S.Number,
-  bytes: S.Number,
-  capBytes: S.Number,
-}
-export const Storage = S.Struct(storageFields)
-export type Storage = typeof Storage.Type
-
 /** What `/admin/atoms` remembers. Namespaced so the sheet's own state — a page
  *  number, which specimen rows are ticked, which toggles are on — is never
  *  mistaken for the Admin's. */
@@ -308,7 +295,6 @@ export const Model = S.Struct({
   // the shell: the session, the sidebar's two aggregates, the Page Head's search
   session: Session,
   counts: Counts,
-  storage: Storage,
   /** The Page Head search's text. A keystroke moves it; `SubmittedSearch`
    *  commits it into the URL's `q`, which is what the fetch reads. */
   searchQuery: S.String,
@@ -430,8 +416,6 @@ export const Message = defineMessageUnion({
   FailedGetSession: {},
   SucceededGetCounts: countsFields,
   FailedGetCounts: {},
-  SucceededGetStorage: storageFields,
-  FailedGetStorage: {},
 
   // filter bar
   /** Add or remove one Tag from the multi-select filter. */
@@ -446,6 +430,11 @@ export const Message = defineMessageUnion({
   SelectedSortFilter: { value: LibrarySortFilter },
   /** Flip the sort between newest and oldest, from the Table Head's `TAKEN`. */
   ToggledSort: {},
+  /** Clear every filter at once — Status, Ratio, the Tag set and the committed
+   *  search. The filtered-empty state offers this, because a filter that
+   *  matched nothing has as many ways back as it has fields, and a link that
+   *  cleared the Tag set alone was no way out of a Status or a search. */
+  ClearedLibraryFilters: {},
   RetryFetch: {},
   /** A cold load (or a Back press) whose page number has no cursor in the
    *  Model: the command walks the keyset from the first page to the one the

@@ -62,7 +62,6 @@ const COLD_READS = [
     byStatus: { draft: 7, published: 402, failed: 1 },
     byTag: [],
   }),
-  Message.SucceededGetStorage({ photos: 412, bytes: 1, capBytes: 1 }),
   Message.SucceededFetchTags({ tags: [] }),
 ]
 
@@ -178,6 +177,31 @@ describe('the URL is the filter', () => {
     ])
     expect(init(at('/admin?status=scheduled')).model.statusFilter).toBe('scheduled')
   })
+
+  it('clears every filter in one move and keeps the view', () => {
+    // The filtered-empty state's way back. Every field goes at once, because a
+    // filter that matched nothing has as many ways out as it has fields.
+    const filtered = cold('/admin?status=failed&ratio=3:2&tag=kyoto&q=sun&view=grid')
+    const cleared = update(filtered, Message.ClearedLibraryFilters({}))
+
+    expect(cleared.model.statusFilter).toBe('all')
+    expect(cleared.model.ratioFilter).toBe('any')
+    expect(cleared.model.activeTagIds).toEqual([])
+    expect(cleared.model.appliedQuery).toBe('')
+    expect(cleared.model.libraryPage).toBe(0)
+    // How the operator is reading the Library is not which rows it holds, so
+    // clearing the filters leaves the grid alone.
+    expect(libraryViewOf(cleared.model.route)).toBe('grid')
+    expect(
+      (cleared.commands ?? []).map((command) => ({
+        name: command.name,
+        args: command.args ?? {},
+      })),
+    ).toEqual([
+      { name: 'FetchPhotos', args: { tagIds: [], q: '' } },
+      { name: 'ReplaceUrl', args: { url: '/admin?view=grid' } },
+    ])
+  })
 })
 
 describe('a reload restores the filtered page', () => {
@@ -200,7 +224,7 @@ describe('a reload restores the filtered page', () => {
     expect((moved.commands ?? []).map((command) => command.name)).toEqual([
       'FetchSession',
       'FetchCounts',
-      'FetchStorage',
+      'FetchTags',
       'FetchPhotos',
     ])
   })

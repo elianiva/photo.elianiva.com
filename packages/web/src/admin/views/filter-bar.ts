@@ -120,7 +120,11 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
           h.div(
             [h.Class('flex items-center gap-2')],
             [
-              h.span([h.Class('type-kicker text-role-text-disabled')], ['RATIO']),
+              // `color.text.secondary`, not `color.text.disabled`: the kicker
+              // names a filter the operator can pick, and `color.text.disabled`
+              // is 3.6:1 on the page's surface — under the 4.5:1 a 10px
+              // `$typography.kicker` line needs.
+              h.span([h.Class('type-kicker text-role-text-secondary')], ['RATIO']),
               Segment.segmentGroup(
                 {
                   selected: model.ratioFilter,

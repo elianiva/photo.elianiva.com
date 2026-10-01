@@ -1,25 +1,12 @@
 /**
- * The Storage block's two outputs: the figure it reports, and the CSV index it
- * downloads.
+ * The Storage block's CSV index: the document it downloads.
  *
- * The figure is `GetStorageUsage`'s `photos` and `bytes` against its `capBytes`
- * — the same payload the sidebar's meter reads, so the two cannot report
- * different caps however the design draws them. The rendering is the meter's
- * own convention: decimal gigabytes, the cap rounded to a whole number, which
- * is why `STORAGE_CAP_BYTES`'s 20 GiB prints as `21 GB` here as it does there.
- * The design's `20 GB` in this block and its `50 GB` in the meter are the
- * canvas disagreeing with itself; one constant and one convention settle it.
+ * The block's other output — the `412 FRAMES · 4.2 GB OF 21 GB` figure — was
+ * read off `SUM(bytes)`, which only an upload writes, so it is gone; the block
+ * now counts rows off `GetCounts` instead.
  */
 
 import type { PhotoIndexRow } from '@photo/shared'
-
-/** `412 FRAMES · 4.2 GB OF 21 GB` — the design's sentence, over live numbers. */
-export const storageFigure = (usage: {
-  readonly photos: number
-  readonly bytes: number
-  readonly capBytes: number
-}): string =>
-  `${String(usage.photos)} FRAMES · ${(usage.bytes / 1e9).toFixed(1)} GB OF ${Math.round(usage.capBytes / 1e9).toString()} GB`
 
 /** The index's columns, in the order the issue names them. `taken_at` is
  *  `takenAt`'s column spelling — a CSV is read in a spreadsheet, not decoded

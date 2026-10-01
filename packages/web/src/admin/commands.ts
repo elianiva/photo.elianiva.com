@@ -20,14 +20,7 @@ import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
 import { librarySortOf } from './route'
 import type { LibraryFilters } from './route'
-import {
-  BULK_BORDER_MAT,
-  GridCols,
-  LIBRARY_PAGE_SIZE,
-  Message,
-  PhotoDetails,
-  Storage,
-} from './model'
+import { BULK_BORDER_MAT, GridCols, LIBRARY_PAGE_SIZE, Message, PhotoDetails } from './model'
 import type { Counts as CountsType, LibraryPage } from './model'
 import { GridPrefs, GridPrefsLive } from './prefs'
 
@@ -45,10 +38,6 @@ interface Session {
   readonly email: string | null
   readonly teamDomain: string | null
 }
-
-/** The sidebar meter's aggregate, whole: the Storage block's frame count and
- *  the sidebar's byte fraction are the same payload. */
-type StorageUsage = Storage
 
 /** Narrow on purpose: widening this to the whole Message union would leak
  *  every variant into each command's success channel. */
@@ -76,16 +65,6 @@ export const FetchCountsCmd = Command.define('FetchCounts', {
   execute: Effect.map(rpcAdmin<CountsType>('GetCounts', {}), (counts) =>
     Message.SucceededGetCounts(counts),
   ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetCounts({})))),
-})
-
-/** The Storage meter's aggregate. `photos` rides in the same payload and the
- *  Storage block (#37) draws it beside the byte total, so the Model keeps the
- *  whole read rather than the half the sidebar happens to use. */
-export const FetchStorageCmd = Command.define('FetchStorage', {
-  messages: [Message.SucceededGetStorage, Message.FailedGetStorage],
-  execute: Effect.map(rpcAdmin<StorageUsage>('GetStorageUsage', {}), (usage) =>
-    Message.SucceededGetStorage(usage),
-  ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetStorage({})))),
 })
 
 // ---------------------------------------------------------------------------

@@ -26,36 +26,17 @@ import { placeholderDataUrl } from '@/lib/blurhash'
 import { originalUrl } from '@/lib/image'
 
 import { Message as M } from '../model'
-import type { GridCols, Model, Msg } from '../model'
+import type { Model, Msg } from '../model'
 import { libraryEmpty } from './library-empty'
 import { libraryPager } from './library-pager'
 import { libraryError, libraryIsEmpty, libraryNoMatch } from './library-states'
 import type { Child } from './shared'
 
 // ---------------------------------------------------------------------------
-// tile sizing hints
-// ---------------------------------------------------------------------------
-
-/** The grid sits in the Admin's content column (`max-w-[1080px]`) behind
- *  `px-4` / `sm:px-12` gutters, with `gap-2` / `sm:gap-3` between tiles.
- *  `sizes` tells the browser how wide one tile will be so it can pick from
- *  `srcset` before layout; the numbers here mirror those classes, so a gutter
- *  change is a two-line change rather than a guess. */
-const tileSizes = (cols: GridCols): string => {
-  const gapsSm = ((cols - 1) * 0.75).toFixed(2)
-  const gapsXs = ((cols - 1) * 0.5).toFixed(2)
-  return [
-    `(min-width: 1080px) calc((67.5rem - 6rem - ${gapsSm}rem) / ${String(cols)})`,
-    `(min-width: 640px) calc((100vw - 6rem - ${gapsSm}rem) / ${String(cols)})`,
-    `calc((100vw - 2rem - ${gapsXs}rem) / ${String(cols)})`,
-  ].join(', ')
-}
-
-// ---------------------------------------------------------------------------
 // photo tile
 // ---------------------------------------------------------------------------
 
-const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Child => {
+const photoTile = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
   const placeholder =
     photo.blurhash !== undefined && photo.blurhash !== null
       ? placeholderDataUrl(photo.blurhash)
@@ -88,7 +69,6 @@ const photoTile = (photo: PhotoWithTags, sizes: string, h: HtmlBuilder<Msg>): Ch
           h.img([
             h.Class('h-full w-full object-cover'),
             h.Src(originalUrl(photo)),
-            h.Attribute('sizes', sizes),
             h.Alt(''),
             h.Attribute('loading', 'lazy'),
             h.Attribute('decoding', 'async'),
@@ -162,7 +142,7 @@ export const grid = (model: Model, h: HtmlBuilder<Msg>): Child => {
           h.Class('mt-2 grid gap-2 sm:gap-3'),
           h.Style({ gridTemplateColumns: `repeat(${String(model.cols)}, minmax(0, 1fr))` }),
         ],
-        model.photos.map((photo) => photoTile(photo, tileSizes(model.cols), h)),
+        model.photos.map((photo) => photoTile(photo, h)),
       ),
       libraryPager(model, h),
     ],
