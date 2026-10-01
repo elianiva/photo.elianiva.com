@@ -48,7 +48,23 @@
   --role-surface-container: #eae6dc;
   --role-surface-container-high: #b4aea2;
   --role-surface-hover: #eae6dc;
-  --role-text-disabled: #7c766b;
+  /* The two quiet voices, tuned per branch for the 10px `$typography.exif`
+   * and `$typography.kicker` lines they are drawn in. WCAG 1.4.3 wants 4.5:1
+   * for text that size, and the values below are the nearest greys that clear
+   * it on both of the branch's own surfaces — `surface` and
+   * `surface-container` — with margin to spare:
+   *
+   *   light `disabled`  #6b655c  5.06:1 on `surface`, 4.63:1 on `surface-container`
+   *   light `secondary` #5e5950  6.10:1 / 5.58:1
+   *   dark  `disabled`  #9d978d  6.04:1 / 4.78:1
+   *   dark  `secondary` #a09a90  6.29:1 / 4.97:1
+   *
+   * The two branches move in opposite directions because the surfaces do: a
+   * quiet voice on a light ground has to be darker than the ground, and on a
+   * dark ground lighter than it. One value cannot serve both, which is why
+   * the old `#7c766b` read 3.6:1 in the light branch and 3.1:1 in the dark
+   * one — under the threshold in both. */
+  --role-text-disabled: #6b655c;
   --role-text-primary: #1b1a18;
   --role-text-secondary: #5e5950;
 }
@@ -73,9 +89,11 @@
   --role-surface-container: #2f2c28;
   --role-surface-container-high: #46423b;
   --role-surface-hover: #2f2c28;
-  --role-text-disabled: #7c766b;
+  /* See the light branch: the same two voices, tuned for this branch's own
+   * surfaces, and lighter than the ground because the ground is dark. */
+  --role-text-disabled: #9d978d;
   --role-text-primary: #f3f0e8;
-  --role-text-secondary: #8f8a80;
+  --role-text-secondary: #a09a90;
 }
 
 /** The Mats are the colour of the thing being framed, so paper is paper in
