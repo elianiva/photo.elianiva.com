@@ -14,22 +14,22 @@
 ## How to get to it (user POV)
 
 - From any public document: choose the Tag's name in the Folio's section links.
-- Directly: open `http://localhost:5173/tag/<slug>`.
+- Directly: open `http://localhost:4000/tag/<slug>`.
 
 ## Driving it with agent-browser
 
 Preconditions:
 
-- App is healthy at `http://localhost:5173` and at least one published Photo carries a Tag, so the Folio has at least one Tag entry.
+- App is healthy at `http://localhost:4000` and at least one published Photo carries a Tag, so the Folio has at least one Tag entry.
 - `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 
-- **Open the page from the nav.** Run `npx agent-browser open "http://localhost:5173/"` then `npx agent-browser eval "document.querySelector('nav[aria-label=Sections] a[href^=\"/tag/\"]').getAttribute('href')"`. Open that href; the title reads `photo.elianiva.com — <label>` and the heading is that label.
+- **Open the page from the nav.** Run `npx agent-browser open "http://localhost:4000/"` then `npx agent-browser eval "document.querySelector('nav[aria-label=Sections] a[href^=\"/tag/\"]').getAttribute('href')"`. Open that href; the title reads `photo.elianiva.com — <label>` and the heading is that label.
 - **The Folio is the read.** Run `npx agent-browser eval "JSON.stringify([...document.querySelectorAll('nav[aria-label=Sections] a')].map(x => x.getAttribute('href')))"`. The list is `/#`, one `/tag/<slug>` per Tag that has a published Photo, then `/about` — and the same list is printed under `SECTIONS` in the colophon.
 - **The current section is this Tag.** Run `npx agent-browser eval "JSON.stringify([...document.querySelectorAll('a[aria-current=page]')].map(x => x.getAttribute('href')))"`. It is this Tag's own href, not `/#`.
 - **The plates are this Tag's photographs.** Run `npx agent-browser snapshot`. Every plate's title is a Photo carrying this Tag, and no plate belongs to a Tag-less photograph. The earliest one is first.
 - **Plate bytes come from the API Worker.** Run `npx agent-browser get attr src "img[role=img]"` and assert the src points at `http://localhost:13371/api/image/<r2Key>` and loads. No `cdn-cgi/image`, no Unsplash.
 - **The lightbox works here.** Run `npx agent-browser click --role button --name "View <title>"` on a plate; the lightbox opens on the original and `Escape` closes it.
-- **A slug no Tag carries.** Open `http://localhost:5173/tag/nothing-here`. The status is `404` and the page is not the Front.
+- **A slug no Tag carries.** Open `http://localhost:4000/tag/nothing-here`. The status is `404` and the page is not the Front.
 - **The mobile master.** Run `npx agent-browser set viewport 390 844` and reload. The headline is the short one, the plates flow into two columns, and the colophon drops `EQUIPMENT`.
 - **Proof.** `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/tag-page/tag-desktop.aria.txt`, `npx agent-browser screenshot "" .agents/skills/verify-photo/artifacts/tag-page/tag-desktop.png --full`, and the same two for `tag-mobile`.
 

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Default to the dev site; override with an explicit arg or BASE env:
-#   BASE=http://localhost:5173 .agents/skills/verify-photo/scripts/doctor.sh
-BASE="${1:-${BASE:-http://localhost:5173}}"
+#   BASE=http://localhost:4000 .agents/skills/verify-photo/scripts/doctor.sh
+BASE="${1:-${BASE:-http://localhost:4000}}"
 API_BASE="${API_BASE:-http://localhost:13371}"
 FAIL=0
 

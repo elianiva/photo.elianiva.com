@@ -180,7 +180,7 @@ export default Alchemy.Stack(
       },
       domain: SITE_DOMAIN,
       compatibility: { flags: ['nodejs_compat'], date: '2025-09-01' },
-      dev: { port: 5173, strictPort: true },
+      dev: { port: 4000, strictPort: true },
       env: {
         PHOTOS: PhotoBucket,
         DB: PhotoDb,

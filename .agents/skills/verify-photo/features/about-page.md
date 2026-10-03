@@ -15,17 +15,17 @@
 ## How to get to it (user POV)
 
 - From the Front: choose `ABOUT` in the folio's section links.
-- Directly: open `http://localhost:5173/about`.
+- Directly: open `http://localhost:4000/about`.
 - Back: choose `ALL` in the folio, or `BACK TO TOP ↑` in the colophon.
 
 ## Driving it with agent-browser
 
 Preconditions:
 
-- App is healthy at `http://localhost:5173` and at least one Photo is published, or the page is verified in its no-plate state and the plate assertions are reported as unmet.
+- App is healthy at `http://localhost:4000` and at least one Photo is published, or the page is verified in its no-plate state and the plate assertions are reported as unmet.
 - `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 
-- **Open the page.** Run `npx agent-browser open "http://localhost:5173/about"`. The title reads `photo.elianiva.com — About`, the heading is `One camera, one lens, and a lot of walking`, and the Kit prints its four rows.
+- **Open the page.** Run `npx agent-browser open "http://localhost:4000/about"`. The title reads `photo.elianiva.com — About`, the heading is `One camera, one lens, and a lot of walking`, and the Kit prints its four rows.
 - **The current section is ABOUT.** Run `npx agent-browser eval "JSON.stringify([...document.querySelectorAll('a[data-slot=nav-link]')].map(x => [x.textContent, x.getAttribute('aria-current')]))"`. The `ABOUT` row is the one carrying `page`; on `/` it is `ALL`.
 - **Navigate both ways.** Run `npx agent-browser click "a[href='/about']"` from the Front and assert the URL is `/about`; run `npx agent-browser click "a[href='/#']"` and assert the URL is `/#` and the title is the Front's.
 - **A plate is a plate.** Run `npx agent-browser click --role button --name "View <title>"` on a plate. The lightbox opens on the original; `Escape` closes it. The same affordance the Front's plates have.

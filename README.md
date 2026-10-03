@@ -12,7 +12,7 @@ Curated photography showcase — `photo.elianiva.com`.
 
 ```sh
 pnpm install
-pnpm dev          # alchemy dev — site on http://localhost:5173, API Worker on http://localhost:13371
+pnpm dev          # alchemy dev — site on http://localhost:4000, API Worker on http://localhost:13371
 pnpm build
 pnpm typecheck
 pnpm lint

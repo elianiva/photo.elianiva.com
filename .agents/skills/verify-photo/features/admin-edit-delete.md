@@ -12,7 +12,7 @@ Admin library is one read with two views — a table and a square-tile grid — 
 
 ## How to get to it (user POV)
 
-- Open `http://localhost:5173/admin`, then click `Grid view` at the top right of the Library.
+- Open `http://localhost:4000/admin`, then click `Grid view` at the top right of the Library.
 - In grid view, click a tile (or its `Edit`) to land on the Editor route for that Photo.
 - In grid view, click a tile's `Delete`, or the table row's `⋯` → `Move to Trash`, and confirm.
 
@@ -20,11 +20,11 @@ Admin library is one read with two views — a table and a square-tile grid — 
 
 Preconditions:
 
-- App is healthy at `http://localhost:5173/admin`.
+- App is healthy at `http://localhost:4000/admin`.
 - At least one Photo exists. Create one via upload or seed named `verify-edit` if needed.
 - `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 
-- **Switch to the grid.** Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Grid view"`. The URL becomes `$BASE/admin?view=grid`, the `Grid view` button gains `aria-pressed="true"` and the `List view` button `aria-pressed="false"`, `[data-slot="library-grid"]` appears, and `[data-slot="library-table"]` disappears.
+- **Switch to the grid.** Run `BASE="${BASE:-http://localhost:4000}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Grid view"`. The URL becomes `$BASE/admin?view=grid`, the `Grid view` button gains `aria-pressed="true"` and the `List view` button `aria-pressed="false"`, `[data-slot="library-grid"]` appears, and `[data-slot="library-table"]` disappears.
 - **Reload keeps the view.** Run `npx agent-browser open "$BASE/admin?view=grid"`. The grid renders again — the view is URL state, not a transient.
 - **Columns persist.** Run `npx agent-browser click --role button --name "4 columns"`. The button gains `aria-pressed="true"`, `[data-slot="library-grid"]` re-renders with a 4-column `grid-template-columns`, and `localStorage["photo-admin:library:cols"] === "4"` (the old `photo-admin:cols` key is gone). Reload and the count persists.
 - **Open the Editor.** Run `npx agent-browser click --role button --name "Open <photo title>"` (or the table row's `Edit <photo title>`). The URL becomes `$BASE/admin/photos/<id>`, the Editor document renders (`data-slot="mat"`, no sidebar), and no dialog or overlay opens.

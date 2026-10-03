@@ -12,7 +12,7 @@ Tag management lets the owner create free-form grouping labels, see each Tag alo
 
 ## How to get to it (user POV)
 
-- Open `http://localhost:5173/admin` at http://localhost:5173/admin — the filter bar shows every Tag as a chip with a count when unfiltered, or as a single active chip when filtered.
+- Open `http://localhost:4000/admin` at http://localhost:4000/admin — the filter bar shows every Tag as a chip with a count when unfiltered, or as a single active chip when filtered.
 - Use the TagManager inline form to type a new label and create it.
 - Open the upload Dialog; in its Tag Multi combo type a new label and choose the `create:<label>` row to create it in place.
 - Choose a chip to filter the grid to that Tag. Clear the filter to see all Photos again.
@@ -22,14 +22,14 @@ Tag management lets the owner create free-form grouping labels, see each Tag alo
 
 Preconditions:
 
-- App is healthy at `http://localhost:5173/admin` at http://localhost:5173/admin.
+- App is healthy at `http://localhost:4000/admin` at http://localhost:4000/admin.
 - At least one Photo exists so counts are meaningful.
 - `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 - No Tag with slug `verify-tag` exists at start.
 
 - **List tags.** Observe the filter bar. Run `npx agent-browser snapshot` — it contains one button per Tag label, each with its count in parentheses when unfiltered, ordered alphabetically by label.
 - **Create via manager.** Create from the filter bar. Run `npx agent-browser fill --role textbox --name "New tag" --value "Verify Tag"` and `npx agent-browser click --role button --name "Create tag"`. The new chip `Verify Tag` appears at the correct sorted position and is immediately usable as a filter.
-- **Create via combo.** Create inline from the upload Dialog's Multi picker. Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/admin"`, click `Upload` to open the dialog, fill its combo with a non-existent label e.g. `Verify Tag 2`, choose the option whose name is `create:Verify Tag 2`. The `CreateTagRequested{source:"upload"}` flow creates on the API Worker's `/api/admin/rpc` and immediately selects the new Tag — chip appears without a manual second pick.
+- **Create via combo.** Create inline from the upload Dialog's Multi picker. Run `BASE="${BASE:-http://localhost:4000}" npx agent-browser open "$BASE/admin"`, click `Upload` to open the dialog, fill its combo with a non-existent label e.g. `Verify Tag 2`, choose the option whose name is `create:Verify Tag 2`. The `CreateTagRequested{source:"upload"}` flow creates on the API Worker's `/api/admin/rpc` and immediately selects the new Tag — chip appears without a manual second pick.
 - **Create error cases.** Empty label shows a validation toast and no chip is added; duplicate label (same slug via `slugify`) shows a `SlugConflict` toast, no chip added.
 - **Filter by tag.** Filter the Library. Run `npx agent-browser click --role button --name "Verify Tag"` — chip gains selected style, grid shows only Photos tagged `Verify Tag`, result line reads `N photos · filtered by "Verify Tag"`.
 - **Clear filter.** Choose the same chip again. Filter resets, chips return to count view, result line drops the `filtered by` suffix.

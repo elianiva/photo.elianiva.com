@@ -13,7 +13,7 @@ A Library that holds no Photographs at all draws the design's own empty state: a
 
 ## How to get to it (user POV)
 
-- Open `http://localhost:5173/admin` with the Library holding zero Photographs. The block is the whole page body, under the Page Head and the filter bar.
+- Open `http://localhost:4000/admin` with the Library holding zero Photographs. The block is the whole page body, under the Page Head and the filter bar.
 - Choose `Choose files` and pick one or more images in the OS picker.
 - Choose `Import from a folder` and pick a folder; every image in it is offered to the queue.
 - Either way the Upload dialog opens on the queue, where Tags and a takenAt can be set before `Upload N photos`.
@@ -23,7 +23,7 @@ A Library that holds no Photographs at all draws the design's own empty state: a
 
 Preconditions:
 
-- App is healthy at `http://localhost:5173/admin`.
+- App is healthy at `http://localhost:4000/admin`.
 - The Library holds zero Photographs (the block is the zero-Photograph state; a Library with rows never shows it).
 - `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 - `agent-browser set viewport 1440 900`, the design frame's own size.

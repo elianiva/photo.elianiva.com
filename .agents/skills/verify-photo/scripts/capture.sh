@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ID="${1:-gallery-browse}"
-BASE="${BASE:-http://localhost:5173}"
+BASE="${BASE:-http://localhost:4000}"
 OUT=".agents/skills/verify-photo/artifacts/$ID"
 
 mkdir -p "$OUT"

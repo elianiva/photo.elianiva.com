@@ -9,19 +9,19 @@ Scripted way to launch this repo, drive it as a visitor and as the single admin 
 
 ## Launch
 
-Primary verification instance is the Alchemy dev server (`pnpm dev`): the site's Vite dev server on `http://localhost:5173` and the API Worker on `http://localhost:13371`, both pins from `alchemy.run.ts`. Data always hits the shared remote D1/R2 (Alchemy `remote()`), so only one instance at a time — a second `pnpm dev` cannot bind either port.
+Primary verification instance is the Alchemy dev server (`pnpm dev`): the site's Vite dev server on `http://localhost:4000` and the API Worker on `http://localhost:13371`, both pins from `alchemy.run.ts`. Data always hits the shared remote D1/R2 (Alchemy `remote()`), so only one instance at a time — a second `pnpm dev` cannot bind either port.
 
 ```bash
 pnpm install
 # Terminal A — dev server (vite + Foldkit SSR shell + Worker bindings)
 pnpm dev
 # Wait for ready, then confirm the shell
-curl -sSf http://localhost:5173/ | head -n 5
+curl -sSf http://localhost:4000/ | head -n 5
 ```
 
 Ready when:
 
-- `GET /` on `http://localhost:5173` returns 200 with `<!doctype html>` containing the Foldkit app shell (`data-foldkit-app`)
+- `GET /` on `http://localhost:4000` returns 200 with `<!doctype html>` containing the Foldkit app shell (`data-foldkit-app`)
 - `GET /api/health` on `http://localhost:13371` returns 200
 
 Teardown is killing the single `pnpm dev` process you started. Never `pkill -f vite` by name breadth — kill the PID you recorded.
@@ -29,7 +29,7 @@ Teardown is killing the single `pnpm dev` process you started. Never `pkill -f v
 ```bash
 kill $DEV_PID
 # both dev ports must be free again, or the next run will not start
-lsof -nP -iTCP:5173 -iTCP:13371 -sTCP:LISTEN
+lsof -nP -iTCP:4000 -iTCP:13371 -sTCP:LISTEN
 ```
 
 Build-only verification (no server needed):
@@ -44,8 +44,8 @@ All three run via turbo (`build` depends on `^build`). `pnpm build` emits `packa
 
 Ports and env:
 
-- Site `http://localhost:5173` and API Worker `http://localhost:13371` are `dev.port` in `alchemy.run.ts`, both `strictPort: true`. `packages/web/src/lib/api.ts` names the same API origin for the browser (`devApiOrigin`), so a change to either port is two edits in lockstep.
-- Nothing proxies between the two origins. The admin served at 5173 calls the Worker cross-origin, which is why `api-worker.ts` allows `http://localhost:5173` and why dev is the only stage that exercises CORS — in prod the API is a route on the site's own hostname and nothing is cross-origin.
+- Site `http://localhost:4000` and API Worker `http://localhost:13371` are `dev.port` in `alchemy.run.ts`, both `strictPort: true`. `packages/web/src/lib/api.ts` names the same API origin for the browser (`devApiOrigin`), so a change to either port is two edits in lockstep.
+- Nothing proxies between the two origins. The admin served at 4000 calls the Worker cross-origin, which is why `api-worker.ts` allows `http://localhost:4000` and why dev is the only stage that exercises CORS — in prod the API is a route on the site's own hostname and nothing is cross-origin.
 - Reach the API directly at `http://localhost:13371`: `/api/rpc`, `/api/admin/rpc`, `/api/upload`, `/api/image/<r2Key>`, `/api/health`.
 - `packages/web/src/lib/api.ts` is the one table of those paths; change it there, never at a call site.
 - Images are the originals out of R2 through `/api/image/<r2Key>`. There is no zone resizer (Free plan, not editable), so no `srcset` and no `thumbUrl` — a plate that 404s is a bad R2 key, not a missing transform.
@@ -54,7 +54,7 @@ Ports and env:
 - `ACCESS_ALLOWED_EMAILS` is read up front on every stage, `dev` included, so a `.env` carrying it (see `.env.example`) is required for local verification. It is dead weight locally — the gate stands down before the allowlist is consulted.
 - R2 `photo-elianiva-originals` and D1 `photo-elianiva` are remote by default.
 
-If `http://localhost:5173` is unreachable, `/health` on the API is unreachable, or D1 is unreachable, stop. Fix the base before writing the skill patch.
+If `http://localhost:4000` is unreachable, `/health` on the API is unreachable, or D1 is unreachable, stop. Fix the base before writing the skill patch.
 
 ## Doctor
 
@@ -63,7 +63,7 @@ One read-only check. Run before first drive, after any failed drive, and on ever
 ```bash
 .agents/skills/verify-photo/scripts/doctor.sh
 # or manually:
-BASE="${BASE:-http://localhost:5173}"
+BASE="${BASE:-http://localhost:4000}"
 curl -sSf "$BASE/" | grep -q 'data-foldkit-app'
 # typecheck sanity (no server needed)
 pnpm typecheck --filter @photo/shared --filter @photo/api --filter @photo/web 2>&1 | tail -n 5
@@ -101,7 +101,7 @@ Generic recipes:
 **Visitor gallery (public):**
 
 ```bash
-BASE="${BASE:-http://localhost:5173}"
+BASE="${BASE:-http://localhost:4000}"
 npx agent-browser open "$BASE/"
 npx agent-browser snapshot
 npx agent-browser click --role link --name "<photo title>"
@@ -111,7 +111,7 @@ npx agent-browser press --key "Escape"
 **Admin surface (local dev, unauthenticated):**
 
 ```bash
-BASE="${BASE:-http://localhost:5173}"
+BASE="${BASE:-http://localhost:4000}"
 npx agent-browser open "$BASE/admin"
 npx agent-browser click --role button --name "Upload"
 # the tag filter is the sidebar rows; the Library Filter Bar carries Status / Ratio / SORT / View
@@ -147,7 +147,7 @@ Kill only what you started. Keep proof.
 ```bash
 # kill the dev server you launched
 kill $DEV_PID
-lsof -nP -iTCP:5173 -iTCP:13371 -sTCP:LISTEN  # verify both ports released
+lsof -nP -iTCP:4000 -iTCP:13371 -sTCP:LISTEN  # verify both ports released
 # remove only verification-owned data (prefix verify-)
 # via the admin UI delete affordance, or direct DB if the UI is unavailable — never truncate tables
 # e.g. open $BASE/admin, click Delete on the verify photo/tag and confirm
@@ -162,6 +162,6 @@ Helpers clean residue after every failed iteration too. Do not remove `artifacts
 Every helper is executable and its invocation is shown in this body.
 
 - `scripts/doctor.sh` — `.agents/skills/verify-photo/scripts/doctor.sh` — read-only health check (dev-site shell + typecheck hint)
-- `scripts/capture.sh` — `BASE=http://localhost:5173 .agents/skills/verify-photo/scripts/capture.sh gallery-browse` — ARIA + screenshot capture via agent-browser into `artifacts/<id>/`
+- `scripts/capture.sh` — `BASE=http://localhost:4000 .agents/skills/verify-photo/scripts/capture.sh gallery-browse` — ARIA + screenshot capture via agent-browser into `artifacts/<id>/`
 
 See `features/README.md` for the indexed feature map. Keep it honest — a proof that drives one convenient entry point is incomplete when the map lists others.

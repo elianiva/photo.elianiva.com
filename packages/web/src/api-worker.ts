@@ -510,7 +510,7 @@ const imageRoute = (env: ApiEnv) =>
  * that is the part a browser enforces.
  */
 const corsLayer = HttpRouter.cors({
-  allowedOrigins: ['http://localhost:5173', 'http://localhost:13371'],
+  allowedOrigins: ['http://localhost:4000', 'http://localhost:13371'],
   allowedMethods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['content-type', 'authorization', 'cf-access-jwt-assertion', 'b3', 'traceparent'],
   credentials: true,

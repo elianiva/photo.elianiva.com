@@ -4,10 +4,10 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Baseline preconditions
 
-- Launch the dev server with `pnpm dev` — site on `http://localhost:5173`, API Worker on `http://localhost:13371` — with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated).
+- Launch the dev server with `pnpm dev` — site on `http://localhost:4000`, API Worker on `http://localhost:13371` — with a single instance (`ACCESS_TEAM_DOMAIN` blank so admin runs unauthenticated).
 - D1 `photo-elianiva` and R2 `photo-elianiva-originals` are remote and shared even in dev — never truncate tables. Seed data uses prefix `verify-`.
 - Put `agent-browser` on PATH (`curl` optional for image header checks).
-- Run `.agents/skills/verify-photo/scripts/doctor.sh` and require GET / on `http://localhost:5173` with the Foldkit app shell.
+- Run `.agents/skills/verify-photo/scripts/doctor.sh` and require GET / on `http://localhost:4000` with the Foldkit app shell.
 - Never drive an instance that was not started by this verification run. One instance at a time.
 
 ## Driving conventions

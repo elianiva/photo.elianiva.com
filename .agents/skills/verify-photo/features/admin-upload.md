@@ -12,7 +12,7 @@ Admin upload lets the single owner drop original image files, assign Tags and an
 
 ## How to get to it (user POV)
 
-- Open `http://localhost:5173/admin` and choose `Upload` in the header.
+- Open `http://localhost:4000/admin` and choose `Upload` in the header.
 - Drop files onto the FileDrop area or use the file picker. Set Tags via the upload combo (`create:<label>` appears when typed text matches no existing label) and optionally a takenAt.
 - Choose `Add N to drafts` to send the queue. While uploading, the header shows `Uploading done/batchTotal` even after the dialog closes.
 
@@ -20,12 +20,12 @@ Admin upload lets the single owner drop original image files, assign Tags and an
 
 Preconditions:
 
-- App is healthy at `http://localhost:5173/admin` at http://localhost:5173/admin.
+- App is healthy at `http://localhost:4000/admin` at http://localhost:4000/admin.
 - No Photo with slug `verify-upload` exists.
 - `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 - A small JPEG is available at `/tmp/verify-sample.jpg` (create via `scripts/seed.ts` tiny JPEG bytes or any 10KB jpeg).
 
-- **Open dialog.** Choose the header upload action. Run `BASE="${BASE:-http://localhost:5173}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Upload"`. A dialog with FileDrop appears; `Add 0 to drafts` is disabled while queue is empty.
+- **Open dialog.** Choose the header upload action. Run `BASE="${BASE:-http://localhost:4000}" npx agent-browser open "$BASE/admin"` and `npx agent-browser click --role button --name "Upload"`. A dialog with FileDrop appears; `Add 0 to drafts` is disabled while queue is empty.
 - **Enqueue files.** Drop a file. Run `npx agent-browser` file-drop action or use the system picker on the FileDrop role. The queue shows one row named after the file with `pending` status and an object-URL preview (from `previewStore`). Enqueue up to 50 files, each <= 80MB — beyond that the FileDrop validation rejects and the row shows `failed`. Inputs are **JPEG only**: HEIC, TIFF, PNG and WebP are refused by the Worker (`isJpegUpload` / `hasJpegMagic`).
 - **Pick tags on upload.** Assign tags before sending. Open the upload combo, type an existing label and select it, then verify the chip row shows the label. Run `npx agent-browser fill --role combobox --name "Tags" --value "Kyoto"` and `npx agent-browser click --role option --name "Kyoto"`.
 - **Send queue.** Start the run. Run `npx agent-browser click --role button --name "Add 4 to drafts"`. The first item flips to `uploading` with a filled bar and a `13.2 of 21.3 MB · 3:2 · 6000 × 4000` readout; on success it flips to `done` and the new photo appears in the Library without a reload. The header shows `Uploading done/batchTotal` while the queue drains. A failure flips its row to `failed` (the server's reason, e.g. `Unsupported ratio 1:1`, in accent) and does not stop the remaining files.

@@ -1,5 +1,5 @@
 - no need to do e2e testing unless asked
-- dev server: `pnpm dev` → site on http://localhost:5173, API Worker on http://localhost:13371 (requires Cloudflare secrets in the environment). One instance at a time: both ports are fixed and `strictPort` is on. The two are separate origins in dev only; in production the API Worker is a route on the site's hostname at `/api/*`, so the browser is same-origin and `pnpm dev` is the only stage that needs CORS.
+- dev server: `pnpm dev` → site on http://localhost:4000, API Worker on http://localhost:13371 (requires Cloudflare secrets in the environment). One instance at a time: both ports are fixed and `strictPort` is on. The two are separate origins in dev only; in production the API Worker is a route on the site's hostname at `/api/*`, so the browser is same-origin and `pnpm dev` is the only stage that needs CORS.
 - rigorous agent workflows: use `/poteto-mode` (pstack skills vendored in `.agents/skills/`)
 - UI verification: `.agents/skills/verify-photo/` (doctor: `bash .agents/skills/verify-photo/scripts/doctor.sh`)
 - image delivery: no zone image resizing (Free plan, not editable). Every image is the original from R2 via `/api/image/<key>`; there is no `thumbUrl`/`srcSet` and nothing may reintroduce `/cdn-cgi/image`.

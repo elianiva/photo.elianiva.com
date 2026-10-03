@@ -444,7 +444,7 @@ describe('the paths the app asks for', () => {
 })
 
 describe('CORS for the two dev origins', () => {
-  // The site's dev server (5173) and the API Worker (13371) are separate
+  // The site's dev server (4000) and the API Worker (13371) are separate
   // origins, so the browser preflights the admin group's POST before it is
   // sent — the dev pair is a real CORS client, not a same-origin one.
   //
@@ -460,9 +460,9 @@ describe('CORS for the two dev origins', () => {
     })
 
   it('answers the dev site origin', async () => {
-    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}))
+    const response = await worker.fetch(preflight('http://localhost:4000'), workerEnv({}))
     expect(response.status).toBe(204)
-    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:4000')
     expect(response.headers.get('access-control-allow-headers')).toContain('content-type')
     expect(response.headers.get('vary')).toBe('Origin')
   })
@@ -473,7 +473,7 @@ describe('CORS for the two dev origins', () => {
     // that does not answer with the headers it was asked about is a failed
     // preflight: the browser drops the POST, the Worker never sees it, and the
     // Admin reads it as an unproven session rather than as a CORS failure.
-    const response = await worker.fetch(preflight('http://localhost:5173'), workerEnv({}))
+    const response = await worker.fetch(preflight('http://localhost:4000'), workerEnv({}))
     const allowed = (response.headers.get('access-control-allow-headers') ?? '')
       .split(',')
       .map((header) => header.trim().toLowerCase())
@@ -485,12 +485,12 @@ describe('CORS for the two dev origins', () => {
     const response = await worker.fetch(
       new Request('https://photo-api.test/not-a-route', {
         method: 'POST',
-        headers: { origin: 'http://localhost:5173' },
+        headers: { origin: 'http://localhost:4000' },
       }),
       workerEnv({}),
     )
     expect(response.status).toBe(404)
-    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:4000')
   })
 
   it('refuses a preflight from an origin outside the list', async () => {
