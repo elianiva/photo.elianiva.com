@@ -76,7 +76,7 @@ export const sheetDescriptionClass = 'type-caption text-role-text-secondary'
 
 /** The same `Icon Button` ghost close control the Dialog uses. */
 export const sheetCloseButtonClass =
-  'text-role-text-secondary absolute top-4 right-4 flex size-9 items-center justify-center rounded-full outline-none transition-colors duration-120 hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&_svg:not([class*="size-"])]:size-4'
+  'text-role-text-secondary absolute top-4 right-4 flex size-9 items-center justify-center outline-none transition-colors duration-120 hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&_svg:not([class*="size-"])]:size-4'
 
 type StyleConfig<M> = Readonly<{
   className?: string

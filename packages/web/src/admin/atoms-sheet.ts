@@ -7,6 +7,8 @@
  * them, and the update core does not import views.
  */
 
+import { LayoutGrid, List } from 'lucide'
+
 import * as Segment from '@/components/ui/segment'
 import type * as Status from '@/components/ui/status'
 import type * as Swatch from '@/components/ui/swatch'
@@ -100,9 +102,9 @@ export const specimenRows: ReadonlyArray<SpecimenRow> = [
   },
 ]
 
-/** The one table of Segment groups the sheet draws: id, first pick, options and
- *  the box it wears. `initGroups` reads it and the view reads it, so the sheet
- *  cannot declare a group the Model has no state for. */
+/** The one table of Segment groups the sheet draws: id, first pick and options.
+ *  `initGroups` reads it and the view reads it, so the sheet cannot declare a
+ *  group the Model has no state for. */
 export interface SheetSegment extends Segment.ViewInputs {
   id: string
   /** The design's selected option, which is the group's initial state. */
@@ -114,7 +116,7 @@ export const sheetSegments: ReadonlyArray<SheetSegment> = [
     id: 'atoms-status-filter',
     selected: 'all',
     ariaLabel: 'Status filter',
-    frame: 'rule',
+    label: 'STATUS',
     options: [
       { value: 'all', label: 'ALL 412' },
       { value: 'published', label: 'PUBLISHED 402' },
@@ -127,6 +129,7 @@ export const sheetSegments: ReadonlyArray<SheetSegment> = [
     id: 'atoms-ratio-filter',
     selected: 'any',
     ariaLabel: 'Ratio filter',
+    label: 'RATIO',
     options: [
       { value: 'any', label: 'ANY' },
       { value: '3:2', label: '3:2' },
@@ -196,6 +199,20 @@ export const sheetSegments: ReadonlyArray<SheetSegment> = [
       { value: 'draft', label: 'DRAFT' },
       { value: 'scheduled', label: 'SCHEDULED' },
       { value: 'published', label: 'PUBLISHED' },
+    ],
+  },
+  {
+    // The one group whose options are glyphs rather than words: the Library's
+    // view toggle, which is a choice among other choices and so belongs in the
+    // same atom as they are. The words live in `label` and become the buttons'
+    // accessible names, which is why the cells print nothing.
+    id: 'atoms-view',
+    selected: 'list',
+    ariaLabel: 'View',
+    label: 'VIEW',
+    options: [
+      { value: 'list', label: 'List view', icon: List },
+      { value: 'grid', label: 'Grid view', icon: LayoutGrid },
     ],
   },
 ]

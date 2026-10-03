@@ -1,10 +1,21 @@
 /**
  * Segment — the Desk's single-select group (master `96138b5e94f43632`), and
- * the one stateful atom in the set. One option is 28px of height around 4/12 of
- * padding, `$typography.exif`, no box of its own and no corner radius; the
- * selected one fills `color.primary` and reads `color.on-primary`. The group
- * around them is a 1px box, `color.rule` for the Library's status filter and
- * `color.outline` everywhere else.
+ * the one stateful atom in the set. It is the app's *only* choice group: every
+ * "pick one of these" control is this component with a different value set, so
+ * a row of them reads as one row rather than as a collection of idioms.
+ *
+ * One option is 28px of height around 4/12 of padding, `$typography.exif`, no
+ * box of its own and no corner radius; the selected one fills `color.primary`
+ * and reads `color.on-primary`. The group around them is a 1px `color.rule`
+ * box — one box, for every group. There is no second frame to pick: a near-
+ * black box beside a grey one in the same row was a mistake twice over, since
+ * it read as two kinds of control and only one of them was chosen.
+ *
+ * `label` is the group's own kicker, printed to the left of the box, so
+ * `[KICKER][box]` is one aligned unit rather than a label a caller hand-writes
+ * beside the atom and has to keep on the baseline. An option may carry a glyph
+ * instead of text (`icon`), which is how the Library's view toggle is a Segment
+ * like every other choice rather than a pair of icon buttons.
  *
  * It is a submodel rather than a view function because it owns the selection —
  * the issue's rule is that a stateful atom keeps its state in a `Model` folded
@@ -21,7 +32,9 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineView } from 'foldkit/submodel'
 import * as Update from 'foldkit/update'
+import type { IconNode } from 'lucide'
 
+import { icon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -77,47 +90,76 @@ export const writeGroup = (groups: Groups, id: string, next: Model): Groups => (
 // view
 // ---------------------------------------------------------------------------
 
-export interface SegmentOption<V extends string = string> {
+export interface SegmentOption<V extends string | number = string> {
   /** The value the parent acts on — a Ratio, a status, a mat style. */
   value: V
   /** What the option prints. A filter prints its count (`ALL 412`); a mat
    *  style prints its name. */
   label: string
+  /** The accessible name, where the printed text is not one. A glyph option has
+   *  no text at all, so it needs one; a bare number needs the noun beside it
+   *  (`4` is `4 columns`). Defaults to `label`, which is what a text option
+   *  already reads as — so a plain option carries no `aria-label` at all. */
+  ariaLabel?: string
+  /** A glyph in place of the label — the Library's `List` / `LayoutGrid` pair.
+   *  The accessible name still comes from `label`, so the two never disagree. */
+  icon?: IconNode
 }
 
-/** The 1px box the options sit in. */
-export const segmentFrameKeys = ['rule', 'outline'] as const
-export type SegmentFrame = (typeof segmentFrameKeys)[number]
+/** The group's own kicker, beside the box. `type-kicker` in
+ *  `color.text.secondary`, not `color.text.disabled`: it names a choice the
+ *  operator can make, and `color.text.disabled` is 3.6:1 on the page's surface
+ *  — under the 4.5:1 a 10px kicker needs. */
+const groupLabelClass = 'type-kicker text-role-text-secondary'
 
-const frameClasses: Record<SegmentFrame, string> = {
-  rule: 'border border-role-rule',
-  outline: 'border border-role-outline',
-}
+/** The group row: the kicker and the box it names, on one baseline. */
+const groupClass = 'inline-flex items-center gap-2'
 
-export const segmentGroupClass =
-  'inline-flex items-center border border-transparent [&>*]:h-7 [&>*]:shrink-0'
+/** The 1px `color.rule` box every group's options sit in. */
+const boxClass = 'inline-flex items-stretch border border-role-rule'
 
 export const segmentOptionClass =
-  'focus-visible:z-10 focus-visible:ring-role-focus/50 inline-flex items-center justify-center px-3 py-1 type-exif transition-colors duration-120 outline-none focus-visible:ring-[3px]'
+  'focus-visible:z-10 focus-visible:ring-role-focus/50 inline-flex h-7 shrink-0 items-center justify-center px-3 type-exif transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
-const optionClasses = (isSelected: boolean): string =>
+/** A glyph option is a square cell rather than a padded word, so a row of them
+ *  is as tall as it is wide and lines up with the labelled groups beside it. */
+const iconOptionClass = 'w-7 px-0'
+
+/** An option's accessible name, or `undefined` when its printed text already is
+ *  one — an `aria-label` that repeats the visible label is noise. */
+const optionName = <V extends string | number>(option: SegmentOption<V>): string | undefined =>
+  option.ariaLabel ?? (option.icon === undefined ? undefined : option.label)
+
+/** The 14px slot the design gives a glyph inside a 28px option. */
+const optionIconClass = 'size-3.5'
+
+const optionClasses = <V extends string | number>(
+  option: SegmentOption<V>,
+  isSelected: boolean,
+): string =>
   cn(
     segmentOptionClass,
+    option.icon === undefined ? '' : iconOptionClass,
     isSelected
       ? 'bg-role-primary text-role-on-primary'
       : 'text-role-text-secondary hover:text-role-text-primary',
   )
 
-export interface ViewInputs<V extends string = string> {
+export interface ViewInputs<V extends string | number = string> {
   options: ReadonlyArray<SegmentOption<V>>
-  /** Names the group for assistive technology — `RATIO`, `FORMAT`, `Status`. */
+  /** Names the group for assistive technology — `RATIO`, `FORMAT`, `Status`.
+   *  When the group prints a `label`, this names it in words: `Ratio filter`
+   *  for a `RATIO` kicker, so the accessible name contains the visible one. */
   ariaLabel: string
-  /** Which 1px box the group wears. Defaults to `outline`. */
-  frame?: SegmentFrame
+  /** The group's kicker, printed beside the box. Omitted where the group sits
+   *  under a panel head that already names it — the Editor's six. */
+  label?: string
   /** A group with nothing to pick from yet — the Editor's Ratio segment while
    *  the Photo is still loading. Renders every option disabled rather than
    *  offering a pick that cannot be applied. */
   isDisabled?: boolean
+  /** Sized the options' box rather than the group row, so `w-78` and
+   *  `flex w-full` mean what they meant when the group *was* the box. */
   className?: string
   optionClass?: string
 }
@@ -126,7 +168,7 @@ export interface ViewInputs<V extends string = string> {
  *  `ViewInputs` carry no selection because the child Model owns it; the
  *  stateless group below takes it, for a caller that owns it instead (the
  *  Library's filters, whose answer the URL carries). */
-export interface GroupInputs<V extends string = string> extends ViewInputs<V> {
+export interface GroupInputs<V extends string | number = string> extends ViewInputs<V> {
   selected: V
   /** The group's slot id, when it has one. */
   id?: string
@@ -136,7 +178,7 @@ export interface GroupInputs<V extends string = string> extends ViewInputs<V> {
  *  `view` delegates here, so the stateful and stateless callers draw the same
  *  thing. The value type is the option set's own, so a pick arrives typed as
  *  the union the caller declared rather than as a bare string. */
-export const segmentGroup = <M, V extends string>(
+export const segmentGroup = <M, V extends string | number>(
   inputs: GroupInputs<V>,
   onPick: (value: V) => M,
   h: HtmlBuilder<M>,
@@ -145,29 +187,39 @@ export const segmentGroup = <M, V extends string>(
     [
       h.Role('group'),
       h.AriaLabel(inputs.ariaLabel),
-      h.Class(cn(segmentGroupClass, frameClasses[inputs.frame ?? 'outline'], inputs.className)),
+      h.Class(groupClass),
       h.DataAttribute('slot', 'segment'),
       ...(inputs.id === undefined ? [] : [h.DataAttribute('id', inputs.id)]),
     ],
-    inputs.options.map((option) =>
-      h.button(
-        [
-          h.Key(option.value),
-          h.Type('button'),
-          h.AriaPressed(String(option.value === inputs.selected)),
-          h.OnClick(onPick(option.value)),
-          ...(inputs.isDisabled === true ? [h.Disabled(true)] : []),
-          h.Class(
-            cn(
-              optionClasses(option.value === inputs.selected),
-              inputs.isDisabled === true && 'cursor-not-allowed opacity-50',
-              inputs.optionClass,
-            ),
-          ),
-        ],
-        [option.label],
+    [
+      ...(inputs.label === undefined ? [] : [h.span([h.Class(groupLabelClass)], [inputs.label])]),
+      h.div(
+        [h.Class(cn(boxClass, inputs.className))],
+        inputs.options.map((option) => {
+          // Set where the printed text is not a name on its own: a glyph, or
+          // a bare number with the noun left off.
+          const name = optionName(option)
+          return h.button(
+            [
+              h.Key(String(option.value)),
+              h.Type('button'),
+              h.AriaPressed(String(option.value === inputs.selected)),
+              ...(name === undefined ? [] : [h.AriaLabel(name)]),
+              h.OnClick(onPick(option.value)),
+              ...(inputs.isDisabled === true ? [h.Disabled(true)] : []),
+              h.Class(
+                cn(
+                  optionClasses(option, option.value === inputs.selected),
+                  inputs.isDisabled === true && 'cursor-not-allowed opacity-50',
+                  inputs.optionClass,
+                ),
+              ),
+            ],
+            option.icon === undefined ? [option.label] : [icon(h, option.icon, optionIconClass)],
+          )
+        }),
       ),
-    ),
+    ],
   )
 
 /** One single-select group that owns its own selection. */

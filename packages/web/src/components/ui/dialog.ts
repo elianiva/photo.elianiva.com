@@ -49,9 +49,9 @@ export const dialogPanelClass =
   'bg-role-surface text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 grid max-w-[calc(100%-2rem)] gap-4 border border-role-hairline p-4 type-ui duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none'
 
 /** Upstream renders its close control as a ghost button; the Desk's is the
- * `Icon Button` ghost kind: 36px, round, an 18px mark. */
+ *  `Icon Button` ghost kind: 36px, square, an 18px mark. */
 export const dialogCloseButtonClass =
-  'text-role-text-secondary absolute top-3 right-3 flex size-9 items-center justify-center rounded-full outline-none transition-colors duration-120 hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&_svg:not([class*="size-"])]:size-4'
+  'text-role-text-secondary absolute top-3 right-3 flex size-9 items-center justify-center outline-none transition-colors duration-120 hover:bg-role-surface-hover hover:text-role-text-primary focus-visible:ring-[3px] focus-visible:ring-role-focus/50 [&_svg:not([class*="size-"])]:size-4'
 
 export const dialogTitleClass = 'type-section text-role-text-primary'
 

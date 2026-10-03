@@ -134,16 +134,13 @@ const segmentBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
     'Segment',
     h,
     labelled(
-      'Status filter · color.rule box',
+      'Status filter · counts inline',
       sheetSegment(model, segmentNamed('atoms-status-filter'), h),
       h,
     ),
-    labelled(
-      'Ratio filter · color.outline box',
-      sheetSegment(model, segmentNamed('atoms-ratio-filter'), h),
-      h,
-    ),
+    labelled('Ratio filter', sheetSegment(model, segmentNamed('atoms-ratio-filter'), h), h),
     labelled('Format · equal thirds', sheetSegment(model, segmentNamed('atoms-format'), h), h),
+    labelled('View · glyph options', sheetSegment(model, segmentNamed('atoms-view'), h), h),
   )
 
 const statusBand = (h: HtmlBuilder<Msg>): Html =>

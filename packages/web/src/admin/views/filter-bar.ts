@@ -1,15 +1,28 @@
 /**
- * The Library's Filter Bar (`Desk Filter Bar` master `6cabf557894bf636`, the
- * `filters(basic)` variant). One 36px row: the Status Segment, the Ratio
- * Segment behind a `RATIO` kicker, then the SORT select and the list/grid
- * toggle on the right.
+ * The Library's Filter Bar (`Desk Filter Bar` master `6cabf557894bf636`). Two
+ * tiers of choice groups: the ones that narrow the list, then the ones that
+ * decide how it is read.
  *
- * The `full` variant — two rows, with the design's `SERIES` select — stays in
- * the design; this is the single-row one the issue calls for, and a narrow
- * width can reintroduce `full` from the drawing rather than from a second
- * invention here.
+ * Every one of them is the same atom — `Segment`, one height, one 1px
+ * `color.rule` box, a kicker naming it — because they used not to be, and the
+ * row read as four unrelated controls: two segments in boxes of different
+ * greys at 28px, a native dropdown at 36px wearing a bottom rule, and a pair of
+ * round icon buttons. Two heights, three frames, two shapes. Worse, the grid's
+ * density picker was not in the bar at all: it floated on a row of its own,
+ * above it and right-aligned, so the one control that changed with the view
+ * sat outside the bar that changed with it.
  *
- * Two deviations from the drawing, both stated:
+ * The rule now: a choice is a `Segment`, and a `Segment` is square.
+ *
+ * Two tiers rather than one row is the measure's decision, not a leftover: the
+ * page column is `max-w-[1080px]` — the Library table's own width, at every
+ * viewport — and the five groups need about 1285px of it, so no window makes
+ * them one line. Letting the clusters wrap on their own is exactly what left
+ * the sort and the view toggle stranded on a third line with nothing relating
+ * them to the filters above. Stacked by construction, every group keeps its
+ * own left edge and the bar reads as two rows on purpose.
+ *
+ * Three deviations from the drawing, all stated:
  *
  *   - The `SERIES` select is not rendered. A Series has no entity (decision 5);
  *     grouping is Tags, and a Tag is picked where it is applied — the upload
@@ -19,6 +32,11 @@
  *     (decision 3): nothing records a publish time, so there is no number to
  *     print and the segment selects nothing. #16 booked the consequence and
  *     #29's Scheduled page is the honest empty state that follows.
+ *   - SORT is a `Segment` and not the drawing's Select. Two orderings is a pair
+ *     of choices, and a dropdown is a control for a set too large to print; at
+ *     36px with a bottom rule it was also the one thing in the bar that was not
+ *     the height of everything beside it. Its labels drop `FIRST` for the same
+ *     reason — `NEWEST` under a `SORT` kicker says it.
  *
  * Every filter here is the URL's, not the bar's: a pick builds the Library's
  * query and the Model reads it back, so a reload lands on the same filtered
@@ -28,12 +46,10 @@
 import type { HtmlBuilder } from 'foldkit/html'
 import { LayoutGrid, List } from 'lucide'
 
-import { iconButton } from '@/components/ui/icon-button'
 import * as Segment from '@/components/ui/segment'
-import * as Select from '@/components/ui/select'
 
 import { Message as M } from '../model'
-import type { Model, Msg } from '../model'
+import type { GridCols, Model, Msg } from '../model'
 import { LIBRARY_RATIO_FILTERS } from '../route'
 import type { LibraryRatioFilter, LibraryStatusFilter } from '../route'
 import { libraryViewOf } from '../route'
@@ -61,101 +77,115 @@ const ratioOptions: ReadonlyArray<Segment.SegmentOption<LibraryRatioFilter>> =
   }))
 
 const SORT_OPTIONS = [
-  { value: 'newest', label: 'NEWEST FIRST' },
-  { value: 'oldest', label: 'OLDEST FIRST' },
+  { value: 'newest', label: 'NEWEST' },
+  { value: 'oldest', label: 'OLDEST' },
 ] as const
 
-/** The list/grid toggle: the active view is the filled Icon Button and the
- *  other is the ghost one, which is the drawing's own pair. */
-const viewToggle = (model: Model, h: HtmlBuilder<Msg>): Child => {
+/** The two views, as glyphs. The words stay in the accessible name, so the
+ *  pair reads as `List view` / `Grid view` rather than as two unlabelled
+ *  squares. */
+const VIEW_OPTIONS = [
+  { value: 'list', label: 'List view', icon: List },
+  { value: 'grid', label: 'Grid view', icon: LayoutGrid },
+] as const
+
+/** The grid's 2–6 square-tile columns, a preference persisted on change. The
+ *  numbers print as they are and are named by `ariaLabel`, because `4` on its
+ *  own is not a thing to read aloud. The values are the Model's own `GridCols`,
+ *  so a pick is typed as the column count rather than parsed back out of a
+ *  string. */
+const COL_CHOICES: ReadonlyArray<GridCols> = [2, 3, 4, 5, 6]
+
+const colsOptions: ReadonlyArray<Segment.SegmentOption<GridCols>> = COL_CHOICES.map((cols) => ({
+  value: cols,
+  label: String(cols),
+  ariaLabel: `${String(cols)} columns`,
+}))
+
+/** A tier of the bar: one row of groups, wrapping as a unit. */
+const tierClass = 'flex flex-wrap items-end gap-x-6 gap-y-3'
+
+export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const view = libraryViewOf(model.route)
   return h.div(
-    [h.Role('group'), h.AriaLabel('View')],
-    [
-      iconButton(
-        {
-          kind: view === 'list' ? 'filled' : 'ghost',
-          isPressed: view === 'list',
-          onClick: M.SelectedView({ view: 'list' }),
-          ariaLabel: 'List view',
-        },
-        List,
-        h,
-      ),
-      iconButton(
-        {
-          kind: view === 'grid' ? 'filled' : 'ghost',
-          isPressed: view === 'grid',
-          onClick: M.SelectedView({ view: 'grid' }),
-          ariaLabel: 'Grid view',
-        },
-        LayoutGrid,
-        h,
-      ),
-    ],
-  )
-}
-
-export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.div(
     [
       h.DataAttribute('slot', 'library-filter-bar'),
-      h.Class('flex flex-wrap items-center justify-between gap-x-6 gap-y-2'),
+      // Two tiers, stacked, and that is the shape the measure allows rather
+      // than a wrap that happened: the page column is `max-w-[1080px]` — the
+      // Library table's own width — and the five groups need about 1285px of
+      // it, so no viewport makes them one row. Letting the clusters wrap on
+      // their own is what left the sort and the view toggle stranded on a
+      // third line with nothing relating them to the filters above.
+      h.Class('mt-8 flex flex-col gap-y-4'),
     ],
     [
       h.div(
-        [h.Class('flex flex-wrap items-center gap-x-6 gap-y-2')],
+        [h.Class(tierClass)],
         [
           Segment.segmentGroup(
             {
               selected: model.statusFilter,
               options: statusOptions(model),
+              label: 'STATUS',
               ariaLabel: 'Status filter',
-              frame: 'rule',
             },
             (value) => M.SelectedStatusFilter({ value }),
             h,
           ),
-          h.div(
-            [h.Class('flex items-center gap-2')],
-            [
-              // `color.text.secondary`, not `color.text.disabled`: the kicker
-              // names a filter the operator can pick, and `color.text.disabled`
-              // is 3.6:1 on the page's surface — under the 4.5:1 a 10px
-              // `$typography.kicker` line needs.
-              h.span([h.Class('type-kicker text-role-text-secondary')], ['RATIO']),
-              Segment.segmentGroup(
-                {
-                  selected: model.ratioFilter,
-                  options: ratioOptions,
-                  ariaLabel: 'Ratio filter',
-                },
-                (value) => M.SelectedRatioFilter({ value }),
-                h,
-              ),
-            ],
+          Segment.segmentGroup(
+            {
+              selected: model.ratioFilter,
+              options: ratioOptions,
+              label: 'RATIO',
+              ariaLabel: 'Ratio filter',
+            },
+            (value) => M.SelectedRatioFilter({ value }),
+            h,
           ),
         ],
       ),
       h.div(
-        [h.Class('flex items-center gap-4')],
+        [h.Class(tierClass)],
         [
-          // The design's Select is a kicker over a box; the `basic` bar is one
-          // 36px row, so the kicker sits beside the box rather than above it.
-          Select.select<Msg>(
+          Segment.segmentGroup(
             {
-              id: 'library-sort',
-              label: 'SORT',
-              value: model.sortFilter,
+              selected: model.sortFilter,
               options: SORT_OPTIONS,
-              onChange: (value) =>
-                M.SelectedSortFilter({ value: value === 'oldest' ? 'oldest' : 'newest' }),
-              className: 'w-auto flex-row items-center gap-2',
+              label: 'SORT',
+              ariaLabel: 'Sort',
             },
+            (value) => M.SelectedSortFilter({ value }),
             h,
           ),
-          viewToggle(model, h),
+          Segment.segmentGroup(
+            {
+              selected: view,
+              options: VIEW_OPTIONS,
+              label: 'VIEW',
+              ariaLabel: 'View',
+            },
+            (value) => M.SelectedView({ view: value === 'grid' ? 'grid' : 'list' }),
+            h,
+          ),
+          // Only in the grid, because only the grid has a density. It is in the
+          // bar rather than on a row above it: the density is the grid's, so it
+          // is read beside the choice that turns the grid on.
+          ...(view === 'grid'
+            ? [
+                Segment.segmentGroup(
+                  {
+                    selected: model.cols,
+                    options: colsOptions,
+                    label: 'DENSITY',
+                    ariaLabel: 'Grid density',
+                  },
+                  (cols) => M.SelectedCols({ cols }),
+                  h,
+                ),
+              ]
+            : []),
         ],
       ),
     ],
   )
+}
