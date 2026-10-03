@@ -58,7 +58,6 @@ describe('the route table', () => {
   it('names every admin route', () => {
     expect(routeOf('/admin')).toEqual(libraryRoute())
     expect(routeOf('/admin/')).toEqual(libraryRoute())
-    expect(routeOf('/admin/drafts')).toEqual({ _tag: 'Drafts' })
     expect(routeOf('/admin/scheduled')).toEqual({ _tag: 'Scheduled' })
     expect(routeOf('/admin/settings')).toEqual({ _tag: 'Settings' })
     expect(routeOf('/admin/photos/abc')).toEqual({ _tag: 'Photo', id: 'abc' })
@@ -68,7 +67,6 @@ describe('the route table', () => {
     for (const path of [
       '/admin',
       '/admin/atoms',
-      '/admin/drafts',
       '/admin/scheduled',
       '/admin/settings',
       '/admin/photos/photo-1',
@@ -101,12 +99,14 @@ describe('the route table', () => {
     expect(routeOf('/about')).toEqual({ _tag: 'NotFound', path: '/about' })
   })
 
-  it('names no route for the retired Uploads and Trash pages', () => {
-    // Both paths are inside the Admin's URL space, so they still boot the Admin
-    // and draw its NotFound — but no route, no sidebar row and no Page Head
-    // title answers to either of them.
+  it('names no route for the retired Uploads, Trash and Drafts pages', () => {
+    // All three paths are inside the Admin's URL space, so they still boot the
+    // Admin and draw its NotFound — but no route, no sidebar row and no Page
+    // Head title answers to any of them. A draft is a Status on the Filter Bar
+    // rather than a page of its own, so `Drafts` is a retired route.
     expect(routeOf('/admin/uploads')).toEqual({ _tag: 'NotFound', path: '/admin/uploads' })
     expect(routeOf('/admin/trash')).toEqual({ _tag: 'NotFound', path: '/admin/trash' })
+    expect(routeOf('/admin/drafts')).toEqual({ _tag: 'NotFound', path: '/admin/drafts' })
   })
 })
 
@@ -115,7 +115,6 @@ describe('the admin URL space', () => {
     for (const path of [
       '/admin',
       '/admin/',
-      '/admin/drafts',
       '/admin/scheduled',
       '/admin/settings',
       '/admin/photos/abc',
@@ -136,10 +135,10 @@ describe('the admin URL space', () => {
 /** The three reads the shell itself needs, on every route and every navigation.
  *  Nothing is cached across a route change: a session can expire between two
  *  pages, and a count or a Tag list is a fact about the moment it was read. The
- *  Tags are here rather than on the Library alone because the sidebar is the
- *  shell's chrome on every route, and a `TAGS` group that emptied itself the
- *  moment the operator left the Library was a list of nothing under a heading
- *  that had just held four. */
+ *  Tags are here rather than on the Library alone because every route can offer
+ *  a Tag — the Bulk Bar's `Add tag` and the upload dialog's combo both read the
+ *  list, and a route that listed none would offer `No tags yet.` over a Library
+ *  that has four. */
 const SHELL_READS = ['FetchSession', 'FetchCounts', 'FetchTags']
 
 const listReads = (result: { readonly commands?: ReadonlyArray<Command<Message>> }) =>
@@ -169,7 +168,7 @@ describe('a cold load', () => {
   })
 
   it('fetches the shell but no list on a cold load of a route with no data behind it yet', () => {
-    expect(commandNames(init(at('/admin/drafts')).commands)).toEqual(SHELL_READS)
+    expect(commandNames(init(at('/admin/scheduled')).commands)).toEqual(SHELL_READS)
     expect(commandNames(init(at('/admin/photos/abc/edit')).commands)).toEqual(SHELL_READS)
   })
 
@@ -245,7 +244,7 @@ describe('an unproven session', () => {
     update(init(at(pathname)).model, Message.FailedGetSession({})).model
 
   it('loads the document rather than navigating in-app, so Access can answer', () => {
-    for (const pathname of ['/admin', '/admin/photos/abc', '/admin/drafts', '/admin/nope']) {
+    for (const pathname of ['/admin', '/admin/photos/abc', '/admin/scheduled', '/admin/nope']) {
       const result = update(
         refused(pathname),
         onUrlRequest(UrlRequest.Internal({ url: at(pathname) })),

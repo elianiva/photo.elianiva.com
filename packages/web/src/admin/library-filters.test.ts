@@ -60,7 +60,6 @@ const COLD_READS = [
     total: 412,
     trashed: 3,
     byStatus: { draft: 7, published: 402, failed: 1 },
-    byTag: [],
   }),
   Message.SucceededFetchTags({ tags: [] }),
 ]
@@ -96,28 +95,25 @@ describe('the URL is the filter', () => {
   it('parses every filter out of the query, and prints the default URL as /admin', () => {
     expect(libraryUrl()).toBe('/admin')
     expect(
-      urlToAppRoute(
-        at('/admin?status=draft&ratio=3:2&tag=kyoto,nyc&sort=oldest&q=sun&page=2&view=grid'),
-      ),
+      urlToAppRoute(at('/admin?status=draft&ratio=3:2&sort=oldest&q=sun&page=2&view=grid')),
     ).toEqual(expect.objectContaining({ _tag: 'Library' }))
     expect(
       libraryUrl({
         status: 'draft',
         ratio: '3:2',
-        tagIds: ['kyoto', 'nyc'],
         sort: 'oldest',
         q: 'sun',
         page: 2,
         view: 'grid',
       }),
-    ).toBe('/admin?status=draft&ratio=3%3A2&tag=kyoto%2Cnyc&sort=oldest&q=sun&page=2&view=grid')
+    ).toBe('/admin?status=draft&ratio=3%3A2&sort=oldest&q=sun&page=2&view=grid')
   })
 
   it('a status pick moves the model, re-reads with the status, and replaces the URL', () => {
     const picked = fold(Message.SelectedStatusFilter({ value: 'draft' }))
     expect(picked.model.statusFilter).toBe('draft')
     expect(picked.commands).toEqual([
-      { name: 'FetchPhotos', args: { tagIds: [], q: '', status: 'draft' } },
+      { name: 'FetchPhotos', args: { q: '', status: 'draft' } },
       { name: 'ReplaceUrl', args: { url: '/admin?status=draft' } },
     ])
   })
@@ -126,7 +122,7 @@ describe('the URL is the filter', () => {
     const sorted = fold(Message.SelectedSortFilter({ value: 'oldest' }))
     expect(sorted.commands[0]).toEqual({
       name: 'FetchPhotos',
-      args: { tagIds: [], q: '', sort: { key: 'takenAt', direction: 'asc' } },
+      args: { q: '', sort: { key: 'takenAt', direction: 'asc' } },
     })
     expect(sorted.commands[1]).toEqual({ name: 'ReplaceUrl', args: { url: '/admin?sort=oldest' } })
     // One fact, two places on the page: the Model's sort is what both the
@@ -150,19 +146,6 @@ describe('the URL is the filter', () => {
     expect(gridView.commands).toEqual([{ name: 'ReplaceUrl', args: { url: '/admin?view=grid' } }])
   })
 
-  it('a tag pick keeps the rest of the filter and rewrites the one key', () => {
-    // The sidebar owns the tag set; this asserts the URL it produces carries
-    // the current status beside the tag.
-    const tagged = fold(
-      Message.SelectedStatusFilter({ value: 'draft' }),
-      Message.ToggledTagFilter({ id: 'kyoto' }),
-    )
-    expect(tagged.commands[3]).toEqual({
-      name: 'ReplaceUrl',
-      args: { url: '/admin?status=draft&tag=kyoto' },
-    })
-  })
-
   it('SCHEDULED is recorded in the URL but dispatches no read, because nothing records a publish time', () => {
     const scheduled = fold(Message.SelectedStatusFilter({ value: 'scheduled' }))
 
@@ -181,12 +164,11 @@ describe('the URL is the filter', () => {
   it('clears every filter in one move and keeps the view', () => {
     // The filtered-empty state's way back. Every field goes at once, because a
     // filter that matched nothing has as many ways out as it has fields.
-    const filtered = cold('/admin?status=failed&ratio=3:2&tag=kyoto&q=sun&view=grid')
+    const filtered = cold('/admin?status=failed&ratio=3:2&q=sun&view=grid')
     const cleared = update(filtered, Message.ClearedLibraryFilters({}))
 
     expect(cleared.model.statusFilter).toBe('all')
     expect(cleared.model.ratioFilter).toBe('any')
-    expect(cleared.model.activeTagIds).toEqual([])
     expect(cleared.model.appliedQuery).toBe('')
     expect(cleared.model.libraryPage).toBe(0)
     // How the operator is reading the Library is not which rows it holds, so
@@ -198,7 +180,7 @@ describe('the URL is the filter', () => {
         args: command.args ?? {},
       })),
     ).toEqual([
-      { name: 'FetchPhotos', args: { tagIds: [], q: '' } },
+      { name: 'FetchPhotos', args: { q: '' } },
       { name: 'ReplaceUrl', args: { url: '/admin?view=grid' } },
     ])
   })
@@ -212,7 +194,7 @@ describe('a reload restores the filtered page', () => {
       (coldLoad.commands ?? [])
         .filter((command) => command.name === 'FetchPhotos')
         .map((command) => command.args),
-    ).toEqual([{ tagIds: [], q: '', status: 'draft' }])
+    ).toEqual([{ q: '', status: 'draft' }])
   })
 
   it('a Back press to a filter the Model does not hold re-reads it', () => {

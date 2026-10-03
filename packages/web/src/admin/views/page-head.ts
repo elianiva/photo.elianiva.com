@@ -52,12 +52,11 @@ export interface PageHead {
 export const pageHeadOf = (model: Model): PageHead =>
   AppRoute.match(model.route, {
     Library: (): PageHead => ({ title: 'Library', isSearchable: true, isUploadable: true }),
-    // `Drafts` and `Scheduled` resolve before their bodies land (#29), so there
-    // is no list under either bar for a query to narrow: a field here would
-    // rewrite the address bar to the Library's own URL and move the operator
-    // off the page they typed into. Uploading is meaningful on both — a draft
-    // is what an upload lands as — so the primary action stays.
-    Drafts: (): PageHead => ({ title: 'Drafts', isSearchable: false, isUploadable: true }),
+    // `Scheduled` resolves before its body lands (#29), so there is no list
+    // under the bar for a query to narrow: a field here would rewrite the
+    // address bar to the Library's own URL and move the operator off the page
+    // they typed into. Uploading is meaningful on it — a draft is what an
+    // upload lands as — so the primary action stays.
     Scheduled: (): PageHead => ({ title: 'Scheduled', isSearchable: false, isUploadable: true }),
     Settings: (): PageHead => ({
       title: 'Settings',

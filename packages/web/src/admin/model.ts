@@ -17,7 +17,6 @@ import {
   RenditionFormat,
   Settings,
   Tag,
-  TagId,
   WatermarkPosition,
 } from '@photo/shared'
 
@@ -87,12 +86,11 @@ export const QueueItem = S.Struct({
 })
 export type QueueItem = typeof QueueItem.Type
 
-/** The photo, one tag, or the whole ticked selection awaiting destructive
+/** One photo, or the whole ticked selection, awaiting destructive
  *  confirmation. `bulk` carries a count because there is no single label to
  *  name forty photographs by, and it is a soft delete like the single one. */
 export const PendingConfirm = S.Union([
   S.Struct({ kind: S.Literal('photo'), id: S.String, label: S.String }),
-  S.Struct({ kind: S.Literal('tag'), id: S.String, label: S.String }),
   S.Struct({ kind: S.Literal('bulk'), count: S.Number }),
 ])
 export type PendingConfirm = typeof PendingConfirm.Type
@@ -172,7 +170,6 @@ const countsFields = {
   total: S.Number,
   trashed: S.Number,
   byStatus: S.Struct({ draft: S.Number, published: S.Number, failed: S.Number }),
-  byTag: S.Array(S.Struct({ id: TagId, label: S.String, count: S.Number })),
 }
 export const Counts = S.Struct(countsFields)
 export type Counts = typeof Counts.Type
@@ -303,23 +300,10 @@ export const Model = S.Struct({
   appliedQuery: S.String,
   /** The Library filter's single-selects, read off the URL. Status is one of
    *  the design's five segments; ratio is `any` or one of the six; sort is the
-   *  two orderings. The view is route state (`libraryViewOf`), and the sidebar
-   *  owns the tag set (`activeTagIds`). */
+   *  two orderings. The view is route state (`libraryViewOf`). */
   statusFilter: LibraryStatusFilter,
   ratioFilter: LibraryRatioFilter,
   sortFilter: LibrarySortFilter,
-
-  // tag filter, as Tag ids. A set, not one slug: the sidebar's tag filter is
-  // multi-select, and a second pick narrows the list rather than replacing the
-  // first. Empty means every Photo.
-  activeTagIds: S.Array(S.String),
-
-  // the sidebar's per-tag actions: create a Tag, delete this one
-  tagActions: Dialog.Model,
-  /** The Tag whose actions are open, if any. */
-  tagActionsId: S.optional(S.String),
-  /** The label typed into the create field. */
-  tagActionLabel: S.String,
 
   // grid density: number of square-tile columns (persisted to localStorage)
   cols: GridCols,
@@ -418,8 +402,6 @@ export const Message = defineMessageUnion({
   FailedGetCounts: {},
 
   // filter bar
-  /** Add or remove one Tag from the multi-select filter. */
-  ToggledTagFilter: { id: S.String },
   /** One of the status filter's five segments. `scheduled` is not a stored
    *  Status; the filter selects nothing for it (see `route.ts`). */
   SelectedStatusFilter: { value: LibraryStatusFilter },
@@ -430,10 +412,9 @@ export const Message = defineMessageUnion({
   SelectedSortFilter: { value: LibrarySortFilter },
   /** Flip the sort between newest and oldest, from the Table Head's `TAKEN`. */
   ToggledSort: {},
-  /** Clear every filter at once — Status, Ratio, the Tag set and the committed
-   *  search. The filtered-empty state offers this, because a filter that
-   *  matched nothing has as many ways back as it has fields, and a link that
-   *  cleared the Tag set alone was no way out of a Status or a search. */
+  /** Clear every filter at once — Status, Ratio and the committed search. The
+   *  filtered-empty state offers this, because a filter that matched nothing has
+   *  as many ways back as it has fields. */
   ClearedLibraryFilters: {},
   RetryFetch: {},
   /** A cold load (or a Back press) whose page number has no cursor in the
@@ -449,12 +430,6 @@ export const Message = defineMessageUnion({
   SetSearchQuery: { value: S.String },
   SubmittedSearch: {},
 
-  // the sidebar's per-tag actions
-  OpenedTagActions: { id: S.String },
-  SetTagActionLabel: { value: S.String },
-  SubmitTagCreate: {},
-  GotTagActionsMessage: { message: Dialog.Message },
-
   // grid density and view
   SelectedCols: { cols: GridCols },
   /** The Library's view mode. The URL is the state, so this only prints it:
@@ -463,10 +438,8 @@ export const Message = defineMessageUnion({
   SelectedView: { view: LibraryView },
   CompletedPersistCols: {},
 
-  // create tag inline (from either combo, the tag manager bar, or the
-  // sidebar's per-row actions)
+  // create a Tag inline, from the upload Dialog's combo
   CreateTagRequested: {
-    source: S.Literals(['upload', 'sidebar']),
     label: S.String,
   },
 
@@ -474,7 +447,6 @@ export const Message = defineMessageUnion({
   RemoveUploadTag: { id: S.String },
 
   SucceededCreateTag: {
-    source: S.Literals(['upload', 'sidebar']),
     tag: Tag,
   },
 
@@ -510,10 +482,8 @@ export const Message = defineMessageUnion({
 
   // destructive confirmation
   RequestDeletePhoto: { id: S.String, label: S.String },
-  RequestDeleteTag: { id: S.String, label: S.String },
   ConfirmPending: {},
   DeletedPhoto: { id: S.String, ...libraryPageFields },
-  DeletedTag: { tags: S.Array(Tag), ...libraryPageFields },
   GotConfirmMessage: { message: Dialog.Message },
 
   // Desk atom submodels
@@ -701,7 +671,6 @@ export const fileStore = new Map<string, File>()
 export const libraryFiltersOfModel = (model: Model): LibraryFilters => ({
   status: model.statusFilter,
   ratio: model.ratioFilter,
-  tagIds: [...model.activeTagIds],
   sort: model.sortFilter,
   q: model.appliedQuery,
   page: model.libraryPage,

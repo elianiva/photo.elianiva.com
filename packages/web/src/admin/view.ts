@@ -1,9 +1,9 @@
 /**
  * Admin view root: the shell every route renders inside. Two columns — the
- * sidebar (brand, nav, tags, session footer) and the page column, which opens
+ * sidebar (brand, nav, session footer) and the page column, which opens
  * with the Page Head and continues into the route's own page. The app-level
- * overlays (upload Dialog, tag actions, confirm AlertDialog, toast stack) sit
- * on top of both. The page itself is chosen by the route in `views/pages.ts`.
+ * overlays (upload Dialog, confirm AlertDialog, toast stack) sit on top of
+ * both. The page itself is chosen by the route in `views/pages.ts`.
  *
  * The root element carries the theme scope, read off the route the Model
  * already holds. `data-theme="dark"` re-themes this whole subtree and nothing
@@ -31,7 +31,7 @@ import { confirmDialog, toastStack } from './views/overlays'
 import { documentTitle, pageHead } from './views/page-head'
 import { routePage } from './views/pages'
 import { sessionExpired } from './views/session'
-import { sidebar, tagActionsDialog } from './views/sidebar'
+import { sidebar } from './views/sidebar'
 import { GUTTER } from './views/shared'
 import { uploadDialog } from './views/upload-dialog'
 
@@ -51,7 +51,6 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
           h.main([h.Class(`${GUTTER} flex-1 pb-24`)], [routePage(model, h)]),
         ],
       ),
-      tagActionsDialog(model, h),
       uploadDialog(model, h),
       confirmDialog(model, h),
       toastStack(model, h),

@@ -74,12 +74,10 @@ export const librarySortOf = (
 
 /** The Library's filter, as the Model holds it and as the URL carries it.
  *  `page` is a zero-based page number: the URL carries `1` for the second page
- *  and omits it for the first. `tagIds` is a set because the sidebar's tag
- *  filter is multi-select; the URL joins it with commas under one `tag` key. */
+ *  and omits it for the first. */
 export interface LibraryFilters {
   readonly status: LibraryStatusFilter
   readonly ratio: LibraryRatioFilter
-  readonly tagIds: ReadonlyArray<string>
   readonly sort: LibrarySortValue
   readonly q: string
   readonly page: number
@@ -91,7 +89,6 @@ export interface LibraryFilters {
 export const defaultLibraryFilters: LibraryFilters = {
   status: 'all',
   ratio: 'any',
-  tagIds: [],
   sort: 'newest',
   q: '',
   page: 0,
@@ -106,7 +103,6 @@ export const defaultLibraryFilters: LibraryFilters = {
 const libraryQueryFields = {
   status: S.OptionFromOptional(S.String),
   ratio: S.OptionFromOptional(S.String),
-  tag: S.OptionFromOptional(S.String),
   sort: S.OptionFromOptional(S.String),
   q: S.OptionFromOptional(S.String),
   page: S.OptionFromOptional(S.FiniteFromString),
@@ -135,10 +131,6 @@ export const libraryFiltersOf = (route: AppRoute): LibraryFilters =>
     : {
         status: pick(LIBRARY_STATUS_FILTERS, Option.getOrUndefined(route.status), 'all'),
         ratio: pick(LIBRARY_RATIO_FILTERS, Option.getOrUndefined(route.ratio), 'any'),
-        tagIds: (Option.getOrUndefined(route.tag) ?? '')
-          .split(',')
-          .map((id) => id.trim())
-          .filter((id) => id !== ''),
         sort: pick(LIBRARY_SORTS, Option.getOrUndefined(route.sort), 'newest'),
         q: Option.getOrUndefined(route.q) ?? '',
         page: Math.max(0, Math.trunc(Option.getOrUndefined(route.page) ?? 0)),
@@ -150,15 +142,11 @@ export const libraryFiltersOf = (route: AppRoute): LibraryFilters =>
 export const libraryQueryOf = (filters: LibraryFilters) => ({
   status: filters.status === 'all' ? Option.none() : Option.some(filters.status),
   ratio: filters.ratio === 'any' ? Option.none() : Option.some(filters.ratio),
-  tag: filters.tagIds.length === 0 ? Option.none() : Option.some(filters.tagIds.join(',')),
   sort: filters.sort === 'newest' ? Option.none() : Option.some(filters.sort),
   q: filters.q === '' ? Option.none() : Option.some(filters.q),
   page: filters.page === 0 ? Option.none() : Option.some(filters.page),
   view: filters.view === 'list' ? Option.none() : Option.some(filters.view),
 })
-
-const sameTags = (a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean =>
-  a.length === b.length && a.every((id, index) => id === b[index])
 
 /** Whether two filters select the same rows, ignoring the page. A page move
  *  keeps the selection; a filter change is a claim about a different set, so it
@@ -166,7 +154,6 @@ const sameTags = (a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean =
 export const sameLibraryFilterSet = (a: LibraryFilters, b: LibraryFilters): boolean =>
   a.status === b.status &&
   a.ratio === b.ratio &&
-  sameTags(a.tagIds, b.tagIds) &&
   a.sort === b.sort &&
   a.q === b.q &&
   a.view === b.view
@@ -188,8 +175,6 @@ export const AppRoute = defineRouteUnion({
    *  looking at the atoms, not a destination: nothing in the Admin links to
    *  it, and the sidebar's nav is the design's own six rows. */
   Atoms: {},
-  /** `/admin/drafts` — Photos that are not published. */
-  Drafts: {},
   /** `/admin/scheduled` — drafts flagged for later publication. Nothing
    *  promotes a scheduled Photo yet (CONTEXT.md, Status), so this route
    *  exists before the page does. */
@@ -210,8 +195,6 @@ export const libraryRouter = pipe(admin, query(LibraryQuery), mapTo(AppRoute.Lib
 
 export const atomsRouter = pipe(admin, slash(literal('atoms')), mapTo(AppRoute.Atoms))
 
-export const draftsRouter = pipe(admin, slash(literal('drafts')), mapTo(AppRoute.Drafts))
-
 export const scheduledRouter = pipe(admin, slash(literal('scheduled')), mapTo(AppRoute.Scheduled))
 
 export const settingsRouter = pipe(admin, slash(literal('settings')), mapTo(AppRoute.Settings))
@@ -225,14 +208,7 @@ export const photoRouter = pipe(
 
 /** Every admin route. A parser only matches when it consumes the whole path,
  *  so the shared `admin` prefix never shadows a longer route. */
-const adminParser = oneOf(
-  photoRouter,
-  settingsRouter,
-  scheduledRouter,
-  draftsRouter,
-  atomsRouter,
-  libraryRouter,
-)
+const adminParser = oneOf(photoRouter, settingsRouter, scheduledRouter, atomsRouter, libraryRouter)
 
 /** A route back into its URL. The inverse of {@link urlToAppRoute}, built from
  *  the same routers, so the sidebar's links and the router can never disagree
@@ -242,7 +218,6 @@ export const appRouteToUrl = (route: AppRoute): string =>
   AppRoute.match(route, {
     Library: (filters) => libraryRouter(filters),
     Atoms: () => atomsRouter(),
-    Drafts: () => draftsRouter(),
     Scheduled: () => scheduledRouter(),
     Settings: () => settingsRouter(),
     Photo: ({ id }) => photoRouter({ id }),

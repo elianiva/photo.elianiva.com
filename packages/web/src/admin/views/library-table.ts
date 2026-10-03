@@ -206,8 +206,9 @@ const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
 }
 
 /** The `Add tag` picker. A Dialog holding one box per Tag, because the design
- *  draws a single ghost button and no picker at all, and the Admin already
- *  creates Tags from the sidebar — inline create here would be a second
+ *  draws a single ghost button and no picker at all. A Tag is created inline
+ *  from the upload Dialog's combo, so the one place a new label is typed is the
+ *  one place a Tag comes from — a second create field here would be a second
  *  convention for one thing. */
 const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.submodel({
@@ -231,7 +232,7 @@ const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
               model.tags.length === 0
                 ? Dialog.description(
                     { attributes: render.description },
-                    ['No tags yet. Create one from the sidebar first.'],
+                    ['No tags yet. Type a new label in the upload dialog to create one.'],
                     innerH,
                   )
                 : h.div(

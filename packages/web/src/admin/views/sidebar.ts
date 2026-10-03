@@ -3,13 +3,12 @@
  * 248px, pinned to the start of the shell and as tall as the viewport, on
  * `color.surface.container` behind a 1px `color.hairline` rule.
  *
- * Four bands, top to bottom: the brand, the primary nav, the `TAGS` group, and
- * the footer. Every band is closed by a hairline, because a hairline is the
- * broadsheet's one structural device and four bands of the same grey text with
- * nothing between them read as one long list of eight rows rather than as a
- * masthead, a nav, an index and a footer. The primary nav's counts come from
- * `GetCounts`; the TAGS group's and the footer's meter are the same read, so a
- * tag cannot show one number in the sidebar and another on the Library bar. The
+ * Three bands, top to bottom: the brand, the primary nav, and the footer.
+ * Every band is closed by a hairline, because a hairline is the broadsheet's one
+ * structural device and three bands of the same grey text with nothing between
+ * them read as one long list rather than as a masthead, a nav and a footer. The
+ * primary nav's counts and the footer's meter are the same read, so the Library
+ * total cannot show one number on the rail and another on the Library bar. The
  * footer's email is the verified Access claim, not a constant.
  *
  * A row is a link when it navigates and a button when it acts in place, which
@@ -17,21 +16,18 @@
  * is a link with a real `href` out of the route table, so a cold load of that
  * URL boots the Admin on the row the operator last looked at.
  *
- * The `TAGS` group is the rail's only band that grows, so it is the band that
- * scrolls: the rail is exactly as tall as the viewport, and a twentieth Tag
- * must not push the meter and the way out of the Admin off the bottom of it.
+ * There is no Tag index here. A Tag is picked where it is applied — the upload
+ * dialog's combo and the Library's Bulk Bar — and a filter the operator cannot
+ * see set is not a filter, so `?tag=` is not in the URL's vocabulary either.
  */
 
-import type { Html, HtmlBuilder } from 'foldkit/html'
-import type { Tag } from '@photo/shared'
-import { ArrowUpRight, Clock, Images, LogOut, MoreHorizontal, NotebookPen, Settings } from 'lucide'
+import type { HtmlBuilder } from 'foldkit/html'
+import { ArrowUpRight, Clock, Images, LogOut, Settings } from 'lucide'
 import type { IconNode } from 'lucide'
 
-import * as Dialog from '@/components/ui/dialog'
 import * as SidebarItem from '@/components/ui/sidebar-item'
 import { icon } from '@/lib/icons'
 
-import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
 import {
   AppRoute,
@@ -50,27 +46,6 @@ import type { Child } from './shared'
 /** The design's 248px column, and the padding either side of the brand. */
 const SIDEBAR_WIDTH = 'w-[248px]'
 const SIDEBAR_PADDING = 'py-6 pr-3 pl-3'
-
-/** The rail's action gutter: the 24px column at every row's trailing edge that
- *  holds a Tag's `⋯`. It is drawn on every row whether or not the row fills it,
- *  so the counts in both groups end on one edge — a nav count and a Tag count
- *  are the same kind of number, and two right edges for them is two numbers
- *  that cannot be read down. */
-const ROW_GUTTER = 'w-6 shrink-0'
-
-/** One row of the rail: the item, then the action gutter. The gutter is a
- *  sibling of the item rather than a child of it, because a Tag row is a
- *  `<button>` and its `⋯` is a `<button>`, and a button inside a button is not
- *  markup. It also means the `⋯` sits outside the selected row's own box, which
- *  is where an action on a row belongs. */
-const railRow = (item: Html, gutter: Html | undefined, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('flex items-center')],
-    [
-      h.div([h.Class('min-w-0 flex-1')], [item]),
-      h.div([h.Class(`flex justify-end ${ROW_GUTTER}`)], gutter === undefined ? [] : [gutter]),
-    ],
-  )
 
 // ---------------------------------------------------------------------------
 // brand
@@ -157,35 +132,29 @@ interface NavRow {
   readonly count?: string
 }
 
-/** One primary-nav row, inside the rail's shared action gutter. The gutter is
- *  empty here — a nav row's action is the navigation itself — but it is drawn,
- *  because the Tag rows below put their `⋯` in the same column and a count that
- *  ends on one edge in one group and another edge in the next cannot be read
- *  down. */
+/** One primary-nav row. */
 const navRow = (model: Model, row: NavRow, h: HtmlBuilder<Msg>): Child =>
-  railRow(
-    SidebarItem.sidebarItem(
-      {
-        label: row.label,
-        href: appRouteToUrl(row.route),
-        state: model.route._tag === row.route._tag ? 'active' : 'default',
-        icon: row.glyph,
-        ...(row.count === undefined ? {} : { count: row.count }),
-      },
-      h,
-    ),
-    undefined,
+  SidebarItem.sidebarItem(
+    {
+      label: row.label,
+      href: appRouteToUrl(row.route),
+      state: model.route._tag === row.route._tag ? 'active' : 'default',
+      icon: row.glyph,
+      ...(row.count === undefined ? {} : { count: row.count }),
+    },
     h,
   )
 
 /** The rows, in the design's order. Two of them report no count at all, and
  *  both for the honest reason `CONTEXT.md` already states: `Scheduled` is a
  *  display label over a draft with no publish time recorded, so there is no
- *  Scheduled Photo to count, and `Settings` is a singleton with no rows.
+ *  Scheduled Photo to count, and `Settings` is a singleton with no rows. A
+ *  draft is a Status on the Filter Bar, not a page of its own, so there is no
+ *  `Drafts` row here: the Library with `DRAFTS` selected is the drafts list.
  *
  *  Every row carries a glyph. The design leaves `Settings` without one and
- *  reserves the slot, so the labels line up either way — but a rail of four
- *  destinations where three are marked and one is not reads as a glyph that
+ *  reserves the slot, so the labels line up either way — but a rail of three
+ *  destinations where two are marked and one is not reads as a glyph that
  *  failed to load, not as a decision, so this is the one place the drawing is
  *  overruled. */
 const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
@@ -195,12 +164,6 @@ const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
       label: 'Library',
       glyph: Images,
       count: String(model.counts.total),
-    },
-    {
-      route: AppRoute.Drafts(),
-      label: 'Drafts',
-      glyph: NotebookPen,
-      count: String(model.counts.byStatus.draft),
     },
     { route: AppRoute.Scheduled(), label: 'Scheduled', glyph: Clock },
     { route: AppRoute.Settings(), label: 'Settings', glyph: Settings },
@@ -213,192 +176,6 @@ const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
     ],
     rows.map((row) => navRow(model, row, h)),
   )
-}
-
-// ---------------------------------------------------------------------------
-// tags group
-// ---------------------------------------------------------------------------
-
-const tagCountFor = (model: Model, tag: Tag): number =>
-  model.counts.byTag.find((entry) => entry.id === tag.id)?.count ?? 0
-
-/** The `⋯` affordance on one tag row. It carries no label of its own — the
- *  row's label is already in the row — so it is named for the Tag it acts on,
- *  which is what a screen reader needs to say out loud. It fills the row's
- *  action gutter: 24px of 4px padding around a 16px glyph. */
-const tagActionsButton = (tag: Tag, h: HtmlBuilder<Msg>): Html =>
-  h.button(
-    [
-      h.OnClick(M.OpenedTagActions({ id: tag.id })),
-      h.AriaLabel(`Tag actions for ${tag.label}`),
-      h.Title(`Tag actions for “${tag.label}”`),
-      h.Class(
-        'hover:bg-role-surface-hover focus-visible:ring-role-focus/50 shrink-0 p-1 text-role-text-disabled transition-colors duration-120 hover:text-role-text-primary focus-visible:outline-none focus-visible:ring-[3px]',
-      ),
-      h.DataAttribute('slot', 'tag-actions'),
-    ],
-    [icon(h, MoreHorizontal, 'size-4')],
-  )
-
-/** One Tag in the index. The `⋯` is passed as the row's gutter rather than
- *  drawn inside it, so the row stays one button whose whole width toggles the
- *  filter. */
-const tagRow = (model: Model, tag: Tag, h: HtmlBuilder<Msg>): Child => {
-  const selected = model.activeTagIds.includes(tag.id)
-  return h.div(
-    [h.Key(`tag-${tag.id}`)],
-    [
-      railRow(
-        SidebarItem.sidebarItem(
-          {
-            label: tag.label,
-            state: selected ? 'active' : 'default',
-            onClick: M.ToggledTagFilter({ id: tag.id }),
-            count: String(tagCountFor(model, tag)),
-            attributes: [h.AriaPressed(String(selected))],
-          },
-          h,
-        ),
-        tagActionsButton(tag, h),
-        h,
-      ),
-    ],
-  )
-}
-
-/** The index of Tags. It is the rail's one band that grows, so it is the band
- *  that scrolls: the list takes whatever height is left over and scrolls inside
- *  it, rather than growing the rail past the viewport and carrying the storage
- *  meter and the sign-out link off the bottom with it. */
-const tagsGroup = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('flex min-h-0 flex-1 flex-col pt-3 pb-4'), h.DataAttribute('slot', 'sidebar-tags')],
-    [
-      h.h2([h.Class('type-kicker shrink-0 pb-2 text-role-text-secondary')], ['Tags']),
-      ...(model.tags.length === 0
-        ? [h.p([h.Class('px-2 type-exif-sm text-role-text-disabled')], ['No tags yet.'])]
-        : [
-            h.div(
-              [h.Class('flex min-h-0 flex-1 flex-col overflow-y-auto')],
-              model.tags.map((tag) => tagRow(model, tag, h)),
-            ),
-          ]),
-    ],
-  )
-
-// ---------------------------------------------------------------------------
-// the per-tag actions Dialog
-// ---------------------------------------------------------------------------
-
-/** The design's `⋯` menu, as a Dialog. The Desk has no Menu atom — #23 drew
- *  the atom set and a menu is not in it — and a two-action sheet is the
- *  smallest container that is keyboard- and screen-reader-complete. Delete
- *  still routes through the shared confirm Dialog, so the destructive path is
- *  the same one every other delete takes. */
-export const tagActionsDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const tag = model.tags.find((candidate) => candidate.id === model.tagActionsId)
-  return h.submodel({
-    slotId: 'admin-tag-actions',
-    model: model.tagActions,
-    view: Dialog.view,
-    viewInputs: Dialog.styledViewInputs<Msg>(
-      {
-        panelClass: 'w-full max-w-sm',
-        content: (render, innerH) => [
-          h.div(
-            [h.Class('flex flex-col gap-4')],
-            [
-              h.div(
-                [h.Class('flex items-start justify-between gap-2')],
-                [
-                  Dialog.title(
-                    { attributes: render.title },
-                    [tag === undefined ? 'Tag' : `Tag · ${tag.label}`],
-                    innerH,
-                  ),
-                  Dialog.closeButton({ attributes: render.closeButton }, ['×'], innerH),
-                ],
-              ),
-              h.form(
-                [
-                  h.OnSubmit(M.SubmitTagCreate()),
-                  h.DataAttribute('slot', 'tag-create-form'),
-                  h.Class('flex flex-col gap-2'),
-                ],
-                [
-                  h.label(
-                    [h.Class('type-kicker text-role-text-secondary'), h.For('admin-tag-create')],
-                    ['New tag'],
-                  ),
-                  h.input([
-                    h.Id('admin-tag-create'),
-                    h.Value(model.tagActionLabel),
-                    h.OnInput((value) => M.SetTagActionLabel({ value })),
-                    h.Placeholder('New tag…'),
-                    h.Class(
-                      'h-9 border-0 border-b border-role-outline bg-transparent type-exif placeholder:text-role-text-disabled focus:border-role-rule focus:outline-none',
-                    ),
-                  ]),
-                  h.div(
-                    [h.Class('flex justify-end')],
-                    [
-                      h.button(
-                        [
-                          h.Type('submit'),
-                          h.AriaLabel('Create tag'),
-                          h.Class(
-                            'border border-role-rule px-4 py-2 type-ui text-role-text-primary transition-colors duration-120 hover:bg-role-surface-hover',
-                          ),
-                          h.DataAttribute('slot', 'button'),
-                        ],
-                        ['Create tag'],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              h.div(
-                [h.Class('border-role-hairline flex flex-col gap-2 border-t pt-4')],
-                [
-                  h.p(
-                    [h.Class('type-caption text-role-text-secondary')],
-                    [
-                      tag === undefined
-                        ? 'Open a tag’s actions to delete it.'
-                        : `Deleting “${tag.label}” detaches it from every Photo. The Photos themselves are not deleted.`,
-                    ],
-                  ),
-                  h.div(
-                    [h.Class('flex justify-end')],
-                    [
-                      ...(tag === undefined
-                        ? []
-                        : [
-                            h.button(
-                              [
-                                h.Type('button'),
-                                h.OnClick(M.RequestDeleteTag({ id: tag.id, label: tag.label })),
-                                h.AriaLabel(`Delete tag ${tag.label}`),
-                                h.Class(
-                                  'border border-role-accent px-4 py-2 type-ui text-role-accent transition-colors duration-120 hover:bg-role-accent hover:text-role-on-accent',
-                                ),
-                                h.DataAttribute('slot', 'button'),
-                              ],
-                              ['Delete tag'],
-                            ),
-                          ]),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      },
-      h,
-    ),
-    toParentMessage: (message) => M.GotTagActionsMessage({ message }),
-  })
 }
 
 // ---------------------------------------------------------------------------
@@ -471,9 +248,8 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
 
 export const sidebar = (model: Model, h: HtmlBuilder<Msg>): Child =>
   // `<aside>` rather than `<div>`: the rail is a complementary landmark, and
-  // the brand, the Tag index and the meter below the nav are content no other
-  // landmark contains. Without it every one of them is a node the document
-  // cannot place.
+  // the brand and the meter below the nav are content no other landmark
+  // contains. Without it every one of them is a node the document cannot place.
   h.aside(
     [
       h.AriaLabel('Admin'),
@@ -482,5 +258,5 @@ export const sidebar = (model: Model, h: HtmlBuilder<Msg>): Child =>
       ),
       h.DataAttribute('slot', 'sidebar'),
     ],
-    [brand(h), primaryNav(model, h), tagsGroup(model, h), footer(model, h)],
+    [brand(h), primaryNav(model, h), footer(model, h)],
   )

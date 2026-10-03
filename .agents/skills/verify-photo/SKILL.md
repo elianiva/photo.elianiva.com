@@ -90,7 +90,8 @@ UI handles that actually exist in this repo:
 - Library grid: square tiles by `aria-label "Open <title>"`; hover overlay has `Edit` and `Delete`; a tile (or its `Edit`) opens the **Editor route** `/admin/photos/<id>`
 - Library Filter Bar: status segments `ALL 412` / `PUBLISHED 402` / `DRAFTS 7` / `SCHEDULED` / `FAILED 1`, ratio segments `ANY` / `3:2` / …, a `combobox` named `SORT` (`NEWEST FIRST` / `OLDEST FIRST`), next to the `List view` / `Grid view` toggle
 - Table Head: the sorted column is a button `Sort by TAKEN` whose label reads `TAKEN ↓` or `TAKEN ↑`
-- Tag filter (sidebar): one row per tag labeled `tag.label` with its count and `aria-pressed`; the row toggles the filter in place
+- Admin rail: links `Library` (with the total) / `Scheduled` / `Settings`, then the verified email, the `LIBRARY n OF m LIVE` meter and `Sign out`. There is no Tag index and no `Drafts` row.
+- Tag pickers: the upload dialog's combo (`Tags`) and the Bulk Bar's `Add tag` over the ticked rows
 - Upload dialog: `FileDrop` + `Multi` combo for tag ids + `takenAt` input, queue rows by `QueueItem.id` (`${name}:${size}`)
 - Editor route `/admin/photos/<id>`: Top Bar, Stage (`data-slot="mat"`), 360px Inspector; `← Library` returns to the view it was opened from
 - Lightbox (public gallery only): keyboard `Escape` dismisses it (`public/subscriptions.ts`); the Admin has no lightbox any more
@@ -114,8 +115,8 @@ npx agent-browser press --key "Escape"
 BASE="${BASE:-http://localhost:4000}"
 npx agent-browser open "$BASE/admin"
 npx agent-browser click --role button --name "Upload"
-# the tag filter is the sidebar rows; the Library Filter Bar carries Status / Ratio / SORT / View
-npx agent-browser click --role button --name "Kyoto 38"
+# the Library Filter Bar carries Status / Ratio / SORT / View; Tags are picked in the dialogs
+npx agent-browser click --role button --name "DRAFTS 7"
 # switch the Library to the tile grid; the URL becomes /admin?view=grid
 npx agent-browser click --role button --name "Grid view"
 # upload: pick files via FileDrop, set tags via combo, then Add N to drafts
@@ -150,7 +151,7 @@ kill $DEV_PID
 lsof -nP -iTCP:4000 -iTCP:13371 -sTCP:LISTEN  # verify both ports released
 # remove only verification-owned data (prefix verify-)
 # via the admin UI delete affordance, or direct DB if the UI is unavailable — never truncate tables
-# e.g. open $BASE/admin, click Delete on the verify photo/tag and confirm
+# e.g. open $BASE/admin, click Delete on the verify photo and confirm
 # remove temp files but retain artifacts/
 rm -f /tmp/verify-sample.jpg
 ```

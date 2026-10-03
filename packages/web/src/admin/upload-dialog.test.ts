@@ -52,7 +52,6 @@ const cold = (): Model =>
       total: 1,
       trashed: 0,
       byStatus: { draft: 0, published: 1, failed: 0 },
-      byTag: [],
     }),
     Message.SucceededFetchTags({ tags: [] }),
     Message.SucceededFetchPhotos({ photos: [PHOTO], nextCursor: null, total: 1 }),

@@ -84,14 +84,6 @@ export interface PhotoCounts {
   readonly trashed: number
   /** One entry per stored Status. `scheduled` is not a Status, so it has none. */
   readonly byStatus: Readonly<Record<PhotoStatus, number>>
-  /** Every Tag with how many live Photos carry it. A count of 0 is a fact. */
-  readonly byTag: ReadonlyArray<PhotoTagCount>
-}
-
-export interface PhotoTagCount {
-  readonly id: TagId
-  readonly label: string
-  readonly count: number
 }
 
 export interface PhotoUpdatePatch {
@@ -834,32 +826,24 @@ const dropRow = (batch: BatchContract, sql: Db, id: string): Effect.Effect<void>
 // ---------------------------------------------------------------------------
 
 interface CountRow {
-  readonly kind: 'status' | 'total' | 'tag'
+  readonly kind: 'status' | 'total'
   readonly key: string
-  readonly label: string | null
   readonly n: number
 }
 
 /**
  * The counts the sidebar and the Filter Bar need, in one statement and one
  * round trip. `kind` is the discriminator: the Status counts, the grand
- * total, the trashed total and the per-Tag counts have different key spaces,
- * so a UNION keeps them in one result rather than four queries.
+ * total and the trashed total have different key spaces, so a UNION keeps them
+ * in one result rather than three queries.
  */
 const COUNTS_SQL = `
-  SELECT 'status' AS kind, status AS key, NULL AS label, COUNT(*) AS n
+  SELECT 'status' AS kind, status AS key, COUNT(*) AS n
     FROM photos WHERE ${LIVE} GROUP BY status
   UNION ALL
-  SELECT 'total', 'all', NULL, COUNT(*) FROM photos WHERE ${LIVE}
+  SELECT 'total', 'all', COUNT(*) FROM photos WHERE ${LIVE}
   UNION ALL
-  SELECT 'total', 'trashed', NULL, COUNT(*) FROM photos WHERE deletedAt IS NOT NULL
-  UNION ALL
-  SELECT 'tag', t.id, t.label, COUNT(p.id) AS n
-    FROM tags t
-    LEFT JOIN photo_tags pt ON pt.tagId = t.id
-    LEFT JOIN photos p ON p.id = pt.photoId AND p.${LIVE}
-   GROUP BY t.id, t.label
-   ORDER BY t.label`
+  SELECT 'total', 'trashed', COUNT(*) FROM photos WHERE deletedAt IS NOT NULL`
 
 /** The row the CSV index reads, plus the two columns it needs but does not
  *  name: `id` keys the tag join, and the place is in the metadata blob. */
@@ -1156,29 +1140,21 @@ export const PhotoServiceLive = Layer.effect(
             new StorageError({ message: 'Failed to count photos', cause: describeCause(cause) }),
         )
         const byStatus: Record<PhotoStatus, number> = { ...NO_STATUSES }
-        const byTag: Array<PhotoTagCount> = []
         let total = 0
         let trashed = 0
-        const rows = raw
         for (const status of PHOTO_STATUSES) {
-          const row = rows.find(
+          const row = raw.find(
             (candidate) => candidate.kind === 'status' && candidate.key === status,
           )
           if (row !== undefined) byStatus[status] = row.n
         }
-        for (const row of rows) {
+        for (const row of raw) {
           if (row.kind === 'total') {
             if (row.key === 'trashed') trashed = row.n
             else total = row.n
-          } else if (row.kind === 'tag') {
-            byTag.push({
-              id: S.decodeSync(TagId)(row.key),
-              label: row.label ?? '',
-              count: row.n,
-            })
           }
         }
-        return { total, trashed, byStatus, byTag }
+        return { total, trashed, byStatus }
       })
 
     const index: PhotoServiceContract['index'] = () =>

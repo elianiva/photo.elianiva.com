@@ -29,7 +29,7 @@ describe('the branch a URL is drawn in', () => {
   })
 
   it('draws the Library and the other Library routes light', () => {
-    for (const pathname of ['/admin', '/admin/', '/admin/drafts', '/admin/settings']) {
+    for (const pathname of ['/admin', '/admin/', '/admin/scheduled', '/admin/settings']) {
       expect(routeOf(pathname)._tag).not.toBe('Photo')
       expect(themeForUrl(`${ORIGIN}${pathname}`)).toBe('light')
     }
@@ -51,7 +51,7 @@ describe('the branch a URL is drawn in', () => {
   it('agrees with the view, which reads the branch off the route it holds', () => {
     for (const pathname of [
       '/admin',
-      '/admin/drafts',
+      '/admin/scheduled',
       '/admin/settings',
       '/admin/photos/photo-1',
       '/admin/photos/abc/edit',

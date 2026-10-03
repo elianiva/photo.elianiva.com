@@ -1,45 +1,40 @@
 # Tag management
 
-Tag management lets the owner create free-form grouping labels, see each Tag alongside its photo count in the admin filter bar, filter the Library to one Tag at a time, and delete a Tag while seeing its chips disappear from cards without a full reload.
+Tag management lets the owner create free-form grouping labels, attach them to Photographs as they are uploaded or in bulk from the Library, and read each Tag back on a row. The Admin rail carries no Tag index and no tag filter: a Tag is picked where a Photograph is given it, and nowhere else.
 
 ## Sub-features
 
-- `tag-list` lists all Tags ordered by label.
-- `tag-create-manager` creates a Tag from the TagManager bar.
+- `tag-list` reads every Tag ordered by label (`ListTags`), which is what both pickers offer.
 - `tag-create-combo` creates a Tag inline from the upload Dialog's Multi combo via a `create:<label>` pseudo-entry.
-- `tag-filter` filters the grid by one Tag slug and shows the result line with count.
-- `tag-delete` removes a Tag and refreshes both tags and filtered photos.
+- `tag-create-error` refuses an empty label and reports a duplicate slug as `SlugConflict`.
+- `tag-attach-upload` sends the ticked Tags with the upload, so the new row carries them.
+- `tag-attach-bulk` applies the ticked Tags to the Library's selected rows through the Bulk Bar's `Add tag`.
 
 ## How to get to it (user POV)
 
-- Open `http://localhost:4000/admin` at http://localhost:4000/admin — the filter bar shows every Tag as a chip with a count when unfiltered, or as a single active chip when filtered.
-- Use the TagManager inline form to type a new label and create it.
-- Open the upload Dialog; in its Tag Multi combo type a new label and choose the `create:<label>` row to create it in place.
-- Choose a chip to filter the grid to that Tag. Clear the filter to see all Photos again.
-- Choose the delete affordance on a Tag and confirm.
+- Open `http://localhost:4000/admin` at http://localhost:4000/admin.
+- Open the upload Dialog; in its Tag Multi combo type a new label and choose the `create:<label>` row to create it in place. It is then selected, so the batch goes out with it.
+- Tick one or more rows in the Library and choose `Add tag` in the Bulk Bar to attach an existing Tag to them.
+- Read a Tag back on a row's badges, on the Card grid, and on the public Tag page at `/tag/<slug>`.
 
 ## Driving it with agent-browser
 
 Preconditions:
 
 - App is healthy at `http://localhost:4000/admin` at http://localhost:4000/admin.
-- At least one Photo exists so counts are meaningful.
+- At least one Photo exists so attaching a Tag has rows to attach it to.
 - `.agents/skills/verify-photo/scripts/doctor.sh` passes.
 - No Tag with slug `verify-tag` exists at start.
 
-- **List tags.** Observe the filter bar. Run `npx agent-browser snapshot` — it contains one button per Tag label, each with its count in parentheses when unfiltered, ordered alphabetically by label.
-- **Create via manager.** Create from the filter bar. Run `npx agent-browser fill --role textbox --name "New tag" --value "Verify Tag"` and `npx agent-browser click --role button --name "Create tag"`. The new chip `Verify Tag` appears at the correct sorted position and is immediately usable as a filter.
-- **Create via combo.** Create inline from the upload Dialog's Multi picker. Run `BASE="${BASE:-http://localhost:4000}" npx agent-browser open "$BASE/admin"`, click `Upload` to open the dialog, fill its combo with a non-existent label e.g. `Verify Tag 2`, choose the option whose name is `create:Verify Tag 2`. The `CreateTagRequested{source:"upload"}` flow creates on the API Worker's `/api/admin/rpc` and immediately selects the new Tag — chip appears without a manual second pick.
-- **Create error cases.** Empty label shows a validation toast and no chip is added; duplicate label (same slug via `slugify`) shows a `SlugConflict` toast, no chip added.
-- **Filter by tag.** Filter the Library. Run `npx agent-browser click --role button --name "Verify Tag"` — chip gains selected style, grid shows only Photos tagged `Verify Tag`, result line reads `N photos · filtered by "Verify Tag"`.
-- **Clear filter.** Choose the same chip again. Filter resets, chips return to count view, result line drops the `filtered by` suffix.
-- **Delete tag.** Delete the verify tag. Run `npx agent-browser click --role button --name "Delete Verify Tag"` then `npx agent-browser click --role button --name "Confirm"` — the chip disappears and Photos that only had that tag lose the chip instantly.
-- **Propagation.** After delete, no card shows the deleted Tag label. Re-filter or snapshot the grid to confirm.
-- **Proof.** Capture unfiltered and filtered states plus the manager form: `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/tag-management/unfiltered.aria.txt` and `filtered.aria.txt` with matching `npx agent-browser screenshot` .png.
+- **Create via the upload combo.** Run `BASE="${BASE:-http://localhost:4000}" npx agent-browser open "$BASE/admin"`, click `Upload` to open the dialog, fill its combo with a non-existent label e.g. `Verify Tag`, and choose the option whose name is `create:Verify Tag`. The `CreateTagRequested` flow creates on the API Worker's `/api/admin/rpc` and immediately selects the new Tag — the chip row shows it without a manual second pick.
+- **Create error cases.** An empty label adds no Tag; a duplicate label (same slug via `slugify`) reports `SlugConflict` and adds no Tag.
+- **Attach on upload.** Send the queue with `Add N to drafts`; the new row's badges name the Tags it was sent with.
+- **Attach in bulk.** Tick two rows, then `npx agent-browser click --role button --name "Add tag"`, tick `Verify Tag` in the dialog and choose `Add tag` there. Both rows carry the Tag on the next read, with no reload.
+- **The rail offers no Tag index.** `npx agent-browser snapshot` on `/admin` lists `Library`, `Scheduled` and `Settings` under `Admin sections` and no tag row, and `/admin?tag=verify-tag` draws the unfiltered Library, because `tag` is no longer part of the URL's vocabulary.
+- **Proof.** Capture the rail and the `Add tag` dialog: `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/tag-management/rail.aria.txt` and `add-tag.aria.txt` with matching `npx agent-browser screenshot` .png.
 
 ## Gotchas
 
-- TagManager counts only describe the loaded result set (first 60). A larger gallery with pages beyond 60 will show undercount — not a bug, just the viewport of verification.
-- A filtered view keeps the same chip list but hides counts and replaces them with active styling. Do not assert count text while filtered.
-- Deleting the active tag clears the filter to the unfiltered set — snapshot again to confirm counts return.
+- A Tag cannot be renamed or deleted from the Admin today; the rail's `⋯` menu was its only home. A Tag is attached on upload or in bulk, and reads back on rows and on its public page.
+- A Tag with no Photographs attached is not a Folio link and answers `404` at `/tag/<slug>` — the caption and the page wait for a published Photograph.
 - Slug is normalized via `slugify` (max 80, fallback `untitled`). The label retains original trimming and spacing as typed.

@@ -706,8 +706,6 @@ export const statusVariantOf = (photo: PhotoWithTags): 'published' | 'draft' | '
  *  return route that is not a list is the Library, which is what a cold load of
  *  the Editor's URL has. */
 export const editorReturnUrl = (returnRoute: AppRoute): string =>
-  returnRoute._tag === 'Library' ||
-  returnRoute._tag === 'Drafts' ||
-  returnRoute._tag === 'Scheduled'
+  returnRoute._tag === 'Library' || returnRoute._tag === 'Scheduled'
     ? appRouteToUrl(returnRoute)
     : libraryUrl()

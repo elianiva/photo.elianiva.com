@@ -77,28 +77,6 @@ export const foldConfirm = Update.foldChild({
       : (writtenModel) => ({ model: writtenModel }),
 })
 
-/** The sidebar's per-tag actions Dialog. Closing it (Esc, backdrop, close
- *  button) forgets which Tag it was opened on, so a later one cannot act on a
- *  Tag the operator has already navigated away from. */
-export const foldTagActions = Update.foldChild({
-  update: Dialog.update,
-  read: (model: Model) => Opt.some(model.tagActions),
-  write: (model: Model, nextDialog: typeof model.tagActions) =>
-    modifyFields(model, { tagActions: () => nextDialog }),
-  toParentMessage: (message: typeof Dialog.Message.Type) =>
-    Message.GotTagActionsMessage({ message }),
-  foldOutMessage: (out): Update.Step<Model, Msg> =>
-    out._tag === 'Closed'
-      ? // `tagActionsId` is optional; clear it with a spread (see `withOptional`).
-        (writtenModel) => ({
-          model: modifyFields(
-            { ...writtenModel, tagActionsId: undefined },
-            { tagActionLabel: () => '' },
-          ),
-        })
-      : (writtenModel) => ({ model: writtenModel }),
-})
-
 /** Dropped files surface through the child's out-channel: each file's bytes
  *  land in `fileStore` and a queue item rides back to the parent. */
 export const foldFileDrop = Update.foldChild({
@@ -284,7 +262,7 @@ export const foldUploadCombo: ComboFold = Update.foldChild({
       const label = value.slice('create:'.length)
       return (comboModel) => ({
         model: comboModel,
-        commands: [CreateTagCmd({ source: 'upload', label })],
+        commands: [CreateTagCmd({ label })],
       })
     }
     return (comboModel) => ({
@@ -296,8 +274,7 @@ export const foldUploadCombo: ComboFold = Update.foldChild({
 })
 
 /** The row `⋯` menu. Closing it forgets which Photo it was opened on, so a
- *  later menu cannot act on a row the operator has paged away from. The same
- *  shape as the sidebar's per-tag actions, for the same reason. */
+ *  later menu cannot act on a row the operator has paged away from. */
 export const foldRowMenu = Update.foldChild({
   update: Dialog.update,
   read: (model: Model) => Opt.some(model.rowMenu),

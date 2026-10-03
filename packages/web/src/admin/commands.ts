@@ -81,7 +81,6 @@ export const listArgsOf = (filters: LibraryFilters): PhotoListArgs => {
   return {
     ...(status === undefined ? {} : { status }),
     ...(ratio === undefined ? {} : { ratio }),
-    tagIds: [...filters.tagIds],
     q: filters.q,
     ...(filters.sort === 'newest' ? {} : { sort: librarySortOf(filters.sort) }),
   }
@@ -90,13 +89,12 @@ export const listArgsOf = (filters: LibraryFilters): PhotoListArgs => {
 /** Where the table is reading: its filter, and the keyset position of the page.
  *  The empty string is the first page, which is the only page with no cursor.
  *
- *  The four optional keys are the Filter Bar's: Status, Ratio and Sort are
+ *  The three optional keys are the Filter Bar's: Status, Ratio and Sort are
  *  omitted when they are the default, so an unfiltered read asks for exactly
  *  what it asked for before they existed. */
 const photoListFields = {
   status: S.optional(PhotoStatus),
   ratio: S.optional(PhotoRatio),
-  tagIds: S.Array(S.String),
   q: S.String,
   sort: S.optional(LibrarySort),
   cursor: S.optional(S.String),
@@ -112,7 +110,6 @@ export type PageArgs = typeof PageArgs.Type
  *  so a page of rows and the number it is paged over are never fetched under
  *  two different filters. */
 const listPayload = (args: {
-  tagIds: readonly string[]
   q: string
   cursor?: string | undefined
   status?: PhotoStatus | undefined
@@ -120,7 +117,6 @@ const listPayload = (args: {
   sort?: typeof LibrarySort.Type | undefined
 }) =>
   rpcAdmin<PhotoPage>('ListLibraryRows', {
-    ...(args.tagIds.length > 0 ? { tagIds: [...args.tagIds] } : {}),
     ...(args.q === '' ? {} : { q: args.q }),
     ...(args.cursor === undefined || args.cursor === '' ? {} : { cursor: args.cursor }),
     ...(args.status === undefined ? {} : { status: args.status }),
@@ -157,7 +153,7 @@ const foldOverChunks = <E>(
 // that changed Status, gained a Tag, gained a Mat or left the library is a row
 // the table is now holding wrong, and a count read before the write is a count
 // that is already wrong. `FetchCountsCmd` rides along for the same reason: a
-// Status or a Tag moved, so the sidebar's numbers moved too.
+// Status moved, so the sidebar's numbers moved too.
 // ---------------------------------------------------------------------------
 
 /** A soft delete. The Bulk Bar's `Delete` and the Trash it lands in are one
@@ -241,21 +237,18 @@ export const PersistColsCmd = Command.define('PersistCols', {
     ),
 })
 
-/** The Admin's Photo list. It carries the sidebar's filter as a set of Tag ids
- *  and the Page Head's search as `q`, because both are set-shaped: a single
- *  `tagSlug` would let a second pick replace the first rather than narrow it,
- *  and a query that had nowhere to go would be a control that lies. Both keys
- *  are omitted when empty, so "no filter" is the absence of a filter rather
- *  than an empty one.
+/** The Admin's Photo list. It carries the Page Head's search as `q`, omitted
+ *  when empty, so "no filter" is the absence of a filter rather than an empty
+ *  one.
  *
  *  `cursor` is the keyset position of the page being read. The empty string is
  *  the first page, which is the only page with no cursor. */
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
   args: photoListFields,
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ tagIds, q, cursor, status, ratio, sort }) =>
+  execute: ({ q, cursor, status, ratio, sort }) =>
     Effect.map(
-      listPayload({ tagIds, q, ...(cursor === undefined ? {} : { cursor }), status, ratio, sort }),
+      listPayload({ q, ...(cursor === undefined ? {} : { cursor }), status, ratio, sort }),
       (page) => Message.SucceededFetchPhotos(toLibraryPage(page)),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
@@ -527,30 +520,11 @@ export const DeletePhotoCmd = Command.define('DeletePhoto', {
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
-export const DeleteTagCmd = Command.define('DeleteTag', {
-  args: { id: S.String, page: PageArgs },
-  messages: [Message.DeletedTag, Message.FailedRpc],
-  execute: ({ id, page }) =>
-    Effect.map(
-      Effect.andThen(
-        rpcAdmin('DeleteTag', { id }),
-        // Refetch both sides: cards would otherwise keep showing the deleted
-        // tag until the next full reload. The surviving filter rides along so
-        // a filtered view stays filtered after the delete.
-        Effect.all({
-          tags: rpcPublic<ReadonlyArray<Tag>>('ListTags', {}),
-          page: listPayload(page),
-        }),
-      ),
-      ({ tags, page: fresh }) => Message.DeletedTag({ tags: [...tags], ...toLibraryPage(fresh) }),
-    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
-})
-
 export const CreateTagCmd = Command.define('CreateTag', {
-  args: { source: S.Literals(['upload', 'sidebar']), label: S.String },
+  args: { label: S.String },
   messages: [Message.SucceededCreateTag, Message.FailedRpc],
-  execute: ({ source, label }) =>
+  execute: ({ label }) =>
     Effect.map(rpcAdmin<Tag>('CreateTag', { slug: label, label }), (tag) =>
-      Message.SucceededCreateTag({ source, tag }),
+      Message.SucceededCreateTag({ tag }),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })

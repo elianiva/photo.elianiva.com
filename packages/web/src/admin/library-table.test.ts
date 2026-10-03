@@ -44,10 +44,6 @@ const COUNTS: Counts = {
   total: 412,
   trashed: 3,
   byStatus: { draft: 7, published: 402, failed: 1 },
-  byTag: [
-    { id: TagId.make('kyoto'), label: 'Kyoto', count: 38 },
-    { id: TagId.make('nyc'), label: 'New York', count: 52 },
-  ],
 }
 
 /** One row's worth of the design's data, so a scene asserts against the values
@@ -76,7 +72,7 @@ const PAGE: ReadonlyArray<PhotoWithTags> = Array.from({ length: 7 }, (_, index) 
 const SECOND = Array.from({ length: 7 }, (_, index) => row(index + 8))
 const NEXT_CURSOR = 'cursor-after-page-one'
 /** The filter and the cursor a command issued from the first page carries. */
-const PAGE_ARGS = { tagIds: [], q: '', cursor: '' }
+const PAGE_ARGS = { q: '', cursor: '' }
 
 const listed = (
   photos: ReadonlyArray<PhotoWithTags> = PAGE,
@@ -157,7 +153,7 @@ describe('selection', () => {
     const filtered = fold(
       Message.ToggledRowSelection({ id: PAGE[0]?.id ?? '' }),
       Message.ToggledRowSelection({ id: PAGE[1]?.id ?? '' }),
-      Message.ToggledTagFilter({ id: 'kyoto' }),
+      Message.SelectedStatusFilter({ value: 'draft' }),
     )
     expect(filtered.model.selected).toEqual([])
     expect(filtered.commands.map((command) => command.name)).toEqual(['FetchPhotos'])
@@ -370,7 +366,7 @@ describe('paging', () => {
     )
     expect(paged.commands[0]).toEqual({
       name: 'FetchPhotos',
-      args: { tagIds: [], q: '', cursor: NEXT_CURSOR },
+      args: { q: '', cursor: NEXT_CURSOR },
     })
     // The rows the answer carried are the rows the page is now over — the range
     // the pager prints is read off them, not off the page it was on.
@@ -396,7 +392,7 @@ describe('paging', () => {
       Message.SteppedLibraryPage({ delta: -1 }),
     )
     expect(back.commands.map((command) => command.name)).toEqual(['FetchPhotos', 'FetchPhotos'])
-    expect(back.commands[1]?.args).toEqual({ tagIds: [], q: '', cursor: '' })
+    expect(back.commands[1]?.args).toEqual({ q: '', cursor: '' })
     expect(back.model.libraryPage).toBe(0)
     expect(back.model.libraryCursors).toEqual([''])
   })
@@ -414,8 +410,12 @@ describe('paging', () => {
 
 describe('the states that are not rows', () => {
   it('a filter that matches nothing keeps the filter, so it is not an empty Library', () => {
-    const settled = fold(Message.ToggledTagFilter({ id: 'kyoto' }), listed([], 0, null))
-    expect(settled.model.activeTagIds).toEqual(['kyoto'])
+    const settled = fold(
+      Message.SetSearchQuery({ value: 'nothing matches this' }),
+      Message.SubmittedSearch({}),
+      listed([], 0, null),
+    )
+    expect(settled.model.appliedQuery).toBe('nothing matches this')
     expect(settled.model.photos).toEqual([])
     expect(settled.model.libraryTotal).toBe(0)
   })

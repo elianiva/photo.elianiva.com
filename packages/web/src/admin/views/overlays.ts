@@ -25,12 +25,9 @@ const confirmCopy = (pending: PendingConfirm | undefined): string => {
   if (pending.kind === 'photo') {
     return `“${pending.label}” will be moved to Trash: it leaves the Library, its original stays in R2, and its number is never reused.`
   }
-  if (pending.kind === 'bulk') {
-    return `${String(pending.count)} photograph${
-      pending.count === 1 ? '' : 's'
-    } will be moved to Trash: they leave the Library, their originals stay in R2, and their numbers are never reused.`
-  }
-  return `Tag “${pending.label}” will be deleted and detached from all photographs.`
+  return `${String(pending.count)} photograph${
+    pending.count === 1 ? '' : 's'
+  } will be moved to Trash: they leave the Library, their originals stay in R2, and their numbers are never reused.`
 }
 
 export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>

@@ -460,15 +460,12 @@ describe('the admin group GetPhoto', () => {
 })
 
 describe('GetCounts handler', () => {
-  it('reports the total, each status, each tag and the trashed count, with no scheduled key', async () => {
+  it('reports the total, each status and the trashed count, with no scheduled key', async () => {
     const harness = makeTestHarness()
-    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-    const unused = await createTag(harness, 'unused', 'Unused')
     const published = await createPhoto(harness, {
       slug: 'temple',
       title: 'Temple',
       takenAt: '2024-05-01',
-      tagIds: [kyoto.id],
     })
     const draft = await createPhoto(harness, { slug: 'alley', title: 'Alley' })
     await setPhotoStatus(harness, draft.id, 'draft')
@@ -476,17 +473,13 @@ describe('GetCounts handler', () => {
 
     const result = await adminRpc(harness, (client) => client.GetCounts({}))
 
-    // The trashed Photo is out of every live count and in `trashed`; the Tag
-    // it carried is neither. `toEqual` pins the key set, so a `scheduled` count
-    // appearing here fails this without a second assertion.
+    // The trashed Photo is out of every live count and in `trashed`.
+    // `toEqual` pins the key set, so a `scheduled` count appearing here fails
+    // this without a second assertion.
     expect(result).toEqual({
       total: 1,
       trashed: 1,
       byStatus: { draft: 1, published: 0, failed: 0 },
-      byTag: [
-        { id: kyoto.id, label: 'Kyoto', count: 0 },
-        { id: unused.id, label: 'Unused', count: 0 },
-      ],
     })
   })
 })

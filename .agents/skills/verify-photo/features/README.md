@@ -47,4 +47,4 @@ Keep implementation details out of the map. Name only user paths, stable handles
 - [Admin upload](./admin-upload.md) covers the multipart upload path, blurhash handling, tag assignment on upload, and queue behavior.
 - [Admin library views and delete](./admin-edit-delete.md) covers the list/grid toggle and its URL state, grid density persistence, opening a Photo in the Editor route, and delete confirmation.
 - [Admin Library empty state](./admin-library-empty.md) covers the zero-Photograph block, its two real file pickers, the Upload dialog they open, and the distinct filtered-empty copy.
-- [Tag management](./tag-management.md) covers creating tags from the manager, draft/upload combos, counting per-tag, and delete propagation.
+- [Tag management](./tag-management.md) covers creating a Tag inline from the upload combo, attaching it on upload or in bulk from the Library, and the absence of a Tag index on the rail.

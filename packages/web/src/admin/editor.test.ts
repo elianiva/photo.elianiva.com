@@ -93,7 +93,6 @@ const shellReads: ReadonlyArray<Message> = [
     total: 412,
     trashed: 3,
     byStatus: { draft: 7, published: 402, failed: 1 },
-    byTag: [],
   }),
 ]
 
@@ -136,7 +135,7 @@ describe('the Editor on a cold load', () => {
   })
 
   it('records the route it was opened from, so `← Library` goes back there', () => {
-    expect(reachedFrom('/admin/drafts').editor.returnRoute).toEqual({ _tag: 'Drafts' })
+    expect(reachedFrom('/admin/scheduled').editor.returnRoute).toEqual({ _tag: 'Scheduled' })
     expect(reachedFrom('/admin?status=draft').editor.returnRoute).toEqual(
       libraryRoute({ ...defaultLibraryFilters, status: 'draft' }),
     )
@@ -254,7 +253,7 @@ describe('leaving the Editor', () => {
     expect(asked.model.editor.leaveUrl).toBe('/admin')
 
     // A second ask cannot re-arm the guard over the URL it is already holding.
-    const again = update(asked.model, Message.RequestLeaveEditor({ url: '/admin/drafts' }))
+    const again = update(asked.model, Message.RequestLeaveEditor({ url: '/admin/scheduled' }))
     expect(again.model.editor.leaveUrl).toBe('/admin')
   })
 

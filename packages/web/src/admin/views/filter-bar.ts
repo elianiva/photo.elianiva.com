@@ -12,9 +12,9 @@
  * Two deviations from the drawing, both stated:
  *
  *   - The `SERIES` select is not rendered. A Series has no entity (decision 5);
- *     grouping is Tags, and the tags are the sidebar's filter (`A4`). Filling
- *     that slot with a tag filter would be a second copy of a control that
- *     already exists rather than a replacement for one that does not.
+ *     grouping is Tags, and a Tag is picked where it is applied — the upload
+ *     dialog's combo and the Library's own Bulk Bar — not as a filter over the
+ *     rows beside it.
  *   - `SCHEDULED` is drawn without a count. `scheduled` is not a stored Status
  *     (decision 3): nothing records a publish time, so there is no number to
  *     print and the segment selects nothing. #16 booked the consequence and
@@ -22,8 +22,7 @@
  *
  * Every filter here is the URL's, not the bar's: a pick builds the Library's
  * query and the Model reads it back, so a reload lands on the same filtered
- * page. The tag set is the one filter that lives elsewhere — the sidebar owns
- * it, and the bar deliberately omits it.
+ * page.
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
@@ -101,7 +100,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [
       h.DataAttribute('slot', 'library-filter-bar'),
-      h.Class('mt-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-2'),
+      h.Class('flex flex-wrap items-center justify-between gap-x-6 gap-y-2'),
     ],
     [
       h.div(

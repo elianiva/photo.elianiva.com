@@ -27,7 +27,6 @@ import {
   BulkTrashCmd,
   CreateTagCmd,
   DeletePhotoCmd,
-  DeleteTagCmd,
   ExportCsvIndexCmd,
   FetchCountsCmd,
   FetchLibraryPageCmd,
@@ -54,7 +53,6 @@ import {
   foldFileDrop,
   foldRowMenu,
   foldSegmentGroup,
-  foldTagActions,
   foldToast,
   foldUploadCombo,
   foldUploadDialog,
@@ -146,22 +144,18 @@ const initialModel = (route: AppRoute): Model => {
     nextCursor: null,
     loadingMore: false,
     session: { status: 'loading', email: null, teamDomain: null },
-    counts: { total: 0, trashed: 0, byStatus: { draft: 0, published: 0, failed: 0 }, byTag: [] },
+    counts: { total: 0, trashed: 0, byStatus: { draft: 0, published: 0, failed: 0 } },
     searchQuery: filters.q,
     // The committed search, which is the URL's `q` as of the last load.
     appliedQuery: filters.q,
     statusFilter: filters.status,
     ratioFilter: filters.ratio,
     sortFilter: filters.sort,
-    activeTagIds: [...filters.tagIds],
     cols: storedCols(),
     segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
     atoms: initAtomsState(),
     photoStatus: 'loading',
     editor: initEditorState(),
-
-    tagActions: Dialog.init({ id: 'admin-tag-actions' }),
-    tagActionLabel: '',
 
     uploadDialog: Dialog.init({ id: 'admin-upload-dialog' }),
     fileDrop: FileDrop.init({ id: 'admin-file-drop' }),
@@ -196,13 +190,13 @@ const initialModel = (route: AppRoute): Model => {
  *  transition and `ChangedUrl` with the navigation one. A fetch returned from
  *  `ChangedUrl` alone never fires on a direct visit or a reload. */
 const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => {
-  // Every navigation re-reads the session and the sidebar's two aggregates,
-  // cold load included. None of them is cached across a route change: a session
-  // can expire between two pages, and a count or a Tag list is a fact about the
-  // moment it was read, not about the moment the Admin booted. The Tags ride
-  // here rather than on entering the Library because the sidebar is the shell's
-  // chrome on every route: read only on the Library, a cold load of Settings
-  // drew `No tags yet.` under a `TAGS` heading the Library had just listed.
+  // Every navigation re-reads the session and the sidebar's counts, cold load
+  // included. Neither is cached across a route change: a session can expire
+  // between two pages, and a count is a fact about the moment it was read, not
+  // about the moment the Admin booted. The Tag list rides here rather than on
+  // entering the Library because the shell needs it on every route — the
+  // Library's Bulk Bar and the Editor read it, and a route that listed none
+  // would offer `Add tag` an empty set of choices.
   const shellCommands: Commands = [FetchSessionCmd(), FetchCountsCmd(), FetchTagsCmd()]
   const nextRoute = transition.nextRoute
   // The Settings page is a form over a row, and a form over a row is only
@@ -309,7 +303,6 @@ const withLibraryFilters = (model: Model, filters: LibraryFilters, resetCursors:
     sortFilter: () => filters.sort,
     appliedQuery: () => filters.q,
     searchQuery: () => filters.q,
-    activeTagIds: () => [...filters.tagIds],
     libraryPage: () => filters.page,
     ...(resetCursors ? { libraryCursors: () => [''] } : {}),
   })
@@ -382,10 +375,7 @@ const runNextOrFinish = (model: Model): UpdateReturn => {
     failedCount === 0 || !settled.uploadDialog.isOpen ? releaseFinishedItems(settled) : settled
   // The list and the sidebar's counts both moved: an upload changes a Photo's
   // Status, so re-read both rather than let the count outlive the write.
-  const refresh: Commands = [
-    FetchPhotosCmd({ tagIds: [...settled.activeTagIds], q: settled.searchQuery }),
-    FetchCountsCmd(),
-  ]
+  const refresh: Commands = [FetchPhotosCmd({ q: settled.searchQuery }), FetchCountsCmd()]
   return failedCount === 0
     ? showToast(finished, `Uploaded ${photoCountLabel(uploadedCount)}`, 'Success', undefined, [
         ...refresh,
@@ -507,29 +497,19 @@ const libraryFilterChange = (
     ratioFilter: () => filters.ratio,
     sortFilter: () => filters.sort,
     appliedQuery: () => filters.q,
-    activeTagIds: () => [...filters.tagIds],
     libraryPage: () => 0,
     libraryCursors: () => [''],
   })
   const commands: Array<Commands[number]> = [ReplaceUrlCmd({ url: libraryUrl(filters) })]
-  // On the Library the rows are re-read here; on any other route the tag row
-  // is a way in, and the navigation's own load (via `ChangedUrl`) reads them.
+  // On the Library the rows are re-read here; on any other route the URL move
+  // is the whole of it, and the navigation's own load (via `ChangedUrl`) reads
+  // them.
   const onLibrary = model.route._tag === 'Library'
   if (refetchRows && onLibrary && filters.status !== 'scheduled') {
     commands.unshift(FetchPhotosCmd(listArgsOf(filters)))
   }
   return { model: next, commands }
 }
-
-/** Add or remove one Tag from the multi-select filter: refetch the first page
- *  through the surviving ids and drop a selection the filtered list can no
- *  longer back. */
-const toggleTagFilter = (model: Model, id: string): UpdateReturn =>
-  libraryFilterChange(
-    model,
-    { ...libraryFiltersOfModel(model), tagIds: toggleIn(model.activeTagIds, id), page: 0 },
-    true,
-  )
 
 const transition = (model: Model, message: Msg): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
@@ -638,7 +618,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         ? { model }
         : { model, commands: libraryLoadCommand(model, filters) }
     },
-    ToggledTagFilter: ({ id }) => toggleTagFilter(model, id),
     SelectedStatusFilter: ({ value }) =>
       libraryFilterChange(model, { ...libraryFiltersOfModel(model), status: value, page: 0 }, true),
     SelectedRatioFilter: ({ value }) =>
@@ -684,31 +663,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         { ...libraryFiltersOfModel(model), q: model.searchQuery.trim(), page: 0 },
         true,
       ),
-
-    // ----- the sidebar's per-tag actions -----------------------------------------
-    OpenedTagActions: ({ id }) => {
-      const opened = Dialog.open(model.tagActions)
-      // `tagActionsId` is optional and may be absent from normalized state;
-      // spread it in (see `withOptional`).
-      const armed = withOptional(model, { tagActionsId: id })
-      return {
-        model: modifyFields(armed, {
-          tagActions: () => opened.model,
-          tagActionLabel: () => '',
-        }),
-        commands: liftChildCommands(opened.commands ?? [], (message) =>
-          Message.GotTagActionsMessage({ message }),
-        ),
-      }
-    },
-    SetTagActionLabel: ({ value }) => ({
-      model: modifyFields(model, { tagActionLabel: () => value }),
-    }),
-    SubmitTagCreate: () => {
-      const label = model.tagActionLabel.trim()
-      if (label === '') return { model }
-      return transition(model, Message.CreateTagRequested({ source: 'sidebar', label }))
-    },
 
     // ----- grid density -----------------------------------------------------------
     SelectedCols: ({ cols }) => ({
@@ -772,41 +726,21 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     }),
 
     // ----- create tag inline ------------------------------------------------------
-    CreateTagRequested: ({ source, label }) => ({
+    CreateTagRequested: ({ label }) => ({
       model,
-      commands: [CreateTagCmd({ source, label })],
+      commands: [CreateTagCmd({ label })],
     }),
-    SucceededCreateTag: ({ source, tag }) => {
+    SucceededCreateTag: ({ tag }) => {
       const withTag = modifyFields(model, { tags: () => [...model.tags, tag].sort(byLabel) })
-      // A new Tag carries no Photos, but it does carry a row in the sidebar, so
-      // the counts are re-read rather than the row being spliced in here.
-      const recount: Commands = [FetchCountsCmd()]
-      if (source === 'upload') {
-        return {
-          model: modifyFields(withTag, {
-            uploadTagIds: () => toggleIn(withTag.uploadTagIds, tag.id),
-          }),
-          commands: recount,
-        }
+      // The Tag now rides every picker that offers one, so it is ticked in the
+      // dialog that asked for it — the one convention, wherever the pick came
+      // from.
+      return {
+        model: modifyFields(withTag, {
+          uploadTagIds: () => toggleIn(withTag.uploadTagIds, tag.id),
+        }),
+        commands: [FetchCountsCmd()],
       }
-      if (source === 'sidebar') {
-        // The actions Dialog has done its job: close it and forget the label.
-        // `tagActionsId` is optional; clear it with a spread (see `withOptional`).
-        const closed = Dialog.close(withTag.tagActions)
-        return {
-          model: modifyFields(withOptional(withTag, { tagActionsId: undefined }), {
-            tagActions: () => closed.model,
-            tagActionLabel: () => '',
-          }),
-          commands: [
-            ...recount,
-            ...liftChildCommands(closed.commands ?? [], (message) =>
-              Message.GotTagActionsMessage({ message }),
-            ),
-          ],
-        }
-      }
-      return showToast(withTag, `Created tag “${tag.label}”`, 'Success', undefined, recount)
     },
     RemoveUploadTag: ({ id }) => ({
       model: modifyFields(model, { uploadTagIds: () => toggleIn(model.uploadTagIds, id) }),
@@ -920,26 +854,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
 
     // ----- destructive confirmation ---------------------------------------------------
     RequestDeletePhoto: ({ id, label }) => openConfirm(model, { kind: 'photo', id, label }),
-    RequestDeleteTag: ({ id, label }) => {
-      // The tag's actions Dialog has done its job; the confirm Dialog that
-      // replaces it is the same one every other destructive action uses, and
-      // two stacked dialogs would be two ways to cancel the same thing.
-      const closed = Dialog.close(model.tagActions)
-      const dismissed = modifyFields(withOptional(model, { tagActionsId: undefined }), {
-        tagActions: () => closed.model,
-        tagActionLabel: () => '',
-      })
-      const confirmed = openConfirm(dismissed, { kind: 'tag', id, label })
-      return {
-        model: confirmed.model,
-        commands: [
-          ...liftChildCommands(closed.commands ?? [], (message) =>
-            Message.GotTagActionsMessage({ message }),
-          ),
-          ...(confirmed.commands ?? []),
-        ],
-      }
-    },
     ConfirmPending: () => {
       const pending = model.pendingConfirm
       if (pending === undefined) return { model }
@@ -951,17 +865,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const command =
         pending.kind === 'photo'
           ? DeletePhotoCmd({ id: pending.id, page: currentPage(model) })
-          : pending.kind === 'bulk'
-            ? BulkTrashCmd({ ids: selectedIds(model), page: currentPage(model) })
-            : DeleteTagCmd({
-                id: pending.id,
-                // If the dying tag IS one of the active filters, drop it; the
-                // refetch then runs against the filters that survive.
-                page: {
-                  ...currentPage(model),
-                  tagIds: model.activeTagIds.filter((candidate) => candidate !== pending.id),
-                },
-              })
+          : BulkTrashCmd({ ids: selectedIds(model), page: currentPage(model) })
       return {
         model: cleared,
         commands: [
@@ -973,8 +877,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }
     },
     DeletedPhoto: ({ photos, nextCursor, total }) => {
-      // A Photo left every list, so the Library total, its Status and every Tag
-      // it carried all just moved.
+      // A Photo left every list, so the Library total and its Status both just
+      // moved.
       const refreshed = modifyFields(model, {
         photos: () => [...photos],
         nextCursor: () => nextCursor ?? null,
@@ -982,21 +886,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         loadingMore: () => false,
       })
       return showToast(refreshed, 'Deleted', 'Success', undefined, [FetchCountsCmd()])
-    },
-    DeletedTag: ({ tags, photos, nextCursor, total }) => {
-      // If the deleted tag was one of the active filters, drop it — the
-      // refetch already came back without it (ConfirmPending removed it from
-      // the filters it passed to DeleteTagCmd).
-      const activeTagIds = model.activeTagIds.filter((id) => tags.some((tag) => tag.id === id))
-      const settled = modifyFields(model, {
-        tags: () => tags ?? [],
-        photos: () => [...photos],
-        nextCursor: () => nextCursor ?? null,
-        libraryTotal: () => total,
-        loadingMore: () => false,
-        activeTagIds: () => activeTagIds,
-      })
-      return showToast(settled, 'Tag deleted', 'Success', undefined, [FetchCountsCmd()])
     },
 
     // ----- the Editor route ---------------------------------------------------------
@@ -1596,9 +1485,10 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         return { model: modifyFields(model, { route: () => nextRoute }) }
       }
       // `← Library` goes back to the route the Editor was opened from, so a
-      // Photo reached from Drafts returns to Drafts. Recorded here rather than
-      // in `applyRoute`, which is handed the model with the route already
-      // changed and so no longer knows where the Editor was opened from.
+      // Photo reached from a filtered Library returns to that same filter.
+      // Recorded here rather than in `applyRoute`, which is handed the model
+      // with the route already changed and so no longer knows where the Editor
+      // was opened from.
       const returning =
         model.route._tag !== 'Photo' && nextRoute._tag === 'Photo'
           ? withOptional(model, { editor: { ...model.editor, returnRoute: model.route } })
@@ -1661,7 +1551,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
               }
             : { model },
       }),
-    GotTagActionsMessage: ({ message }) => foldTagActions(model, message),
     GotEditorLeaveMessage: ({ message }) => foldEditorLeave(model, message),
 
     // SAFETY: the carrier is S.Unknown because the multi-combobox child

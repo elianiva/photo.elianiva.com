@@ -16,18 +16,12 @@ import { Message as M, libraryFiltersOfModel } from '../model'
 import type { Model, Msg } from '../model'
 import type { Child } from './shared'
 
-/** Whether anything narrows the list. The sidebar's Tag set and the Page
- *  Head's committed search are two of them; the Filter Bar's Status and Ratio
- *  are the rest. Sort is not here: it orders the list rather than selecting
- *  none of it, so it cannot be why a row is missing. */
+/** Whether anything narrows the list. The Filter Bar's Status and Ratio and the
+ *  Page Head's committed search are the three. Sort is not here: it orders the
+ *  list rather than selecting none of it, so it cannot be why a row is missing. */
 export const libraryHasFilter = (model: Model): boolean => {
   const filters = libraryFiltersOfModel(model)
-  return (
-    filters.status !== 'all' ||
-    filters.ratio !== 'any' ||
-    filters.tagIds.length > 0 ||
-    filters.q.trim() !== ''
-  )
+  return filters.status !== 'all' || filters.ratio !== 'any' || filters.q.trim() !== ''
 }
 
 /** A Library with no Photographs at all: nothing narrows the list and the
@@ -62,7 +56,7 @@ export const libraryError = (model: Model, h: HtmlBuilder<Msg>): Child =>
  *  draws the same words and the same clear, whatever arrangement is behind it.
  *
  *  The way back is `Clear all filters`, one move for every field: a link that
- *  cleared the Tag set alone left a Status or a search that matched nothing with
+ *  cleared one field alone left a Status or a search that matched nothing with
  *  no way out of it at all. */
 export const libraryNoMatch = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(

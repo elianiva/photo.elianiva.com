@@ -99,9 +99,10 @@ import { formatBytes, type Child } from './shared'
 // ---------------------------------------------------------------------------
 
 /** `← Library` returns to the route the Editor was opened from, so a Photo
- *  reached from Drafts goes back to Drafts rather than to the Library. It is an
- *  anchor carrying that URL, not a `history.back()`: the runtime intercepts it
- *  and so does every other affordance a link has. */
+ *  reached from a filtered Library goes back to that same filter rather than to
+ *  the unfiltered one. It is an anchor carrying that URL, not a
+ *  `history.back()`: the runtime intercepts it and so does every other
+ *  affordance a link has. */
 const backLink = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.a(
     [

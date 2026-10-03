@@ -1307,30 +1307,18 @@ describe('PhotoService.purge', () => {
 })
 
 describe('PhotoService.counts', () => {
-  it('counts every status, the grand total and each tag over live photos', async () => {
+  it('counts every status, the grand total, and the Trash apart from both', async () => {
     const harness = makeTestHarness()
-    const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-    const film = await createTag(harness, 'film', 'Film')
-    const published = await seed(harness, {
-      slug: 'temple',
-      title: 'Temple',
-      tagIds: [kyoto.id, film.id],
-    })
-    const draft = await seed(harness, { slug: 'alley', title: 'Alley', tagIds: [kyoto.id] })
+    const published = await seed(harness, { slug: 'temple', title: 'Temple' })
+    const draft = await seed(harness, { slug: 'alley', title: 'Alley' })
     const failed = await seed(harness, { slug: 'ruins', title: 'Ruins' })
     await setStatus(harness, draft.id, 'draft')
     await setStatus(harness, failed.id, 'failed')
-    const empty = await createTag(harness, 'unused', 'Unused')
 
     expect(await counts(harness)).toEqual({
       total: 3,
       trashed: 0,
       byStatus: { draft: 1, published: 1, failed: 1 },
-      byTag: [
-        { id: film.id, label: 'Film', count: 1 },
-        { id: kyoto.id, label: 'Kyoto', count: 2 },
-        { id: empty.id, label: 'Unused', count: 0 },
-      ],
     })
     // A trashed Photo leaves every live count, the grand total included, and
     // is what `trashed` reports instead.
@@ -1339,11 +1327,6 @@ describe('PhotoService.counts', () => {
       total: 2,
       trashed: 1,
       byStatus: { draft: 1, published: 0, failed: 1 },
-      byTag: [
-        { id: film.id, label: 'Film', count: 0 },
-        { id: kyoto.id, label: 'Kyoto', count: 1 },
-        { id: empty.id, label: 'Unused', count: 0 },
-      ],
     })
   })
 
@@ -1354,25 +1337,22 @@ describe('PhotoService.counts', () => {
       total: 0,
       trashed: 0,
       byStatus: { draft: 0, published: 0, failed: 0 },
-      byTag: [],
     })
   })
 
-  it('counts a photo carrying several tags once each', async () => {
+  it('counts a tagged Photo in neither number, because a Tag is not a Status', async () => {
+    // Tags are grouped where they are applied and are not a filter on the
+    // Library, so nothing here reports how many Photos carry one.
     const harness = makeTestHarness()
     const kyoto = await createTag(harness, 'kyoto', 'Kyoto')
-    const film = await createTag(harness, 'film', 'Film')
-    await seed(harness, { slug: 'one', title: 'One', tagIds: [kyoto.id, film.id] })
+    await seed(harness, { slug: 'one', title: 'One', tagIds: [kyoto.id] })
     await seed(harness, { slug: 'two', title: 'Two', tagIds: [kyoto.id] })
 
-    const result = await counts(harness)
-
-    expect(result.total).toBe(2)
-    // Ordered by label, and a Photo carrying two tags counts once in each.
-    expect(result.byTag).toEqual([
-      { id: film.id, label: 'Film', count: 1 },
-      { id: kyoto.id, label: 'Kyoto', count: 2 },
-    ])
+    expect(await counts(harness)).toEqual({
+      total: 2,
+      trashed: 0,
+      byStatus: { draft: 0, published: 2, failed: 0 },
+    })
   })
 })
 

@@ -17,7 +17,7 @@ A Library that holds no Photographs at all draws the design's own empty state: a
 - Choose `Choose files` and pick one or more images in the OS picker.
 - Choose `Import from a folder` and pick a folder; every image in it is offered to the queue.
 - Either way the Upload dialog opens on the queue, where Tags and a takenAt can be set before `Upload N photos`.
-- With one or more Photographs in the Library, filter the Library down to nothing (a Tag with no matches, or a search that matches no row) and the filtered-empty copy appears instead.
+- With one or more Photographs in the Library, filter the Library down to nothing (a search that matches no row, or a Status with none) and the filtered-empty copy appears instead.
 
 ## Driving it with agent-browser
 
@@ -39,7 +39,7 @@ Preconditions:
 - **Import from a folder does the same through the directory input.** Repeat the step above with `[data-slot="empty"] input[webkitdirectory]` → same dialog, same queue rows.
 - **A cancelled picker changes nothing.** Fire `change` with an empty `DataTransfer` → no dialog opens and the queue is unchanged.
 - **Proof.** Capture the block before any pick: `npx agent-browser snapshot > .agents/skills/verify-photo/artifacts/library-empty/empty-state.aria.txt` and `npx agent-browser screenshot .agents/skills/verify-photo/artifacts/library-empty/empty-state.png`. Keep both pickers' dialog screenshots next to them.
-- **The filtered-empty state is untouched.** Add one Photograph, then apply a Tag that no Photograph carries: the body reads `Nothing matches this filter` and `No frames yet` is absent.
+- **The filtered-empty state is untouched.** Add one Photograph, then search the Page Head for a string no row carries: the body reads `Nothing matches this filter`, offers `Clear all filters`, and `No frames yet` is absent.
 
 ## Gotchas
 

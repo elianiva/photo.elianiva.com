@@ -217,17 +217,6 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // ---------------------------------------------------------------------------
 // routes whose pages are still being built
 // ---------------------------------------------------------------------------
-/** `Drafts` is a route before it is a page. The URL resolves, the route is
- *  right, and the Page Head above it names the page — but the body says what is
- *  actually true of it rather than pretending to. #29 owns the body. */
-const forthcomingPage = (note: string, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('mt-8 flex flex-col items-start gap-4')],
-    [
-      h.p([h.Class('type-deck max-w-prose text-role-text-secondary')], [note]),
-      backToLibrary('← Library', h),
-    ],
-  )
 
 /** `Scheduled` says what is actually true of it rather than calling itself
  *  empty: nothing is scheduled, because nothing records a publish time
@@ -270,11 +259,6 @@ export const routePage = (model: Model, h: HtmlBuilder<Msg>): Child =>
   AppRoute.match(model.route, {
     Library: () => libraryPage(model, h),
     Atoms: () => atomsPage(model, h),
-    Drafts: () =>
-      forthcomingPage(
-        'There is no drafts list yet. Everything not published is already counted in the sidebar.',
-        h,
-      ),
     Scheduled: () => scheduledPage(h),
     Settings: () => settingsPage(model, h),
     Photo: () => photoPage(model, h),
