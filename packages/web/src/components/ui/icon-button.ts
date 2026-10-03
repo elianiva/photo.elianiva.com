@@ -1,6 +1,6 @@
 /**
- * Icon Button — the design's 36px round control (master `f3b5eec3452af4e3`),
- * the Desk's only icon affordance. Three kinds, one geometry:
+ * Icon Button — the design's 36px control (master `f3b5eec3452af4e3`), the
+ * Desk's icon affordance. Three kinds, one geometry:
  *
  *   ghost    no box, `color.text.primary`, fills `color.surface.hover`
  *   outline  1px `color.rule` box, `color.text.primary`, fills
@@ -8,9 +8,16 @@
  *   filled   `color.primary` box, `color.on-primary` icon, hover
  *            `color.primary.hover`
  *
- * The circle is `radius.full` — the one rounded control the Desk has, and the
- * one the design draws. `Button` is the rectangular one; reach for this when
- * the affordance is a single glyph with no label beside it.
+ * The box is square, like every other control in the Desk: `Button` draws no
+ * corner radius on any of its four variants, and `Segment` options carry none,
+ * so a circle here was the only rounded control on the page and it sat in rows
+ * beside square ones. What stays round is data, not controls — the Mat
+ * swatch's chip, a Status dot, a Switch's track, a Slider's thumb — because
+ * there the roundness *is* the mark.
+ *
+ * Where the choice is one of a set and carries a word (`List` / `Grid` beside
+ * the Library's other choices), it belongs in a `Segment` option rather than
+ * here: this is for a glyph whose meaning stands alone.
  */
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import type { IconNode } from 'lucide'
@@ -30,11 +37,11 @@ export const iconButtonVariants: Record<IconButtonKind, string> = {
   filled: 'bg-role-primary text-role-on-primary hover:bg-role-primary-hover',
 }
 
-/** The 18px icon slot the design gives the glyph inside the 36px circle. */
+/** The 18px icon slot the design gives the glyph inside the 36px box. */
 export const iconButtonIconClass = 'size-[18px]'
 
 const iconButtonBase =
-  'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-role-focus/50 inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding transition-colors duration-120 outline-none focus-visible:ring-[3px]'
+  'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 data-disabled:cursor-not-allowed data-disabled:opacity-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-role-focus focus-visible:ring-role-focus/50 inline-flex size-9 shrink-0 items-center justify-center border border-transparent bg-clip-padding transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 export type IconButtonConfig<M> = Readonly<{
   onClick?: M

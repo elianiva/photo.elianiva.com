@@ -85,10 +85,10 @@ UI handles that actually exist in this repo:
 - Gallery photos by title text or `photoWithTags.id` derived `aria-label`
 - Admin header: link `Elianiva`, button `Upload`, search field by `aria-label "Search photographs"`
 - Library view toggle: buttons `List view` / `Grid view` with `aria-pressed`; the choice is URL state (`/admin?view=grid`)
-- Library controls: in grid view, density buttons `aria-label "2 columns"` through `"6 columns"` with `aria-pressed`
+- Library controls: the grid density group in the Filter Bar, buttons `aria-label "2 columns"` through `"6 columns"` with `aria-pressed`; drawn only in grid view
 - Library table: rows by `libraryRow` slots, pager `Next page` / `Previous page`; row `⋯` by `aria-label "More actions for <title>"`
 - Library grid: square tiles by `aria-label "Open <title>"`; hover overlay has `Edit` and `Delete`; a tile (or its `Edit`) opens the **Editor route** `/admin/photos/<id>`
-- Library Filter Bar: status segments `ALL 412` / `PUBLISHED 402` / `DRAFTS 7` / `SCHEDULED` / `FAILED 1`, ratio segments `ANY` / `3:2` / …, a `combobox` named `SORT` (`NEWEST FIRST` / `OLDEST FIRST`), next to the `List view` / `Grid view` toggle
+- Library Filter Bar: two tiers of `Segment` groups, each `role="group"` with its own kicker — tier 1 `Status filter` (`ALL 412` / `PUBLISHED 402` / `DRAFTS 7` / `SCHEDULED` / `FAILED 1`) and `Ratio filter` (`ANY` / `3:2` / …); tier 2 `Sort` (`NEWEST` / `OLDEST`), `View` (`List view` / `Grid view`, glyph options) and, in grid view only, `Grid density` (2–6 columns). No `combobox`: the sort is a Segment
 - Table Head: the sorted column is a button `Sort by TAKEN` whose label reads `TAKEN ↓` or `TAKEN ↑`
 - Admin rail: links `Library` (with the total) / `Scheduled` / `Settings`, then the verified email, the `LIBRARY n OF m LIVE` meter and `Sign out`. There is no Tag index and no `Drafts` row.
 - Tag pickers: the upload dialog's combo (`Tags`) and the Bulk Bar's `Add tag` over the ticked rows
@@ -115,7 +115,7 @@ npx agent-browser press --key "Escape"
 BASE="${BASE:-http://localhost:4000}"
 npx agent-browser open "$BASE/admin"
 npx agent-browser click --role button --name "Upload"
-# the Library Filter Bar carries Status / Ratio / SORT / View; Tags are picked in the dialogs
+# the Library Filter Bar carries Status / Ratio / Sort / View / Density; Tags are picked in the dialogs
 npx agent-browser click --role button --name "DRAFTS 7"
 # switch the Library to the tile grid; the URL becomes /admin?view=grid
 npx agent-browser click --role button --name "Grid view"

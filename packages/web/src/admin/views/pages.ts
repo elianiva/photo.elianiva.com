@@ -42,46 +42,17 @@ const backToLibrary = (label: string, h: HtmlBuilder<Msg>): Child =>
   )
 
 // ---------------------------------------------------------------------------
-// the Library's grid density: 2–6 square-tile columns, a preference persisted
-// on change. The list/grid toggle is the Filter Bar's `View` group; this control
-// only means anything in the grid, so it is drawn only there.
+// the Library page
 // ---------------------------------------------------------------------------
-
-const COL_CHOICES = [2, 3, 4, 5, 6] as const
-
-/** The design's `Segment`: 28px of 4/12 padding, `$typography.exif`, no
- *  container box and no corner radius. The chosen step fills with
- *  `color.primary` and reads in `color.on-primary`. */
-const colsToggle = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.div(
-    [h.Class('flex items-center'), h.Role('group'), h.AriaLabel('Grid density')],
-    COL_CHOICES.map((cols) =>
-      h.button(
-        [
-          h.OnClick(M.SelectedCols({ cols })),
-          h.AriaLabel(`${String(cols)} columns`),
-          h.AriaPressed(String(cols === model.cols)),
-          h.Class(
-            cols === model.cols
-              ? 'bg-role-primary px-3 py-1 type-exif text-role-on-primary'
-              : 'px-3 py-1 type-exif text-role-text-secondary transition-colors duration-120 hover:text-role-text-primary',
-          ),
-        ],
-        [String(cols)],
-      ),
-    ),
-  )
 
 const libraryPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const view = libraryViewOf(model.route)
   return h.div(
     [],
     [
-      // One Library read, two views. The Filter Bar's `View` group is the
-      // toggle; the density picker is drawn only when the grid is.
-      ...(view === 'grid'
-        ? [h.div([h.Class('mt-4 flex justify-end')], [colsToggle(model, h)])]
-        : []),
+      // One Library read, two views. The Filter Bar's `VIEW` group is the
+      // toggle and its `DENSITY` group is drawn only when the grid is, so
+      // every control over the list is in the bar rather than beside it.
       libraryFilterBar(model, h),
       // The design's Drop Zone strip sits between the Filter Bar and the rows,
       // and over any Library that holds a Photograph: the zero-Photograph state
