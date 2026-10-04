@@ -5,7 +5,7 @@ Curated photography showcase — `photo.elianiva.com`.
 - **Frontend**: Foldkit (SSR, `packages/web`) + Tailwind CSS v4
 - **Backend**: Effect (`packages/api`) — Photo and Tag services over R2 + D1, served by the API Worker via Effect RPC, mounted on the site's own hostname at `/api/*`
 - **Shared**: Effect Schema RPC contract (`packages/shared`) — the RPC groups and the domain schemas they encode
-- **Infra**: Alchemy (`alchemy.run.ts`) → Cloudflare `Website.Vite` (custom domain `photo.elianiva.com`) + `Worker` (route `photo.elianiva.com/api/*`) + one Cloudflare Access application covering `/admin`, `/api/admin/rpc` and `/api/upload`
+- **Infra**: Alchemy (`alchemy.run.ts`) → Cloudflare `Website.Vite` (custom domain `photo.elianiva.com`) + `Worker` (route `photo.elianiva.com/api/*`) + one Cloudflare Access application covering `/admin` and everything under it, `/api/admin/rpc` and `/api/upload`
 - **Monorepo**: pnpm + Turborepo
 
 ## Develop
@@ -36,7 +36,7 @@ One hostname, two Workers behind it. The website Worker owns the custom domain;
 the API Worker owns the `/api/*` route on it, which is the more specific match
 and therefore wins for its own paths. In development the API Worker is on its
 own port and the pair _is_ cross-origin, which is the only reason CORS exists at
-all. One Access application covers `/admin`, `/api/admin/rpc` and `/api/upload`;
+all. One Access application covers `/admin` and everything under it, `/api/admin/rpc` and `/api/upload`;
 that is one login, one application token and one first-party cookie.
 
 | Path                     | Worker  | Purpose                                                             | Gated                  |

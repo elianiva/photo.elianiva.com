@@ -115,8 +115,18 @@ export default Alchemy.Stack(
     // could not complete the interactive login that would have fixed it: the
     // browser's preflight carries no cookies, so Cloudflare answered the
     // preflight with a bare 403 before the Worker was ever reached. One
-    // application with three destinations on one hostname gives one login, one
+    // application with five destinations on one hostname gives one login, one
     // app token and one same-origin cookie, and no preflight to fail.
+    //
+    // `/admin` alone does not cover the pages under it: a destination of
+    // `example.com/alpha/*` covers `/alpha/one` but not `/alpha` itself, so
+    // the parent path and the wildcard are two destinations, not one. The
+    // admin RPC gets the same pair: Effect's HTTP RPC client appends a slash
+    // to the URL it is given, so the app asks for `/api/admin/rpc/` where the
+    // route is declared `/api/admin/rpc` (see `api-worker.ts`
+    // `ignoreTrailingSlash`) — the exact destination alone would leave that
+    // request ungated at the edge. (`/api/upload` is one XHR POST to the
+    // exact path, so it stays one destination.)
     //
     // `destinations` is the field to reach for; `domain` is only the primary
     // one and is what the App Launcher shows. Cloudflare folds `domain` into
@@ -129,7 +139,9 @@ export default Alchemy.Stack(
       domain: `${SITE_DOMAIN}/admin`,
       destinations: [
         { type: 'public', uri: `${SITE_DOMAIN}/admin` },
+        { type: 'public', uri: `${SITE_DOMAIN}/admin/*` },
         { type: 'public', uri: `${SITE_DOMAIN}${ADMIN_API_PREFIX}/rpc` },
+        { type: 'public', uri: `${SITE_DOMAIN}${ADMIN_API_PREFIX}/rpc/*` },
         { type: 'public', uri: `${SITE_DOMAIN}${API_ROUTE_PREFIX}/upload` },
       ],
       policies: AccessPolicies,

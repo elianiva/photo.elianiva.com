@@ -61,15 +61,19 @@ outside the IaC.
 
 **The fix is the premise.** The API Worker is mounted at
 `photo.elianiva.com/api/*` as a _route_ rather than given a custom domain, and
-the Admin's three gated paths are three **destinations on one application**:
-`/admin`, `/api/admin/rpc`, `/api/upload`. That is one application token, one
+the Admin's three gated paths are five **destinations on one application**:
+`/admin` and `/admin/*`, and `/api/admin/rpc` and `/api/admin/rpc/*` (a path
+destination covers neither its parent nor its children on its own — and
+Effect's HTTP RPC client appends a slash to the URL it is given, so the app
+asks for `/api/admin/rpc/` where the route is declared `/api/admin/rpc`),
+plus `/api/upload`. That is one application token, one
 login, one first-party cookie, and nothing cross-origin in production — so
 there is no preflight to fail and no cookie to withhold. CORS survives only for
 the two localhost dev ports.
 
 ## Three layers, cheapest first
 
-1. **Edge** — one Access application over the three destinations above. A
+1. **Edge** — one Access application over the five destinations above. A
    request to them without a valid Access session never reaches a Worker.
 2. **Route split** — public reads served from `/api/rpc` with no gate; every
    write from `/api/admin/rpc`. The audience is part of the type-level design,
