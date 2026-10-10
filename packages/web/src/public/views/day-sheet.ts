@@ -6,7 +6,7 @@
  * A frame is a photo at a fixed height with its width following its Ratio, so a
  * month of mixed landscapes and portraits packs into rows the way a contact
  * sheet does, and the whole archive reads at a glance instead of one column at
- * a time. The film is drawn rather than typed: the black stock and the two rows
+ * a time. The film is drawn rather than typed: the soft gray stock and the two slim rows
  * of sprocket holes are CSS over one `<img>`, so the frame is still a single
  * button to the lightbox.
  *
@@ -37,7 +37,7 @@ const numeralOf = (section: DaySection): string => (section.day === null ? '' : 
 
 /** One row of sprocket holes along a frame's edge. */
 const SPROCKETS =
-  'pointer-events-none absolute inset-x-0 h-2.5 [background:repeating-linear-gradient(90deg,var(--role-surface)_0_8px,transparent_8px_24px)]'
+  'pointer-events-none absolute inset-x-0 h-[3px] [background:repeating-linear-gradient(90deg,var(--role-surface)_0_3px,transparent_3px_9px)]'
 
 const grease = (h: HtmlBuilder<Message>): ReadonlyArray<Child> => [
   h.span(
@@ -71,7 +71,7 @@ const frame = (
       h.button(
         [
           h.Class(
-            'group relative block w-full cursor-pointer bg-role-primary py-[12px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px] lg:w-auto',
+            'group relative block w-full cursor-pointer bg-role-primary-hover py-[4px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px] lg:w-auto',
           ),
           h.Style({ aspectRatio: String(photo.aspect) }),
           h.OnClick(Message.ClickedFigure({ id: photo.id })),
@@ -87,7 +87,7 @@ const frame = (
           h.AriaLabel(`View ${photo.title}`),
         ],
         [
-          h.span([h.Class(`${SPROCKETS} top-px`)], []),
+          h.span([h.Class(`${SPROCKETS} top-[0.5px]`)], []),
           h.img([
             h.Class('block h-full w-full object-cover'),
             h.Style(placeholderStyle(photo)),
@@ -99,7 +99,7 @@ const frame = (
               ? [h.Loading('eager'), h.Fetchpriority('high')]
               : [h.Loading('lazy'), h.Decoding('async')]),
           ]),
-          h.span([h.Class(`${SPROCKETS} bottom-px`)], []),
+          h.span([h.Class(`${SPROCKETS} bottom-[0.5px]`)], []),
           // The title, over the frame: hidden until hover or focus reaches it.
           h.span(
             [
