@@ -46,7 +46,7 @@ export const intro = (timeline: Timeline, h: HtmlBuilder<Message>): Child => {
             [h.Class('max-w-[340px] type-caption text-role-text-primary')],
             [
               isEmpty
-                ? 'The first one is on its way.'
+                ? 'Nothing posted yet, check back later.'
                 : 'Aside from writing software, I like doing photography. I mostly take street photos because I like to walk around the neighbourhood and interact with people.',
             ],
           ),

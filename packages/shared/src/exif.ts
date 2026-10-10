@@ -20,7 +20,14 @@ export interface ExifFacts {
   readonly shutter?: number | null | undefined
   readonly iso?: number | null | undefined
   readonly focalLength?: number | null | undefined
-  readonly metadata?: { readonly camera?: string | null | undefined } | null | undefined
+  readonly metadata?:
+    | {
+        readonly camera?: string | null | undefined
+        readonly lens?: string | null | undefined
+        readonly location?: string | null | undefined
+      }
+    | null
+    | undefined
 }
 
 const SEPARATOR = ' · '
@@ -98,4 +105,47 @@ export const formatExifLine = (photo: ExifFacts): string | null => {
 
   const line = segments.filter(isText).join(SEPARATOR)
   return line === '' ? null : line.toUpperCase()
+}
+
+/** One labelled fact for the lightbox's details. */
+export interface ExifDetail {
+  readonly label: string
+  readonly value: string
+}
+
+/** `31 August 2025`, read out of the stored `YYYY-MM-DD` the same way
+ *  {@link dayMonth} does, with the year the Exif line leaves off. */
+const fullDate = (takenAt: string | null | undefined): string | undefined => {
+  const short = dayMonth(takenAt)
+  const year = /^(\d{4})/.exec(takenAt?.trim() ?? '')?.[1]
+  if (short === undefined || year === undefined) return undefined
+  const day = short.slice(0, 2)
+  const parsed = DateTime.make(takenAt?.trim().slice(0, 10) ?? '')
+  if (Opt.isNone(parsed)) return undefined
+  return `${day} ${DateTime.formatUtc(parsed.value, { month: 'long', locale: 'en-US' })} ${year}`
+}
+
+/** The facts the lightbox lists beside a photograph, in reading order: what it
+ *  was made with, then the exposure, then when and where. The same rule as
+ *  {@link formatExifLine} — a fact the Photo does not carry is a row that is
+ *  not there. An empty list means the lightbox draws no details at all. */
+export const exifDetails = (photo: ExifFacts): ReadonlyArray<ExifDetail> => {
+  const aperture = positive(photo.aperture)
+  const shutter = positive(photo.shutter)
+  const iso = positive(photo.iso)
+  const focalLength = positive(photo.focalLength)
+  const rows: ReadonlyArray<readonly [string, string | undefined]> = [
+    ['Camera', text(photo.metadata?.camera)],
+    ['Lens', text(photo.metadata?.lens)],
+    ['Focal length', focalLength === undefined ? undefined : `${number(focalLength)} mm`],
+    ['Aperture', aperture === undefined ? undefined : `f/${number(aperture)}`],
+    [
+      'Shutter',
+      shutter === undefined ? undefined : shutterSpeed(shutter).replace(/S$/, '').concat(' s'),
+    ],
+    ['ISO', iso === undefined ? undefined : number(iso)],
+    ['Taken', fullDate(photo.takenAt)],
+    ['Where', text(photo.metadata?.location)],
+  ]
+  return rows.flatMap(([label, value]) => (value === undefined ? [] : [{ label, value }]))
 }

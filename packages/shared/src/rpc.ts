@@ -199,6 +199,12 @@ export class UpdatePhoto extends Rpc.make('UpdatePhoto', {
     slug: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200)))),
     takenAt: S.optional(S.String.pipe(S.check(S.isMaxLength(64)))),
     metadata: S.optional(PhotoMetadata),
+    /** The four EXIF columns. A number sets one; `null` clears it, because a
+     *  fact the Photo does not carry is absent rather than zero. */
+    aperture: S.optional(S.NullOr(S.Number.pipe(S.check(S.isGreaterThan(0))))),
+    shutter: S.optional(S.NullOr(S.Number.pipe(S.check(S.isGreaterThan(0))))),
+    iso: S.optional(S.NullOr(S.Number.pipe(S.check(S.isGreaterThan(0))))),
+    focalLength: S.optional(S.NullOr(S.Number.pipe(S.check(S.isGreaterThan(0))))),
     /** The frame proportion, one of six. A Photo column rather than a
      *  Presentation field, so it rides on this call and not on
      *  `UpdatePhotoPresentation`. */

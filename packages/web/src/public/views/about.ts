@@ -7,17 +7,17 @@ import { kit } from './kit'
 import { BAND, type Child } from './shared'
 
 const DECK =
-  "I'm a software engineer who happens to also love photography, you'll find mostly street photography here. I'm not a professional photographer by any means, these are just pictures I took on my free time"
+  "I'm a software engineer who happens to also love photography. You'll find mostly street photos here. I'm not a professional photographer by any means, these are just pictures I took in my free time."
 
 /** The desktop master's two columns, one paragraph each. */
 const COLUMNS: ReadonlyArray<string> = [
-  'I shoot on the way to things. That is most of the method, and it works fine. If the light is bad I wait a bit, or I come back the next morning.',
-  'I keep everything, including the ones I do not like. Each photograph gets a number, a date, and whatever exposure the camera reported. Nothing gets edited afterwards. This site is the whole folder, newest first.',
+  'Every photo here has a number, a date, and whatever exposure the camera reported. Open any of them and you can see how I took it.',
+  "This site is basically the whole folder, newest first. Everything is the original file, I don't shrink anything.",
 ]
 
 /** The mobile master's single paragraph: the same two columns, re-flowed. */
 const PROSE_MOBILE =
-  'I shoot on the way to things. That is most of the method. I keep everything, including the ones I do not like — each photograph gets a number, a date, and whatever exposure the camera reported, and nothing gets edited afterwards.'
+  "Every photo here has a number, a date, and whatever exposure the camera reported. Open any of them and you can see how I took it. This site is basically the whole folder, newest first, and I don't shrink anything."
 
 const paragraph = (className: string, text: string, h: HtmlBuilder<Message>): Child =>
   h.p([h.Class(className)], [text])

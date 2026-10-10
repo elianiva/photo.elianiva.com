@@ -72,6 +72,8 @@ import {
   isEditorDirty,
   isPhotoRatio,
   levelLabel,
+  parseExifNumber,
+  parseShutter,
   matColourClass,
   matPaddingStyle,
   photoNumberLabel,
@@ -695,6 +697,33 @@ const editTab = (model: Model, h: HtmlBuilder<Msg>): Child =>
  *  and the atom's own padding does the rest) rather than the pin. */
 const FIELD_BOX = 'h-auto'
 
+/** One of the `CAMERA` panel's fields: the Input atom at the Field recipe's
+ *  height. A value that is not a number is drawn invalid, and a save leaves
+ *  that column alone rather than storing it. */
+const exifField = (
+  h: HtmlBuilder<Msg>,
+  id: string,
+  label: string,
+  value: string,
+  ready: boolean,
+  onInput: (value: string) => Msg,
+  isInvalid = false,
+  placeholder?: string,
+): Child =>
+  Input.input(
+    {
+      id,
+      label,
+      value,
+      isDisabled: !ready,
+      isInvalid,
+      className: FIELD_BOX,
+      ...(placeholder === undefined ? {} : { placeholder }),
+      onInput,
+    },
+    h,
+  )
+
 /** The `DETAILS` tab: the Photo's own record. `TITLE`, `PLACE`, `TAKEN` and
  *  `SLUG` are `UpdatePhoto` fields written on the Top Bar's `Update`; the
  *  Status group is `SetPhotoStatus`; the `RATIO` Select writes the same
@@ -712,7 +741,18 @@ const detailsTab = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const ready = photo !== undefined && model.photoStatus === 'ready' && draft !== undefined
   // A form over a Photo that has not loaded yet is drawn disabled over empty
   // values rather than blinking out and back.
-  const details = draft ?? { title: '', slug: '', location: '', takenAt: '' }
+  const details = draft ?? {
+    title: '',
+    slug: '',
+    location: '',
+    takenAt: '',
+    camera: '',
+    lens: '',
+    focalLength: '',
+    aperture: '',
+    shutter: '',
+    iso: '',
+  }
   const number = photo === undefined ? 'NO. —' : photoNumberLabel(photo) || 'NO. —'
   return h.div(
     [h.Role('tabpanel'), h.AriaLabel('DETAILS'), h.Class('flex flex-col gap-6')],
@@ -811,11 +851,63 @@ const detailsTab = (model: Model, h: HtmlBuilder<Msg>): Child => {
           h,
         ),
       ),
+      panel(
+        'CAMERA',
+        h,
+        exifField(h, 'editor-camera', 'CAMERA', details.camera, ready, (value) =>
+          M.SetEditorCamera({ value }),
+        ),
+        exifField(h, 'editor-lens', 'LENS', details.lens, ready, (value) =>
+          M.SetEditorLens({ value }),
+        ),
+        h.div(
+          [h.Class('grid grid-cols-2 gap-3')],
+          [
+            exifField(
+              h,
+              'editor-focal-length',
+              'FOCAL LENGTH (MM)',
+              details.focalLength,
+              ready,
+              (value) => M.SetEditorFocalLength({ value }),
+              parseExifNumber(details.focalLength) === undefined,
+            ),
+            exifField(
+              h,
+              'editor-aperture',
+              'APERTURE (F/)',
+              details.aperture,
+              ready,
+              (value) => M.SetEditorAperture({ value }),
+              parseExifNumber(details.aperture) === undefined,
+            ),
+            exifField(
+              h,
+              'editor-shutter',
+              'SHUTTER (S)',
+              details.shutter,
+              ready,
+              (value) => M.SetEditorShutter({ value }),
+              parseShutter(details.shutter) === undefined,
+              '1/250',
+            ),
+            exifField(
+              h,
+              'editor-iso',
+              'ISO',
+              details.iso,
+              ready,
+              (value) => M.SetEditorIso({ value }),
+              parseExifNumber(details.iso) === undefined,
+            ),
+          ],
+        ),
+      ),
     ],
   )
 }
 
-/** The 360px Inspector: `color.surface.container` with a 1px hairline on the
+/** The Inspector: `color.surface.container` with a 1px hairline on the
  *  left, the tab strip over the tab body. */
 const inspector = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(

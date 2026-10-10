@@ -92,6 +92,11 @@ export interface PhotoUpdatePatch {
   readonly slug?: string | undefined
   readonly takenAt?: string | undefined
   readonly metadata?: Record<string, unknown> | undefined
+  /** The four EXIF columns; `null` clears one. */
+  readonly aperture?: number | null | undefined
+  readonly shutter?: number | null | undefined
+  readonly iso?: number | null | undefined
+  readonly focalLength?: number | null | undefined
   /** The frame proportion. A Photo column, set from the Editor's crop. */
   readonly ratio?: PhotoRatio | undefined
   /** The client re-encoded Blurhash of the authored composition. A Photo
@@ -1071,6 +1076,12 @@ export const PhotoServiceLive = Layer.effect(
         }
         if (patch.takenAt !== undefined) {
           assignments.push(sql`takenAt = ${patch.takenAt === '' ? null : patch.takenAt}`)
+        }
+        if (patch.aperture !== undefined) assignments.push(sql`aperture = ${patch.aperture}`)
+        if (patch.shutter !== undefined) assignments.push(sql`shutter = ${patch.shutter}`)
+        if (patch.iso !== undefined) assignments.push(sql`iso = ${patch.iso}`)
+        if (patch.focalLength !== undefined) {
+          assignments.push(sql`focalLength = ${patch.focalLength}`)
         }
         if (patch.ratio !== undefined) {
           assignments.push(sql`ratio = ${patch.ratio}`)

@@ -101,7 +101,7 @@ import {
   isPhotoRatio,
   isPhotoStatus,
   isPresentationDirty,
-  metadataWithLocation,
+  metadataWithDetails,
   withCropDragEnd,
   withCropDragStart,
   withEditorDetails,
@@ -1009,6 +1009,36 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         editor: () => withEditorDetails(model.editor, { takenAt: value }),
       }),
     }),
+    SetEditorCamera: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { camera: value }),
+      }),
+    }),
+    SetEditorLens: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { lens: value }),
+      }),
+    }),
+    SetEditorFocalLength: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { focalLength: value }),
+      }),
+    }),
+    SetEditorAperture: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { aperture: value }),
+      }),
+    }),
+    SetEditorShutter: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { shutter: value }),
+      }),
+    }),
+    SetEditorIso: ({ value }) => ({
+      model: modifyFields(model, {
+        editor: () => withEditorDetails(model.editor, { iso: value }),
+      }),
+    }),
     SetEditorSlug: ({ value }) => ({
       model: modifyFields(model, {
         editor: () => withEditorDetails(model.editor, { slug: value }),
@@ -1094,7 +1124,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             ...(detailsDirty
               ? {
                   details: detailsDraft,
-                  metadata: metadataWithLocation(model.photo?.metadata, detailsDraft.location),
+                  metadata: metadataWithDetails(model.photo?.metadata, detailsDraft),
                 }
               : {}),
           }),

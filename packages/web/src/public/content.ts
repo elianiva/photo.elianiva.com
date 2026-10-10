@@ -27,7 +27,7 @@
  */
 
 import { Schema as S } from 'effect'
-import { PHOTO_RATIOS, formatExifLine, nearestRatio } from '@photo/shared'
+import { PHOTO_RATIOS, exifDetails, formatExifLine, nearestRatio } from '@photo/shared'
 import type { PhotoWithTags, PublicSection } from '@photo/shared'
 
 import { renditionUrl } from '@/lib/image'
@@ -70,6 +70,9 @@ export const FigureSchema = S.Struct({
   /** 'X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 31 AUG', or null when the Photo
    *  carries none of the facts the line is made of. */
   exif: S.NullOr(S.String),
+  /** The labelled facts the lightbox lists — camera, lens, exposure, day,
+   *  place — minus any the Photo does not carry. */
+  details: S.Array(S.Struct({ label: S.String, value: S.String })),
   /** The original's key in R2 — the photo's bytes. */
   r2Key: S.String,
 })
@@ -211,6 +214,7 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
     ratio,
     aspect: photo.width > 0 && photo.height > 0 ? photo.width / photo.height : RATIO_VALUE[ratio],
     exif: formatExifLine(photo),
+    details: exifDetails(photo),
     r2Key: photo.r2Key,
   }
 }

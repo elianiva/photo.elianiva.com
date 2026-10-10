@@ -18,6 +18,7 @@ import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
+import { exifPatchOfDetails } from './editor'
 import { librarySortOf } from './route'
 import type { LibraryFilters } from './route'
 import { ImagePipeline } from '@/lib/pipeline/service'
@@ -254,9 +255,7 @@ export const PersistThemeCmd = Command.define('PersistTheme', {
   args: { theme: Theme },
   messages: [Message.CompletedPersistTheme],
   execute: ({ theme }) =>
-    Effect.sync(() => writeAdminTheme(theme)).pipe(
-      Effect.as(Message.CompletedPersistTheme()),
-    ),
+    Effect.sync(() => writeAdminTheme(theme)).pipe(Effect.as(Message.CompletedPersistTheme())),
 })
 
 /** The Admin's Photo list. It carries the Page Head's search as `q`, omitted
@@ -423,6 +422,7 @@ export const UpdateEditorCmd = Command.define('UpdateEditor', {
                   title: details.title,
                   slug: details.slug,
                   takenAt: details.takenAt,
+                  ...exifPatchOfDetails(details),
                   ...(metadata === undefined ? {} : { metadata }),
                 }),
           })

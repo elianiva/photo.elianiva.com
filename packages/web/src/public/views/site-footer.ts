@@ -56,7 +56,7 @@ const about = (h: HtmlBuilder<Message>): Child =>
     [h.Class('flex min-w-0 flex-col gap-3 py-6 lg:py-0')],
     [
       h.span([h.Class('type-wordmark-lg text-role-text-primary')], ['Elianiva']),
-      h.p([h.Class('type-body italic text-role-text-secondary')], ['Shot on foot, usually early.']),
+      h.p([h.Class('type-body italic text-role-text-secondary')], ['Mostly street photos.']),
     ],
   )
 
@@ -128,12 +128,7 @@ export const siteFooter = (nav: ReadonlyArray<NavEntry>, h: HtmlBuilder<Message>
   const columns = [
     {
       label: 'equipment',
-      lines: [
-        'Camera — Fujifilm X-T20',
-        'Lens — 25mm f/1.8, manual',
-        'Film sim — Classic Chrome',
-        'Based in Jakarta',
-      ],
+      lines: ['Camera — Fujifilm X-T20', 'Lens — 25mm f/1.8'],
       desktopOnly: true,
     },
     {
@@ -142,7 +137,7 @@ export const siteFooter = (nav: ReadonlyArray<NavEntry>, h: HtmlBuilder<Message>
     },
     {
       label: 'elsewhere',
-      lines: ['instagram', 'prints on request', 'hello@elianiva.com'],
+      lines: ['instagram', 'hello@elianiva.com'],
       linesMobile: ['instagram', 'hello@elianiva.com'],
     },
   ]

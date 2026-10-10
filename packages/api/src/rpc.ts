@@ -77,6 +77,10 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
         payload.slug === undefined &&
         payload.takenAt === undefined &&
         payload.metadata === undefined &&
+        payload.aperture === undefined &&
+        payload.shutter === undefined &&
+        payload.iso === undefined &&
+        payload.focalLength === undefined &&
         payload.ratio === undefined &&
         payload.blurhash === undefined &&
         payload.tagIds === undefined
@@ -89,6 +93,10 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
           slug: payload.slug,
           takenAt: payload.takenAt,
           metadata: payload.metadata,
+          aperture: payload.aperture,
+          shutter: payload.shutter,
+          iso: payload.iso,
+          focalLength: payload.focalLength,
           ratio: payload.ratio,
           blurhash: payload.blurhash,
           tagIds: payload.tagIds,

@@ -4,7 +4,8 @@
  * lives here once rather than twice.
  *
  * Desktop flows them into two columns with a hairline between them; mobile
- * flows them into two, without rules, at a 12px beat. The flow is computed per
+ * flows them into two, without rules, at an 8px beat and bleeding 8px past
+ * the page's side padding so each photo is a bit wider. The flow is computed per
  * breakpoint because the column count changes the assignment, so this draws
  * both trees and lets `lg` pick one. The columns are not
  * authored — `flowColumns` drops each photo into the shortest column — and the
@@ -70,7 +71,7 @@ const columnsMobile = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [h.Class('flex items-stretch gap-4 lg:hidden')],
+    [h.Class('-mx-2 flex items-stretch gap-2 lg:hidden')],
     [
       ...flowColumns(figures, MOBILE_COLUMNS).map((columnFigures, index) =>
         column(columnFigures, 'gap-3', headsDocument && index === 0, h),

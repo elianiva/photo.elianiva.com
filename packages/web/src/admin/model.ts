@@ -213,6 +213,15 @@ export const PhotoDetails = S.Struct({
   slug: S.String,
   location: S.String,
   takenAt: S.String,
+  /** `metadata.camera` and `metadata.lens`, lifted like `location`. */
+  camera: S.String,
+  lens: S.String,
+  /** The four EXIF columns as the operator types them: text, empty when the
+   *  Photo carries none. `shutter` is a fraction (`1/250`) or seconds (`0.5`). */
+  focalLength: S.String,
+  aperture: S.String,
+  shutter: S.String,
+  iso: S.String,
 })
 export type PhotoDetails = typeof PhotoDetails.Type
 
@@ -645,6 +654,12 @@ export const Message = defineMessageUnion({
   SetEditorTitle: { value: S.String },
   SetEditorPlace: { value: S.String },
   SetEditorTakenAt: { value: S.String },
+  SetEditorCamera: { value: S.String },
+  SetEditorLens: { value: S.String },
+  SetEditorFocalLength: { value: S.String },
+  SetEditorAperture: { value: S.String },
+  SetEditorShutter: { value: S.String },
+  SetEditorIso: { value: S.String },
   SetEditorSlug: { value: S.String },
   /** The `DETAILS` tab's Ratio Select. It writes the same `EditorState.ratio`
    *  override the Crop section's Segment does. */

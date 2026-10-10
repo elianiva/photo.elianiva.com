@@ -243,6 +243,12 @@ const DETAILS_FIELDS: ReadonlyArray<keyof PhotoDetails> = [
   'slug',
   'location',
   'takenAt',
+  'camera',
+  'lens',
+  'focalLength',
+  'aperture',
+  'shutter',
+  'iso',
 ] satisfies ReadonlyArray<keyof PhotoDetails>
 
 /** The `DETAILS` values a Photo carries. `location` is lifted out of the
@@ -254,7 +260,68 @@ export const detailsOfPhoto = (photo: PhotoWithTags): PhotoDetails => ({
   slug: photo.slug,
   location: photo.metadata?.location ?? '',
   takenAt: photo.takenAt ?? '',
+  camera: photo.metadata?.camera ?? '',
+  lens: photo.metadata?.lens ?? '',
+  focalLength: numberText(photo.focalLength),
+  aperture: numberText(photo.aperture),
+  shutter: shutterText(photo.shutter),
+  iso: numberText(photo.iso),
 })
+
+/** A stored EXIF number as the field shows it: empty for none. */
+const numberText = (value: number | null | undefined): string =>
+  typeof value === 'number' && value > 0 ? String(Math.round(value * 100) / 100) : ''
+
+/** A stored shutter time as the field shows it: `1/250` below a second, the
+ *  seconds themselves from one up, and a plain decimal for a time no shutter is
+ *  marked with. */
+const shutterText = (seconds: number | null | undefined): string => {
+  if (typeof seconds !== 'number' || seconds <= 0) return ''
+  if (seconds >= 1) return numberText(seconds)
+  const denominator = 1 / seconds
+  const whole = Math.round(denominator)
+  return whole >= 2 && Math.abs(whole - denominator) < 0.05 ? `1/${String(whole)}` : String(seconds)
+}
+
+/** One EXIF field read back: a positive number, `null` for a cleared field
+ *  (which clears the column), `undefined` for text that is not a number — which
+ *  leaves the column alone rather than storing a guess. */
+export const parseExifNumber = (text: string): number | null | undefined => {
+  const trimmed = text.trim()
+  if (trimmed === '') return null
+  const value = Number(trimmed)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+/** {@link parseExifNumber} for a shutter, which also reads `1/250`. */
+export const parseShutter = (text: string): number | null | undefined => {
+  const fraction = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/.exec(text)
+  if (fraction === null) return parseExifNumber(text)
+  const value = Number(fraction[1]) / Number(fraction[2])
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+/** The four EXIF columns a `DETAILS` save sends: only the ones that parse, so
+ *  a half-typed value never reaches the wire. */
+export const exifPatchOfDetails = (
+  details: PhotoDetails,
+): {
+  focalLength?: number | null
+  aperture?: number | null
+  shutter?: number | null
+  iso?: number | null
+} => {
+  const focalLength = parseExifNumber(details.focalLength)
+  const aperture = parseExifNumber(details.aperture)
+  const shutter = parseShutter(details.shutter)
+  const iso = parseExifNumber(details.iso)
+  return {
+    ...(focalLength === undefined ? {} : { focalLength }),
+    ...(aperture === undefined ? {} : { aperture }),
+    ...(shutter === undefined ? {} : { shutter }),
+    ...(iso === undefined ? {} : { iso }),
+  }
+}
 
 /** Write a `DETAILS` field on the draft. A control that fires before the Photo
  *  read answers is dropped rather than resurrecting a half-built record. */
@@ -267,21 +334,24 @@ export const withEditorDetails = (
     : { ...editor, detailsDraft: { ...editor.detailsDraft, ...patch } }
 
 /** The metadata blob a `DETAILS` save sends. `UpdatePhoto` replaces the whole
- *  blob, so the fields the panel does not edit — caption, camera, lens — are
- *  carried rather than dropped, and a cleared location removes the key rather
- *  than storing an empty string (CONTEXT.md: a fact the Photo does not carry is
- *  absent, never a blank). */
-export const metadataWithLocation = (
+ *  blob, so the caption the panel does not edit is carried rather than dropped,
+ *  and a cleared location, camera or lens removes the key rather than storing
+ *  an empty string (CONTEXT.md: a fact the Photo does not carry is absent,
+ *  never a blank). */
+export const metadataWithDetails = (
   metadata: PhotoMetadata | undefined,
-  location: string,
+  details: Pick<PhotoDetails, 'location' | 'camera' | 'lens'>,
 ): PhotoMetadata => {
-  const base = metadata ?? {}
-  const carried: PhotoMetadata = {
-    ...(base.caption === undefined ? {} : { caption: base.caption }),
-    ...(base.camera === undefined ? {} : { camera: base.camera }),
-    ...(base.lens === undefined ? {} : { lens: base.lens }),
+  const caption = metadata?.caption
+  const location = details.location.trim()
+  const camera = details.camera.trim()
+  const lens = details.lens.trim()
+  return {
+    ...(caption === undefined ? {} : { caption }),
+    ...(location === '' ? {} : { location }),
+    ...(camera === '' ? {} : { camera }),
+    ...(lens === '' ? {} : { lens }),
   }
-  return location === '' ? carried : { ...carried, location }
 }
 
 /** The stored Statuses widened to `string`, so the guard can ask whether an

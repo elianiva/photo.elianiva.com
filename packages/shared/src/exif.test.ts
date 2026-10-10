@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatExifLine, type ExifFacts } from './exif'
+import { exifDetails, formatExifLine, type ExifFacts } from './exif'
 
 /** A Photo carrying every fact the line can print. Every table below removes
  *  from this one fixture, so "all segments present" and "no segment left" are
@@ -155,5 +155,32 @@ describe('formatExifLine formatting', () => {
     expect(line({ metadata: { camera: 'Fujifilm x-t20' } })).toBe(
       'FUJIFILM X-T20 · 25MM · F/8 · 1/1000 · ISO 200 · 31 AUG',
     )
+  })
+})
+
+describe('exifDetails', () => {
+  it('lists only the facts the photo carries, in reading order', () => {
+    expect(
+      exifDetails({
+        takenAt: '2025-08-31',
+        aperture: 1.8,
+        shutter: 0.004,
+        iso: 200,
+        focalLength: 25,
+        metadata: { camera: 'X-T20', lens: 'XC 25mm F1.8' },
+      }),
+    ).toEqual([
+      { label: 'Camera', value: 'X-T20' },
+      { label: 'Lens', value: 'XC 25mm F1.8' },
+      { label: 'Focal length', value: '25 mm' },
+      { label: 'Aperture', value: 'f/1.8' },
+      { label: 'Shutter', value: '1/250 s' },
+      { label: 'ISO', value: '200' },
+      { label: 'Taken', value: '31 August 2025' },
+    ])
+  })
+
+  it('is empty for a photo with nothing to say', () => {
+    expect(exifDetails({})).toEqual([])
   })
 })
