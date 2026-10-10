@@ -32,7 +32,7 @@ import { confirmDialog, toastStack } from './views/overlays'
 import { documentTitle, pageHead } from './views/page-head'
 import { routePage } from './views/pages'
 import { sessionExpired } from './views/session'
-import { sidebar } from './views/sidebar'
+import { navScrim, sidebar, topBar } from './views/sidebar'
 import { GUTTER } from './views/shared'
 import { uploadDialog } from './views/upload-dialog'
 
@@ -41,9 +41,13 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
   body: h.div(
     [
       scopeTheme(themeForRoute(model.route, model.theme), h),
-      h.Class('bg-role-surface flex min-h-dvh flex-col text-role-text-primary lg:flex-row'),
+      h.Class(
+        'bg-role-surface flex min-h-dvh flex-col overflow-x-clip pt-14 text-role-text-primary lg:flex-row lg:pt-0',
+      ),
     ],
     [
+      topBar(model, h),
+      navScrim(model, h),
       sidebar(model, h),
       h.div(
         [h.Class('flex min-w-0 flex-1 flex-col')],

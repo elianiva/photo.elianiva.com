@@ -381,6 +381,9 @@ export const Model = S.Struct({
   // the Desk's light or dark branch (persisted to localStorage)
   theme: Theme,
 
+  // the sidebar drawer below `lg`, where the rail is toggled instead of pinned
+  navOpen: S.Boolean,
+
   // the Desk atoms sheet: one Segment group per single-select it draws
   segmentGroups: Segment.Groups,
   atoms: AtomsState,
@@ -518,6 +521,10 @@ export const Message = defineMessageUnion({
   // the Desk's light or dark branch
   ToggledTheme: {},
   CompletedPersistTheme: {},
+
+  // the sidebar drawer below `lg`
+  ToggledNav: {},
+  ClosedNav: {},
 
   // create a Tag inline, from the upload Dialog's combo
   CreateTagRequested: {

@@ -164,6 +164,7 @@ const initialModel = (route: AppRoute): Model => {
     sortFilter: filters.sort,
     cols: storedCols(),
     theme: storedAdminTheme(),
+    navOpen: false,
     segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
     atoms: initAtomsState(),
     photoStatus: 'loading',
@@ -464,6 +465,15 @@ const settled = (model: Model, page: LibraryPage, title: string, detail?: string
 // update
 // ---------------------------------------------------------------------------
 
+/** Folds the mobile drawer shut over whatever update just produced. */
+const closingNav = (update: () => UpdateReturn): UpdateReturn => {
+  const result = update()
+  return {
+    ...result,
+    model: modifyFields(result.model, { navOpen: () => false }),
+  }
+}
+
 /** Opens the Upload dialog over whatever update just produced, so a caller
  *  that queued files can hand the result straight back without repeating the
  *  dialog fold. */
@@ -699,6 +709,10 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }
     },
     CompletedPersistTheme: () => ({ model }),
+
+    // ----- the mobile drawer ---------------------------------------------------
+    ToggledNav: () => ({ model: modifyFields(model, { navOpen: () => !model.navOpen }) }),
+    ClosedNav: () => ({ model: modifyFields(model, { navOpen: () => false }) }),
 
     // ----- the atoms sheet -------------------------------------------------------
     // Every handler here moves one of the sheet's own pieces of state. Nothing
@@ -1581,53 +1595,54 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         },
         External: ({ href }) => ({ model, commands: [LoadCmd({ href })] }),
       }),
-    ChangedUrl: ({ url }) => {
-      const nextRoute = urlToAppRoute(url)
-      // A popstate has already moved the URL bar. Leaving a dirty Editor
-      // through one undoes the step and asks, because an in-app history move
-      // does not fire `beforeunload` and would otherwise be the one way out of
-      // the Editor that loses an authored crop. Going *back* rather than
-      // writing the Editor's URL into the bar is what puts the operator where
-      // they were, with the entry they came from still behind them.
-      if (discardsTheDraft(model, nextRoute)) {
-        const guard = withLeaveGuard(model, editorReturnUrl(model.editor.returnRoute))
-        return { model: guard.model, commands: [BackCmd(), ...(guard.commands ?? [])] }
-      }
-      // A filter change moves the URL and the Model together and then the
-      // runtime reports the new URL back. When the Model already holds exactly
-      // what the route names — and the route the Model last saw names
-      // something else — the change was ours: adopt the route and stop, so
-      // clicking a filter costs one page read rather than two and does not
-      // re-run the shell's three reads. A URL that changed while the route did
-      // not is a real navigation and falls through to `applyRoute`.
-      const nextFilters = nextRoute._tag === 'Library' ? libraryFiltersOf(nextRoute) : undefined
-      const routeFilters = libraryFiltersOf(model.route)
-      const routeUnchanged =
-        nextFilters !== undefined &&
-        model.route._tag === 'Library' &&
-        sameLibraryFilters(nextFilters, routeFilters)
-      if (
-        !routeUnchanged &&
-        nextFilters !== undefined &&
-        model.route._tag === 'Library' &&
-        sameLibraryFilters(nextFilters, libraryFiltersOfModel(model))
-      ) {
-        return { model: modifyFields(model, { route: () => nextRoute }) }
-      }
-      // `← Library` goes back to the route the Editor was opened from, so a
-      // Photo reached from a filtered Library returns to that same filter.
-      // Recorded here rather than in `applyRoute`, which is handed the model
-      // with the route already changed and so no longer knows where the Editor
-      // was opened from.
-      const returning =
-        model.route._tag !== 'Photo' && nextRoute._tag === 'Photo'
-          ? withOptional(model, { editor: { ...model.editor, returnRoute: model.route } })
-          : model
-      return applyRoute(
-        modifyFields(returning, { route: () => nextRoute }),
-        Transition.make(model.route, nextRoute),
-      )
-    },
+    ChangedUrl: ({ url }) =>
+      closingNav(() => {
+        const nextRoute = urlToAppRoute(url)
+        // A popstate has already moved the URL bar. Leaving a dirty Editor
+        // through one undoes the step and asks, because an in-app history move
+        // does not fire `beforeunload` and would otherwise be the one way out of
+        // the Editor that loses an authored crop. Going *back* rather than
+        // writing the Editor's URL into the bar is what puts the operator where
+        // they were, with the entry they came from still behind them.
+        if (discardsTheDraft(model, nextRoute)) {
+          const guard = withLeaveGuard(model, editorReturnUrl(model.editor.returnRoute))
+          return { model: guard.model, commands: [BackCmd(), ...(guard.commands ?? [])] }
+        }
+        // A filter change moves the URL and the Model together and then the
+        // runtime reports the new URL back. When the Model already holds exactly
+        // what the route names — and the route the Model last saw names
+        // something else — the change was ours: adopt the route and stop, so
+        // clicking a filter costs one page read rather than two and does not
+        // re-run the shell's three reads. A URL that changed while the route did
+        // not is a real navigation and falls through to `applyRoute`.
+        const nextFilters = nextRoute._tag === 'Library' ? libraryFiltersOf(nextRoute) : undefined
+        const routeFilters = libraryFiltersOf(model.route)
+        const routeUnchanged =
+          nextFilters !== undefined &&
+          model.route._tag === 'Library' &&
+          sameLibraryFilters(nextFilters, routeFilters)
+        if (
+          !routeUnchanged &&
+          nextFilters !== undefined &&
+          model.route._tag === 'Library' &&
+          sameLibraryFilters(nextFilters, libraryFiltersOfModel(model))
+        ) {
+          return { model: modifyFields(model, { route: () => nextRoute }) }
+        }
+        // `← Library` goes back to the route the Editor was opened from, so a
+        // Photo reached from a filtered Library returns to that same filter.
+        // Recorded here rather than in `applyRoute`, which is handed the model
+        // with the route already changed and so no longer knows where the Editor
+        // was opened from.
+        const returning =
+          model.route._tag !== 'Photo' && nextRoute._tag === 'Photo'
+            ? withOptional(model, { editor: { ...model.editor, returnRoute: model.route } })
+            : model
+        return applyRoute(
+          modifyFields(returning, { route: () => nextRoute }),
+          Transition.make(model.route, nextRoute),
+        )
+      }),
     CompletedNavigate: () => ({ model }),
     CompletedLoad: () => ({ model }),
 

@@ -140,10 +140,9 @@ const row = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Child =>
 // the Bulk Bar
 // ---------------------------------------------------------------------------
 
-/** The Bulk Bar (master `2ee1012a86fa8715`). The design draws it inverted —
- *  `ds(, theme(dark))` — against the page it sits on, and one `data-theme` on
- *  this element is the opposite scope saying the same thing: the role tokens below
- *  it resolve to their dark branch and nothing above it moves.
+/** The Bulk Bar (master `2ee1012a86fa8715`). It uses the active Admin theme
+ *  like the rest of the Library; forcing a separate theme scope made it stay
+ *  light when the operator switched the Desk to dark mode.
  *
  *  The box beside `2 SELECTED` is the design's own `state(on)`, so it reads as
  *  "a selection exists" and unticking it is `Clear` — which is the affordance
@@ -153,9 +152,10 @@ export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const count = model.selected.length
   return h.div(
     [
-      h.Attribute('data-theme', 'light'),
       h.DataAttribute('slot', 'bulk-bar'),
-      h.Class('flex items-center justify-between gap-4 bg-role-surface py-2 pr-3 pl-3'),
+      h.Class(
+        'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-role-surface-container py-2 pr-3 pl-3',
+      ),
     ],
     [
       h.div(
@@ -186,7 +186,7 @@ export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
       ),
       h.div(
-        [h.Class('flex items-center gap-1')],
+        [h.Class('flex flex-wrap items-center gap-1')],
         [
           // `Discard` here means "drop the selection" and nothing else. The
           // Editor's `Discard` — discard unsaved edits — is a different control

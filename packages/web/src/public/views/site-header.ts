@@ -1,7 +1,7 @@
 /**
  * Header: the wordmark and the Nav, printed at the top of every public
- * document. One row and nothing else — the name at the left in italic, the
- * sections at the right, and no rule, flag, fill or second line around them.
+ * document. The larger wordmark gives the site a clear entry point, and the
+ * bottom rule separates its navigation from the document below it.
  *
  * The page is a sheet of film proofs, and a proof sheet does not open with a
  * site's banner: the photographs are the structure and the header only
@@ -52,13 +52,17 @@ export const siteHeader = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.header(
-    [h.Class(`${BAND} flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 pb-2 pt-5`)],
+    [
+      h.Class(
+        `${BAND} flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b border-role-hairline pb-4 pt-6 lg:gap-x-12 lg:pb-5 lg:pt-8`,
+      ),
+    ],
     [
       h.a(
         [
           h.Href(routeHref({ route: 'home' })),
           h.Class(
-            'type-wordmark text-role-text-primary transition-opacity duration-120 hover:opacity-70 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px]',
+            'type-wordmark text-role-text-primary transition-opacity duration-120 hover:opacity-70 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:type-wordmark-lg',
           ),
         ],
         ['Elianiva'],

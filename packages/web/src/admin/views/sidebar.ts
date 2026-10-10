@@ -23,7 +23,7 @@
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
-import { ArrowUpRight, Clock, Images, LogOut, Moon, Settings, Sun } from 'lucide'
+import { ArrowUpRight, Clock, Images, LogOut, Menu, Moon, Settings, Sun, X } from 'lucide'
 import type { IconNode } from 'lucide'
 
 import * as SidebarItem from '@/components/ui/sidebar-item'
@@ -46,8 +46,8 @@ import type { Child } from './shared'
 // ---------------------------------------------------------------------------
 
 /** The design's 248px column, and the padding either side of the brand. */
-const SIDEBAR_WIDTH = 'w-full lg:w-[232px]'
-const SIDEBAR_PADDING = 'px-3 py-3 lg:py-6'
+const SIDEBAR_WIDTH = 'w-[260px] max-w-[85vw] lg:w-[232px]'
+const SIDEBAR_PADDING = 'px-3 pb-6 pt-20 lg:pt-6'
 
 // ---------------------------------------------------------------------------
 // brand
@@ -59,11 +59,7 @@ const SIDEBAR_PADDING = 'px-3 py-3 lg:py-6'
  *  was a destination. */
 const brand = (h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [
-      h.Class(
-        'flex shrink-0 flex-row items-baseline gap-2 px-3 pb-2 lg:flex-col lg:gap-1.5 lg:pb-6',
-      ),
-    ],
+    [h.Class('hidden shrink-0 flex-col gap-1.5 px-3 pb-6 lg:flex')],
     [
       // The design's wordmark. `THE DESK` is display copy for this one place —
       // it is not a route, a type, or a directory (CONTEXT.md).
@@ -92,7 +88,7 @@ const libraryMeter = (model: Model, h: HtmlBuilder<Msg>): Child => {
   // be NaN, and a NaN width would silently vanish.
   const livePercent = total > 0 ? Math.min(100, Math.max(0, (byStatus.published / total) * 100)) : 0
   return h.div(
-    [h.Class('hidden flex-col gap-2 px-3 lg:flex')],
+    [h.Class('flex flex-col gap-2 px-3')],
     [
       h.div(
         [h.Class('flex items-baseline justify-between gap-2')],
@@ -178,7 +174,7 @@ const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
     [
       h.AriaLabel('Admin sections'),
       h.DataAttribute('slot', 'sidebar-nav'),
-      h.Class('flex shrink-0 flex-row gap-1 overflow-x-auto lg:flex-col lg:gap-0.5'),
+      h.Class('flex shrink-0 flex-col gap-0.5'),
     ],
     rows.map((row) => navRow(model, row, h)),
   )
@@ -209,7 +205,7 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
   return h.div(
     [
       h.Class(
-        'flex shrink-0 flex-row flex-wrap items-center gap-x-2 lg:mt-auto lg:flex-col lg:items-stretch lg:gap-3 lg:border-t lg:border-role-outline-variant lg:pt-4',
+        'mt-auto flex shrink-0 flex-col items-stretch gap-3 border-t border-role-outline-variant pt-4',
       ),
       h.DataAttribute('slot', 'sidebar-footer'),
     ],
@@ -221,7 +217,7 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
         : [
             h.p(
               [
-                h.Class('type-exif-sm hidden truncate text-role-text-secondary lg:block'),
+                h.Class('type-exif-sm truncate text-role-text-secondary'),
                 h.Title(model.session.email),
               ],
               [model.session.email],
@@ -271,9 +267,50 @@ export const sidebar = (model: Model, h: HtmlBuilder<Msg>): Child =>
     [
       h.AriaLabel('Admin'),
       h.Class(
-        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-sunken flex shrink-0 flex-col lg:sticky lg:top-0 lg:h-dvh`,
+        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-sunken fixed inset-y-0 left-0 z-40 flex flex-col overflow-y-auto transition-transform duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 lg:shrink-0 ${model.navOpen ? 'translate-x-0' : '-translate-x-full'}`,
       ),
       h.DataAttribute('slot', 'sidebar'),
     ],
     [brand(h), primaryNav(model, h), footer(model, h)],
   )
+
+/** The mobile top bar: pinned to the top of the screen, with the drawer's
+ *  toggle and the wordmark. Gone from `lg` up, where the rail is always there. */
+export const topBar = (model: Model, h: HtmlBuilder<Msg>): Child =>
+  h.header(
+    [
+      h.DataAttribute('slot', 'top-bar'),
+      h.Class(
+        'bg-role-surface-sunken fixed inset-x-0 top-0 z-50 flex h-14 items-center gap-3 px-3 lg:hidden',
+      ),
+    ],
+    [
+      h.button(
+        [
+          h.Type('button'),
+          h.OnClick(M.ToggledNav()),
+          h.AriaLabel(model.navOpen ? 'Close navigation' : 'Open navigation'),
+          h.AriaExpanded(model.navOpen),
+          h.Class(
+            'flex size-9 cursor-pointer items-center justify-center rounded-md text-role-text-primary hover:bg-role-surface-hover',
+          ),
+        ],
+        [icon(h, model.navOpen ? X : Menu, 'size-5')],
+      ),
+      h.span([h.Class('type-wordmark-md leading-none text-role-text-primary')], ['Elianiva']),
+      h.span([h.Class('type-label text-role-text-secondary')], ['THE DESK']),
+    ],
+  )
+
+/** The scrim behind the open drawer. A tap on it closes the drawer. */
+export const navScrim = (model: Model, h: HtmlBuilder<Msg>): Child =>
+  model.navOpen
+    ? h.div(
+        [
+          h.DataAttribute('slot', 'nav-scrim'),
+          h.OnClick(M.ClosedNav()),
+          h.Class('fixed inset-0 z-30 bg-role-shadow/60 lg:hidden'),
+        ],
+        [],
+      )
+    : h.div([h.Class('hidden')], [])

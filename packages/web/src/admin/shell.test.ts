@@ -88,3 +88,18 @@ describe('the rail\u2019s meter', () => {
     expect(counts.byStatus.published).toBe(COUNTS.byStatus.published)
   })
 })
+
+describe('the mobile navigation drawer', () => {
+  it('opens, then closes when navigation changes the route', () => {
+    const closed = init(at('/admin')).model
+    const opened = update(closed, Message.ToggledNav({})).model
+
+    expect(closed.navOpen).toBe(false)
+    expect(opened.navOpen).toBe(true)
+
+    const navigated = update(opened, Message.ChangedUrl({ url: at('/admin/scheduled') })).model
+
+    expect(navigated.route._tag).toBe('Scheduled')
+    expect(navigated.navOpen).toBe(false)
+  })
+})
