@@ -26,7 +26,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { figureUrl, type Figure } from '../content'
+import { figureUrl, placeholderStyle, type Figure } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
@@ -77,6 +77,7 @@ export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => 
         [
           h.img([
             h.Class('h-full w-full object-cover'),
+            h.Style(placeholderStyle(photo)),
             h.Src(figureUrl(photo)),
             // The button label is the photo's accessible name; a second reading
             // of the same sentence would only make the figure noisier.

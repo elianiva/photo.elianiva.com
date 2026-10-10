@@ -74,6 +74,7 @@ describe('sectionsOf', () => {
       title: 'Momo',
       takenAt: '2025-08-31',
       r2Key: 'originals/momo.jpg',
+      blurhash: null,
     })
     expect(mapped?.figures[0]).not.toHaveProperty('index')
   })

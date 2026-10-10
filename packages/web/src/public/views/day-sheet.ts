@@ -28,7 +28,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameCount, figureUrl, type DaySection, type Figure } from '../content'
+import { frameCount, figureUrl, placeholderStyle, type DaySection, type Figure } from '../content'
 import { Message } from '../model'
 import { BAND, type Child } from './shared'
 
@@ -90,6 +90,7 @@ const frame = (
           h.span([h.Class(`${SPROCKETS} top-px`)], []),
           h.img([
             h.Class('block h-full w-full object-cover'),
+            h.Style(placeholderStyle(photo)),
             h.Src(figureUrl(photo)),
             // The button's label is the photo's accessible name; a second
             // reading of the same sentence would only make the frame noisier.
@@ -116,13 +117,17 @@ const frame = (
 
 const rail = (section: DaySection, h: HtmlBuilder<Message>): Child =>
   h.div(
-    [h.Class('flex items-baseline gap-3 lg:flex-col lg:items-start lg:justify-between lg:gap-0')],
+    [h.Class('flex items-baseline gap-3 lg:flex-col lg:items-start lg:gap-1')],
     [
-      h.span([h.Class('type-numeral-sm text-role-accent lg:type-numeral')], [numeralOf(section)]),
-      // The month and count are written by hand, beside the actual capture day
-      // rather than a month number that can be mistaken for the date.
+      // The day, the month and the count are all written by hand in the accent,
+      // at the head of the rail, beside the actual capture day rather than a
+      // month number that can be mistaken for the date.
       h.span(
-        [h.Class('type-hand -rotate-3 whitespace-nowrap text-role-pen lowercase')],
+        [h.Class('type-hand -rotate-3 text-[44px] leading-none text-role-accent')],
+        [numeralOf(section)],
+      ),
+      h.span(
+        [h.Class('type-hand -rotate-3 whitespace-nowrap text-role-accent lowercase')],
         [`${section.month} ${section.year}`, h.br([]), frameCount(section.figures.length)],
       ),
     ],

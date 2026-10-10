@@ -9,7 +9,8 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { figurePreviewUrl, type Figure } from '../content'
+import { imageUrl } from '@/lib/image'
+import { figurePreviewUrl, figureUrl, placeholderStyle, type Figure } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
@@ -39,15 +40,34 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
       h.div(
         [h.Class('flex min-h-0 w-full flex-1 items-center justify-center')],
         [
-          h.img([
-            h.Class('max-h-full max-w-full h-auto w-auto object-contain'),
-            h.Src(figurePreviewUrl(figure)),
-            h.Alt(figure.title),
-            h.Attribute('decoding', 'async'),
-            h.Attribute('fetchpriority', 'high'),
-            // Clicks on the image itself must not bubble to the close backdrop.
-            h.OnClick(Message.ClickedFigure({ id: figure.id })),
-          ]),
+          // The 1600px small rendition (usually already cached from the
+          // timeline) paints at once and the full-size preview fades in over it
+          // when it lands, so opening never waits on the big file.
+          h.div(
+            [h.Class('relative grid max-h-full max-w-full')],
+            [
+              h.img([
+                h.Class('col-start-1 row-start-1 max-h-full max-w-full h-auto w-auto object-contain'),
+                h.Style(placeholderStyle(figure)),
+                h.Src(figureUrl(figure)),
+                h.Alt(figure.title),
+                h.Attribute('decoding', 'async'),
+                h.OnClick(Message.ClickedFigure({ id: figure.id })),
+              ]),
+              h.img([
+                h.Class(
+                  'col-start-1 row-start-1 max-h-full max-w-full h-full w-full object-contain',
+                ),
+                h.Src(figurePreviewUrl(figure)),
+                h.Alt(''),
+                h.AriaHidden(true),
+                h.Attribute('decoding', 'async'),
+                h.Attribute('fetchpriority', 'low'),
+                // Clicks on the image itself must not bubble to the close backdrop.
+                h.OnClick(Message.ClickedFigure({ id: figure.id })),
+              ]),
+            ],
+          ),
         ],
       ),
       ...(figure.details.length === 0
@@ -71,6 +91,17 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
               ),
             ),
           ]),
+      h.a(
+        [
+          h.Href(imageUrl(figure.r2Key)),
+          h.Attribute('download', ''),
+          h.Class(
+            'absolute top-12 right-32 type-label text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-36',
+          ),
+          h.OnClick(Message.ClickedFigure({ id: figure.id })),
+        ],
+        ['Download'],
+      ),
       h.button(
         [
           h.Id('lightbox-close'),

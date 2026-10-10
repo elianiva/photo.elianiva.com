@@ -26,6 +26,7 @@
  * what the views read.
  */
 
+import { placeholderDataUrl } from '@/lib/blurhash'
 import { Schema as S } from 'effect'
 import { PHOTO_RATIOS, exifDetails, formatExifLine, nearestRatio } from '@photo/shared'
 import type { PhotoWithTags, PublicSection } from '@photo/shared'
@@ -75,6 +76,9 @@ export const FigureSchema = S.Struct({
   details: S.Array(S.Struct({ label: S.String, value: S.String })),
   /** The original's key in R2 — the photo's bytes. */
   r2Key: S.String,
+  /** The placeholder the frame paints until its bytes arrive; null for a Photo
+   *  uploaded before Blurhash existed. */
+  blurhash: S.NullOr(S.String),
 })
 export type Figure = typeof FigureSchema.Type
 
@@ -218,6 +222,7 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
     exif: formatExifLine(photo),
     details: exifDetails(photo),
     r2Key: photo.r2Key,
+    blurhash: photo.blurhash ?? null,
   }
 }
 
@@ -331,6 +336,15 @@ export const frameCount = (count: number): string =>
 /** The grid's image: the Photo's `small` WebP (1600px long edge), served from
  *  R2 through the Worker's proxy. The frame is cropped to the Ratio by the
  *  photo's own `aspect-ratio` box. */
+/** The decoded Blurhash as a CSS style for the `<img>`, so it shows through
+ *  until the bitmap arrives. Empty when the Photo has none. */
+export const placeholderStyle = (figure: Figure): Record<string, string> => {
+  const url = figure.blurhash === null ? null : placeholderDataUrl(figure.blurhash)
+  return url === null
+    ? {}
+    : { backgroundImage: `url(${url})`, backgroundSize: '100% 100%' }
+}
+
 export const figureUrl = (figure: Figure): string => renditionUrl(figure.id, 'small')
 
 /** The lightbox's image: the `preview` WebP at the original's pixel size. */
