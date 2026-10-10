@@ -30,7 +30,7 @@ and D1 once the domain schemas are already here.
   becomes filterable or sortable. The EXIF four are columns for a sharper
   reason: a formatted number has a type the boundary can check and a range it
   can validate, which a free-form blob does not.
-- **One original per Photo**, at `originals/{id}-{slug}.jpg`. JPEG only — the
+- **One original per Photo**, at `originals/{id}-{slug}.jpg`, plus its two WebP renditions (below). JPEG only — the
   declared MIME, the bytes' own SOI marker and the stored key are three checks
   on one format list. Width and height are extracted at upload.
 - **Fresh resources.** Bucket `photo-elianiva-originals`, D1
@@ -39,32 +39,41 @@ and D1 once the domain schemas are already here.
 - **Auth is Cloudflare Access** (OTP IdP, an allowlist of one email). No app
   login form exists anywhere in the product (ADR 0006).
 
-## Image delivery: the original's bytes, or nothing
+## Image delivery: three files, made in the browser
 
-Every image — the home page's photos, the Library's grid, the Editor's stage — is
-the Photo's original, served from R2 through the Worker's `/api/image/<key>`
-proxy and cropped to its Ratio by the photo's own `aspect-ratio` box.
+Every Photo is three files in R2:
 
-**There is no resizer.** Cloudflare zone image resizing
-(`/cdn-cgi/image/width=…/image/<key>`) is plan-gated, and this zone is on the
-Free plan, where `image_resizing` reports `editable: false` — every request to
-it answers 404, on either host, for any width. The `IMAGES` binding that
-`alchemy.run.ts` declared and `WebsiteEnv` typed as `unknown` was read by
-nothing and has been removed rather than adopted. So have `thumbUrl`, `srcSet`
-and every other URL builder for that path: a builder for a delivery path that
-cannot work is worse than no builder, because the 404 surfaces as a missing
-photograph rather than as a mistake.
+| file      | what                                    | used for                          |
+| --------- | --------------------------------------- | --------------------------------- |
+| `small`   | WebP, 1600 px long edge, quality 90     | Library, grids, public frontpage  |
+| `preview` | WebP, the original's pixels, quality 90 | what a click opens (the lightbox) |
+| `full`    | the original JPEG, untouched            | the Editor's Download             |
 
-The trade is honest and worth naming: a grid of forty photos asks for forty
-originals. Stored **Renditions** (`CONTEXT.md`) are the designed answer;
-regenerating them is a separate piece of work. A zone plan upgrade would bring
-the resizer back, which is a plan decision and not a code one.
+All three are served from R2 through the Worker's `/api/image/<key>` proxy.
+
+**There is still no zone resizer.** Cloudflare zone image resizing
+(`/cdn-cgi/image/…`) is plan-gated and this zone is on the Free plan, so every
+request to it answers 404; nothing may reintroduce `thumbUrl`, `srcSet` or that
+path. What replaces it is not a server transform but **client-side
+processing**: the Admin decodes the JPEG in a Web Worker (jsquash: Lanczos3
+resize, WebP/JPEG/PNG encode), produces `small` and `preview`, and uploads all
+three in one multipart request. The Worker never decodes pixels; it validates
+the declared type and the bytes' own magic (JPEG SOI, WebP `RIFF…WEBP`) and
+stores. The same pipeline powers Download: the browser fetches the original and
+re-encodes it at any width, frame and border the operator picks. The server's
+work per photo is one write of three objects and, later, one read.
+
+The two WebP keys are derived from the Photo's id (`renditionKey` in
+`@photo/shared`) rather than stored, so no column can disagree with an object.
+The pipeline is an Effect service (`ImagePipeline`): a bounded pool of
+short-lived Workers, typed errors, interruption that terminates the Worker, and
+a per-item preparation fiber so the upload queue works ahead of itself.
 
 ## Consequences
 
-- Nothing but `/api/upload` writes to R2, and the original is never overwritten
-  in place — a Rendition is a new object, never the same key.
-- `handleImageProxy` accepts only `originals/` keys, and serves them
+- Nothing but `/api/upload` writes to R2, and an object is never overwritten
+  in place.
+- `handleImageProxy` accepts only `originals/` and `renditions/` keys, and serves them
   `immutable` for a year, which is honest about a key that never changes.
 - Adding a filterable metadata field is an `ALTER TABLE` when it earns one, and
   a JSON key when it does not.

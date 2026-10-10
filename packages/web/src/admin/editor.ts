@@ -52,6 +52,14 @@ export type EditorCompare = (typeof COMPARE_OPTIONS)[number]
 
 export const initEditorState = (): EditorState => ({
   tab: 'edit',
+  download: {
+    format: 'original',
+    width: 0,
+    quality: 90,
+    frame: 'original',
+    borderPercent: 0,
+    working: false,
+  },
   saving: false,
   detailsSnapshot: undefined,
   detailsDraft: undefined,
@@ -226,27 +234,6 @@ export const withEditorMat = (editor: EditorState, enabled: boolean): EditorStat
   editor.draft === undefined
     ? editor
     : { ...editor, draft: { ...editor.draft, borderEnabled: enabled } }
-
-/** The six export override fields the Export panel edits, as one patch. They
- *  are all Presentation columns, so a write is a field on the draft exactly
- *  like the Mat's. */
-export type EditorExportPatch = Partial<
-  Pick<
-    PhotoPresentation,
-    | 'previewLongEdge'
-    | 'previewFormat'
-    | 'previewQuality'
-    | 'fullQuality'
-    | 'keepExif'
-    | 'removeGps'
-  >
->
-
-/** Write one or more export overrides on the draft. A control that fires
- *  before the Presentation read answers is dropped rather than resurrecting a
- *  half-built draft. */
-export const withEditorExport = (editor: EditorState, patch: EditorExportPatch): EditorState =>
-  editor.draft === undefined ? editor : { ...editor, draft: { ...editor.draft, ...patch } }
 
 /** The `DETAILS` tab's editable fields, the counterpart of
  *  `PRESENTATION_FIELDS`. The Ratio override is deliberately not one of them:

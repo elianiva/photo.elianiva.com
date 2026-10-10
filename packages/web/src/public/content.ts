@@ -30,7 +30,7 @@ import { Schema as S } from 'effect'
 import { PHOTO_RATIOS, formatExifLine, nearestRatio } from '@photo/shared'
 import type { PhotoWithTags, PublicSection } from '@photo/shared'
 
-import { imageUrl } from '@/lib/image'
+import { renditionUrl } from '@/lib/image'
 
 // ---------------------------------------------------------------------------
 // figures
@@ -318,10 +318,13 @@ export const sectionCount = (section: Month): string => {
   return `${pad(section.figures.length, 2)} ${noun} · NO. ${pad(first, 3)}–${pad(last, 3)}`
 }
 
-/** The photo's bytes: the Photo's original in R2, served through the Worker's
- *  proxy. The frame is cropped to the Ratio by the photo's own `aspect-ratio`
- *  box, so no resizing happens on the way out. */
-export const figureUrl = (figure: Figure): string => imageUrl(figure.r2Key)
+/** The grid's image: the Photo's `small` WebP (1600px long edge), served from
+ *  R2 through the Worker's proxy. The frame is cropped to the Ratio by the
+ *  photo's own `aspect-ratio` box. */
+export const figureUrl = (figure: Figure): string => renditionUrl(figure.id, 'small')
+
+/** The lightbox's image: the `preview` WebP at the original's pixel size. */
+export const figurePreviewUrl = (figure: Figure): string => renditionUrl(figure.id, 'preview')
 
 // ---------------------------------------------------------------------------
 // photo → columns

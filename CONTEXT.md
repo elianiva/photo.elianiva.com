@@ -53,8 +53,12 @@ A mark stamped onto an exported frame, configured per-site in Settings and appli
 _Avoid_: Logo, Overlay, Stamp (Stamp is the act, not the thing), Branding on renditions
 
 **Rendition**:
-A derived image file produced from a Photo's original. There are exactly two: `PREVIEW` (the long edge the Export panel sets, used by the library, the grid, and the public pages) and `FULL` (the presentation-sized export). A Rendition is regenerated whenever the crop, mat, level, or export settings change. The original in R2 is not a Rendition, and Renditions are never hand-placed in R2 outside the regeneration path.
+A derived WebP file produced from a Photo's original, **in the browser, at upload**. There are exactly two: `small` (long edge capped at 1600 px, quality 90 — the Library, the grids and the public frontpage) and `preview` (the original's own pixel size, quality 90 — what a click opens). Together with the original JPEG (`full`, byte for byte, the downloadable file) they are the three files of a Photo. The Worker only checks and stores them, under keys derived from the Photo's id (`renditions/<id>/small.webp`, `renditions/<id>/preview.webp`), and removes them with the Photo. The crop, level and mat are drawn over them by the Photo's own box and are not baked in. The original in R2 is not a Rendition.
 _Avoid_: Derivative, thumbnail, variant, export (the export is the action; the file it produces is a Rendition)
+
+**Download**:
+The Editor's `DOWNLOAD` panel: the original as stored, or a re-encode of it (JPEG, WebP or PNG) at a chosen width, quality, frame and border. It is made in the browser from the original fetched out of R2, so it costs the server one object read.
+_Avoid_: Export (the old Export panel was removed; its per-photo override columns remain but nothing reads them)
 
 **Tag**:
 A label for grouping/filtering Photos (e.g., `kyoto`, `film`, `portrait`). Free-form, many-to-many with Photo. Has `slug` (URL-safe, unique), `label` (the name) and an optional `caption` (the one-line sentence the Tag's own public page prints under it, e.g. `Ferries, rain, and the long light on Istiklal.`). A Tag with no caption has `null` there, never an empty string. Managed from day one; no controlled vocabulary. A Tag is a **public document** as well as an Admin grouping: its slug is a URL (`/tag/<slug>`) and its label is the **Nav**'s entry for it, so a Tag renamed in the Admin renames a page's headline and a nav link in the same read.

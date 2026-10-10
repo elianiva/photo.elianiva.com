@@ -23,6 +23,7 @@ import {
   describeCause,
   formatMeasuredRatio,
   nearestRatio,
+  renditionKey,
   PhotoRatio,
   type PhotoStatus,
   type PhotoWithTags,
@@ -166,6 +167,10 @@ export interface CreatePhotoInput {
   readonly blurhash?: string | undefined
   readonly contentType?: string | undefined
   readonly bytes: ArrayBuffer
+  /** The two WebP files the browser produced. Stored under keys derived from
+   *  the new Photo's id (`renditionKey`), so they are written after the id is
+   *  known and removed with the Photo. */
+  readonly renditions?: { readonly small: ArrayBuffer; readonly preview: ArrayBuffer } | undefined
   readonly tagIds: ReadonlyArray<string>
 }
 
@@ -1008,17 +1013,43 @@ export const PhotoServiceLive = Layer.effect(
         )
         // R2 after the row, never before it. A duplicate r2Key now fails the
         // insert, which leaves the pre-existing Photo's original untouched;
-        // a failed put takes the new row back down with it, so no row is ever
-        // left pointing at bytes that are not there.
+        // a failed put takes the new row back down with it (and any object
+        // already written), so no row is ever left pointing at bytes that are
+        // not there.
+        const objects: Array<{ key: string; body: ArrayBuffer; type: string }> = [
+          { key: input.r2Key, body: input.bytes, type: contentType },
+        ]
+        if (input.renditions !== undefined) {
+          objects.push(
+            { key: renditionKey(id, 'small'), body: input.renditions.small, type: 'image/webp' },
+            {
+              key: renditionKey(id, 'preview'),
+              body: input.renditions.preview,
+              type: 'image/webp',
+            },
+          )
+        }
         yield* Effect.tryPromise({
           try: () =>
-            gateway.photos.put(input.r2Key, input.bytes, { httpMetadata: { contentType } }),
+            Promise.all(
+              objects.map((object) =>
+                gateway.photos.put(object.key, object.body, {
+                  httpMetadata: { contentType: object.type },
+                }),
+              ),
+            ),
           catch: (cause) =>
             new StorageError({
               message: 'Failed to store original in R2',
               cause: describeCause(cause),
             }),
-        }).pipe(Effect.tapError(() => dropRow(batch, sql, id)))
+        }).pipe(
+          Effect.tapError(() =>
+            Effect.promise(() =>
+              gateway.photos.delete(objects.map((object) => object.key)).catch(() => undefined),
+            ).pipe(Effect.andThen(dropRow(batch, sql, id))),
+          ),
+        )
 
         return { id, slug, r2Key: input.r2Key }
       })
@@ -1126,7 +1157,12 @@ export const PhotoServiceLive = Layer.effect(
             new StorageError({ message: 'Failed to purge photo', cause: describeCause(cause) }),
         )
         yield* Effect.tryPromise({
-          try: () => gateway.photos.delete(row.r2Key),
+          try: () =>
+            gateway.photos.delete([
+              row.r2Key,
+              renditionKey(id, 'small'),
+              renditionKey(id, 'preview'),
+            ]),
           catch: (cause) =>
             new StorageError({ message: 'R2 delete failed', cause: describeCause(cause) }),
         }).pipe(Effect.orElseSucceed(() => undefined))

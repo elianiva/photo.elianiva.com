@@ -21,7 +21,7 @@
  * dispatch, before the browser has already acted on the key.
  */
 
-import { Effect, Option, Queue, Schema as S, Stream } from 'effect'
+import { Effect, Option, Queue, Result, Schema as S, Stream } from 'effect'
 import { Subscription } from 'foldkit'
 import {
   PhotoId,
@@ -32,13 +32,14 @@ import {
 } from '@photo/shared'
 
 import { UPLOAD_PATH, apiUrl } from '@/lib/api'
-import { compositionSource, encodeBlurhash, encodeCompositionBlurhash } from '@/lib/blurhash'
+import { compositionSource, encodeCompositionBlurhash } from '@/lib/blurhash'
 import { CompositionSpec } from '@/lib/blurhash'
-import { originalUrl } from '@/lib/image'
+import { smallUrl } from '@/lib/image'
 
 import { Message, fileStore } from './model'
 import type { Model } from './model'
 import { blurhashSignature, isEditorDirty } from './editor'
+import { awaitPrepared, startPrepare } from './upload-prepare'
 
 /** The id the Page Head's search input carries, and therefore the element the
  *  shortcut reaches for. Declared here and read by `views/page-head.ts` so the
@@ -143,44 +144,60 @@ const uploadStream = (
     takenAt: string
     useExportDefaults: boolean
     publishWhenReady: boolean
+    /** The next items in line, kept warm while this one uploads. */
+    upcoming: ReadonlyArray<string>
   }>,
 ): Stream.Stream<Message> =>
-  Stream.callback<Message>((queue) =>
-    Effect.acquireRelease(
-      Effect.promise(async () => {
-        const file = fileStore.get(itemId)
-        if (file === undefined) {
-          Queue.offerUnsafe(
-            queue,
-            Message.FailedUploadItem({ itemId, message: 'uploaded bytes are gone' }),
-          )
-          return { xhr: undefined }
-        }
-        try {
-          // One decode for the detail line's dimensions and the stored
-          // placeholder. Absent when the browser cannot decode the bytes —
-          // the upload proceeds without either.
-          const decoded = await encodeBlurhash(file)
-          if (decoded !== undefined) {
-            Queue.offerUnsafe(
-              queue,
-              Message.UploadItemFacts({
-                itemId,
-                width: decoded.width,
-                height: decoded.height,
-                ratio: ratioLabel(decoded.width, decoded.height),
-              }),
-            )
-          }
-          const form = new FormData()
-          form.set('file', file)
-          form.set('title', file.name.replace(/\.[^/.]+$/, ''))
-          form.set('tagIds', JSON.stringify([...options.tagIds]))
-          form.set('publishWhenReady', options.publishWhenReady ? 'true' : 'false')
-          form.set('useExportDefaults', options.useExportDefaults ? 'true' : 'false')
-          if (decoded?.blurhash !== undefined) form.set('blurhash', decoded.blurhash)
-          if (options.takenAt !== '') form.set('takenAt', options.takenAt)
+  Stream.callback<Message>(
+    Effect.fn('upload.run')(function* (queue) {
+      const offer = (message: Message): void => {
+        Queue.offerUnsafe(queue, message)
+      }
+      const fail = (message: string): void => {
+        offer(Message.FailedUploadItem({ itemId, message }))
+      }
+      const file = fileStore.get(itemId)
+      if (file === undefined) return fail('uploaded bytes are gone')
 
+      // Work ahead: the next items decode and encode while this one uploads.
+      for (const id of options.upcoming) {
+        const upcoming = fileStore.get(id)
+        if (upcoming !== undefined) startPrepare(id, upcoming)
+      }
+
+      // Everything the Worker will store is made here, in this tab. The Worker
+      // only accepts the files. A failed preparation is a failed row.
+      const prepared = yield* awaitPrepared(itemId, file).pipe(Effect.result)
+      if (Result.isFailure(prepared)) return fail(prepared.failure.message)
+      const { renditions, title, blurhash } = prepared.success
+      offer(
+        Message.UploadItemFacts({
+          itemId,
+          width: renditions.width,
+          height: renditions.height,
+          ratio: ratioLabel(renditions.width, renditions.height),
+        }),
+      )
+
+      const form = new FormData()
+      form.set('file', file)
+      form.set('small', renditions.small, 'small.webp')
+      form.set('preview', renditions.preview, 'preview.webp')
+      form.set(
+        'title',
+        Option.getOrElse(title, () => file.name.replace(/\.[^/.]+$/, '')),
+      )
+      form.set('tagIds', JSON.stringify([...options.tagIds]))
+      form.set('publishWhenReady', options.publishWhenReady ? 'true' : 'false')
+      form.set('useExportDefaults', options.useExportDefaults ? 'true' : 'false')
+      if (blurhash !== undefined) form.set('blurhash', blurhash)
+      if (options.takenAt !== '') form.set('takenAt', options.takenAt)
+      const totalBytes = file.size + renditions.small.size + renditions.preview.size
+
+      // The request is a scoped resource: the stream's scope closing — the item
+      // left `uploading`, the dialog was cancelled — aborts it.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
           const xhr = new XMLHttpRequest()
           xhr.open('POST', apiUrl(UPLOAD_PATH))
           // Harmless in production, where this is a same-origin POST the
@@ -188,43 +205,38 @@ const uploadStream = (
           // on the dev port pair, which is cross-origin.
           xhr.withCredentials = true
           xhr.upload.onprogress = (event): void => {
-            // `event.loaded` counts the multipart body, not just the file, so it
-            // can pass `file.size` by the boundary bytes at the very end. The
-            // readout names the file's own bytes, never more than it has.
-            Queue.offerUnsafe(
-              queue,
-              Message.UploadProgress({ itemId, loaded: Math.min(event.loaded, file.size) }),
+            // `event.loaded` counts the whole multipart body; the bar names the
+            // original's own bytes, scaled to how much of the body has gone.
+            offer(
+              Message.UploadProgress({
+                itemId,
+                loaded: Math.min(Math.round((event.loaded / totalBytes) * file.size), file.size),
+              }),
             )
           }
           xhr.onload = (): void => {
             if (xhr.status >= 200 && xhr.status < 300) {
-              Queue.offerUnsafe(
-                queue,
+              offer(
                 Message.SucceededUploadItem({
                   itemId,
                   renditionsPending: uploadSuccessIsPending(xhr),
                 }),
               )
             } else {
-              Queue.offerUnsafe(
-                queue,
-                Message.FailedUploadItem({ itemId, message: uploadErrorMessage(xhr) }),
-              )
+              fail(uploadErrorMessage(xhr))
             }
           }
-          xhr.onerror = (): void => {
-            Queue.offerUnsafe(queue, Message.FailedUploadItem({ itemId, message: 'upload failed' }))
-          }
+          xhr.onerror = (): void => fail('upload failed')
           xhr.send(form)
-          return { xhr }
-        } catch {
-          Queue.offerUnsafe(queue, Message.FailedUploadItem({ itemId, message: 'upload failed' }))
-          return { xhr: undefined }
-        }
-      }),
-      ({ xhr }) => Effect.sync(() => xhr?.abort()),
-    ).pipe(Effect.flatMap(() => Effect.never)),
+          return xhr
+        }),
+        (xhr) => Effect.sync(() => xhr.abort()),
+      )
+    }, Effect.andThen(Effect.never)),
   )
+
+/** How many items past the one uploading are prepared ahead of time. */
+const UPLOAD_PREFETCH = 2
 
 /** The run's options, read once when the stream opens. They are dependencies
  *  so `update` can change them before a run, but the keep-alive below ignores
@@ -235,6 +247,7 @@ interface UploadDependencies {
   readonly takenAt: string
   readonly useExportDefaults: boolean
   readonly publishWhenReady: boolean
+  readonly upcoming: ReadonlyArray<string>
 }
 
 /** The Stage frame the crop is authored through, when the event landed in it.
@@ -397,7 +410,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         const composition = blurhashSignature(model.photo, model.editor)
         return {
           photoId: Option.some(String(model.route.id)),
-          sourceUrl: composition === '' ? '' : originalUrl(model.photo),
+          sourceUrl: composition === '' ? '' : smallUrl(model.photo),
           composition,
         }
       },
@@ -446,6 +459,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
       takenAt: S.String,
       useExportDefaults: S.Boolean,
       publishWhenReady: S.Boolean,
+      upcoming: S.Array(S.String),
     },
     {
       modelToDependencies: (model): UploadDependencies => ({
@@ -454,6 +468,10 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         takenAt: model.uploadTakenAt,
         useExportDefaults: model.uploadUseExportDefaults,
         publishWhenReady: model.uploadPublishWhenReady,
+        upcoming: model.queue
+          .filter((item) => item.status === 'pending')
+          .slice(0, UPLOAD_PREFETCH)
+          .map((item) => item.id),
       }),
       // Only a change of item restarts the stream. Progress messages update the
       // Model dozens of times a second; without this, every one would abort and
@@ -466,11 +484,12 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         takenAt,
         useExportDefaults,
         publishWhenReady,
+        upcoming,
       }: UploadDependencies) =>
         Option.match(itemId, {
           onNone: () => Stream.empty,
           onSome: (id) =>
-            uploadStream(id, { tagIds, takenAt, useExportDefaults, publishWhenReady }),
+            uploadStream(id, { tagIds, takenAt, useExportDefaults, publishWhenReady, upcoming }),
         }),
     },
   ),

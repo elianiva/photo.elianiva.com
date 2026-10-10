@@ -25,7 +25,6 @@ import {
   MAT_FOOT_MULTIPLE,
   blurhashSignature,
   compositionSpec,
-  withEditorExport,
 } from './editor'
 import { Message } from './model'
 import type { Model } from './model'
@@ -308,10 +307,6 @@ describe('leaving the Editor', () => {
       side: 0.04,
       foot: 0.04 * MAT_FOOT_MULTIPLE,
     })
-    // An export override cannot move a pixel, so it cannot move the signature.
-    expect(blurhashSignature(photo, withEditorExport(editor, { previewQuality: 60 }))).toBe(
-      blurhashSignature(photo, editor),
-    )
     // A crop does.
     const panned = { ...editor, draft: { ...PRESENTATION, cropX: 10 } }
     expect(blurhashSignature(photo, panned)).not.toBe(blurhashSignature(photo, editor))

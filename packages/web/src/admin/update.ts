@@ -41,6 +41,7 @@ import {
   PersistColsCmd,
   ReplaceUrlCmd,
   SaveSettingsCmd,
+  DownloadPhotoCmd,
   SetEditorStatusCmd,
   SetRowStatusCmd,
   UpdateEditorCmd,
@@ -71,7 +72,8 @@ import {
   type UpdateReturn,
 } from './helpers'
 import { AdminToast, BULK_BORDER_MAT, libraryFiltersOfModel, Message } from './model'
-import type { LibraryPage, Message as Msg, Model } from './model'
+import type { DownloadState, LibraryPage, Message as Msg, Model } from './model'
+import { originalUrl } from '@/lib/image'
 import {
   appRouteToUrl,
   defaultLibraryFilters,
@@ -101,7 +103,6 @@ import {
   withCropDragEnd,
   withCropDragStart,
   withEditorDetails,
-  withEditorExport,
   withEditorFlip,
   withEditorLevel,
   withEditorMat,
@@ -326,6 +327,11 @@ export const init: Runtime.RoutingApplicationInit<Model, Message> = (url: Url) =
 }
 
 // ---------------------------------------------------------------------------
+const withDownload = (model: Model, patch: Partial<DownloadState>): Model =>
+  modifyFields(model, {
+    editor: () => ({ ...model.editor, download: { ...model.editor.download, ...patch } }),
+  })
+
 // upload chaining
 // ---------------------------------------------------------------------------
 
@@ -932,33 +938,34 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     ToggledEditorMat: ({ enabled }) => ({
       model: modifyFields(model, { editor: () => withEditorMat(model.editor, enabled) }),
     }),
-    // The Export panel's six overrides. Like the Mat's toggle they write the
-    // draft and touch nothing else; the Top Bar's `Update` is the one save.
-    SetEditorPreviewFormat: ({ value }) => ({
-      model: modifyFields(model, {
-        editor: () => withEditorExport(model.editor, { previewFormat: value }),
-      }),
-    }),
-    SetEditorPreviewQuality: ({ value }) => ({
-      model: modifyFields(model, {
-        editor: () => withEditorExport(model.editor, { previewQuality: value }),
-      }),
-    }),
-    SetEditorPreviewLongEdge: ({ value }) => ({
-      model: modifyFields(model, {
-        editor: () => withEditorExport(model.editor, { previewLongEdge: value }),
-      }),
-    }),
-    SetEditorKeepExif: ({ isChecked }) => ({
-      model: modifyFields(model, {
-        editor: () => withEditorExport(model.editor, { keepExif: isChecked }),
-      }),
-    }),
-    SetEditorRemoveGps: ({ isChecked }) => ({
-      model: modifyFields(model, {
-        editor: () => withEditorExport(model.editor, { removeGps: isChecked }),
-      }),
-    }),
+    // The Download panel: browser-side export of the stored original.
+    SetDownloadFormat: ({ value }) => ({ model: withDownload(model, { format: value }) }),
+    SetDownloadWidth: ({ value }) => ({ model: withDownload(model, { width: value }) }),
+    SetDownloadQuality: ({ value }) => ({ model: withDownload(model, { quality: value }) }),
+    SetDownloadFrame: ({ value }) => ({ model: withDownload(model, { frame: value }) }),
+    SetDownloadBorder: ({ value }) => ({ model: withDownload(model, { borderPercent: value }) }),
+    StartedDownload: () => {
+      const photo = model.photo
+      if (photo === undefined || model.editor.download.working) return { model }
+      const d = model.editor.download
+      return {
+        model: withDownload(model, { working: true }),
+        commands: [
+          DownloadPhotoCmd({
+            url: originalUrl(photo),
+            name: photo.slug,
+            format: d.format,
+            width: d.width,
+            quality: d.quality,
+            frame: d.frame,
+            borderPercent: d.borderPercent,
+          }),
+        ],
+      }
+    },
+    SucceededDownload: () => ({ model: withDownload(model, { working: false }) }),
+    FailedDownload: ({ message }) =>
+      showToast(withDownload(model, { working: false }), 'Download failed', 'Error', message),
     // The composition was re-encoded. A result whose signature no longer
     // matches the draft is one the operator has already moved off — dropping
     // it keeps the readout from flickering back to a stale crop.

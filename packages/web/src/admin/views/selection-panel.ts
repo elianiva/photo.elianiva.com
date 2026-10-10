@@ -24,7 +24,7 @@ import * as Button from '@/components/ui/button'
 import { status } from '@/components/ui/status'
 import type { StatusVariant } from '@/components/ui/status'
 import { icon } from '@/lib/icons'
-import { originalUrl } from '@/lib/image'
+import { smallUrl } from '@/lib/image'
 
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
@@ -58,7 +58,7 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
         [
           h.img([
             h.Class('max-h-full max-w-full object-contain'),
-            h.Src(originalUrl(photo)),
+            h.Src(smallUrl(photo)),
             h.Alt(photo.title),
             h.Attribute('decoding', 'async'),
           ]),

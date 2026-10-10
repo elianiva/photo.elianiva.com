@@ -20,7 +20,16 @@ import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
 import { librarySortOf } from './route'
 import type { LibraryFilters } from './route'
-import { BULK_BORDER_MAT, GridCols, LIBRARY_PAGE_SIZE, Message, PhotoDetails } from './model'
+import { ImagePipeline } from '@/lib/pipeline/service'
+import {
+  BULK_BORDER_MAT,
+  DownloadFormat,
+  DownloadFrame,
+  GridCols,
+  LIBRARY_PAGE_SIZE,
+  Message,
+  PhotoDetails,
+} from './model'
 import type { Counts as CountsType, LibraryPage } from './model'
 import { GridPrefs, GridPrefsLive } from './prefs'
 
@@ -427,6 +436,105 @@ export const SetEditorStatusCmd = Command.define('SetEditorStatus', {
     ).pipe(Effect.catch(() => Effect.succeed(Message.FailedSetEditorStatus({})))),
 })
 
+// ---------------------------------------------------------------------------
+// the Download panel
+// ---------------------------------------------------------------------------
+
+/** The download could not be made: the original was unreachable, or the
+ *  pipeline failed. Either way the toast prints the message. */
+class DownloadFailed extends S.TaggedError<DownloadFailed>()('DownloadFailed', {
+  message: S.String,
+}) {}
+
+const saveBlob = (blob: Blob, filename: string): Effect.Effect<void> =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => URL.createObjectURL(blob)),
+    (href) =>
+      Effect.sync(() => {
+        const anchor = document.createElement('a')
+        anchor.href = href
+        anchor.download = filename
+        document.body.append(anchor)
+        anchor.click()
+        anchor.remove()
+      }).pipe(
+        // The browser starts the save asynchronously; revoking at once would
+        // cancel it.
+        Effect.andThen(Effect.sleep('10 seconds')),
+      ),
+    (href) => Effect.sync(() => URL.revokeObjectURL(href)),
+  )
+
+const fetchOriginal = (url: string): Effect.Effect<Blob, DownloadFailed> =>
+  Effect.tryPromise({
+    try: async (signal) => {
+      const response = await fetch(url, { credentials: 'include', signal })
+      if (!response.ok) throw new Error(`status ${String(response.status)}`)
+      return response.blob()
+    },
+    catch: (cause) =>
+      new DownloadFailed({
+        message: `Could not fetch the original (${cause instanceof Error ? cause.message : 'network'})`,
+      }),
+  })
+
+const downloadPhoto = Effect.fn('admin.downloadPhoto')(function* (input: {
+  readonly url: string
+  readonly name: string
+  readonly format: DownloadFormat
+  readonly width: number
+  readonly quality: number
+  readonly frame: DownloadFrame
+  readonly borderPercent: number
+}) {
+  const pipeline = yield* ImagePipeline
+  const original = yield* fetchOriginal(input.url)
+  if (input.format === 'original') {
+    return yield* Effect.forkDetach(saveBlob(original, `${input.name}.jpg`))
+  }
+  const out = yield* pipeline
+    .export(original, {
+      format: input.format,
+      width:
+        input.width > 0
+          ? input.width
+          : (yield* Effect.promise(() => createImageBitmap(original))).width,
+      quality: input.quality,
+      frame: input.frame,
+      borderPercent: input.borderPercent,
+      method: 'lanczos3',
+      background: '#ffffff',
+      borderColor: '#ffffff',
+    })
+    .pipe(Effect.mapError((error) => new DownloadFailed({ message: error.message })))
+  return yield* Effect.forkDetach(
+    saveBlob(out.blob, `${input.name}-${String(out.width)}.${out.extension}`),
+  )
+})
+
+/** Fetch the stored original and save it, as it is or re-encoded. Everything
+ *  past the fetch runs in this tab (the pipeline's Web Workers), so a download
+ *  costs the server one object read and nothing more. The save is forked: the
+ *  Message answers when the file is made, not when the browser has finished
+ *  writing it. */
+export const DownloadPhotoCmd = Command.define('DownloadPhoto', {
+  args: {
+    url: S.String,
+    name: S.String,
+    format: DownloadFormat,
+    width: S.Number,
+    quality: S.Number,
+    frame: DownloadFrame,
+    borderPercent: S.Number,
+  },
+  messages: [Message.SucceededDownload, Message.FailedDownload],
+  execute: ({ url, name, format, width, quality, frame, borderPercent }) =>
+    downloadPhoto({ url, name, format, width, quality, frame, borderPercent }).pipe(
+      Effect.map(() => Message.SucceededDownload()),
+      Effect.catch((error) => Effect.succeed(Message.FailedDownload({ message: error.message }))),
+      Effect.provide(ImagePipeline.layer),
+    ),
+})
 // ---------------------------------------------------------------------------
 // the Settings page
 // ---------------------------------------------------------------------------

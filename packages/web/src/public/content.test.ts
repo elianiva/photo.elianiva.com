@@ -8,6 +8,7 @@ import {
   timelineOf,
   flowColumns,
   frameNoShort,
+  figurePreviewUrl,
   figureUrl,
   monthsOf,
   type HomeRead,
@@ -178,10 +179,16 @@ describe('timelineOf', () => {
 // ---------------------------------------------------------------------------
 
 describe('figureUrl', () => {
-  it('serves the Photo’s own original out of R2 through the proxy', () => {
-    const [mapped] = monthsOf([section('2025-08', [photo({ r2Key: 'originals/lift.jpg' })])])
+  it('serves the Photo’s small rendition out of R2 through the proxy', () => {
+    const [mapped] = monthsOf([section('2025-08', [photo({ id: PhotoId.make('lift') })])])
     const url = new URL(figureUrl(mapped!.figures[0]!), 'https://photo.elianiva.com')
-    expect(url.pathname).toBe('/api/image/originals%2Flift.jpg')
+    expect(url.pathname).toBe('/api/image/renditions%2Flift%2Fsmall.webp')
+  })
+
+  it('opens the preview rendition in the lightbox', () => {
+    const [mapped] = monthsOf([section('2025-08', [photo({ id: PhotoId.make('lift') })])])
+    const url = new URL(figurePreviewUrl(mapped!.figures[0]!), 'https://photo.elianiva.com')
+    expect(url.pathname).toBe('/api/image/renditions%2Flift%2Fpreview.webp')
   })
 })
 

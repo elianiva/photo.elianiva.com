@@ -49,7 +49,11 @@ export default defineConfig(({ command }) => ({
   },
   optimizeDeps: {
     entries: ['src/entry.ts'],
+    // The codecs resolve their .wasm with `new URL(..., import.meta.url)`, which
+    // the dependency pre-bundler cannot rewrite.
+    exclude: ['@jsquash/jpeg', '@jsquash/png', '@jsquash/resize', '@jsquash/webp'],
   },
+  worker: { format: 'es' },
   environments: {
     // The Worker `pnpm infra:deploy` uploads, so this is the description both
     // builds read: `pnpm build` builds it here, and Alchemy's Cloudflare Vite

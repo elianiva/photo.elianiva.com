@@ -14,7 +14,7 @@ import * as Button from '@/components/ui/button'
 import * as DropZone from '@/components/ui/drop-zone'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as SpecRow from '@/components/ui/spec-row'
-import { originalUrl } from '@/lib/image'
+import { smallUrl } from '@/lib/image'
 
 import { atomsPage } from './atoms'
 import { libraryFilterBar } from './filter-bar'
@@ -144,7 +144,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
         [
           h.img([
             h.Class('max-h-[70vh] w-full bg-role-surface-container object-contain'),
-            h.Src(originalUrl(photo)),
+            h.Src(smallUrl(photo)),
             h.Alt(photo.title),
             h.Attribute('decoding', 'async'),
           ]),

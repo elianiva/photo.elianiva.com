@@ -9,18 +9,29 @@
  * a delivery path that cannot work is worse than no URL builder, because the
  * 404 surfaces as a missing photograph rather than as a mistake.
  *
- * So every image is served as the original it is, straight out of R2 through
- * the Worker's own proxy. The trade is honest and worth naming: a grid of
- * forty photos asks for forty originals. The designed answer is stored
- * Renditions (CONTEXT.md, `Rendition`; regeneration is #35), and until those
- * exist this is what a Free-plan zone can serve. Upgrading the zone would
- * bring the resizer back; that is a plan decision, not a code one.
+ * So every image is a stored file served straight out of R2 through the
+ * Worker's own proxy: the `small` and `preview` WebP renditions the browser made
+ * at upload (CONTEXT.md, `Rendition`), or the original JPEG for a download.
  */
 
-import type { PhotoWithTags } from '@photo/shared'
+import { renditionKey, type PhotoWithTags, type RenditionKind } from '@photo/shared'
 import { IMAGE_PATH, apiOrigin } from './api'
 
-/** The original's bytes, via the R2 proxy. */
+/** A stored WebP rendition (`small`: 1600px long edge; `preview`: full size),
+ *  via the R2 proxy. The browser produces both at upload, so every Photo has
+ *  them. */
+export const renditionUrl = (photoId: string, kind: RenditionKind): string =>
+  imageUrl(renditionKey(photoId, kind))
+
+/** The grids, the Library and the frontpage. */
+export const smallUrl = (photo: Pick<PhotoWithTags, 'id'>): string =>
+  renditionUrl(photo.id, 'small')
+
+/** What a click opens: the original's pixel size, as WebP. */
+export const previewUrl = (photo: Pick<PhotoWithTags, 'id'>): string =>
+  renditionUrl(photo.id, 'preview')
+
+/** The original JPEG's bytes, via the R2 proxy. The download's source. */
 export const originalUrl = (photo: PhotoWithTags): string => imageUrl(photo.r2Key)
 
 /** By key rather than by Photo, for a view holding only what it needs. */

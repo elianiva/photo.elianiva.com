@@ -1001,6 +1001,51 @@ describe('PhotoService.create', () => {
   })
 })
 
+describe('PhotoService.create renditions', () => {
+  const webp = (): ArrayBuffer =>
+    new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]).buffer
+
+  it('stores the original and both renditions, and purge takes all three down', async () => {
+    const harness = makeTestHarness()
+    const created = await Effect.runPromise(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.create({
+            slug: 'one',
+            title: 'One',
+            r2Key: 'originals/one.jpg',
+            width: 1200,
+            height: 800,
+            metadata: '{}',
+            contentType: 'image/jpeg',
+            bytes: JPEG_BYTES(),
+            renditions: { small: webp(), preview: webp() },
+            tagIds: [],
+          }),
+        ),
+        harness,
+      ),
+    )
+
+    const keys = () =>
+      harness.photos.list().then((page) => page.objects.map((object) => object.key).sort())
+    expect(await keys()).toEqual([
+      'originals/one.jpg',
+      `renditions/${created.id}/preview.webp`,
+      `renditions/${created.id}/small.webp`,
+    ])
+    expect(
+      (await harness.photos.head(`renditions/${created.id}/small.webp`))?.httpMetadata,
+    ).toEqual({
+      contentType: 'image/webp',
+    })
+
+    await trash(harness, created.id)
+    await purge(harness, created.id)
+    expect(await keys()).toEqual([])
+  })
+})
+
 describe('PhotoService.update', () => {
   it('applies every field and returns the refreshed photo with its new tags', async () => {
     const harness = makeTestHarness()

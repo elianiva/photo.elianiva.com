@@ -25,7 +25,9 @@ import {
   UploadErrorBody,
   UploadSuccessBody,
   hasJpegMagic,
+  hasWebpMagic,
   isJpegUpload,
+  isServableKey,
 } from '@photo/shared'
 import { rejectionResponse, verifyAdminAccess } from './access'
 import { ADMIN_RPC_PATH, HEALTH_PATH, IMAGE_PATH, RPC_PATH, UPLOAD_PATH } from './lib/api'
@@ -164,6 +166,21 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     if (!isJpegUpload(file.name, file.type)) {
       return uploadError('unsupported image — JPEG only', 415)
     }
+    // The browser produced both WebP renditions before sending anything; the
+    // Worker only checks they are what they claim to be and stores them.
+    const small = form.get('small')
+    const preview = form.get('preview')
+    if (!(small instanceof File) || !(preview instanceof File)) {
+      return uploadError('small and preview renditions are required', 400)
+    }
+    if (
+      small.size <= 0 ||
+      preview.size <= 0 ||
+      small.size > UPLOAD_MAX_BYTES ||
+      preview.size > UPLOAD_MAX_BYTES
+    ) {
+      return uploadError('renditions must be non-empty and under 80MB', 413)
+    }
     const takenAtRaw = form.get('takenAt')
     // The dialog's two Toggle Rows. `Publish when ready` off (the default)
     // creates a draft; `Use export defaults` on seeds the six export columns
@@ -189,6 +206,14 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     // only a real JPEG ever reaches `extractImageMeta` and R2.
     if (!hasJpegMagic(new Uint8Array(bytes))) {
       return uploadError('unsupported image — JPEG only', 415)
+    }
+
+    const [smallBytes, previewBytes] = yield* Effect.tryPromise({
+      try: () => Promise.all([small.arrayBuffer(), preview.arrayBuffer()]),
+      catch: () => new Error('failed to read upload'),
+    })
+    if (!hasWebpMagic(new Uint8Array(smallBytes)) || !hasWebpMagic(new Uint8Array(previewBytes))) {
+      return uploadError('renditions must be WebP', 415)
     }
 
     const meta = yield* extractImageMeta(bytes).pipe(Effect.catch(() => Effect.succeed(undefined)))
@@ -251,13 +276,13 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
         blurhash: parseBlurhash(form.get('blurhash')),
         contentType: 'image/jpeg',
         bytes,
+        renditions: { small: smallBytes, preview: previewBytes },
         tagIds,
       }),
     )
-    // `renditionsPending` is declared rather than sniffed for: regeneration is
-    // not built yet (CONTEXT.md `Rendition`, #35), so nothing an upload stores
-    // owes a Rendition, and the Admin's queue holds a `true` here at
-    // `processing` rather than publishing a Photo still waiting for one.
+    // The browser made both renditions before sending, so nothing an upload
+    // stores owes one. The field stays on the contract for a queue that holds a
+    // `true` here at `processing`.
     return jsonResponse(UploadSuccessBody.make({ ...created, renditionsPending: false }), {
       status: 201,
     })
@@ -323,7 +348,7 @@ const imageProxy = Effect.fn('api.imageProxy')(function* (env: ApiEnv, rawKey: s
     r2Key === '' ||
     r2Key.length > 256 ||
     r2Key.includes('..') ||
-    !r2Key.startsWith('originals/') ||
+    !isServableKey(r2Key) ||
     r2Key.includes('\0')
   ) {
     // Not an upload rejection: nothing decodes an image proxy's 404, so it

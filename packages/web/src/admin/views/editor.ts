@@ -34,7 +34,7 @@
  */
 
 import type { Document, HtmlBuilder } from 'foldkit/html'
-import type { PhotoPresentation, PhotoRatio, PhotoWithTags, RenditionFormat } from '@photo/shared'
+import type { PhotoPresentation, PhotoRatio, PhotoWithTags } from '@photo/shared'
 import { PHOTO_RATIOS } from '@photo/shared'
 import { ArrowLeft, FlipHorizontal, RotateCcw, RotateCw } from 'lucide'
 
@@ -46,7 +46,6 @@ import * as NavLink from '@/components/ui/nav-link'
 import * as Segment from '@/components/ui/segment'
 import * as Select from '@/components/ui/select'
 import * as Slider from '@/components/ui/slider'
-import * as SpecRow from '@/components/ui/spec-row'
 import * as Status from '@/components/ui/status'
 import * as Textarea from '@/components/ui/textarea'
 import * as ToggleRow from '@/components/ui/toggle-row'
@@ -54,7 +53,7 @@ import * as ToggleRow from '@/components/ui/toggle-row'
 import { blurhashComponentLabel, placeholderDataUrl } from '@/lib/blurhash'
 
 import { icon } from '@/lib/icons'
-import { originalUrl } from '@/lib/image'
+import { previewUrl } from '@/lib/image'
 import { scopeTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
@@ -85,14 +84,10 @@ import {
 } from '../editor'
 import { Message as M } from '../model'
 import type { EditorTab, Model, Msg } from '../model'
-import {
-  DEFAULT_PREVIEW_LONG_EDGE,
-  DEFAULT_PREVIEW_QUALITY,
-  PREVIEW_LONG_EDGES,
-} from '../settings-draft'
+import {} from '../settings-draft'
 import { documentTitle } from './page-head'
 import { toastStack } from './overlays'
-import { formatBytes, type Child } from './shared'
+import { type Child } from './shared'
 
 // ---------------------------------------------------------------------------
 // Top Bar
@@ -228,7 +223,7 @@ const frame = (
         // it carries its own handle: the frame is the window, the image is what
         // moves inside it.
         ...(isOriginal ? [] : [h.DataAttribute('crop-image', 'true')]),
-        h.Src(originalUrl(photo)),
+        h.Src(previewUrl(photo)),
         h.Alt(photo.title),
         h.Attribute('decoding', 'async'),
         h.Class('absolute inset-0 size-full object-cover'),
@@ -505,24 +500,6 @@ const cropPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
   )
 }
 
-/** The three output formats the design's `Segment` offers. AVIF leads because
- *  the migrated `previewFormat` default is `avif` and the design picks it. */
-const EXPORT_FORMATS: ReadonlyArray<Segment.SegmentOption<RenditionFormat>> = [
-  { value: 'jpeg', label: 'JPEG' },
-  { value: 'webp', label: 'WEBP' },
-  { value: 'avif', label: 'AVIF' },
-]
-
-/** `ORIGINAL 6000 × 4000 · 18.4 MB` — the frame the stored columns measured and
- *  the bytes the bucket holds. A row uploaded before `bytes` existed prints the
- *  dimensions and an honest `—` for the size it cannot know. */
-const originalSizeLabel = (photo: PhotoWithTags | undefined): string =>
-  photo === undefined
-    ? '—'
-    : `${String(photo.width)} × ${String(photo.height)} · ${
-        photo.bytes === undefined || photo.bytes === null ? '—' : formatBytes(photo.bytes)
-      }`
-
 /** The `BLURHASH` block in the Export section's lower frame: the component
  *  readout and the decoded 64×40 preview. The component count is
  *  `blurhashComponentLabel()`, read off `image.blurhash.x` / `.y` — never the
@@ -574,92 +551,105 @@ const blurhashBlock = (model: Model, h: HtmlBuilder<Msg>): Child => {
   )
 }
 
-/** The `EXPORT` panel: the output format, the preview's quality and long edge,
- *  the two metadata policies, the three Sizes rows, and the Blurhash block.
- *  Every control writes `EditorState.draft`, so the Top Bar's one `Update` is
- *  the save — there is no `/Use export defaults/` toggle, because the per-photo
- *  columns *are* the defaults until the operator moves one, and a toggle whose
- *  off-state nothing defines is a control that lies.
- *
- *  The head carries no saving readout. The design's `−89%` is the original's
- *  bytes against the FULL Rendition's, and until `E6` (#35) produces that
- *  rendition there is no measurement — the one number the head could print was
- *  `—`, which is a readout that says nothing. */
-const exportPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const draft = model.editor.draft
-  const disabled = draft === undefined
+const DOWNLOAD_FORMATS = [
+  { value: 'original', label: 'ORIGINAL JPEG · UNTOUCHED' },
+  { value: 'jpeg', label: 'JPEG' },
+  { value: 'webp', label: 'WEBP' },
+  { value: 'png', label: 'PNG' },
+] as const
+
+const DOWNLOAD_WIDTHS = [0, 6000, 4000, 3200, 2400, 1600, 1080, 800] as const
+
+const DOWNLOAD_FRAMES = ['original', '1:1', '4:5', '5:4', '3:2', '2:3', '16:9', '9:16'] as const
+
+/** The `DOWNLOAD` panel: pick a format and a width, optionally frame and border
+ *  it, and the browser makes the file from the stored original. The server
+ *  does one object read; every pixel of the work is this tab's. */
+const downloadPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const d = model.editor.download
+  const untouched = d.format === 'original'
+  const lossy = d.format === 'jpeg' || d.format === 'webp'
+  const off = model.photo === undefined || d.working
   return h.section(
     [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-4')],
     [
-      panelHead('EXPORT', undefined, h),
-      Segment.segmentGroup(
+      panelHead('DOWNLOAD', undefined, h),
+      Select.select(
         {
-          selected: draft?.previewFormat ?? 'avif',
-          options: EXPORT_FORMATS,
-          ariaLabel: 'Format',
-          isDisabled: disabled,
-          className: 'w-full',
-          optionClass: 'flex-1',
-        },
-        (value) => M.SetEditorPreviewFormat({ value }),
-        h,
-      ),
-      Slider.slider(
-        {
-          id: 'editor-preview-quality',
-          label: 'PREVIEW QUALITY',
-          value: draft?.previewQuality ?? DEFAULT_PREVIEW_QUALITY,
-          min: 1,
-          max: 100,
-          step: 1,
-          isDisabled: disabled,
-          onInput: (value) => M.SetEditorPreviewQuality({ value }),
+          id: 'download-format',
+          label: 'FORMAT',
+          value: d.format,
+          options: DOWNLOAD_FORMATS.map((o) => ({ value: o.value, label: o.label })),
+          isDisabled: off,
+          onChange: (raw) =>
+            M.SetDownloadFormat({
+              value: DOWNLOAD_FORMATS.find((o) => o.value === raw)?.value ?? 'original',
+            }),
         },
         h,
       ),
       Select.select(
         {
-          id: 'editor-preview-long-edge',
-          label: 'PREVIEW LONG EDGE',
-          value: String(draft?.previewLongEdge ?? DEFAULT_PREVIEW_LONG_EDGE),
-          options: PREVIEW_LONG_EDGES.map((edge) => ({
-            value: String(edge),
-            label: `${String(edge)} PX`,
+          id: 'download-width',
+          label: 'WIDTH',
+          value: String(d.width),
+          options: DOWNLOAD_WIDTHS.map((w) => ({
+            value: String(w),
+            label: w === 0 ? 'AS SHOT' : `${String(w)} PX`,
           })),
-          isDisabled: disabled,
-          onChange: (raw) => M.SetEditorPreviewLongEdge({ value: Number(raw) }),
+          isDisabled: off || untouched,
+          onChange: (raw) => M.SetDownloadWidth({ value: Number(raw) }),
         },
         h,
       ),
-      ToggleRow.toggleRow(
+      Slider.slider(
         {
-          id: 'editor-keep-exif',
-          label: 'Keep EXIF data',
-          isChecked: draft?.keepExif ?? true,
-          isDisabled: disabled,
-          onToggle: (isChecked) => M.SetEditorKeepExif({ isChecked }),
+          id: 'download-quality',
+          label: 'QUALITY',
+          value: d.quality,
+          min: 1,
+          max: 100,
+          step: 1,
+          isDisabled: off || !lossy,
+          onInput: (value) => M.SetDownloadQuality({ value }),
         },
         h,
       ),
-      ToggleRow.toggleRow(
+      Select.select(
         {
-          id: 'editor-remove-gps',
-          label: 'Remove GPS location',
-          isChecked: draft?.removeGps ?? true,
-          isDisabled: disabled,
-          onToggle: (isChecked) => M.SetEditorRemoveGps({ isChecked }),
+          id: 'download-frame',
+          label: 'FRAME',
+          value: d.frame,
+          options: DOWNLOAD_FRAMES.map((f) => ({
+            value: f,
+            label: f === 'original' ? 'AS SHOT' : f,
+          })),
+          isDisabled: off || untouched,
+          onChange: (raw) =>
+            M.SetDownloadFrame({ value: DOWNLOAD_FRAMES.find((f) => f === raw) ?? 'original' }),
         },
         h,
       ),
-      // One row, not three. The design's `PREVIEW` and `FULL` are `E6`'s (#35)
-      // rendition rows, and with no rendition there is no dimension and no byte
-      // count to print — both said `—`, which is a row that says nothing. The
-      // original's own frame is always there, so that is the one row left.
-      h.dl(
-        [h.DataAttribute('slot', 'export-sizes'), h.Class('flex flex-col')],
-        [SpecRow.specRow({ label: 'ORIGINAL', value: originalSizeLabel(model.photo) }, h)],
+      Slider.slider(
+        {
+          id: 'download-border',
+          label: 'BORDER',
+          value: d.borderPercent,
+          min: 0,
+          max: 20,
+          step: 1,
+          display: `${String(d.borderPercent)}%`,
+          isDisabled: off || untouched,
+          onInput: (value) => M.SetDownloadBorder({ value }),
+        },
+        h,
       ),
       blurhashBlock(model, h),
+      Button.button(
+        { onClick: M.StartedDownload(), isDisabled: off, className: 'w-full justify-center' },
+        d.working ? 'Working…' : 'Download',
+        h,
+      ),
     ],
   )
 }
@@ -694,7 +684,7 @@ const editTab = (model: Model, h: HtmlBuilder<Msg>): Child =>
           ],
         ),
       ),
-      exportPanel(model, h),
+      downloadPanel(model, h),
     ],
   )
 

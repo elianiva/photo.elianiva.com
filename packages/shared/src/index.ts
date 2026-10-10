@@ -1,5 +1,6 @@
 export * from './exif'
 export * from './photo'
+export * from './rendition'
 export * from './rpc'
 export * from './settings'
 export * from './upload'

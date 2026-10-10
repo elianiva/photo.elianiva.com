@@ -21,6 +21,7 @@ import {
 } from '@photo/shared'
 
 import { Multi } from '@foldkit/ui/combobox'
+import { Frame } from '@/lib/pipeline/schema'
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Segment from '@/components/ui/segment'
@@ -228,6 +229,27 @@ export const EditorCropDrag = S.Struct({
 })
 export type EditorCropDrag = typeof EditorCropDrag.Type
 
+/** The Download panel's choices. `original` is the stored JPEG, untouched; the
+ *  other three are produced in the browser from it (nothing is sent to the
+ *  server). View state: none of it is saved with the Photo. */
+export const DownloadFormat = S.Literals(['original', 'jpeg', 'webp', 'png'])
+export type DownloadFormat = typeof DownloadFormat.Type
+
+export const DownloadFrame = Frame
+export type DownloadFrame = typeof DownloadFrame.Type
+
+export const DownloadState = S.Struct({
+  format: DownloadFormat,
+  /** Output width in pixels, border included; `0` is the original's own. */
+  width: S.Number,
+  quality: S.Number,
+  frame: DownloadFrame,
+  /** Border as a percentage of the frame. */
+  borderPercent: S.Number,
+  working: S.Boolean,
+})
+export type DownloadState = typeof DownloadState.Type
+
 export const EditorState = S.Struct({
   /** Which Inspector tab is open. `EDIT` is the design's default; `DETAILS`
    *  is the record. `HISTORY` is deferred (decision 8) and no third value
@@ -260,6 +282,7 @@ export const EditorState = S.Struct({
   blurhash: S.optional(S.String),
   /** The pan in flight, or absent. View state, never saved. */
   cropDrag: S.optional(EditorCropDrag),
+  download: DownloadState,
   saving: S.Boolean,
   /** The route the Editor was opened from, so `← Library` returns to the list
    *  the operator was reading rather than to `/admin` whatever it was. */
@@ -593,11 +616,16 @@ export const Message = defineMessageUnion({
   /** The Export panel's six overrides. One variant each so a value's type is
    *  the schema's and the row that writes it is unambiguous; every one lands
    *  on `EditorState.draft` and rides the Top Bar's `Update`. */
-  SetEditorPreviewFormat: { value: RenditionFormat },
-  SetEditorPreviewQuality: { value: S.Number },
-  SetEditorPreviewLongEdge: { value: S.Number },
-  SetEditorKeepExif: { isChecked: S.Boolean },
-  SetEditorRemoveGps: { isChecked: S.Boolean },
+  /** The Download panel. Browser-side only: `StartedDownload` runs the pipeline
+   *  over the stored original and saves the result; nothing is uploaded. */
+  SetDownloadFormat: { value: DownloadFormat },
+  SetDownloadWidth: { value: S.Number },
+  SetDownloadQuality: { value: S.Number },
+  SetDownloadFrame: { value: DownloadFrame },
+  SetDownloadBorder: { value: S.Number },
+  StartedDownload: {},
+  SucceededDownload: {},
+  FailedDownload: { message: S.String },
   /** The client re-encoded the composition's Blurhash. `signature` names the
    *  composition it was encoded from, so a result for a draft the operator has
    *  already moved off is dropped rather than shown or saved. */

@@ -8,7 +8,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { figureUrl, type Figure } from '../content'
+import { figurePreviewUrl, type Figure } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
@@ -37,7 +37,7 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
     [
       h.img([
         h.Class('max-h-full max-w-full h-auto w-auto object-contain'),
-        h.Src(figureUrl(figure)),
+        h.Src(figurePreviewUrl(figure)),
         h.Alt(figure.title),
         h.Attribute('decoding', 'async'),
         h.Attribute('fetchpriority', 'high'),
