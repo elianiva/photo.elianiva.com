@@ -13,7 +13,7 @@ import { FetchHttpClient } from 'effect/http'
 import { RpcSerialization } from 'effect/rpc'
 import { layerProtocolHttp, make as makeRpcClient } from 'effect/rpc/RpcClient'
 import { PhotoAdminRpcs, PhotoPublicRpcs } from '@photo/shared'
-import { ADMIN_RPC_PATH, RPC_PATH, apiOrigin } from './api'
+import { ADMIN_RPC_PATH, RPC_PATH } from './api'
 
 export class RpcFailure extends Data.TaggedError('RpcFailure')<{
   readonly message: string
@@ -131,7 +131,7 @@ const rpcCaller = (group: unknown, url: string) => {
 /** Calls on the public group (`/api/rpc`) — the ungated surface, and the one
  *  `PublicPhotoService` keeps to published, non-trashed Photos. The Admin does
  *  not read Photos through it: it needs Drafts, so it uses the admin group. */
-export const rpcPublic = rpcCaller(PhotoPublicRpcs, `${apiOrigin()}${RPC_PATH}`)
+export const rpcPublic = rpcCaller(PhotoPublicRpcs, RPC_PATH)
 
 /** Calls on the admin group (`/api/admin/rpc`) — update/delete photos,
  *  create/delete tags. Edge-gated + JWT-verified server-side (ADR 0003).
@@ -140,4 +140,4 @@ export const rpcPublic = rpcCaller(PhotoPublicRpcs, `${apiOrigin()}${RPC_PATH}`)
  *  `credentials: same-origin` and there is no preflight to fail. No
  *  `credentials: 'include'` is set anywhere: on the dev port pair the gate
  *  stands down by design, so there is no cookie to carry. */
-export const rpcAdmin = rpcCaller(PhotoAdminRpcs, `${apiOrigin()}${ADMIN_RPC_PATH}`)
+export const rpcAdmin = rpcCaller(PhotoAdminRpcs, ADMIN_RPC_PATH)

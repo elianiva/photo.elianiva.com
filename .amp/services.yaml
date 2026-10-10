@@ -1,0 +1,9 @@
+services:
+  dev:
+    command: pnpm dev
+    port: 4000
+    portals:
+      - url: http://localhost:4000
+        title: Photo site
+      - url: http://localhost:13371
+        title: API Worker

@@ -31,7 +31,7 @@ import {
   nearestRatio,
 } from '@photo/shared'
 
-import { UPLOAD_PATH, apiUrl } from '@/lib/api'
+import { UPLOAD_PATH } from '@/lib/api'
 import { compositionSource, encodeCompositionBlurhash } from '@/lib/blurhash'
 import { CompositionSpec } from '@/lib/blurhash'
 import { smallUrl } from '@/lib/image'
@@ -199,7 +199,7 @@ const uploadStream = (
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const xhr = new XMLHttpRequest()
-          xhr.open('POST', apiUrl(UPLOAD_PATH))
+          xhr.open('POST', UPLOAD_PATH)
           // Harmless in production, where this is a same-origin POST the
           // browser sends the Access cookie with either way. It earns its place
           // on the dev port pair, which is cross-origin.

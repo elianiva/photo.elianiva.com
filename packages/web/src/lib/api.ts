@@ -16,34 +16,18 @@
  * Same-origin removes both: no preflight to fail, and one cookie for the one
  * hostname the Admin is already on.
  *
- * Local development is the one stage that is still cross-origin, because the
- * site's Vite dev server and the API Worker get a fixed port each
- * (`dev.port` in `alchemy.run.ts`). That is what `apiOrigin` is for, and it is
- * why CORS survives in `api-worker.ts` — narrowed to the dev pair alone.
+ * Local development is same-origin for the browser too: the site's Vite dev
+ * server and the API Worker get a fixed port each (`dev.port` in
+ * `alchemy.run.ts`), and the dev server proxies `/api` to the Worker
+ * (`server.proxy` in `vite.config.ts`). CORS survives in `api-worker.ts` for
+ * direct calls to the Worker's own port, narrowed to the dev pair alone.
  */
 
-/** In dev, the API Worker's own port. Everywhere else the API is this origin. */
-const devApiOrigin = 'http://localhost:13371'
-
 /**
- * The API's origin: the dev port in the dev stage, empty everywhere else (so
- * every URL below is a same-origin path on the deployed site).
- *
- * `import.meta.env.DEV` and not a `window` probe, because a server-rendered
- * view has to print the same URL the browser will. The website Worker renders
- * the home page's photos, and it has no `window`: a probe that answered the dev
- * port in the browser and `''` in the Worker stamped `/api/image/…` into the
- * HTML and asked the browser for
- * `http://localhost:13371/api/image/…`, which foldkit reports as a server DOM
- * that did not match the first client view and rebuilds (ADR 0004). Both stages
- * of a build agree on `DEV`, and the dev port is a property of the dev stage
- * rather than of the browser that happens to be on localhost.
- */
-export const apiOrigin = (): string => (import.meta.env.DEV ? devApiOrigin : '')
-
-/**
- * The empty string above is a *relative* base, and something downstream has to
- * be able to resolve it — worth knowing because the failure is not local.
+ * Every URL below is a *relative* path, and something downstream has to be able
+ * to resolve it — worth knowing because the failure is not local. In dev the
+ * Vite dev server proxies `/api` to the API Worker's fixed port
+ * (`server.proxy` in `vite.config.ts`), so dev is same-origin too.
  *
  * Effect's HTTP client turns a request's url into a `URL` with
  * `new URL(url, baseUrl())`, where `baseUrl` is `location.origin +
@@ -77,5 +61,3 @@ export const IMAGE_PATH = `${API_PREFIX}/image`
 
 /** Liveness, including a real D1 round trip. */
 export const HEALTH_PATH = `${API_PREFIX}/health`
-
-export const apiUrl = (path: string): string => `${apiOrigin()}${path}`

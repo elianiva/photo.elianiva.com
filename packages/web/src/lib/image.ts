@@ -15,7 +15,7 @@
  */
 
 import { renditionKey, type PhotoWithTags, type RenditionKind } from '@photo/shared'
-import { IMAGE_PATH, apiOrigin } from './api'
+import { IMAGE_PATH } from './api'
 
 /** A stored WebP rendition (`small`: 1600px long edge; `preview`: full size),
  *  via the R2 proxy. The browser produces both at upload, so every Photo has
@@ -36,7 +36,7 @@ export const originalUrl = (photo: PhotoWithTags): string => imageUrl(photo.r2Ke
 
 /** By key rather than by Photo, for a view holding only what it needs. */
 export const imageUrl = (r2Key: string): string =>
-  `${apiOrigin()}${IMAGE_PATH}/${encodeURIComponent(r2Key)}`
+  `${IMAGE_PATH}/${encodeURIComponent(r2Key)}`
 
 /** Sizes attribute for admin cards: justified rows inside a max-w-6xl
  *  container put a typical card near half the content width (≤ 552px). */

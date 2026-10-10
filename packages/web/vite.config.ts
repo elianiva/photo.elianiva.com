@@ -54,6 +54,12 @@ export default defineConfig(({ command }) => ({
     exclude: ['@jsquash/jpeg', '@jsquash/png', '@jsquash/resize', '@jsquash/webp'],
   },
   worker: { format: 'es' },
+  // Dev only: the browser reaches the API through the site's own origin, which
+  // the Vite dev server forwards to the API Worker's fixed port. A browser that
+  // is not on this machine (a tunnelled or portalled dev server) cannot reach
+  // `localhost:13371` itself, so the Admin's reads failed and showed "Session
+  // expired". It also makes dev same-origin like production.
+  server: { proxy: { '/api': 'http://localhost:13371' } },
   environments: {
     // The Worker `pnpm infra:deploy` uploads, so this is the description both
     // builds read: `pnpm build` builds it here, and Alchemy's Cloudflare Vite

@@ -114,11 +114,12 @@ line on every request.
   500s tells a crawler the site is broken over a date it does not need.
 - The sitemap's `lastmod` is `MAX(takenAt)` over **published, non-trashed**
   Photos, so a trashed photograph stops dating the sitemap.
-- `apiOrigin()` must answer from `import.meta.env.DEV` and not from a `window`
-  probe: the Worker renders the home page's photo URLs and has no `window`, so a
-  browser-only probe stamped `/api/image/…` into the HTML and the client asked
-  for the dev port, which foldkit reports as a server DOM that did not match the
-  first client view and rebuilds.
+- API URLs are root-relative paths in every stage (the dev server proxies `/api`
+  to the API Worker). They must not depend on a `window` probe: the Worker
+  renders the home page's photo URLs and has no `window`, so a browser-only
+  origin stamped `/api/image/…` into the HTML and the client asked for the dev
+  port, which foldkit reports as a server DOM that did not match the first
+  client view and rebuilds.
 - `curl /` is the check that caught all of this, and it is in the
   `verify-photo` skill's doctor: a dev page with no `data-foldkit-app` is a
   refused handoff, not a slow build.
