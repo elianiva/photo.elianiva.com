@@ -84,7 +84,7 @@ import {
   type EditorSegmentGroup,
   type EditorZoom,
 } from '../editor'
-import { Message as M } from '../model'
+import { Message as M, isBusy } from '../model'
 import type { EditorTab, Model, Msg } from '../model'
 import {} from '../settings-draft'
 import { documentTitle } from './page-head'
@@ -176,7 +176,8 @@ const topBarRight = (model: Model, h: HtmlBuilder<Msg>): Child => {
           // Publishing is the main act on a draft; saving edits steps back
           // until the Photo is live, then is the main act itself.
           variant: published || model.photo === undefined ? 'default' : 'secondary',
-          isDisabled: !dirty || model.editor.saving,
+          isDisabled: !dirty,
+          isLoading: model.editor.saving,
         },
         model.editor.saving ? 'Updating…' : 'Update',
         h,
@@ -189,6 +190,7 @@ const topBarRight = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 onClick: M.SetEditorPhotoStatus({ status: published ? 'draft' : 'published' }),
                 variant: published ? 'ghost' : 'default',
                 isDisabled: model.editor.saving,
+                isLoading: isBusy(model, published ? 'editor-unpublish' : 'editor-publish'),
                 attributes: [h.DataAttribute('slot', 'editor-publish')],
               },
               published ? 'Unpublish' : 'Publish',
@@ -665,7 +667,12 @@ const downloadPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
       ),
       blurhashBlock(model, h),
       Button.button(
-        { onClick: M.StartedDownload(), isDisabled: off, className: 'w-full justify-center' },
+        {
+          onClick: M.StartedDownload(),
+          isDisabled: off,
+          isLoading: d.working,
+          className: 'w-full justify-center',
+        },
         d.working ? 'Working…' : 'Download',
         h,
       ),

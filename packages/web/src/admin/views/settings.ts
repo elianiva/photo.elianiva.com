@@ -350,7 +350,7 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child =>
             {
               onClick: M.ExportCsvIndex({}),
               variant: 'secondary',
-              isDisabled: model.settingsIndexing,
+              isLoading: model.settingsIndexing,
             },
             model.settingsIndexing ? 'Building the index…' : 'Export a CSV index',
             h,
@@ -446,7 +446,8 @@ const actions = (model: Model, h: HtmlBuilder<Msg>): Child => {
           Button.button(
             {
               onClick: M.SaveSettings({}),
-              isDisabled: !unsaved || model.settingsSaving,
+              isDisabled: !unsaved,
+              isLoading: model.settingsSaving,
               className: 'whitespace-nowrap',
             },
             model.settingsSaving ? 'Saving…' : 'Save settings',

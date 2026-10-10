@@ -8,7 +8,7 @@ import type { HtmlBuilder } from 'foldkit/html'
 import * as Button from '@/components/ui/button'
 import * as Dialog from '@/components/ui/dialog'
 
-import { AdminToast, Message as M } from '../model'
+import { AdminToast, Message as M, isBusy } from '../model'
 import type { Model, Msg, PendingConfirm } from '../model'
 import type { Child } from './shared'
 
@@ -63,12 +63,17 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                         message: Dialog.Message.RequestedClose(),
                       }),
                       variant: 'secondary',
+                      isDisabled: isBusy(model, 'confirm'),
                     },
                     'Cancel',
                     innerH,
                   ),
                   Button.button(
-                    { onClick: M.ConfirmPending(), variant: 'destructive' },
+                    {
+                      onClick: M.ConfirmPending(),
+                      variant: 'destructive',
+                      isLoading: isBusy(model, 'confirm'),
+                    },
                     confirmLabel(model.pendingConfirm),
                     innerH,
                   ),

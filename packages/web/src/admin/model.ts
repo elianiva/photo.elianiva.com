@@ -440,6 +440,11 @@ export const Model = S.Struct({
   /** The CSV index is being built and downloaded. */
   settingsIndexing: S.Boolean,
 
+  /** Keys of the mutations in flight (`BusyKey`). A button whose action is in
+   *  this list draws a spinner and ignores clicks; dialogs that wait on the
+   *  write stay open until it settles. */
+  busy: S.Array(S.String),
+
   // ----- the Library table -----------------------------------------------------
   /** The ticked Photos. A `Set<PhotoId>` in the design's terms, an array here:
    *  the Model is compared structurally on every render, and an array is the
@@ -806,3 +811,16 @@ export const libraryFiltersOfModel = (model: Model): LibraryFilters => ({
   page: model.libraryPage,
   view: libraryViewOf(model.route),
 })
+
+/** The mutations whose buttons draw a spinner, keyed by what is in flight. */
+export type BusyKey =
+  | 'confirm'
+  | 'bulk-tags'
+  | 'row-status'
+  | 'bulk-border'
+  | 'bulk-publish'
+  | 'bulk-unpublish'
+  | 'editor-publish'
+  | 'editor-unpublish'
+
+export const isBusy = (model: Model, key: BusyKey): boolean => model.busy.includes(key)

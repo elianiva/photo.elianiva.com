@@ -43,10 +43,10 @@ export const dialogClass = 'bg-transparent p-0 open:flex items-center justify-ce
  *  `color.surface` inside a `color.hairline` box with no corner radius, and
  *  the scrim is the design's own `color.shadow` rather than a black alpha. */
 export const dialogBackdropClass =
-  'data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 bg-role-shadow/40 duration-100 supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50'
+  'data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 bg-role-shadow/40 duration-200 ease-out data-leave:duration-150 data-leave:ease-in motion-reduce:animate-none supports-backdrop-filter:backdrop-blur-xs fixed inset-0 isolate z-50'
 
 export const dialogPanelClass =
-  'bg-role-surface text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 grid max-w-[calc(100%-2rem)] gap-4 border border-role-hairline p-4 type-ui duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none'
+  'bg-role-surface text-role-on-surface data-enter:animate-in data-leave:animate-out data-leave:fade-out-0 data-enter:fade-in-0 data-leave:zoom-out-95 data-enter:zoom-in-95 data-enter:slide-in-from-bottom-2 data-leave:slide-out-to-bottom-2 grid max-w-[calc(100%-2rem)] gap-4 border border-role-hairline p-4 type-ui duration-200 ease-out data-leave:duration-150 data-leave:ease-in motion-reduce:animate-none sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none'
 
 /** Upstream renders its close control as a ghost button; the Desk's is the
  *  `Icon Button` ghost kind: 36px, square, an 18px mark. */

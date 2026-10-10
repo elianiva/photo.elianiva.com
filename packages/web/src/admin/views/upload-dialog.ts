@@ -390,7 +390,8 @@ const uploadFooter = (model: Model, h: HtmlBuilder<Msg>): Child => {
           Button.button(
             {
               onClick: onPrimary,
-              isDisabled: model.uploading || summary.draftCount === 0,
+              isDisabled: summary.draftCount === 0,
+              isLoading: model.uploading,
               className: 'whitespace-nowrap',
             },
             primaryLabel,

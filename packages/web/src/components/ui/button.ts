@@ -23,6 +23,8 @@ import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
 import { cn } from '@/lib/utils'
 
+import { spinner } from './spinner'
+
 /** Button variant keys. Sync with `buttonVariants` is compiler-enforced:
  *  `buttonVariants` is `Record<ButtonVariant, string>` (missing key = error)
  *  and annotated object literals reject unknown keys. */
@@ -53,6 +55,9 @@ export const buttonClass = (variant: ButtonVariant = 'default', className?: stri
 export type ButtonConfig<M> = Readonly<{
   onClick?: M
   isDisabled?: boolean
+  /** An async action is in flight: a spinner leads the label, and the button
+   *  ignores clicks and reports `aria-busy`. */
+  isLoading?: boolean
   type?: 'button' | 'submit' | 'reset'
   isAutofocus?: boolean
   variant?: ButtonVariant
@@ -67,18 +72,31 @@ export const button = <M>(config: ButtonConfig<M>, label: Html | string, h: Html
   FoldkitButton.view<M>(
     {
       ...(config.onClick !== undefined && { onClick: config.onClick }),
-      ...(config.isDisabled !== undefined && { isDisabled: config.isDisabled }),
+      ...((config.isDisabled !== undefined || config.isLoading === true) && {
+        isDisabled: config.isDisabled === true || config.isLoading === true,
+      }),
       ...(config.type !== undefined && { type: config.type }),
       ...(config.isAutofocus !== undefined && { isAutofocus: config.isAutofocus }),
       toView: (attributes) =>
         h.button(
           [
             ...attributes.button,
-            h.Class(buttonClass(config.variant, config.className)),
+            h.Class(
+              buttonClass(
+                config.variant,
+                cn(
+                  config.isLoading === true && 'inline-flex items-center justify-center',
+                  config.className,
+                ),
+              ),
+            ),
             h.DataAttribute('slot', 'button'),
+            ...(config.isLoading === true ? [h.AriaBusy(true)] : []),
             ...(config.attributes ?? []),
           ],
-          [label],
+          config.isLoading === true
+            ? [spinner({ className: 'size-4 shrink-0' }, h), label]
+            : [label],
         ),
     },
     h,

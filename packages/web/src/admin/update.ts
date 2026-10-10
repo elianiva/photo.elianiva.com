@@ -83,7 +83,8 @@ import {
   Message,
   UPLOAD_CONCURRENCY,
 } from './model'
-import type { DownloadState, LibraryPage, Message as Msg, Model } from './model'
+import { isBusy } from './model'
+import type { BusyKey, DownloadState, LibraryPage, Message as Msg, Model } from './model'
 import { originalUrl } from '@/lib/image'
 import {
   appRouteToUrl,
@@ -190,6 +191,7 @@ const initialModel = (route: AppRoute): Model => {
     settingsDraft: emptySettingsDraft,
     settingsSaving: false,
     settingsIndexing: false,
+    busy: [],
 
     selected: [],
     libraryPage: filters.page,
@@ -947,25 +949,15 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     RequestDeletePhoto: ({ id, label }) => openConfirm(model, { kind: 'photo', id, label }),
     ConfirmPending: () => {
       const pending = model.pendingConfirm
-      if (pending === undefined) return { model }
-      const dialogClosed = Dialog.close(model.confirmDialog)
-      const cleared = modifyFields(model, {
-        confirmDialog: () => dialogClosed.model,
-        pendingConfirm: () => undefined,
-      })
+      if (pending === undefined || isBusy(model, 'confirm')) return { model }
+      // The dialog stays open, with the button spinning, until the write
+      // settles (see `applyBusy`); `pendingConfirm` is forgotten once it has
+      // finished closing so the copy does not blank mid-exit.
       const command =
         pending.kind === 'photo'
           ? DeletePhotoCmd({ id: pending.id, page: currentPage(model) })
           : BulkTrashCmd({ ids: selectedIds(model), page: currentPage(model) })
-      return {
-        model: cleared,
-        commands: [
-          command,
-          ...liftChildCommands(dialogClosed.commands ?? [], (message) =>
-            Message.GotConfirmMessage({ message }),
-          ),
-        ],
-      }
+      return { model, commands: [command] }
     },
     DeletedPhoto: ({ photos, nextCursor, total }) => {
       // A Photo left every list, so the Library total and its Status both just
@@ -1410,21 +1402,10 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       }
     },
     SetRowStatus: ({ id, status }) => {
-      // The menu has done its job; it closes rather than sitting behind the
-      // row it was opened on.
-      const closed = Dialog.close(model.rowMenu)
-      const dismissed = modifyFields(withOptional(model, { rowMenuId: undefined }), {
-        rowMenu: () => closed.model,
-      })
-      return {
-        model: dismissed,
-        commands: [
-          SetRowStatusCmd({ id, status, page: currentPage(dismissed) }),
-          ...liftChildCommands(closed.commands ?? [], (message) =>
-            Message.GotRowMenuMessage({ message }),
-          ),
-        ],
-      }
+      if (isBusy(model, 'row-status')) return { model }
+      // The menu stays up, its button spinning, until the write settles and
+      // `applyBusy` closes it.
+      return { model, commands: [SetRowStatusCmd({ id, status, page: currentPage(model) })] }
     },
     SucceededSetRowStatus: ({ status, ...page }) =>
       settled(
@@ -1498,10 +1479,9 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const ids = selectedIds(model)
       if (invalid || ids.length === 0) return { model }
       if (tagIds.length === 0 && removeTagIds.length === 0 && !hasDetails) return { model }
-      const closed = Dialog.close(model.addTagDialog)
-      const prepared = modifyFields(model, { addTagDialog: () => closed.model })
+      if (isBusy(model, 'bulk-tags')) return { model }
       return {
-        model: prepared,
+        model,
         commands: [
           BulkAddTagsCmd({
             ids,
@@ -1509,11 +1489,8 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
             // Spread rather than `undefined`: see `SubmitEditorUpdate`.
             ...(removeTagIds.length === 0 ? {} : { removeTagIds }),
             ...(hasDetails ? { details: patch } : {}),
-            page: currentPage(prepared),
+            page: currentPage(model),
           }),
-          ...liftChildCommands(closed.commands ?? [], (message) =>
-            Message.GotAddTagDialogMessage({ message }),
-          ),
         ],
       }
     },
@@ -1688,9 +1665,15 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
 
     // ----- child message folds ----------------------------------------------------------
     GotUploadDialogMessage: ({ message }) => foldUploadDialog(model, message),
-    GotConfirmMessage: ({ message }) => foldConfirm(model, message),
+    GotConfirmMessage: ({ message }) =>
+      isBusy(model, 'confirm') && message._tag === 'RequestedClose'
+        ? { model }
+        : foldConfirm(model, message),
     GotRowMenuMessage: ({ message }) => foldRowMenu(model, message),
-    GotAddTagDialogMessage: ({ message }) => foldAddTag(model, message),
+    GotAddTagDialogMessage: ({ message }) =>
+      isBusy(model, 'bulk-tags') && message._tag === 'RequestedClose'
+        ? { model }
+        : foldAddTag(model, message),
     GotFileDropMessage: ({ message }) =>
       // A drop anywhere the FileDrop is real (the dialog, the Library strip, the
       // atoms sheet) opens the dialog on what it queued, so the operator can
@@ -1820,6 +1803,105 @@ const withLeaveGuard = (model: Model, url: string): UpdateReturn => {
   }
 }
 
+/** The key a message starts, when it dispatched a write. */
+const busyStartedBy = (message: Msg): BusyKey | undefined => {
+  switch (message._tag) {
+    case 'ConfirmPending':
+      return 'confirm'
+    case 'ConfirmAddTag':
+      return 'bulk-tags'
+    case 'SetRowStatus':
+      return 'row-status'
+    case 'AddBorderToSelection':
+      return 'bulk-border'
+    case 'SetSelectionStatus':
+      return message.status === 'published' ? 'bulk-publish' : 'bulk-unpublish'
+    case 'SetEditorPhotoStatus':
+      return message.status === 'published' ? 'editor-publish' : 'editor-unpublish'
+    default:
+      return undefined
+  }
+}
+
+/** The keys a message ends. A failed write (`FailedRpc`) ends every one: the
+ *  Admin runs a single write at a time, so none can still be in flight. */
+const busyEndedBy = (message: Msg): ReadonlyArray<string> => {
+  switch (message._tag) {
+    case 'DeletedPhoto':
+    case 'SucceededBulkTrash':
+      return ['confirm']
+    case 'SucceededAddTag':
+      return ['bulk-tags']
+    case 'SucceededSetRowStatus':
+      return ['row-status']
+    case 'SucceededAddBorder':
+      return ['bulk-border']
+    case 'SucceededSetSelectionStatus':
+      return ['bulk-publish', 'bulk-unpublish']
+    case 'SucceededSetEditorStatus':
+    case 'FailedSetEditorStatus':
+      return ['editor-publish', 'editor-unpublish']
+    case 'FailedRpc':
+      return [
+        'confirm',
+        'bulk-tags',
+        'row-status',
+        'bulk-border',
+        'bulk-publish',
+        'bulk-unpublish',
+        'editor-publish',
+        'editor-unpublish',
+      ]
+    default:
+      return []
+  }
+}
+
+/** Track in-flight writes around `step`, and close the dialogs that were held
+ *  open for one once it has settled (success or failure). */
+const applyBusy = (before: Model, message: Msg, result: UpdateReturn): UpdateReturn => {
+  const started = busyStartedBy(message)
+  const ended = busyEndedBy(message)
+  const dispatched = (result.commands ?? []).length > 0
+  if (started === undefined && ended.length === 0) return result
+  const nowBusy = [
+    ...before.busy.filter((key) => !ended.includes(key)),
+    ...(started !== undefined && dispatched && !before.busy.includes(started) ? [started] : []),
+  ]
+  let model = modifyFields(result.model, { busy: () => nowBusy })
+  const commands: Array<NonNullable<UpdateReturn['commands']>[number]> = [
+    ...(result.commands ?? []),
+  ]
+  if (before.busy.includes('confirm') && ended.includes('confirm') && model.confirmDialog.isOpen) {
+    const closed = Dialog.close(model.confirmDialog)
+    model = modifyFields(model, { confirmDialog: () => closed.model })
+    commands.push(
+      ...liftChildCommands(closed.commands ?? [], (m) => Message.GotConfirmMessage({ message: m })),
+    )
+  }
+  if (before.busy.includes('row-status') && ended.includes('row-status') && model.rowMenu.isOpen) {
+    const closed = Dialog.close(model.rowMenu)
+    model = modifyFields(model, { rowMenu: () => closed.model })
+    commands.push(
+      ...liftChildCommands(closed.commands ?? [], (m) => Message.GotRowMenuMessage({ message: m })),
+    )
+  }
+  if (
+    before.busy.includes('bulk-tags') &&
+    ended.includes('bulk-tags') &&
+    model.addTagDialog.isOpen
+  ) {
+    const closed = Dialog.close(model.addTagDialog)
+    model = modifyFields(model, { addTagDialog: () => closed.model })
+    commands.push(
+      ...liftChildCommands(closed.commands ?? [], (m) =>
+        Message.GotAddTagDialogMessage({ message: m }),
+      ),
+    )
+  }
+  return commands.length > 0 ? { model, commands } : { model }
+}
+
 export function update(model: Model, message: Msg): UpdateReturn {
-  return step(model, message)
+  return applyBusy(model, message, step(model, message))
 }

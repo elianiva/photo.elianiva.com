@@ -45,7 +45,7 @@ import { smallUrl } from '@/lib/image'
 import { cn } from '@/lib/utils'
 
 import { bulkDetailsPatch, parseExifNumber, parseShutter } from '../editor'
-import { Message as M } from '../model'
+import { Message as M, isBusy } from '../model'
 import type { BulkDetailField, Model, Msg } from '../model'
 import { libraryEmpty } from './library-empty'
 import { libraryPager } from './library-pager'
@@ -150,6 +150,9 @@ const row = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Child =>
  */
 export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const count = model.selected.length
+  const bulkBusy = ['bulk-border', 'bulk-publish', 'bulk-unpublish'].some((key) =>
+    model.busy.includes(key),
+  )
   return h.div(
     [
       h.DataAttribute('slot', 'bulk-bar'),
@@ -192,14 +195,33 @@ export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
           // Editor's `Discard` — discard unsaved edits — is a different control
           // about a different thing; the collision is the design's.
           Button.button({ onClick: M.ClearedSelection(), variant: 'ghost' }, 'Discard', h),
-          Button.button({ onClick: M.AddBorderToSelection(), variant: 'ghost' }, 'Add border', h),
           Button.button(
-            { onClick: M.SetSelectionStatus({ status: 'draft' }), variant: 'ghost' },
+            {
+              onClick: M.AddBorderToSelection(),
+              variant: 'ghost',
+              isLoading: isBusy(model, 'bulk-border'),
+              isDisabled: bulkBusy,
+            },
+            'Add border',
+            h,
+          ),
+          Button.button(
+            {
+              onClick: M.SetSelectionStatus({ status: 'draft' }),
+              variant: 'ghost',
+              isLoading: isBusy(model, 'bulk-unpublish'),
+              isDisabled: bulkBusy,
+            },
             'Unpublish',
             h,
           ),
           Button.button(
-            { onClick: M.SetSelectionStatus({ status: 'published' }), variant: 'accent' },
+            {
+              onClick: M.SetSelectionStatus({ status: 'published' }),
+              variant: 'accent',
+              isLoading: isBusy(model, 'bulk-publish'),
+              isDisabled: bulkBusy,
+            },
             'Publish',
             h,
           ),
@@ -207,7 +229,11 @@ export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
           // page *is* a Tag page (ADR 0006), so the grouping entity is the Tag.
           Button.button({ onClick: M.OpenedAddTag(), variant: 'ghost' }, 'Edit', h),
           Button.button(
-            { onClick: M.RequestBulkTrash({ count }), variant: 'destructive' },
+            {
+              onClick: M.RequestBulkTrash({ count }),
+              variant: 'destructive',
+              isDisabled: bulkBusy,
+            },
             'Delete',
             h,
           ),
@@ -359,6 +385,7 @@ export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
                         message: Dialog.Message.RequestedClose(),
                       }),
                       variant: 'secondary',
+                      isDisabled: isBusy(model, 'bulk-tags'),
                       attributes: [h.DataAttribute('slot', 'add-tag-cancel')],
                     },
                     'Cancel',
@@ -369,6 +396,7 @@ export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
                       onClick: M.ConfirmAddTag(),
                       variant: 'default',
                       isDisabled: nothing || invalid,
+                      isLoading: isBusy(model, 'bulk-tags'),
                       attributes: [h.DataAttribute('slot', 'add-tag-confirm')],
                     },
                     'Apply',
@@ -426,6 +454,7 @@ const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
                           }),
                           variant: 'ghost',
                           className: 'justify-start',
+                          isLoading: isBusy(model, 'row-status'),
                         },
                         photo.status === 'published' ? 'Unpublish' : 'Publish',
                         innerH,
@@ -435,6 +464,7 @@ const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
                           onClick: M.RequestedRowTrash({ id: photo.id, title: photo.title }),
                           variant: 'destructive',
                           className: 'justify-start',
+                          isDisabled: isBusy(model, 'row-status'),
                         },
                         'Move to Trash',
                         innerH,
