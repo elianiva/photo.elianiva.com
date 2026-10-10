@@ -14,7 +14,7 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "infra:deploy": "alchemy deploy --stage prod --yes",
-    "prepare": "lefthook install || true"
+    "prepare": "lefthook install --force || true"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0",
