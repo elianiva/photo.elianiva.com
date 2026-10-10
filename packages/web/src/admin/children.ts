@@ -14,7 +14,7 @@ import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Segment from '@/components/ui/segment'
 
-import { CreateTagCmd } from './commands'
+import { CreateTagCmd, ReadUploadExifCmd } from './commands'
 import {
   disposeItemAssets,
   showToast,
@@ -135,7 +135,9 @@ export const foldFileDrop = Update.foldChild({
 
       let nextModel: Model = { ...droppedModel, queue: [...droppedModel.queue, ...fresh] }
 
-      let mutableCommands: Array<Command.Command<Msg>> = []
+      let mutableCommands: Array<Command.Command<Msg>> = withinCap.map((itemId) =>
+        ReadUploadExifCmd({ itemId }),
+      )
       // Re-dropped files already in the queue are skipped silently by the
       // dedupe above — say so instead of looking like nothing happened.
       const duplicateCount = allIds.length - freshIds.length

@@ -84,6 +84,10 @@ export const QueueItem = S.Struct({
   /** The rendition summary `E6` fills in for the `processing` state
    *  (`AVIF · 2400, 1600, 800 px`). */
   renditionLabel: S.optional(S.String),
+  /** What the browser read from the file's EXIF on drop, one fact per entry. */
+  exifFacts: S.optional(S.Array(S.String)),
+  /** Why the read came back empty or without a capture date. */
+  exifProblem: S.optional(S.String),
   error: S.optional(S.String),
 })
 export type QueueItem = typeof QueueItem.Type
@@ -512,6 +516,12 @@ export const Message = defineMessageUnion({
   CancelUploads: {},
   /** The frame decoded from the file's own pixels, before the bytes go up. */
   UploadItemFacts: { itemId: S.String, width: S.Number, height: S.Number, ratio: S.String },
+  /** The EXIF the browser could read from a just-dropped file. */
+  ReadUploadExif: {
+    itemId: S.String,
+    facts: S.Array(S.String),
+    problem: S.optional(S.String),
+  },
   /** One `XMLHttpRequest.upload.onprogress` tick. */
   UploadProgress: { itemId: S.String, loaded: S.Number },
   /** `renditionsPending` is `E6`'s signal: true holds the row at `processing`

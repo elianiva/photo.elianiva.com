@@ -21,6 +21,8 @@ import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
 import { exifPatchOfDetails } from './editor'
 import { librarySortOf } from './route'
 import type { LibraryFilters } from './route'
+import { readExif } from '@/lib/exif-read'
+import type { ExifRead } from '@/lib/exif-read'
 import { ImagePipeline } from '@/lib/pipeline/service'
 import {
   BULK_BORDER_MAT,
@@ -30,6 +32,7 @@ import {
   LIBRARY_PAGE_SIZE,
   Message,
   PhotoDetails,
+  fileStore,
 } from './model'
 import type { Counts as CountsType, LibraryPage } from './model'
 import { GridPrefs, GridPrefsLive } from './prefs'
@@ -67,6 +70,20 @@ export const FetchSessionCmd = Command.define('FetchSession', {
   execute: Effect.map(rpcAdmin<Session>('GetSession', {}), ({ email, teamDomain }) =>
     Message.SucceededGetSession({ email, teamDomain }),
   ).pipe(Effect.catch(() => Effect.succeed(Message.FailedGetSession({})))),
+})
+
+/** The EXIF the browser can read from a dropped file, shown on its queue row
+ *  before anything uploads. The bytes live in `fileStore`, not in the args. */
+export const ReadUploadExifCmd = Command.define('ReadUploadExif', {
+  args: { itemId: S.String },
+  messages: [Message.ReadUploadExif],
+  execute: ({ itemId }) =>
+    Effect.suspend(() => {
+      const file = fileStore.get(itemId)
+      return file === undefined
+        ? Effect.succeed<ExifRead>({ facts: [], problem: 'File is gone' })
+        : readExif(file)
+    }).pipe(Effect.map(({ facts, problem }) => Message.ReadUploadExif({ itemId, facts, problem }))),
 })
 
 /** The sidebar's counts. Re-issued on every route change and after every

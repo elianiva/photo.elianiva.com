@@ -849,6 +849,14 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           ),
       }),
     }),
+    ReadUploadExif: ({ itemId, facts, problem }) => ({
+      model: modifyFields(model, {
+        queue: () =>
+          model.queue.map((item) =>
+            item.id === itemId ? { ...item, exifFacts: facts, exifProblem: problem } : item,
+          ),
+      }),
+    }),
     UploadProgress: ({ itemId, loaded }) => ({
       model: modifyFields(model, {
         queue: () => model.queue.map((item) => (item.id === itemId ? { ...item, loaded } : item)),

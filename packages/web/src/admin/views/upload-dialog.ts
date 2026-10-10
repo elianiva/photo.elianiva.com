@@ -82,6 +82,25 @@ const detailText = (item: QueueItem): string => {
   }
 }
 
+/** What the browser read from the file's EXIF, and what it could not. Absent
+ *  until the read lands, so nothing flashes a false "no EXIF". */
+const exifLines = (item: QueueItem, h: HtmlBuilder<Msg>): ReadonlyArray<Child> => {
+  if (item.exifFacts === undefined) return []
+  return [
+    ...(item.exifFacts.length > 0
+      ? [
+          h.p(
+            [h.Class('type-exif-sm text-role-text-secondary')],
+            [item.exifFacts.join(' · ')],
+          ),
+        ]
+      : []),
+    ...(item.exifProblem === undefined
+      ? []
+      : [h.p([h.Class('type-caption italic text-role-error')], [item.exifProblem])]),
+  ]
+}
+
 const detailClass = (item: QueueItem): string =>
   item.status === 'failed'
     ? 'type-caption italic text-role-error'
@@ -151,6 +170,7 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
           h.span([h.Class('truncate type-exif text-role-text-primary')], [item.name]),
           ...(item.status === 'uploading' ? [uploadBar(item, h)] : []),
           h.p([h.Class(`truncate ${detailClass(item)}`)], [detailText(item)]),
+          ...exifLines(item, h),
         ],
       ),
       h.div([h.Class('flex w-20 shrink-0 justify-end')], [rowMeta(item, h)]),
