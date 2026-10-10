@@ -6,63 +6,70 @@
  * outside the image also closes.
  */
 
-import { Option } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Option } from "effect";
+import type { HtmlBuilder } from "foldkit/html";
 
-import { imageUrl } from '@/lib/image'
-import { figurePreviewUrl, figureUrl, placeholderStyle, type Figure } from '../content'
-import { Message } from '../model'
-import type { Child } from './shared'
+import { imageUrl } from "@/lib/image";
+import {
+  figurePreviewUrl,
+  figureUrl,
+  placeholderStyle,
+  type Figure,
+} from "../content";
+import { Message } from "../model";
+import type { Child } from "./shared";
 
 export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
   h.div(
     [
-      h.Key('lightbox'),
+      h.Key("lightbox"),
       h.Class(
-        'fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-role-mat-white p-6 sm:p-12 lg:gap-6 lg:p-16',
+        "fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-role-mat-white p-6 sm:p-12 lg:gap-6 lg:p-16",
       ),
       h.OnClick(Message.CloseLightbox()),
       // Tab cycles back to the close button so focus never leaves the dialog.
       // The message is benign: re-selecting the open photo changes nothing.
       h.OnKeyDownFocus((key) =>
-        key === 'Tab'
+        key === "Tab"
           ? Option.some({
-              focusSelector: '#lightbox-close',
+              focusSelector: "#lightbox-close",
               message: Message.ClickedFigure({ id: figure.id }),
             })
           : Option.none(),
       ),
-      h.Attribute('role', 'dialog'),
+      h.Attribute("role", "dialog"),
       h.AriaModal(true),
       h.AriaLabel(figure.title),
     ],
     [
       h.div(
-        [h.Class('flex min-h-0 w-full flex-1 items-center justify-center')],
+        [h.Class("flex min-h-0 w-full flex-1 items-center justify-center")],
         [
           // The 1600px small rendition (usually already cached from the
           // timeline) paints at once and the full-size preview fades in over it
           // when it lands, so opening never waits on the big file.
           h.div(
-            [h.Class('relative grid max-h-full max-w-full')],
+            [h.Class("grid h-full w-full min-h-0")],
             [
               h.img([
-                h.Class('col-start-1 row-start-1 max-h-full max-w-full h-auto w-auto object-contain'),
+                h.Class(
+                  "col-start-1 row-start-1 h-full w-full min-h-0 object-contain",
+                ),
                 h.Style(placeholderStyle(figure)),
                 h.Src(figureUrl(figure)),
                 h.Alt(figure.title),
-                h.Attribute('decoding', 'async'),
+                h.Attribute("decoding", "async"),
                 h.OnClick(Message.ClickedFigure({ id: figure.id })),
               ]),
               h.img([
                 h.Class(
-                  'col-start-1 row-start-1 max-h-full max-w-full h-full w-full object-contain',
+                  "col-start-1 row-start-1 h-full w-full min-h-0 object-contain",
                 ),
                 h.Src(figurePreviewUrl(figure)),
-                h.Alt(''),
+                h.Alt(""),
                 h.AriaHidden(true),
-                h.Attribute('decoding', 'async'),
-                h.Attribute('fetchpriority', 'low'),
+                h.Attribute("decoding", "async"),
+                h.Attribute("fetchpriority", "low"),
                 // Clicks on the image itself must not bubble to the close backdrop.
                 h.OnClick(Message.ClickedFigure({ id: figure.id })),
               ]),
@@ -76,16 +83,22 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
             h.dl(
               [
                 h.Class(
-                  'grid max-h-[28vh] w-full max-w-[1080px] shrink-0 grid-cols-2 gap-x-6 gap-y-3 overflow-y-auto border-t border-role-hairline pt-4 sm:grid-cols-4 lg:flex lg:flex-wrap lg:justify-center lg:gap-x-10',
+                  "grid max-h-[28vh] w-full max-w-[1080px] shrink-0 grid-cols-2 gap-x-6 gap-y-3 overflow-y-auto border-t border-role-hairline pt-4 sm:grid-cols-4 lg:flex lg:flex-wrap lg:justify-center lg:gap-x-10",
                 ),
                 h.OnClick(Message.ClickedFigure({ id: figure.id })),
               ],
               figure.details.map((detail) =>
                 h.div(
-                  [h.Class('flex min-w-0 flex-col gap-0.5')],
+                  [h.Class("flex min-w-0 flex-col gap-0.5")],
                   [
-                    h.dt([h.Class('type-label text-role-text-disabled uppercase')], [detail.label]),
-                    h.dd([h.Class('type-exif text-role-text-primary break-words')], [detail.value]),
+                    h.dt(
+                      [h.Class("type-label text-role-text-disabled uppercase")],
+                      [detail.label],
+                    ),
+                    h.dd(
+                      [h.Class("type-exif text-role-text-primary break-words")],
+                      [detail.value],
+                    ),
                   ],
                 ),
               ),
@@ -94,25 +107,25 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
       h.a(
         [
           h.Href(imageUrl(figure.r2Key)),
-          h.Attribute('download', ''),
+          h.Attribute("download", ""),
           h.Class(
-            'absolute top-12 right-32 type-label text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-36',
+            "absolute top-12 right-32 type-label text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-36",
           ),
           h.OnClick(Message.ClickedFigure({ id: figure.id })),
         ],
-        ['Download'],
+        ["Download"],
       ),
       h.button(
         [
-          h.Id('lightbox-close'),
+          h.Id("lightbox-close"),
           h.Autofocus(true),
           h.Class(
-            'absolute top-12 right-12 type-label text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-16',
+            "absolute top-12 right-12 type-label text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-16",
           ),
           h.OnClick(Message.CloseLightbox()),
-          h.AriaLabel('Close'),
+          h.AriaLabel("Close"),
         ],
-        ['Close'],
+        ["Close"],
       ),
     ],
-  )
+  );
