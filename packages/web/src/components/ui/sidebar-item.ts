@@ -3,15 +3,14 @@
  * One geometry, 36px tall with 8px of vertical and 12px of horizontal
  * padding, and two states:
  *
- *   default  no box, `color.text.secondary` label, `color.text.disabled`
- *            count, filling `color.surface.hover` on hover
- *   active   `color.surface` box with a 2px `color.rule` rule down the
- *            leading edge, label and count in `color.text.primary`
+ *   default  no box, `color.text.secondary` label and count, filling
+ *            `color.surface.hover` on hover
+ *   active   a rounded `color.surface.container` pill, label and count in
+ *            `color.text.primary`
  *
  * The label is `$typography.ui`, the count `$typography.exif`, and the icon
- * slot is 16px. The leading rule is this row's only way of saying "you are
- * here", so the current row is marked by a box and a rule rather than by
- * colour alone.
+ * slot is 16px. The pill is this row's only way of saying "you are here", so
+ * the current row is marked by a box rather than by colour alone.
  *
  * `href` and `onClick` are the two shapes the row takes. A row that navigates
  * gets an `href` — the runtime intercepts the anchor, so a cold load of that
@@ -32,10 +31,10 @@ export const sidebarItemStateKeys = ['active', 'default'] as const
 export type SidebarItemState = (typeof sidebarItemStateKeys)[number]
 
 const sidebarItemBase =
-  'focus-visible:ring-role-focus/50 flex h-9 w-full items-center gap-3 border-0 border-l-2 border-l-transparent py-2 pr-3 pl-2 text-left transition-colors duration-120 outline-none focus-visible:ring-[3px]'
+  'focus-visible:ring-role-focus/50 flex h-9 w-full items-center gap-3 rounded-md py-2 pr-3 pl-3 text-left transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 export const sidebarItemStateClasses: Record<SidebarItemState, string> = {
-  active: 'bg-role-surface border-l-role-rule',
+  active: 'bg-role-surface-container',
   default: 'hover:bg-role-surface-hover',
 }
 

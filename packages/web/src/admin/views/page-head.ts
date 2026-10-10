@@ -1,8 +1,7 @@
 /**
  * Page Head — the title bar every route draws (master `8eef803483156676`).
- * A `$typography.headline` title hard left on the page's left edge, a 3px
- * `color.rule` rule under the whole bar, and the header's own actions on the
- * right: the search field with its shortcut keycap, and the primary Upload
+ * A `$typography.headline` title hard left on the page's left edge and the
+ * header's own actions on the right: the search field with its shortcut keycap, and the primary Upload
  * button.
  *
  * The title and the actions are read off the route through one table
@@ -116,7 +115,7 @@ const uploadAction = (model: Model, h: HtmlBuilder<Msg>): Child =>
         ),
         h,
       )
-    : Button.button({ onClick: M.OpenUpload() }, 'Upload', h)
+    : Button.button({ onClick: M.OpenUpload(), variant: 'accent' }, 'Upload', h)
 
 const headerActions = (head: PageHead, model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
@@ -132,10 +131,10 @@ const headerActions = (head: PageHead, model: Model, h: HtmlBuilder<Msg>): Child
 export const pageHead = (model: Model, h: HtmlBuilder<Msg>, gutter: string): Child => {
   const head = pageHeadOf(model)
   return h.header(
-    [h.DataAttribute('slot', 'page-head'), h.Class(cn(gutter, 'pb-4 pt-8'))],
+    [h.DataAttribute('slot', 'page-head'), h.Class(cn(gutter, 'pb-2 pt-10'))],
     [
       h.div(
-        [h.Class('flex flex-wrap items-end justify-between gap-x-4 gap-y-2')],
+        [h.Class('flex flex-wrap items-end justify-between gap-x-4 gap-y-3')],
         [
           h.h1([h.Class('type-headline text-role-text-primary')], [head.title]),
           ...(head.stamp === undefined
@@ -153,9 +152,6 @@ export const pageHead = (model: Model, h: HtmlBuilder<Msg>, gutter: string): Chi
           headerActions(head, model, h),
         ],
       ),
-      // The design's 3px `color.rule` under the whole bar, the only thick rule
-      // on the Desk.
-      h.div([h.AriaHidden(true), h.Class('mt-4 h-[3px] w-full bg-role-rule')], []),
     ],
   )
 }

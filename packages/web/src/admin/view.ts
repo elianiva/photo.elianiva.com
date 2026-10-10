@@ -3,7 +3,7 @@
  * sidebar (brand, nav, session footer) and the page column, which opens
  * with the Page Head and continues into the route's own page. The app-level
  * overlays (upload Dialog, confirm AlertDialog, toast stack) sit on top of
- * both. The page itself is chosen by the route in `views/pages.ts`.
+ * both. The Library adds a third, the Selection panel, to the page column's right. The page itself is chosen by the route in `views/pages.ts`.
  *
  * The root element carries the theme scope, read off the route the Model
  * already holds. `data-theme="dark"` re-themes this whole subtree and nothing
@@ -27,6 +27,7 @@ import { scopeTheme, themeForRoute } from '@/lib/theme'
 
 import type { Model, Msg } from './model'
 import { editorDocument } from './views/editor'
+import { selectionPanel } from './views/selection-panel'
 import { confirmDialog, toastStack } from './views/overlays'
 import { documentTitle, pageHead } from './views/page-head'
 import { routePage } from './views/pages'
@@ -51,6 +52,7 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
           h.main([h.Class(`${GUTTER} flex-1 pb-24`)], [routePage(model, h)]),
         ],
       ),
+      ...(model.route._tag === 'Library' ? [selectionPanel(model, h)] : []),
       uploadDialog(model, h),
       confirmDialog(model, h),
       toastStack(model, h),

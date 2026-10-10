@@ -1,12 +1,13 @@
 /**
  * Sidebar — the Admin's navigation column (master `e4b0b09450e7d630`).
- * 248px, pinned to the start of the shell and as tall as the viewport, on
- * `color.surface.container` behind a 1px `color.hairline` rule.
+ * 232px, pinned to the start of the shell and as tall as the viewport, on
+ * `color.surface.sunken` — a step below the page, so the rail is told apart by
+ * its ground rather than by a rule.
  *
  * Three bands, top to bottom: the brand, the primary nav, and the footer.
- * Every band is closed by a hairline, because a hairline is the site's one
- * structural device and three bands of the same grey text with nothing between
- * them read as one long list rather than as a header, a nav and a footer. The
+ * The footer is closed by a hairline and the brand and nav are
+ * spaced apart, so three bands of the same grey text still read as a header, a
+ * nav and a footer rather than one long list. The
  * primary nav's counts and the footer's meter are the same read, so the Library
  * total cannot show one number on the rail and another on the Library bar. The
  * footer's email is the verified Access claim, not a constant.
@@ -44,8 +45,8 @@ import type { Child } from './shared'
 // ---------------------------------------------------------------------------
 
 /** The design's 248px column, and the padding either side of the brand. */
-const SIDEBAR_WIDTH = 'w-[248px]'
-const SIDEBAR_PADDING = 'py-6 pr-3 pl-3'
+const SIDEBAR_WIDTH = 'w-[232px]'
+const SIDEBAR_PADDING = 'px-3 py-6'
 
 // ---------------------------------------------------------------------------
 // brand
@@ -57,7 +58,7 @@ const SIDEBAR_PADDING = 'py-6 pr-3 pl-3'
  *  was a destination. */
 const brand = (h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex shrink-0 flex-col gap-1 border-b border-role-hairline pb-4')],
+    [h.Class('flex shrink-0 flex-col gap-1.5 px-3 pb-6')],
     [
       // The design's wordmark. `THE DESK` is display copy for this one place —
       // it is not a route, a type, or a directory (CONTEXT.md).
@@ -86,7 +87,7 @@ const libraryMeter = (model: Model, h: HtmlBuilder<Msg>): Child => {
   // be NaN, and a NaN width would silently vanish.
   const livePercent = total > 0 ? Math.min(100, Math.max(0, (byStatus.published / total) * 100)) : 0
   return h.div(
-    [h.Class('flex flex-col gap-2')],
+    [h.Class('flex flex-col gap-2 px-3')],
     [
       h.div(
         [h.Class('flex items-baseline justify-between gap-2')],
@@ -102,7 +103,7 @@ const libraryMeter = (model: Model, h: HtmlBuilder<Msg>): Child => {
       // it. Hidden from assistive tech because the readout beside it already
       // says the same fraction in words.
       h.div(
-        [h.AriaHidden(true), h.Class('h-0.5 w-full overflow-hidden bg-role-hairline')],
+        [h.AriaHidden(true), h.Class('h-0.5 w-full overflow-hidden bg-role-outline-variant')],
         [
           h.div(
             [
@@ -172,7 +173,7 @@ const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
     [
       h.AriaLabel('Admin sections'),
       h.DataAttribute('slot', 'sidebar-nav'),
-      h.Class('flex shrink-0 flex-col border-b border-role-hairline pt-3 pb-3'),
+      h.Class('flex shrink-0 flex-col gap-0.5'),
     ],
     rows.map((row) => navRow(model, row, h)),
   )
@@ -202,7 +203,7 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const signOut = signOutUrl(model)
   return h.div(
     [
-      h.Class('flex shrink-0 flex-col gap-3 border-t border-role-hairline pt-4'),
+      h.Class('mt-auto flex shrink-0 flex-col gap-3 border-t border-role-outline-variant pt-4'),
       h.DataAttribute('slot', 'sidebar-footer'),
     ],
     [
@@ -232,7 +233,7 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
         [
           h.Href('/'),
           h.Class(
-            'inline-flex items-center gap-1.5 px-2 type-caption text-role-text-primary transition-colors duration-120 hover:text-role-text-secondary',
+            'inline-flex items-center gap-1.5 px-3 type-caption text-role-text-primary transition-colors duration-120 hover:text-role-text-secondary',
           ),
           h.DataAttribute('slot', 'view-site'),
         ],
@@ -254,7 +255,7 @@ export const sidebar = (model: Model, h: HtmlBuilder<Msg>): Child =>
     [
       h.AriaLabel('Admin'),
       h.Class(
-        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-container sticky top-0 flex h-dvh shrink-0 flex-col border-r border-role-hairline`,
+        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-sunken sticky top-0 flex h-dvh shrink-0 flex-col`,
       ),
       h.DataAttribute('slot', 'sidebar'),
     ],

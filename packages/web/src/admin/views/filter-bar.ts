@@ -3,8 +3,8 @@
  * tiers of choice groups: the ones that narrow the list, then the ones that
  * decide how it is read.
  *
- * Every one of them is the same atom — `Segment`, one height, one 1px
- * `color.rule` box, a label naming it — because they used not to be, and the
+ * Every one of them is the same atom — `Segment`, one height, drawn as a row
+ * of rounded pills (`shape: 'pill'`), a label naming it — because they used not to be, and the
  * row read as four unrelated controls: two segments in boxes of different
  * greys at 28px, a native dropdown at 36px wearing a bottom rule, and a pair of
  * round icon buttons. Two heights, three frames, two shapes. Worse, the grid's
@@ -12,7 +12,7 @@
  * above it and right-aligned, so the one control that changed with the view
  * sat outside the bar that changed with it.
  *
- * The rule now: a choice is a `Segment`, and a `Segment` is square.
+ * The rule now: a choice is a `Segment`, and in the Library's bar a `Segment` is a pill.
  *
  * Two tiers rather than one row is the measure's decision, not a leftover: the
  * page column is `max-w-[1080px]` — the Library table's own width, at every
@@ -116,7 +116,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
       // it, so no viewport makes them one row. Letting the clusters wrap on
       // their own is what left the sort and the view toggle stranded on a
       // third line with nothing relating them to the filters above.
-      h.Class('mt-8 flex flex-col gap-y-4'),
+      h.Class('mt-6 flex flex-col gap-y-4'),
     ],
     [
       h.div(
@@ -128,6 +128,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
               options: statusOptions(model),
               label: 'STATUS',
               ariaLabel: 'Status filter',
+              shape: 'pill',
             },
             (value) => M.SelectedStatusFilter({ value }),
             h,
@@ -138,6 +139,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
               options: ratioOptions,
               label: 'RATIO',
               ariaLabel: 'Ratio filter',
+              shape: 'pill',
             },
             (value) => M.SelectedRatioFilter({ value }),
             h,
@@ -153,6 +155,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
               options: SORT_OPTIONS,
               label: 'SORT',
               ariaLabel: 'Sort',
+              shape: 'pill',
             },
             (value) => M.SelectedSortFilter({ value }),
             h,
@@ -163,6 +166,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
               options: VIEW_OPTIONS,
               label: 'VIEW',
               ariaLabel: 'View',
+              shape: 'pill',
             },
             (value) => M.SelectedView({ view: value === 'grid' ? 'grid' : 'list' }),
             h,
@@ -178,6 +182,7 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
                     options: colsOptions,
                     label: 'DENSITY',
                     ariaLabel: 'Grid density',
+                    shape: 'pill',
                   },
                   (cols) => M.SelectedCols({ cols }),
                   h,

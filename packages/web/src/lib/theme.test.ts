@@ -28,24 +28,24 @@ describe('the branch a URL is drawn in', () => {
     expect(themeForUrl(`${ORIGIN}/admin/photos/photo-1`)).toBe('dark')
   })
 
-  it('draws the Library and the other Library routes light', () => {
+  it('draws the Library and the other Desk routes dark', () => {
     for (const pathname of ['/admin', '/admin/', '/admin/scheduled', '/admin/settings']) {
       expect(routeOf(pathname)._tag).not.toBe('Photo')
-      expect(themeForUrl(`${ORIGIN}${pathname}`)).toBe('light')
+      expect(themeForUrl(`${ORIGIN}${pathname}`)).toBe('dark')
     }
   })
 
   it('draws the home page light, because no admin route claims it', () => {
     expect(themeForUrl(`${ORIGIN}/`)).toBe('light')
+    expect(themeForUrl(`${ORIGIN}/about`)).toBe('light')
   })
 
-  it('draws a path under the Editor that names no route light, as the Admin’s NotFound page', () => {
+  it('draws a path under the Editor that names no route dark, as the Admin’s NotFound page', () => {
     // `/admin/photos/photo-1/edit` is not a Photo: no route consumes the
-    // trailing segment, so the Admin draws its own NotFound inside the light
-    // Library's chrome. A theme keyed off a path prefix would get this wrong
-    // in the other direction and paint a dark 404.
+    // trailing segment, so the Admin draws its own NotFound — a page of the
+    // Desk, dark like the rest of it.
     expect(routeOf('/admin/photos/photo-1/edit')._tag).toBe('NotFound')
-    expect(themeForUrl(`${ORIGIN}/admin/photos/photo-1/edit`)).toBe('light')
+    expect(themeForUrl(`${ORIGIN}/admin/photos/photo-1/edit`)).toBe('dark')
   })
 
   it('agrees with the view, which reads the branch off the route it holds', () => {
