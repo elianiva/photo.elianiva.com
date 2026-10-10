@@ -32,10 +32,10 @@
  * -------------------------------------------------------------------------- */
 :root,
 [data-theme='light'] {
-  --role-accent: #8d2212;
-  --role-accent-hover: #721c0f;
-  --role-error: #8d2212;
-  --role-error-container: #f9f4f3;
+  --role-accent: #c8105f;
+  --role-accent-hover: #a30d4d;
+  --role-error: #b3261e;
+  --role-error-container: #f9f1ef;
   --role-focus: #1b1a18;
   --role-hairline: #8f8a80;
   --role-pen: #2757d1;
@@ -74,10 +74,10 @@
 
 .dark,
 [data-theme='dark'] {
-  --role-accent: #da9b8f;
-  --role-accent-hover: #e5c1b9;
-  --role-error: #da9b8f;
-  --role-error-container: #47140c;
+  --role-accent: #ff5fa2;
+  --role-accent-hover: #ff8fbd;
+  --role-error: #f2918a;
+  --role-error-container: #3d1512;
   --role-focus: #f3f0e8;
   --role-hairline: #5e5950;
   --role-pen: #8fb0ff;

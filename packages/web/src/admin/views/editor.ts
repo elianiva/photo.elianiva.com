@@ -304,7 +304,7 @@ const stageState = (model: Model, h: HtmlBuilder<Msg>): Child =>
     ? h.div(
         [
           h.DataAttribute('slot', 'editor-error'),
-          h.Class('border border-role-accent bg-role-error-container p-4 type-ui text-role-error'),
+          h.Class('border border-role-error bg-role-error-container p-4 type-ui text-role-error'),
         ],
         [
           h.p([], ['That photograph could not be loaded.']),

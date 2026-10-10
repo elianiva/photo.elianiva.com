@@ -42,7 +42,7 @@ const isLeavingState = (
  *  neutral surface, matching the reference `toast.tsx` where only the error
  *  icon is colored. */
 export const toastVariantClass = (variant: Variant): string =>
-  variant === 'Error' ? 'text-role-accent' : 'text-role-text-primary'
+  variant === 'Error' ? 'text-role-error' : 'text-role-text-primary'
 
 /** Entry card. Geometry (transform/height) is applied inline per render;
  *  the `after:` bridge extends the hover zone `--gap` + 1px below the card

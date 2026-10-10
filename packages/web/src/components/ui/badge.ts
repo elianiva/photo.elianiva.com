@@ -19,7 +19,7 @@ export const badgeVariantKeys = ['default', 'secondary', 'destructive'] as const
 export const badgeVariants: Record<BadgeVariant, string> = {
   default: 'border-role-outline text-role-text-primary',
   secondary: 'border-role-hairline text-role-text-secondary',
-  destructive: 'border-role-accent text-role-accent',
+  destructive: 'border-role-error text-role-error',
 }
 
 export type BadgeVariant = (typeof badgeVariantKeys)[number]

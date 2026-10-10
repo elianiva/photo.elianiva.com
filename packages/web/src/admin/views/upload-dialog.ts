@@ -84,7 +84,7 @@ const detailText = (item: QueueItem): string => {
 
 const detailClass = (item: QueueItem): string =>
   item.status === 'failed'
-    ? 'type-caption italic text-role-accent'
+    ? 'type-caption italic text-role-error'
     : 'type-exif-sm text-role-text-disabled'
 
 /** The right side of the name row: a percent while uploading, the design's
@@ -105,7 +105,7 @@ const rowMeta = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
       // belongs to. The only server-side rejection today is a Ratio the frame
       // cannot be snapped to, which is a crop; anything else is generic.
       return h.span(
-        [h.Class('shrink-0 type-label text-role-accent')],
+        [h.Class('shrink-0 type-label text-role-error')],
         [item.error?.startsWith('Unsupported ratio') === true ? 'CROP' : 'FAILED'],
       )
     case 'pending':

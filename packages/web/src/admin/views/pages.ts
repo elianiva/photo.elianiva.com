@@ -107,7 +107,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
           ? h.div(
               [
                 h.Class(
-                  'border border-role-accent bg-role-error-container p-4 type-ui text-role-error',
+                  'border border-role-error bg-role-error-container p-4 type-ui text-role-error',
                 ),
               ],
               [

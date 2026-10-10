@@ -25,7 +25,7 @@ export const statusVariants: Record<StatusVariant, string> = {
   published: 'text-role-text-primary',
   draft: 'text-role-text-disabled',
   scheduled: 'text-role-text-secondary',
-  failed: 'text-role-accent',
+  failed: 'text-role-error',
 }
 
 /** The dot is its own line: draft is a ring, published a fill. */
@@ -33,7 +33,7 @@ const dotVariants: Record<StatusVariant, string> = {
   published: 'bg-role-text-primary',
   draft: 'border border-role-text-disabled',
   scheduled: 'bg-role-text-disabled',
-  failed: 'bg-role-accent',
+  failed: 'bg-role-error',
 }
 
 /** What the Desk prints. The design sets every label in caps. */
