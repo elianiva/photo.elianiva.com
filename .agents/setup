@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+step() { echo "==> $*"; }
+
+step "toolchain"
+want_node="$(tr -d '[:space:]' < .node-version)"
+have_node="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo none)"
+if [ "$have_node" != "$want_node" ]; then
+  echo "warning: node $have_node installed, .node-version wants $want_node" >&2
+fi
+if ! command -v pnpm >/dev/null 2>&1; then
+  corepack enable
+fi
+
+step "pnpm install"
+time pnpm install --frozen-lockfile
+
+step "env template"
+[ -f .env ] || cp -- .env.example .env
+echo "setup done"

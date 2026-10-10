@@ -11,3 +11,6 @@ dist/
 
 # Verification proof: written by the verify-photo skill, never committed
 /.agents/skills/*/artifacts/
+
+# Amp portal state
+.amp/portals/*
