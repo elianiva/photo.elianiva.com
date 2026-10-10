@@ -25,6 +25,7 @@ import {
   AddBorderCmd,
   BackCmd,
   BulkAddTagsCmd,
+  BulkSetStatusCmd,
   BulkTrashCmd,
   CreateTagCmd,
   DeletePhotoCmd,
@@ -73,7 +74,13 @@ import {
   type Commands,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, BULK_BORDER_MAT, libraryFiltersOfModel, Message } from './model'
+import {
+  AdminToast,
+  BULK_BORDER_MAT,
+  EMPTY_BULK_DETAILS,
+  libraryFiltersOfModel,
+  Message,
+} from './model'
 import type { DownloadState, LibraryPage, Message as Msg, Model } from './model'
 import { originalUrl } from '@/lib/image'
 import {
@@ -92,6 +99,7 @@ import type { AppRoute, LibraryFilters } from './route'
 import {
   EDITOR_STATUS_SEGMENT,
   blurhashSignature,
+  bulkDetailsPatch,
   detailsOfPhoto,
   editorReturnUrl,
   initEditorSegments,
@@ -186,6 +194,8 @@ const initialModel = (route: AppRoute): Model => {
     rowMenu: Dialog.init({ id: 'admin-row-menu' }),
     addTagDialog: Dialog.init({ id: 'admin-add-tag-dialog' }),
     addTagIds: [],
+    removeTagIds: [],
+    bulkDetails: EMPTY_BULK_DETAILS,
   }
 }
 
@@ -1401,25 +1411,52 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         model: modifyFields(model, {
           addTagDialog: () => opened.model,
           addTagIds: () => [],
+          removeTagIds: () => [],
+          bulkDetails: () => EMPTY_BULK_DETAILS,
         }),
         commands: liftChildCommands(opened.commands ?? [], (message) =>
           Message.GotAddTagDialogMessage({ message }),
         ),
       }
     },
+    // A Tag is added or removed, never both, so ticking it in one list unticks
+    // it in the other.
     ToggledAddTag: ({ id }) => ({
-      model: modifyFields(model, { addTagIds: () => toggleIn(model.addTagIds, id) }),
+      model: modifyFields(model, {
+        addTagIds: () => toggleIn(model.addTagIds, id),
+        removeTagIds: () => model.removeTagIds.filter((tag) => tag !== id),
+      }),
+    }),
+    ToggledRemoveTag: ({ id }) => ({
+      model: modifyFields(model, {
+        removeTagIds: () => toggleIn(model.removeTagIds, id),
+        addTagIds: () => model.addTagIds.filter((tag) => tag !== id),
+      }),
+    }),
+    SetBulkDetail: ({ field, value }) => ({
+      model: modifyFields(model, { bulkDetails: () => ({ ...model.bulkDetails, [field]: value }) }),
     }),
     ConfirmAddTag: () => {
       const tagIds = [...model.addTagIds]
+      const removeTagIds = [...model.removeTagIds]
+      const { patch, invalid } = bulkDetailsPatch(model.bulkDetails)
+      const hasDetails = Object.keys(patch).length > 0
       const ids = selectedIds(model)
-      if (tagIds.length === 0 || ids.length === 0) return { model }
+      if (invalid || ids.length === 0) return { model }
+      if (tagIds.length === 0 && removeTagIds.length === 0 && !hasDetails) return { model }
       const closed = Dialog.close(model.addTagDialog)
       const prepared = modifyFields(model, { addTagDialog: () => closed.model })
       return {
         model: prepared,
         commands: [
-          BulkAddTagsCmd({ ids, tagIds, page: currentPage(prepared) }),
+          BulkAddTagsCmd({
+            ids,
+            tagIds,
+            // Spread rather than `undefined`: see `SubmitEditorUpdate`.
+            ...(removeTagIds.length === 0 ? {} : { removeTagIds }),
+            ...(hasDetails ? { details: patch } : {}),
+            page: currentPage(prepared),
+          }),
           ...liftChildCommands(closed.commands ?? [], (message) =>
             Message.GotAddTagDialogMessage({ message }),
           ),
@@ -1429,14 +1466,25 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // The picked Tags are still on the Model here — the pick is cleared by the
     // write's outcome, not before it, so the toast can name what was applied.
     SucceededAddTag: ({ count, ...page }) => {
-      const labels = model.addTagIds.map(
-        (id) => model.tags.find((tag) => tag.id === id)?.label ?? id,
-      )
+      const label = (id: string): string =>
+        `“${model.tags.find((tag) => tag.id === id)?.label ?? id}”`
+      const { patch } = bulkDetailsPatch(model.bulkDetails)
+      const parts = [
+        ...(model.addTagIds.length > 0 ? [`added ${model.addTagIds.map(label).join(', ')}`] : []),
+        ...(model.removeTagIds.length > 0
+          ? [`removed ${model.removeTagIds.map(label).join(', ')}`]
+          : []),
+        ...(Object.keys(patch).length > 0 ? [`set ${Object.keys(patch).join(', ')}`] : []),
+      ]
       return settled(
-        modifyFields(model, { addTagIds: () => [] }),
+        modifyFields(model, {
+          addTagIds: () => [],
+          removeTagIds: () => [],
+          bulkDetails: () => EMPTY_BULK_DETAILS,
+        }),
         page,
-        `Tagged ${photoCountLabel(count)}`,
-        labels.length > 0 ? labels.map((label) => `“${label}”`).join(', ') : undefined,
+        `Edited ${photoCountLabel(count)}`,
+        parts.length > 0 ? parts.join('; ') : undefined,
       )
     },
     AddBorderToSelection: () => {
@@ -1451,6 +1499,30 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         `Border added to ${photoCountLabel(count)}`,
         `Even mat, paper, ${String(BULK_BORDER_MAT.width)}%.`,
       ),
+    SetSelectionStatus: ({ status }) => {
+      const ids = selectedIds(model)
+      if (ids.length === 0) return { model }
+      return { model, commands: [BulkSetStatusCmd({ ids, status, page: currentPage(model) })] }
+    },
+    SucceededSetSelectionStatus: ({ count, status, ...page }) =>
+      settled(
+        model,
+        page,
+        `${photoCountLabel(count)} ${status === 'published' ? 'published' : 'unpublished'}`,
+        status === 'published'
+          ? 'Visitors can see them on the public site.'
+          : 'Visitors can no longer see them.',
+      ),
+    SetEditorPhotoStatus: ({ status }) => {
+      if (model.route._tag !== 'Photo' || model.photo === undefined) return { model }
+      if (model.photoStatus !== 'ready' || model.editor.saving) return { model }
+      return {
+        model: modifyFields(model, {
+          segmentGroups: () => withEditorStatusSelected(model.segmentGroups, status),
+        }),
+        commands: [SetEditorStatusCmd({ id: model.route.id, status })],
+      }
+    },
     RequestBulkTrash: ({ count }) => openConfirm(model, { kind: 'bulk', count }),
     SucceededBulkTrash: ({ count, ...page }) => {
       // Every selected Photo left every list, so the selection goes with them:

@@ -23,7 +23,7 @@ import {
   withOptional,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, Message, TagMultiCombo, UPLOAD_LIMITS, fileStore, previewStore } from './model'
+import { AdminToast, EMPTY_BULK_DETAILS, Message, TagMultiCombo, UPLOAD_LIMITS, fileStore, previewStore } from './model'
 import type { Message as Msg, Model } from './model'
 
 /** Closing the upload dialog (Cancel button sends the child's requested-close
@@ -302,6 +302,12 @@ export const foldAddTag = Update.foldChild({
     Message.GotAddTagDialogMessage({ message }),
   foldOutMessage: (out): Update.Step<Model, Msg> =>
     out._tag === 'Closed'
-      ? (writtenModel) => ({ model: modifyFields(writtenModel, { addTagIds: () => [] }) })
+      ? (writtenModel) => ({
+          model: modifyFields(writtenModel, {
+            addTagIds: () => [],
+            removeTagIds: () => [],
+            bulkDetails: () => EMPTY_BULK_DETAILS,
+          }),
+        })
       : (writtenModel) => ({ model: writtenModel }),
 })

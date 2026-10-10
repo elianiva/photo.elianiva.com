@@ -153,6 +153,45 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
     }),
   SetPhotoStatus: (payload) =>
     PhotoService.use((service) => service.setStatus(payload.id, payload.status)),
+  SetPhotosStatus: (payload) =>
+    PhotoService.use((service) =>
+      foldOver(payload.ids, (id) => service.setStatus(id, payload.status)),
+    ),
+  BulkUpdatePhotos: ({ photoIds, ...fields }) =>
+    Effect.gen(function* () {
+      const { location, camera, lens, takenAt, aperture, shutter, iso, focalLength } = fields
+      const metadataKeys = { location, camera, lens }
+      const columns = {
+        ...(takenAt === undefined ? {} : { takenAt }),
+        ...(aperture === undefined ? {} : { aperture }),
+        ...(shutter === undefined ? {} : { shutter }),
+        ...(iso === undefined ? {} : { iso }),
+        ...(focalLength === undefined ? {} : { focalLength }),
+      }
+      const setMetadata = Object.entries(metadataKeys).filter(([, value]) => value !== undefined)
+      if (setMetadata.length === 0 && Object.keys(columns).length === 0) {
+        return yield* new InvalidInput({ message: 'empty update' })
+      }
+      // `metadata` is replaced whole by `update`, so each Photo's own blob is
+      // read and merged: the caption and any key not being set ride through.
+      yield* PhotoService.use((service) =>
+        foldOver(photoIds, (id) =>
+          Effect.gen(function* () {
+            const photo = yield* service.get(id)
+            return yield* service.update(id, {
+              ...columns,
+              ...(setMetadata.length === 0
+                ? {}
+                : { metadata: { ...photo.metadata, ...Object.fromEntries(setMetadata) } }),
+            })
+          }),
+        ),
+      )
+    }).pipe(
+      Effect.catchTag('SlugConflict', (error) =>
+        Effect.fail(new InvalidInput({ message: `slug conflict: ${error.slug}` })),
+      ),
+    ),
   UpdatePhotoPresentation: (payload) =>
     PhotoService.use((service) =>
       service.setPresentation(payload.id, {

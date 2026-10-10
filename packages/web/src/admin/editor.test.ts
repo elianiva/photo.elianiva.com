@@ -21,6 +21,7 @@ import type { PhotoPresentation } from '@photo/shared'
 import * as Segment from '@/components/ui/segment'
 
 import {
+  bulkDetailsPatch,
   EDITOR_STATUS_SEGMENT,
   MAT_FOOT_MULTIPLE,
   blurhashSignature,
@@ -337,5 +338,30 @@ describe('leaving the Editor', () => {
       Message.ReencodedEditorBlurhash({ id: PHOTO_ID, signature: 'stale', blurhash: HASH }),
     )
     expect(stale.model.editor.blurhash).toBe(HASH)
+  })
+})
+
+describe('bulkDetailsPatch', () => {
+  const blank = {
+    location: '',
+    takenAt: '',
+    camera: '',
+    lens: '',
+    focalLength: '',
+    aperture: '',
+    shutter: '',
+    iso: '',
+  }
+
+  it('sends only the fields that were filled in', () => {
+    expect(bulkDetailsPatch({ ...blank, lens: ' 35mm f/1.4 ', shutter: '1/250', iso: '400' })).toEqual({
+      patch: { lens: '35mm f/1.4', shutter: 1 / 250, iso: 400 },
+      invalid: false,
+    })
+  })
+
+  it('is empty for a blank form and invalid for an unreadable number', () => {
+    expect(bulkDetailsPatch(blank)).toEqual({ patch: {}, invalid: false })
+    expect(bulkDetailsPatch({ ...blank, iso: 'fast' }).invalid).toBe(true)
   })
 })

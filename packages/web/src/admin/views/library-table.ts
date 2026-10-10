@@ -32,6 +32,7 @@ import type { PhotoWithTags } from '@photo/shared'
 import * as Button from '@/components/ui/button'
 import { checkbox } from '@/components/ui/checkbox'
 import * as Dialog from '@/components/ui/dialog'
+import * as Input from '@/components/ui/input'
 import { libraryRow, libraryRowClass } from '@/components/ui/library-row'
 import type { StatusVariant } from '@/components/ui/status'
 import {
@@ -43,8 +44,9 @@ import {
 import { smallUrl } from '@/lib/image'
 import { cn } from '@/lib/utils'
 
+import { bulkDetailsPatch, parseExifNumber, parseShutter } from '../editor'
 import { LIBRARY_PAGE_SIZE, Message as M } from '../model'
-import type { Model, Msg } from '../model'
+import type { BulkDetailField, Model, Msg } from '../model'
 import { libraryEmpty } from './library-empty'
 import { libraryPager } from './library-pager'
 import { libraryError, libraryIsEmpty, libraryNoMatch } from './library-states'
@@ -191,9 +193,19 @@ export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
           // about a different thing; the collision is the design's.
           Button.button({ onClick: M.ClearedSelection(), variant: 'ghost' }, 'Discard', h),
           Button.button({ onClick: M.AddBorderToSelection(), variant: 'ghost' }, 'Add border', h),
+          Button.button(
+            { onClick: M.SetSelectionStatus({ status: 'draft' }), variant: 'ghost' },
+            'Unpublish',
+            h,
+          ),
+          Button.button(
+            { onClick: M.SetSelectionStatus({ status: 'published' }), variant: 'accent' },
+            'Publish',
+            h,
+          ),
           // The design's `Move to series`, re-pointed at `Add tag`: a Series
           // page *is* a Tag page (ADR 0006), so the grouping entity is the Tag.
-          Button.button({ onClick: M.OpenedAddTag(), variant: 'ghost' }, 'Add tag', h),
+          Button.button({ onClick: M.OpenedAddTag(), variant: 'ghost' }, 'Edit', h),
           Button.button(
             { onClick: M.RequestBulkTrash({ count }), variant: 'destructive' },
             'Delete',
@@ -205,51 +217,133 @@ export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
   )
 }
 
-/** The `Add tag` picker. A Dialog holding one box per Tag, because the design
- *  draws a single ghost button and no picker at all. A Tag is created inline
- *  from the upload Dialog's combo, so the one place a new label is typed is the
- *  one place a Tag comes from — a second create field here would be a second
+/** The Bulk Bar's `Edit` dialog: Tags to add, Tags to remove and the details
+ *  to set, applied to every ticked Photo in one confirm. A Dialog because the
+ *  design draws a single ghost button and no picker. Every field is optional
+ *  and a blank one leaves each Photo's own value alone, so the dialog can only
+ *  ever add information, never blank it. A Tag is created inline from the
+ *  upload Dialog's combo, so the one place a new label is typed is the one
+ *  place a Tag comes from — a second create field here would be a second
  *  convention for one thing. */
-export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
-  h.submodel({
+const detailField = (
+  model: Model,
+  field: BulkDetailField,
+  label: string,
+  h: HtmlBuilder<Msg>,
+  options: { type?: 'date'; placeholder?: string; invalid?: boolean } = {},
+): Child =>
+  Input.input(
+    {
+      id: `bulk-edit-${field}`,
+      label,
+      value: model.bulkDetails[field],
+      className: 'h-auto',
+      placeholder: options.placeholder ?? 'Leave unchanged',
+      isInvalid: options.invalid === true,
+      ...(options.type === undefined ? {} : { type: options.type }),
+      onInput: (value) => M.SetBulkDetail({ field, value }),
+    },
+    h,
+  )
+
+export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const { patch, invalid } = bulkDetailsPatch(model.bulkDetails)
+  const nothing =
+    model.addTagIds.length === 0 &&
+    model.removeTagIds.length === 0 &&
+    Object.keys(patch).length === 0
+  const numberInvalid = (field: 'focalLength' | 'aperture' | 'iso'): boolean =>
+    parseExifNumber(model.bulkDetails[field]) === undefined
+  const tagList = (
+    heading: string,
+    ids: ReadonlyArray<string>,
+    prefix: string,
+    toggle: (id: string) => Msg,
+    innerH: HtmlBuilder<Msg>,
+  ): Child =>
+    h.div(
+      [h.Role('group'), h.AriaLabel(heading), h.Class('flex flex-col')],
+      [
+        h.span([h.Class('type-label text-role-text-secondary')], [heading.toUpperCase()]),
+        ...model.tags.map((tag) =>
+          checkbox(
+            {
+              id: `${prefix}-${tag.id}`,
+              isChecked: ids.includes(tag.id),
+              onToggle: () => toggle(tag.id),
+              label: tag.label,
+              wrapperClass: 'py-1',
+            },
+            innerH,
+          ),
+        ),
+      ],
+    )
+  return h.submodel({
     slotId: 'admin-add-tag-dialog',
     model: model.addTagDialog,
     view: Dialog.view,
     viewInputs: Dialog.styledViewInputs<Msg>(
       {
-        panelClass: 'w-full max-w-sm',
+        panelClass: 'max-h-[90dvh] w-full max-w-md overflow-y-auto',
         content: (render, innerH) => [
           h.div(
-            [h.Class('flex flex-col gap-4')],
+            [h.Class('flex flex-col gap-5')],
             [
               h.div(
                 [h.Class('flex items-start justify-between gap-2')],
                 [
-                  Dialog.title({ attributes: render.title }, ['Add tag'], innerH),
+                  Dialog.title(
+                    { attributes: render.title },
+                    [`Edit ${String(model.selected.length)} selected`],
+                    innerH,
+                  ),
                   Dialog.closeButton({ attributes: render.closeButton }, ['×'], innerH),
                 ],
               ),
+              Dialog.description(
+                { attributes: render.description },
+                ['Only what you fill in changes. Blank fields leave each photograph as it is.'],
+                innerH,
+              ),
               model.tags.length === 0
-                ? Dialog.description(
-                    { attributes: render.description },
+                ? h.p(
+                    [h.Class('type-body m-0 text-role-text-secondary italic')],
                     ['No tags yet. Type a new label in the upload dialog to create one.'],
-                    innerH,
                   )
                 : h.div(
-                    [h.Role('group'), h.AriaLabel('Tags'), h.Class('flex flex-col')],
-                    model.tags.map((tag) =>
-                      checkbox(
-                        {
-                          id: `add-tag-${tag.id}`,
-                          isChecked: model.addTagIds.includes(tag.id),
-                          onToggle: () => M.ToggledAddTag({ id: tag.id }),
-                          label: tag.label,
-                          wrapperClass: 'py-1',
-                        },
+                    [h.Class('grid grid-cols-2 gap-4')],
+                    [
+                      tagList('Add tags', model.addTagIds, 'add-tag', (id) => M.ToggledAddTag({ id }), innerH),
+                      tagList(
+                        'Remove tags',
+                        model.removeTagIds,
+                        'remove-tag',
+                        (id) => M.ToggledRemoveTag({ id }),
                         innerH,
                       ),
-                    ),
+                    ],
                   ),
+              detailField(model, 'location', 'PLACE', h),
+              detailField(model, 'takenAt', 'TAKEN', h, { type: 'date', placeholder: '' }),
+              detailField(model, 'camera', 'CAMERA', h),
+              detailField(model, 'lens', 'LENS', h),
+              h.div(
+                [h.Class('grid grid-cols-2 gap-3')],
+                [
+                  detailField(model, 'focalLength', 'FOCAL LENGTH (MM)', h, {
+                    invalid: numberInvalid('focalLength'),
+                  }),
+                  detailField(model, 'aperture', 'APERTURE (F/)', h, {
+                    invalid: numberInvalid('aperture'),
+                  }),
+                  detailField(model, 'shutter', 'SHUTTER (S)', h, {
+                    placeholder: 'Leave unchanged · 1/250',
+                    invalid: parseShutter(model.bulkDetails.shutter) === undefined,
+                  }),
+                  detailField(model, 'iso', 'ISO', h, { invalid: numberInvalid('iso') }),
+                ],
+              ),
               h.div(
                 [h.Class('flex justify-end gap-2')],
                 [
@@ -268,10 +362,10 @@ export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                     {
                       onClick: M.ConfirmAddTag(),
                       variant: 'default',
-                      isDisabled: model.addTagIds.length === 0,
+                      isDisabled: nothing || invalid,
                       attributes: [h.DataAttribute('slot', 'add-tag-confirm')],
                     },
-                    'Add tag',
+                    'Apply',
                     innerH,
                   ),
                 ],
@@ -284,6 +378,7 @@ export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
     ),
     toParentMessage: (message) => M.GotAddTagDialogMessage({ message }),
   })
+}
 
 /** The row `⋯` menu. `Publish` / `Unpublish` is the one row-scoped lifecycle
  *  move (`SetPhotoStatus`); `Move to Trash` is the destructive one and goes

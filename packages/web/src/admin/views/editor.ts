@@ -145,6 +145,7 @@ const topBarLeft = (model: Model, h: HtmlBuilder<Msg>): Child => {
  *  drawn at all does not need. */
 const topBarRight = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const dirty = isEditorDirty(model.editor)
+  const published = model.photo?.status === 'published'
   return h.div(
     [h.Class('flex items-center gap-2')],
     [
@@ -172,12 +173,28 @@ const topBarRight = (model: Model, h: HtmlBuilder<Msg>): Child => {
       Button.button(
         {
           onClick: M.SubmitEditorUpdate(),
-          variant: 'default',
+          // Publishing is the main act on a draft; saving edits steps back
+          // until the Photo is live, then is the main act itself.
+          variant: published || model.photo === undefined ? 'default' : 'secondary',
           isDisabled: !dirty || model.editor.saving,
         },
         model.editor.saving ? 'Updating…' : 'Update',
         h,
       ),
+      ...(model.photo === undefined || model.photo.status === 'failed'
+        ? []
+        : [
+            Button.button(
+              {
+                onClick: M.SetEditorPhotoStatus({ status: published ? 'draft' : 'published' }),
+                variant: published ? 'ghost' : 'default',
+                isDisabled: model.editor.saving,
+                attributes: [h.DataAttribute('slot', 'editor-publish')],
+              },
+              published ? 'Unpublish' : 'Publish',
+              h,
+            ),
+          ]),
     ],
   )
 }

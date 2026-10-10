@@ -299,7 +299,7 @@ describe('the Bulk Bar', () => {
           total: 412,
         }),
       ),
-    ).toEqual(['Tagged 1 photo — “Kyoto”'])
+    ).toEqual(['Edited 1 photo — added “Kyoto”'])
   })
 
   it('the Add tag picker holds no pick until one is made', () => {

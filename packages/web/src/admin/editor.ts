@@ -33,7 +33,7 @@ import * as Segment from '@/components/ui/segment'
 import type { CompositionSpec } from '@/lib/blurhash'
 
 import { AppRoute, appRouteToUrl, libraryRoute, libraryUrl } from './route'
-import type { EditorState, PhotoDetails } from './model'
+import type { BulkDetails, EditorState, PhotoDetails } from './model'
 
 // ---------------------------------------------------------------------------
 // the state it opens in
@@ -320,6 +320,56 @@ export const exifPatchOfDetails = (
     ...(aperture === undefined ? {} : { aperture }),
     ...(shutter === undefined ? {} : { shutter }),
     ...(iso === undefined ? {} : { iso }),
+  }
+}
+
+/** What the Bulk Bar's edit dialog would send. A blank field is left alone, so
+ *  only filled ones appear; one that is filled but not a number is `invalid`
+ *  rather than dropped, because applying half of what the operator typed to a
+ *  hundred photographs is not recoverable by looking. */
+export const bulkDetailsPatch = (
+  details: BulkDetails,
+): {
+  patch: {
+    location?: string
+    camera?: string
+    lens?: string
+    takenAt?: string
+    focalLength?: number
+    aperture?: number
+    shutter?: number
+    iso?: number
+  }
+  invalid: boolean
+} => {
+  const text = (value: string): string | undefined => {
+    const trimmed = value.trim()
+    return trimmed === '' ? undefined : trimmed
+  }
+  const location = text(details.location)
+  const camera = text(details.camera)
+  const lens = text(details.lens)
+  const takenAt = text(details.takenAt)
+  const numbers = {
+    focalLength: parseExifNumber(details.focalLength),
+    aperture: parseExifNumber(details.aperture),
+    shutter: parseShutter(details.shutter),
+    iso: parseExifNumber(details.iso),
+  }
+  // `null` is a blank field here (nothing to set); `undefined` is unreadable.
+  const invalid = Object.values(numbers).some((value) => value === undefined)
+  return {
+    patch: {
+      ...(location === undefined ? {} : { location }),
+      ...(camera === undefined ? {} : { camera }),
+      ...(lens === undefined ? {} : { lens }),
+      ...(takenAt === undefined ? {} : { takenAt }),
+      ...(typeof numbers.focalLength === 'number' ? { focalLength: numbers.focalLength } : {}),
+      ...(typeof numbers.aperture === 'number' ? { aperture: numbers.aperture } : {}),
+      ...(typeof numbers.shutter === 'number' ? { shutter: numbers.shutter } : {}),
+      ...(typeof numbers.iso === 'number' ? { iso: numbers.iso } : {}),
+    },
+    invalid,
   }
 }
 

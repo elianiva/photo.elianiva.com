@@ -93,13 +93,28 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
           ...(exif === null ? [] : fact('Exif', exif, h)),
         ],
       ),
+      ...(photo.status === 'failed'
+        ? []
+        : [
+            Button.button(
+              {
+                onClick: M.SetSelectionStatus({
+                  status: photo.status === 'published' ? 'draft' : 'published',
+                }),
+                variant: photo.status === 'published' ? 'secondary' : 'accent',
+                className: 'w-full justify-center',
+              },
+              photo.status === 'published' ? 'Unpublish' : 'Publish',
+              h,
+            ),
+          ]),
       h.div(
         [h.Class('flex gap-2')],
         [
           Button.button(
             {
               onClick: M.OpenedPhoto({ id: photo.id }),
-              variant: 'accent',
+              variant: photo.status === 'published' ? 'accent' : 'secondary',
               className: 'flex-1 justify-center',
             },
             h.span(

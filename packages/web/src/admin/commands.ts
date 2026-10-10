@@ -213,18 +213,70 @@ export const AddBorderCmd = Command.define('AddBorder', {
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
-/** The design's `Move to series`, re-pointed at `Add tag`: a Series page *is* a
+const BulkDetailsPatch = S.Struct({
+  location: S.optional(S.String),
+  camera: S.optional(S.String),
+  lens: S.optional(S.String),
+  takenAt: S.optional(S.String),
+  focalLength: S.optional(S.Number),
+  aperture: S.optional(S.Number),
+  shutter: S.optional(S.Number),
+  iso: S.optional(S.Number),
+})
+
+/** The Bulk Bar's `Edit` dialog, one write: Tags to add, Tags to remove and
+ *  details to set, in that order over the same ids. Named for where it began.
+ *  The design's `Move to series`, re-pointed at `Add tag`: a Series page *is* a
  *  Tag page (ADR 0006), so the grouping entity is the Tag. */
 export const BulkAddTagsCmd = Command.define('BulkAddTags', {
-  args: { ids: S.Array(S.String), tagIds: S.Array(S.String), page: PageArgs },
+  args: {
+    ids: S.Array(S.String),
+    tagIds: S.Array(S.String),
+    removeTagIds: S.optional(S.Array(S.String)),
+    details: S.optional(BulkDetailsPatch),
+    page: PageArgs,
+  },
   messages: [Message.SucceededAddTag, Message.FailedRpc],
-  execute: ({ ids, tagIds, page }) =>
+  execute: ({ ids, tagIds, removeTagIds, details, page }) =>
     Effect.gen(function* () {
-      yield* foldOverChunks(ids, (batch) =>
-        rpcAdmin('BulkAddTags', { photoIds: [...batch], tagIds: [...tagIds] }),
-      )
+      if (tagIds.length > 0) {
+        yield* foldOverChunks(ids, (batch) =>
+          rpcAdmin('BulkAddTags', { photoIds: [...batch], tagIds: [...tagIds] }),
+        )
+      }
+      if (removeTagIds !== undefined && removeTagIds.length > 0) {
+        yield* foldOverChunks(ids, (batch) =>
+          rpcAdmin('BulkRemoveTags', { photoIds: [...batch], tagIds: [...removeTagIds] }),
+        )
+      }
+      if (details !== undefined) {
+        yield* foldOverChunks(ids, (batch) =>
+          rpcAdmin('BulkUpdatePhotos', { photoIds: [...batch], ...details }),
+        )
+      }
       const fresh = yield* listPayload(page)
       return Message.SucceededAddTag({ count: ids.length, ...toLibraryPage(fresh) })
+    }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** The Bulk Bar's `Publish` / `Unpublish`: one Status over every ticked Photo,
+ *  chunked like the other bulk writes. */
+export const BulkSetStatusCmd = Command.define('BulkSetStatus', {
+  args: {
+    ids: S.Array(S.String),
+    status: S.Literals(['draft', 'published']),
+    page: PageArgs,
+  },
+  messages: [Message.SucceededSetSelectionStatus, Message.FailedRpc],
+  execute: ({ ids, status, page }) =>
+    Effect.gen(function* () {
+      yield* foldOverChunks(ids, (batch) => rpcAdmin('SetPhotosStatus', { ids: [...batch], status }))
+      const fresh = yield* listPayload(page)
+      return Message.SucceededSetSelectionStatus({
+        count: ids.length,
+        status,
+        ...toLibraryPage(fresh),
+      })
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 

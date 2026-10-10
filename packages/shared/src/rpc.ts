@@ -423,6 +423,33 @@ const TagIds = S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(
   S.check(S.isMaxLength(32)),
 )
 
+/** The Bulk Bar's `Publish` / `Unpublish`: one Status, every selected Photo. */
+export class SetPhotosStatus extends Rpc.make('SetPhotosStatus', {
+  payload: { ids: PhotoIds, status: PhotoStatus },
+  success: S.Void,
+  error: S.Union([PhotoNotFound, StorageError]),
+}) {}
+
+/** The Bulk Bar's `Edit`: set the same detail on every selected Photo. An
+ *  absent key leaves the Photo's own value alone, so a field the operator did
+ *  not fill in is never overwritten. It only sets — clearing a fact is a
+ *  per-Photo edit, where the operator can see what is being removed. */
+export class BulkUpdatePhotos extends Rpc.make('BulkUpdatePhotos', {
+  payload: {
+    photoIds: PhotoIds,
+    location: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200)))),
+    camera: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200)))),
+    lens: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(200)))),
+    takenAt: S.optional(S.String.pipe(S.check(S.isMinLength(1)), S.check(S.isMaxLength(64)))),
+    aperture: S.optional(S.Number.pipe(S.check(S.isGreaterThan(0)))),
+    shutter: S.optional(S.Number.pipe(S.check(S.isGreaterThan(0)))),
+    iso: S.optional(S.Number.pipe(S.check(S.isGreaterThan(0)))),
+    focalLength: S.optional(S.Number.pipe(S.check(S.isGreaterThan(0)))),
+  },
+  success: S.Void,
+  error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
+}) {}
+
 /** The Bulk Bar's `Move to series` slot, re-pointed: Series has no home
  *  (ADR 0006) and Tag is the grouping entity, so the slot is `Add tag`.
  *
@@ -501,6 +528,8 @@ export const PhotoAdminRpcs = RpcGroup.make(
   GetCounts,
   ListLibraryRows,
   SetPhotoStatus,
+  SetPhotosStatus,
+  BulkUpdatePhotos,
   UpdatePhotoPresentation,
   TrashPhotos,
   RestorePhotos,

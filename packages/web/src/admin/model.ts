@@ -120,6 +120,39 @@ export type LibraryPage = typeof LibraryPage.Type
  *  canvas's number and this is the one place it is written down. */
 export const LIBRARY_PAGE_SIZE = 7
 
+export const BULK_DETAIL_FIELDS = [
+  'location',
+  'takenAt',
+  'camera',
+  'lens',
+  'focalLength',
+  'aperture',
+  'shutter',
+  'iso',
+] as const
+export type BulkDetailField = (typeof BULK_DETAIL_FIELDS)[number]
+export const BulkDetails = S.Struct({
+  location: S.String,
+  takenAt: S.String,
+  camera: S.String,
+  lens: S.String,
+  focalLength: S.String,
+  aperture: S.String,
+  shutter: S.String,
+  iso: S.String,
+})
+export type BulkDetails = typeof BulkDetails.Type
+export const EMPTY_BULK_DETAILS: BulkDetails = {
+  location: '',
+  takenAt: '',
+  camera: '',
+  lens: '',
+  focalLength: '',
+  aperture: '',
+  shutter: '',
+  iso: '',
+}
+
 /** The Mat the Bulk Bar's `Add border` puts on every ticked Photo. The design
  *  draws one ghost button and no picker, so a bulk action that asked would be
  *  scope the design does not have; the Editor's own defaults and the design's
@@ -418,6 +451,10 @@ export const Model = S.Struct({
   /** The Bulk Bar's `Add tag` picker: the Dialog, and the Tags ticked in it. */
   addTagDialog: Dialog.Model,
   addTagIds: S.Array(S.String),
+  /** The same dialog's other halves: Tags to take off, and the details to set.
+   *  A blank detail leaves each Photo's own value alone. */
+  removeTagIds: S.Array(S.String),
+  bulkDetails: BulkDetails,
 })
 export type Model = typeof Model.Type
 
@@ -612,6 +649,8 @@ export const Message = defineMessageUnion({
   OpenedAddTag: {},
   GotAddTagDialogMessage: { message: Dialog.Message },
   ToggledAddTag: { id: S.String },
+  ToggledRemoveTag: { id: S.String },
+  SetBulkDetail: { field: S.Literals(BULK_DETAIL_FIELDS), value: S.String },
   ConfirmAddTag: {},
   SucceededAddTag: { count: S.Number, ...libraryPageFields },
   AddBorderToSelection: {},
@@ -619,6 +658,16 @@ export const Message = defineMessageUnion({
   /** The Bulk Bar's `Delete`. A soft delete: it moves the selection to the
    *  Trash, and the Trash is where the irreversible act lives. */
   RequestBulkTrash: { count: S.Number },
+  /** The Bulk Bar's `Publish` / `Unpublish`: one Status on the whole selection. */
+  SetSelectionStatus: { status: S.Literals(['draft', 'published']) },
+  SucceededSetSelectionStatus: {
+    count: S.Number,
+    status: S.Literals(['draft', 'published']),
+    ...libraryPageFields,
+  },
+  /** The Editor Top Bar's `Publish` / `Unpublish`. The same write as the
+   *  Status group, one click from wherever the operator is on the page. */
+  SetEditorPhotoStatus: { status: S.Literals(['draft', 'published']) },
   SucceededBulkTrash: { count: S.Number, ...libraryPageFields },
   /** The row's pencil. The Editor is the Photo route, so the row navigates
    *  rather than opening the legacy edit Sheet. */
