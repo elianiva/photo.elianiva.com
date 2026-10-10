@@ -27,7 +27,13 @@
 import { Schema as S } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { MonthSchema, TimelineSchema, FigureSchema, NavEntrySchema, TagPageSchema } from './content'
+import {
+  DaySectionSchema,
+  TimelineSchema,
+  FigureSchema,
+  NavEntrySchema,
+  TagPageSchema,
+} from './content'
 import { PublicRoute } from './route'
 
 // ---------------------------------------------------------------------------
@@ -43,10 +49,10 @@ import { PublicRoute } from './route'
  *  which is what `init` and the view read and never the other way round.
  *
  *  For the home page: the Timeline itself, already mapped from the read, and the
- *  cursor below the last Month. Emptiness is not a field there on purpose.
- *  It is a property of the Timeline — no lead and no Months — and a second flag
+ *  cursor below the last server month. Emptiness is not a field there on purpose.
+ *  It is a property of the Timeline — no lead and no sections — and a second flag
  *  beside it would be a second answer to "is there anything published", free to
- *  disagree with the first the moment a read returned a Month whose
+ *  disagree with the first the moment a read returned a month whose
  *  photographs were all undrawable.
  *
  *  For the About page: the figures the page shows, mapped from the same read
@@ -84,11 +90,9 @@ export const Model = S.Struct({
   timeline: TimelineSchema,
   /** Figure shown in the lightbox; null while reading the home page. */
   selected: S.NullOr(FigureSchema),
-  /** The month below the last Month, or null when there are no older ones.
-   *  The load-more row is the only thing that acts on it. */
+  /** The server month below the last read, or null when there are no older ones. */
   sectionCursor: S.NullOr(S.String),
-  /** True while an older Month is in flight, so the row cannot be clicked
-   *  twice into two overlapping reads. */
+  /** True while older sections are in flight, so scrolling cannot start two reads. */
   loadingMonths: S.Boolean,
   /** Why the last attempt to load an older Month failed, or null. The
    *  Months already on the page stay either way; the row says so rather than
@@ -116,17 +120,16 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
   ClickedFigure: { id: S.String },
   CloseLightbox: {},
-  /** The reader asked for the Timeline below the last one it has. A Tag page
-   *  draws no load-more row — it is one Tag's photographs, read whole before the
+  /** The reader scrolled near the Timeline's tail. A Tag page
+   *  has no scroll-paged read — it is one Tag's photographs, read whole before the
    *  render — so this is the home page's message alone. */
   LoadOlderMonths: {},
-  /** Those Months arrived, and they were the last ones. */
-  LoadedMonths: {
-    months: S.Array(MonthSchema),
+  /** Those day sections arrived, and they include the next server cursor. */
+  LoadedSections: {
+    sections: S.Array(DaySectionSchema),
     nextMonthCursor: S.NullOr(S.String),
   },
-  /** The read failed. The Timeline already on the page stays; the row offers a
-   *  retry rather than pretending the issue ended. */
+  /** The read failed. The Timeline stays; scrolling can retry the read. */
   FailedLoadMonths: { message: S.String },
 })
 export type Message = typeof Message.Type

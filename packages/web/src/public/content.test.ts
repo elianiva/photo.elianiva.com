@@ -7,10 +7,9 @@ import {
   RATIO_VALUE,
   timelineOf,
   flowColumns,
-  frameNoShort,
   figurePreviewUrl,
   figureUrl,
-  monthsOf,
+  sectionsOf,
   type HomeRead,
 } from './content'
 
@@ -54,40 +53,33 @@ const read = (over: Partial<HomeRead> = {}): HomeRead => ({
 })
 
 // ---------------------------------------------------------------------------
-// placard lines
-// ---------------------------------------------------------------------------
-
-describe('frameNoShort', () => {
-  it('drops the prefix and keeps the three-digit pad', () => {
-    expect(frameNoShort(24)).toBe('024')
-    expect(frameNoShort(7)).toBe('007')
-  })
-})
-
 // ---------------------------------------------------------------------------
 // the read model → figures
 // ---------------------------------------------------------------------------
 
-describe('monthsOf', () => {
-  it('names a section from its month key, not from its label', () => {
-    const [mapped] = monthsOf([section('2025-08', [photo()])])
+describe('sectionsOf', () => {
+  it('uses the capture day while naming the month from the server month key', () => {
+    const [mapped] = sectionsOf([section('2025-08', [photo()])])
+    expect(mapped?.id).toBe('2025-08-31')
+    expect(mapped?.day).toBe(31)
     expect(mapped?.month).toBe('August')
     expect(mapped?.year).toBe('2025')
   })
 
-  it('carries the Photo Number, the title and the R2 key onto the photo', () => {
-    const [mapped] = monthsOf([
+  it('carries the title, capture date and R2 key onto the photo, not its placard number', () => {
+    const [mapped] = sectionsOf([
       section('2025-08', [photo({ number: 7, title: 'Momo', r2Key: 'originals/momo.jpg' })]),
     ])
     expect(mapped?.figures[0]).toMatchObject({
-      index: 7,
       title: 'Momo',
+      takenAt: '2025-08-31',
       r2Key: 'originals/momo.jpg',
     })
+    expect(mapped?.figures[0]).not.toHaveProperty('index')
   })
 
   it("builds the Exif line from the Photo's own facts", () => {
-    const [mapped] = monthsOf([section('2025-08', [photo()])])
+    const [mapped] = sectionsOf([section('2025-08', [photo()])])
     expect(mapped?.figures[0]?.exif).toBe('X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 31 AUG')
   })
 
@@ -100,7 +92,7 @@ describe('monthsOf', () => {
       metadata: {},
       takenAt: undefined,
     })
-    const [mapped] = monthsOf([section('2025-08', [bare])])
+    const [mapped] = sectionsOf([section('2025-08', [bare])])
     // null, not an empty string: the view omits the element rather than
     // rendering a line with nothing in it.
     expect(mapped?.figures[0]?.exif).toBeNull()
@@ -108,7 +100,7 @@ describe('monthsOf', () => {
 
   it('snaps a Photo with no Ratio of its own to the nearest supported one', () => {
     // 3000x2000 measured is 1.5, which is 3:2 exactly.
-    const [mapped] = monthsOf([
+    const [mapped] = sectionsOf([
       section('2025-08', [photo({ ratio: null, width: 3000, height: 2000 })]),
     ])
     expect(mapped?.figures[0]?.ratio).toBe('3:2')
@@ -116,7 +108,7 @@ describe('monthsOf', () => {
 
   it('snaps a measured frame to the Ratio nearest it, not the first one listed', () => {
     // 4000x3000 measured is 1.333, which is 4:3.
-    const [mapped] = monthsOf([
+    const [mapped] = sectionsOf([
       section('2025-08', [photo({ ratio: null, width: 4000, height: 3000 })]),
     ])
     expect(mapped?.figures[0]?.ratio).toBe('4:3')
@@ -125,22 +117,48 @@ describe('monthsOf', () => {
   it('drops a Photo whose frame snaps to no supported Ratio', () => {
     // A square frame matches none of the six, which is why an upload refuses
     // it rather than inventing one.
-    const [mapped] = monthsOf([
+    const [mapped] = sectionsOf([
       section('2025-08', [photo({ ratio: null, width: 1000, height: 1000 })]),
     ])
     expect(mapped).toBeUndefined()
   })
 
   it('drops a Month left with no drawable Photo', () => {
-    const mapped = monthsOf([
+    const mapped = sectionsOf([
       section('2025-08', [photo({ ratio: null, width: 1000, height: 1000 })]),
     ])
     expect(mapped).toEqual([])
   })
 
   it('reads a takenAt carrying a time, which is how the upload stores one', () => {
-    const [mapped] = monthsOf([section('2025-08', [photo({ takenAt: '2026-06-11T14:27' })])])
-    expect(mapped?.figures[0]?.exif).toContain('11 JUN')
+    const [mapped] = sectionsOf([section('2025-08', [photo({ takenAt: '2025-08-11T14:27' })])])
+    expect(mapped?.day).toBe(11)
+    expect(mapped?.figures[0]?.exif).toContain('11 AUG')
+  })
+
+  it('groups a server month into newest-first capture days without merging different dates', () => {
+    const mapped = sectionsOf([
+      section('2025-08', [
+        photo({ id: PhotoId.make('late'), takenAt: '2025-08-31', title: 'Late' }),
+        photo({ id: PhotoId.make('same-day'), takenAt: '2025-08-31T13:00', title: 'Same day' }),
+        photo({ id: PhotoId.make('earlier'), takenAt: '2025-08-04', title: 'Earlier' }),
+      ]),
+    ])
+    expect(
+      mapped.map(({ id, day, figures }) => ({
+        id,
+        day,
+        titles: figures.map((figure) => figure.title),
+      })),
+    ).toEqual([
+      { id: '2025-08-31', day: 31, titles: ['Late', 'Same day'] },
+      { id: '2025-08-04', day: 4, titles: ['Earlier'] },
+    ])
+  })
+
+  it('keeps an unusable date in an undated group instead of inventing a day', () => {
+    const [mapped] = sectionsOf([section('2025-08', [photo({ takenAt: undefined })])])
+    expect(mapped).toMatchObject({ id: '2025-08', day: null })
   })
 })
 
@@ -151,7 +169,7 @@ describe('monthsOf', () => {
 describe('timelineOf', () => {
   it('carries the read as Months and offers more while a cursor remains', () => {
     const timeline = timelineOf(read({ nextMonthCursor: '2025-07' }))
-    expect(timeline.months.map((month) => month.id)).toEqual(['2025-08'])
+    expect(timeline.sections.map((section) => section.id)).toEqual(['2025-08-31'])
     expect(timeline.tail).toBe('more')
   })
 
@@ -161,15 +179,15 @@ describe('timelineOf', () => {
     // of the home page's read now, so every photograph is drawn as a photo in a
     // flow and none of them is ranked above the others.
     const timeline = timelineOf(read())
-    expect(Object.keys(timeline).sort()).toEqual(['months', 'tail'])
-    expect(timeline.months.flatMap((month) => month.figures).map((figure) => figure.id)).toEqual([
-      PhotoId.make('photo-1'),
-    ])
+    expect(Object.keys(timeline).sort()).toEqual(['sections', 'tail'])
+    expect(
+      timeline.sections.flatMap((section) => section.figures).map((figure) => figure.id),
+    ).toEqual([PhotoId.make('photo-1')])
   })
 
   it('is an honest empty timeline when nothing is published', () => {
     const timeline = timelineOf(read({ sections: [], nextMonthCursor: null }))
-    expect(timeline.months).toEqual([])
+    expect(timeline.sections).toEqual([])
     expect(timeline.tail).toBe('empty')
   })
 })
@@ -180,13 +198,13 @@ describe('timelineOf', () => {
 
 describe('figureUrl', () => {
   it('serves the Photo’s small rendition out of R2 through the proxy', () => {
-    const [mapped] = monthsOf([section('2025-08', [photo({ id: PhotoId.make('lift') })])])
+    const [mapped] = sectionsOf([section('2025-08', [photo({ id: PhotoId.make('lift') })])])
     const url = new URL(figureUrl(mapped!.figures[0]!), 'https://photo.elianiva.com')
     expect(url.pathname).toBe('/api/image/renditions%2Flift%2Fsmall.webp')
   })
 
   it('opens the preview rendition in the lightbox', () => {
-    const [mapped] = monthsOf([section('2025-08', [photo({ id: PhotoId.make('lift') })])])
+    const [mapped] = sectionsOf([section('2025-08', [photo({ id: PhotoId.make('lift') })])])
     const url = new URL(figurePreviewUrl(mapped!.figures[0]!), 'https://photo.elianiva.com')
     expect(url.pathname).toBe('/api/image/renditions%2Flift%2Fpreview.webp')
   })
@@ -197,7 +215,7 @@ describe('figureUrl', () => {
 // ---------------------------------------------------------------------------
 
 describe('flowColumns', () => {
-  const three = monthsOf([
+  const three = sectionsOf([
     section('2025-08', [
       photo({ id: PhotoId.make('a'), ratio: '2:3' }),
       photo({ id: PhotoId.make('b'), ratio: '16:9' }),

@@ -4,13 +4,13 @@
  * `init` is synchronous and takes what the Worker already read, because the
  * first paint is server-rendered and a reader should never watch an empty page
  * fill itself in. The one command on the site fetches the months
- * below the last Month when the reader asks for them; the About page and a
+ * below the last server month as the reader scrolls; the About page and a
  * Tag page draw no load-more row, so nothing on them dispatches that command.
  */
 
 import { Runtime, Update } from 'foldkit'
 
-import { EMPTY_TIMELINE, EMPTY_TAG_PAGE, type Month, type Figure } from './content'
+import { EMPTY_TIMELINE, EMPTY_TAG_PAGE, type DaySection, type Figure } from './content'
 import { LoadOlderMonthsCmd } from './commands'
 import { Message } from './model'
 import type { Flags, Model } from './model'
@@ -86,15 +86,16 @@ export const init: Runtime.ApplicationInit<Model, Message, Flags> = (flags) => (
  *  documents read their photographs out of one list. */
 const figuresOf = (model: Model): ReadonlyArray<Figure> => {
   if (model.route === 'home') {
-    return model.timeline.months.flatMap((month) => month.figures)
+    return model.timeline.sections.flatMap((section) => section.figures)
   }
   return model.route === 'about' ? model.figures : model.tag.figures
 }
 
-/** Whether a Month the read returned is already on the page. The cursor only
- *  ever moves backwards, so a repeat would be the same month twice. */
-const isNewSection = (sections: ReadonlyArray<Month>, existing: ReadonlyArray<Month>): boolean =>
-  sections.every((section) => !existing.some((have) => have.id === section.id))
+/** Whether a day section the read returned is already on the page. */
+const isNewSection = (
+  sections: ReadonlyArray<DaySection>,
+  existing: ReadonlyArray<DaySection>,
+): boolean => sections.every((section) => !existing.some((have) => have.id === section.id))
 
 // ---------------------------------------------------------------------------
 // update
@@ -110,8 +111,8 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
     },
     CloseLightbox: () => ({ model: { ...model, selected: null } }),
 
-    // Nothing below, or a read already in flight: the row is not a button in
-    // either state, and a second read would append the same month twice.
+    // Nothing below, or a read already in flight: repeated scroll events must
+    // not start overlapping reads.
     LoadOlderMonths: () =>
       model.sectionCursor === null || model.loadingMonths
         ? { model }
@@ -120,11 +121,21 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
             commands: [LoadOlderMonthsCmd({ sectionCursor: model.sectionCursor })],
           },
 
-    LoadedMonths: ({ months, nextMonthCursor }) => {
-      // A Month already on the page means the cursor did not move, which
-      // would otherwise loop the reader forever on the same month.
-      if (!isNewSection(months, model.timeline.months)) {
-        return { model: { ...model, loadingMonths: false, sectionCursor: null } }
+    LoadedSections: ({ sections, nextMonthCursor }) => {
+      // A day section already on the page means the cursor did not move, which
+      // would otherwise loop the reader forever on the same content.
+      if (
+        !isNewSection(sections, model.timeline.sections) ||
+        (nextMonthCursor !== null && nextMonthCursor === model.sectionCursor)
+      ) {
+        return {
+          model: {
+            ...model,
+            loadingMonths: false,
+            sectionCursor: null,
+            timeline: { ...model.timeline, tail: 'end' },
+          },
+        }
       }
       return {
         model: {
@@ -134,17 +145,15 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
           sectionCursor: nextMonthCursor,
           timeline: {
             ...model.timeline,
-            months: [...model.timeline.months, ...months],
-            // The page's head is the Month it already opened with; the
-            // Months arriving here are older months, below it.
+            sections: [...model.timeline.sections, ...sections],
+            // The months arriving here are older than the page's existing tail.
             tail: nextMonthCursor === null ? 'end' : 'more',
           },
         },
       }
     },
 
-    // The Timeline already on the page is still true, so the row goes back to
-    // offering the load and says why the last attempt did not land.
+    // The Timeline already on the page is still true; a later scroll retries.
     FailedLoadMonths: ({ message }) => ({
       model: { ...model, loadingMonths: false, monthsError: message },
     }),

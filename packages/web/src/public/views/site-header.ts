@@ -80,6 +80,7 @@ export const siteHeader = (
               href: link.href,
               label: link.label,
               state: link.href === current ? 'active' : 'default',
+              typography: 'serif',
               className: 'px-0.5',
             },
             h,

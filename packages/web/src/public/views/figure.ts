@@ -1,12 +1,12 @@
 /**
- * Figure: one photo with its placard. `column` is a photo inside a flow, `about`
+ * Figure: one photo with its title. `column` is a photo inside a flow, `about`
  * the About page's wide photo — the two are the same element at two measures,
  * so the slot only names where the photo sits and only the slot changes how it
  * is drawn. The intro's Page One slot is gone with the Page One photo: a
  * photograph is drawn the same way wherever it falls in the archive.
  *
  * The About page's photo is the design's Figure at the full content measure,
- * and its placard is set one step larger there (`type-lead` at `desktop`,
+ * and its title is set one step larger there (`type-lead` at `desktop`,
  * falling back to the caption size and a two-line clamp on the mobile master),
  * so `type-lead` rides on the slot rather than on the About page wrapping this.
  *
@@ -17,8 +17,8 @@
  * head of its flow because that one is above the fold.
  *
  * The mobile Figure master (size=mobile) differs from the desktop one at every
- * level: the placard is a two-line clamped title with a zero-padded number
- * under it, and the Exif line is gone. One tree carries both variants on the
+ * level: the title is clamped to two lines and the Exif line is gone. One tree
+ * carries both variants on the
  * `lg` breakpoint — the desktop composition needs its full 1080px
  * measure, so `lg` is where the `size` axis flips.
  */
@@ -26,7 +26,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameNo, frameNoShort, figureUrl, type Figure } from '../content'
+import { figureUrl, type Figure } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
@@ -78,7 +78,7 @@ export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => 
           h.img([
             h.Class('h-full w-full object-cover'),
             h.Src(figureUrl(photo)),
-            // The placard below is the photo's accessible name; a second reading
+            // The button label is the photo's accessible name; a second reading
             // of the same sentence would only make the figure noisier.
             h.Alt(''),
             ...(loading === 'eager'
@@ -89,22 +89,11 @@ export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => 
       ),
       h.figcaption(
         [h.Class('flex flex-col gap-2 lg:flex-row lg:items-baseline lg:justify-between lg:gap-4')],
-        [
-          h.span([h.Class(titleClass(slot))], [photo.title]),
-          // The mobile placard number is bare, not "No. 024".
-          h.span(
-            [h.Class('type-exif whitespace-nowrap text-role-text-secondary lg:hidden')],
-            [frameNoShort(photo.index)],
-          ),
-          h.span(
-            [h.Class('hidden type-exif whitespace-nowrap text-role-text-secondary lg:inline')],
-            [frameNo(photo.index)],
-          ),
-        ],
+        [h.span([h.Class(titleClass(slot))], [photo.title])],
       ),
       // The exposure line runs the full measure below the caption, not beside
-      // the frame number: at column width it is one line, and tucked into the
-      // caption row it wraps. The mobile Figure master omits it entirely.
+      // the title: at column width it is one line, and tucked into the caption
+      // row it wraps. The mobile Figure master omits it entirely.
       //
       // A Photo carrying none of the facts an Exif line is made of has no line
       // at all (CONTEXT.md), so the element is left out rather than rendered

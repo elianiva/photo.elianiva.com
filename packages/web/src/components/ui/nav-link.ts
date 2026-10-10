@@ -15,7 +15,7 @@ export const navLinkStateKeys = ['active', 'default'] as const
 export type NavLinkState = (typeof navLinkStateKeys)[number]
 
 export const navLinkBaseClass =
-  'focus-visible:ring-role-focus/50 inline-block border-b-[1.5px] px-0 py-1 type-label transition-colors duration-120 outline-none focus-visible:ring-[3px]'
+  'focus-visible:ring-role-focus/50 inline-block border-b-[1.5px] px-0 py-1 transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 export const navLinkStateClasses: Record<NavLinkState, string> = {
   active: 'border-role-rule text-role-text-primary',
@@ -27,6 +27,7 @@ export type NavLinkConfig = Readonly<{
   href: string
   label: string
   state: NavLinkState
+  typography?: 'label' | 'serif'
   className?: string
 }>
 
@@ -36,7 +37,16 @@ export const navLink = <M>(config: NavLinkConfig, h: HtmlBuilder<M>): Html =>
     [
       h.Href(config.href),
       ...(config.state === 'active' ? [h.AriaCurrent('page')] : []),
-      h.Class(cn(navLinkBaseClass, navLinkStateClasses[config.state], config.className)),
+      h.Class(
+        cn(
+          navLinkBaseClass,
+          config.typography === 'serif'
+            ? 'font-serif text-base font-normal italic tracking-[0.04em]'
+            : 'type-label',
+          navLinkStateClasses[config.state],
+          config.className,
+        ),
+      ),
       h.DataAttribute('slot', 'nav-link'),
       h.DataAttribute('state', config.state),
     ],

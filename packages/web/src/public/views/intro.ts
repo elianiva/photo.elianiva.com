@@ -9,10 +9,9 @@
  * nothing published says so instead — the one thing a static intro cannot do
  * is describe a batch of photographs that is not there.
  *
- * The headline is set large and tight, with its last two words in the accent
- * so the one coloured thing on the first screen is the part that is a person
- * talking. The deck sits at the right of it, ranged to the baseline, and
- * drops under it on a narrow screen.
+ * The headline is set large and tight, with the complete phrase kept inside
+ * the page measure. The deck sits beside it on a wide screen and drops below
+ * it on a narrow one.
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
@@ -22,7 +21,7 @@ import { Message } from '../model'
 import { BAND, type Child } from './shared'
 
 export const intro = (timeline: Timeline, h: HtmlBuilder<Message>): Child => {
-  const isEmpty = timeline.months.length === 0
+  const isEmpty = timeline.sections.length === 0
   return h.section(
     [h.Class('flex flex-col')],
     [
@@ -34,12 +33,12 @@ export const intro = (timeline: Timeline, h: HtmlBuilder<Message>): Child => {
         ],
         [
           h.h1(
-            [h.Class('type-display max-w-[12ch] text-role-text-primary')],
+            [h.Class('type-display max-w-full text-role-text-primary sm:max-w-[14ch]')],
             isEmpty
               ? ['nothing here ', h.span([h.Class('text-role-accent italic')], ['yet'])]
               : [
                   'A bunch of photographs ',
-                  h.span([h.Class('text-role-accent italic')], ['I took']),
+                  h.span([h.Class('whitespace-nowrap text-role-accent italic')], ['I took']),
                 ],
           ),
           h.p(

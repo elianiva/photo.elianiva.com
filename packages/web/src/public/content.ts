@@ -4,7 +4,7 @@
  * take the `timeline` or the `figures` out of the Model and nothing in `public/`
  * reaches for another source of content.
  *
- * What is here is what D1 knows: the figures, the months they group into,
+ * What is here is what D1 knows: the figures, the days they group into,
  * whether there is another month below, the Tags a visitor can go to, and the
  * figures one Tag carries. Every line of text on the site is written in the view
  * that prints it — a header is the site's own voice, it is not a record,
@@ -15,8 +15,8 @@
  * Tag's own label and caption.
  *
  * A Photo that is not published is not here, so a site with nothing published
- * is a real state rather than a placeholder: no Months, and a load-more row in
- * its empty state. Every photograph is a photo in a Month's flow — there is no
+ * is a real state rather than a placeholder: no sections and no pager. Every
+ * photograph is a photo in a capture day's flow — there is no
  * lead photo and nothing is pinned, because the archive does not rank its own
  * photographs.
  *
@@ -60,9 +60,9 @@ export const RATIO_VALUE: Record<FigureRatio, number> = {
 export const FigureSchema = S.Struct({
   /** The Photo's own id, which the lightbox resolves a click through. */
   id: S.String,
-  /** 24 -> "No. 024". The Photo Number, not a position on the page. */
-  index: S.Number,
   title: S.String,
+  /** The capture date, used to group the monthly read into accurate day sheets. */
+  takenAt: S.NullOr(S.String),
   ratio: FigureRatioSchema,
   /** The original's own width / height. Frames draw with this, not the snapped
    *  `ratio`, so a photo is never cropped to the nearest of the six Ratios. */
@@ -78,16 +78,18 @@ export const FigureSchema = S.Struct({
 })
 export type Figure = typeof FigureSchema.Type
 
-export const MonthSchema = S.Struct({
-  /** The month key, `2025-08`, and the cursor that resumes below it. */
+export const DaySectionSchema = S.Struct({
+  /** The day key, `2025-08-31`; undated legacy rows use their month key. */
   id: S.String,
+  /** The capture day, or null when a legacy row has no usable date. */
+  day: S.NullOr(S.Number),
   /** 'August' */
   month: S.String,
   /** '2025' */
   year: S.String,
   figures: S.Array(FigureSchema),
 })
-export type Month = typeof MonthSchema.Type
+export type DaySection = typeof DaySectionSchema.Type
 
 /**
  * The load-more row's three states.
@@ -103,7 +105,7 @@ export const TailSchema = S.Literals(['more', 'end', 'empty'])
 export type Tail = typeof TailSchema.Type
 
 export const TimelineSchema = S.Struct({
-  months: S.Array(MonthSchema),
+  sections: S.Array(DaySectionSchema),
   tail: TailSchema,
 })
 export type Timeline = typeof TimelineSchema.Type
@@ -201,16 +203,16 @@ const monthName = (month: string): string => MONTH_NAMES[Number(month.slice(5, 7
  *   it is dropped rather than drawn in a Ratio it is not.
  * - **Exif.** `formatExifLine` returns null for a Photo carrying no facts, and
  *   null means the view omits the element rather than printing an empty line.
- * - **Number.** The Photo Number is a column, but a legacy row can carry none,
- *   and `0` is the placard of a Photo that has not been numbered.
+ * - **Date.** The capture date stays with the Figure so the monthly server
+ *   read can be presented as truthful day-level sheets.
  */
 const figureOf = (photo: PhotoWithTags): Figure | null => {
   const ratio = photo.ratio ?? nearestRatio(photo.width, photo.height)
   if (ratio === null || ratio === undefined) return null
   return {
     id: photo.id,
-    index: photo.number ?? 0,
     title: photo.title,
+    takenAt: photo.takenAt ?? null,
     ratio,
     aspect: photo.width > 0 && photo.height > 0 ? photo.width / photo.height : RATIO_VALUE[ratio],
     exif: formatExifLine(photo),
@@ -230,48 +232,68 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
 export const figuresOf = (photos: ReadonlyArray<PhotoWithTags>): ReadonlyArray<Figure> =>
   photos.map(figureOf).filter((figure): figure is Figure => figure !== null)
 
-/** A Month's figures, in the order the read returned them, minus any Photo
- *  that cannot be drawn. A Month left with none is dropped with it. */
-const monthOf = (section: PublicSection): Month | null => {
+/** A server month read, split into capture-day sheets while preserving its
+ *  newest-first photo order. Legacy rows with no usable day stay together in
+ *  one undated sheet rather than receiving an invented date. */
+const sectionsOfMonth = (section: PublicSection): ReadonlyArray<DaySection> => {
   const figures = figuresOf(section.photos)
-  if (figures.length === 0) return null
-  return {
-    id: section.month,
+  const groups = new Map<string, { day: number | null; figures: Array<Figure> }>()
+
+  for (const figure of figures) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(figure.takenAt ?? '')
+    const date = match?.[0]
+    const dayValue = match?.[3]
+    const day =
+      date !== undefined &&
+      date.slice(0, 7) === section.month &&
+      dayValue !== undefined &&
+      Number(dayValue) >= 1 &&
+      Number(dayValue) <= 31
+        ? Number(dayValue)
+        : null
+    const id = day === null || date === undefined ? section.month : date
+    const group = groups.get(id)
+    if (group === undefined) groups.set(id, { day, figures: [figure] })
+    else group.figures.push(figure)
+  }
+
+  return [...groups].map(([id, group]) => ({
+    id,
+    day: group.day,
     month: monthName(section.month),
     year: section.year,
-    figures,
-  }
+    figures: group.figures,
+  }))
 }
 
 /**
- * The Months a read returned, as the home page draws them.
+ * The daily sheets a read returned, as the home page draws them.
  *
- * Exported because the home page maps its Months in two places and they must
- * agree: the Worker maps the first read before it renders, and the browser
- * maps each appended read the same way. A Month whose photographs are all
- * undrawable is dropped here rather than rendered as an empty heading.
+ * Exported because the home page maps its monthly reads in two places and they
+ * must agree: the Worker maps the first read before it renders, and the browser
+ * maps each appended read the same way. A month whose photographs are all
+ * undrawable is dropped rather than rendered as an empty heading.
  */
-export const monthsOf = (sections: ReadonlyArray<PublicSection>): ReadonlyArray<Month> =>
-  sections.map(monthOf).filter((section): section is Month => section !== null)
+export const sectionsOf = (months: ReadonlyArray<PublicSection>): ReadonlyArray<DaySection> =>
+  months.flatMap(sectionsOfMonth)
 
 /**
  * The Timeline, from the public read.
  *
  * A site with nothing published is a state this returns honestly rather than a
- * crash or a placeholder: no Months, and a load-more row in its empty state.
- * The home page draws that; it does not need a photograph to be a page.
+ * crash or a placeholder: no sections and no cursor to follow.
  *
  * The Timeline carries no photo of its own. It used to name the newest
  * photograph the Page One photo and draw it beside the intro, which made one
  * photograph the site's cover photo and the same photograph the first frame of
  * the first Month on mobile — a rank the archive never assigned, published
- * from nothing anyone had marked. The Months are the whole of it now.
+ * from nothing anyone had marked. The daily sections are the whole of it now.
  */
 export const timelineOf = (read: HomeRead): Timeline => {
-  const months = monthsOf(read.sections)
+  const sections = sectionsOf(read.sections)
   return {
-    months,
-    tail: months.length === 0 ? 'empty' : 'more',
+    sections,
+    tail: sections.length === 0 ? 'empty' : 'more',
   }
 }
 
@@ -280,7 +302,7 @@ export const timelineOf = (read: HomeRead): Timeline => {
  * for an empty read, named once so the About page's Model can hold a Timeline
  * it never reads without inventing a second spelling of "empty".
  */
-export const EMPTY_TIMELINE: Timeline = { months: [], tail: 'empty' }
+export const EMPTY_TIMELINE: Timeline = { sections: [], tail: 'empty' }
 
 /**
  * A Tag page, from the public read.
@@ -302,29 +324,9 @@ export const tagPageOf = (read: TagRead): TagPage => ({
 // derived lines
 // ---------------------------------------------------------------------------
 
-const pad = (value: number, width: number): string => String(value).padStart(width, '0')
-
-/** A photo's placard number: `frameNo(24)` -> 'No. 024'. */
-export const frameNo = (index: number): string => `No. ${pad(index, 3)}`
-
-/** The mobile placard number, zero-padded and unprefixed: `frameNoShort(24)` -> '024'. */
-export const frameNoShort = (index: number): string => pad(index, 3)
-
 /** The mobile section head counts frames only, e.g. '09 FRAMES'. */
 export const frameCount = (count: number): string =>
-  `${pad(count, 2)} ${count === 1 ? 'FRAME' : 'FRAMES'}`
-
-/** The section head's right-hand line, e.g. '08 FRAMES · NO. 016–023'. A
- *  Month with no photo carries no number range, so it prints the count
- *  alone rather than a range over nothing. */
-export const sectionCount = (section: Month): string => {
-  if (section.figures.length === 0) return frameCount(0)
-  const indices = section.figures.map((figure) => figure.index)
-  const first = Math.min(...indices)
-  const last = Math.max(...indices)
-  const noun = section.figures.length === 1 ? 'FRAME' : 'FRAMES'
-  return `${pad(section.figures.length, 2)} ${noun} · NO. ${pad(first, 3)}–${pad(last, 3)}`
-}
+  `${String(count).padStart(2, '0')} ${count === 1 ? 'FRAME' : 'FRAMES'}`
 
 /** The grid's image: the Photo's `small` WebP (1600px long edge), served from
  *  R2 through the Worker's proxy. The frame is cropped to the Ratio by the

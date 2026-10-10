@@ -31,12 +31,11 @@ import type { Model } from './model'
 import { routeHref, tagPath } from './route'
 import { aboutBody } from './views/about'
 import { siteFooter } from './views/site-footer'
-import { loadMore } from './views/load-more'
+import { archiveEnd } from './views/archive-end'
 import { intro } from './views/intro'
 import { lightbox } from './views/lightbox'
 import { siteHeader } from './views/site-header'
-import { monthSheet } from './views/month-sheet'
-import { BAND } from './views/shared'
+import { daySheet } from './views/day-sheet'
 import { tagBody } from './views/tag-page'
 
 const TITLES: Record<Exclude<Model['route'], 'tag'>, string> = {
@@ -87,13 +86,10 @@ const homeDocument = (model: Model, h: HtmlBuilder<Message>): Document => ({
       [h.Class('flex flex-col')],
       [
         intro(model.timeline, h),
-        // The first Month heads the page, so its first photo is the one the
-        // browser fetches eagerly; every other Month is below the fold.
-        ...model.timeline.months.map((section, index) => monthSheet(section, index === 0, h)),
-        h.div(
-          [h.Id('archive'), h.Class(`${BAND} pt-4 lg:pt-12`)],
-          [loadMore(model.timeline.tail, model.loadingMonths, model.monthsError, h)],
-        ),
+        // The first capture day heads the page, so its first photo is the one
+        // the browser fetches eagerly; later sections load as the reader scrolls.
+        ...model.timeline.sections.map((section, index) => daySheet(section, index === 0, h)),
+        archiveEnd(model.timeline.tail, model.loadingMonths, model.monthsError, h),
       ],
     ),
   ]),

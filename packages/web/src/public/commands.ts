@@ -1,16 +1,16 @@
 /**
  * The home page's one command: read the months below the one the page ends on.
  *
- * It is a client-side read rather than a navigation because appending a Month
- * is the same page with more of it — the load-more row moves down and more
- * photographs appear above it. Navigating would throw away the Months already
+ * It is a client-side read rather than a navigation because appending more
+ * capture-day sections is the same page with more of it. Navigating would
+ * throw away the sections already
  * rendered and make the reader scroll back past them.
  *
  * The read goes to the public group, which filters to published, non-trashed
  * Photos inside `PublicPhotoService`, so a Draft cannot be appended to the home page
- * by asking for an older month. The Months are mapped by `monthsOf`, the
- * same function the Worker used for the first read, so an appended month is
- * drawn exactly as a server-rendered one is.
+ * by asking for an older month. The response is mapped by `sectionsOf`, the
+ * same function the Worker used for the first read, so appended photos are
+ * grouped and drawn exactly as server-rendered ones are.
  */
 
 import { Effect, Schema as S } from 'effect'
@@ -18,7 +18,7 @@ import { Command } from 'foldkit'
 
 import type { PublicSection } from '@photo/api'
 import { rpcPublic } from '@/lib/rpc'
-import { monthsOf } from './content'
+import { sectionsOf } from './content'
 import { Message } from './model'
 
 /** The public read's answer, as the public group declares it. The response is
@@ -33,13 +33,13 @@ type HomePageRead = {
 
 export const LoadOlderMonthsCmd = Command.define('LoadOlderMonths', {
   args: { sectionCursor: S.String },
-  messages: [Message.LoadedMonths, Message.FailedLoadMonths],
+  messages: [Message.LoadedSections, Message.FailedLoadMonths],
   execute: ({ sectionCursor }) =>
     Effect.map(
       rpcPublic<HomePageRead>('GetFrontPage', { sectionCursor, sectionCount: 2 }),
       (read) =>
-        Message.LoadedMonths({
-          months: monthsOf(read.sections),
+        Message.LoadedSections({
+          sections: sectionsOf(read.sections),
           nextMonthCursor: read.nextMonthCursor,
         }),
     ).pipe(

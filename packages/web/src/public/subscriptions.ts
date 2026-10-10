@@ -13,6 +13,16 @@ import { FigureSchema } from './content'
 import { Message } from './model'
 import type { Model } from './model'
 
+const PREFETCH_DISTANCE = 900
+
+const archiveIsNear = (): boolean => {
+  const archive = document.getElementById('archive')
+  return (
+    archive !== null &&
+    archive.getBoundingClientRect().top <= window.innerHeight + PREFETCH_DISTANCE
+  )
+}
+
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   lightboxKeys: entry(
     { selected: S.NullOr(FigureSchema) },
@@ -28,6 +38,48 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
           }),
           Effect.sync(() => selected !== null),
         ),
+    },
+  ),
+  archiveScroll: entry(
+    {
+      home: S.Boolean,
+      hasMore: S.Boolean,
+      loading: S.Boolean,
+      cursor: S.NullOr(S.String),
+      error: S.NullOr(S.String),
+    },
+    {
+      modelToDependencies: (model) => ({
+        home: model.route === 'home',
+        hasMore: model.sectionCursor !== null,
+        loading: model.loadingMonths,
+        cursor: model.sectionCursor,
+        error: model.monthsError,
+      }),
+      dependenciesToStream: ({ home, hasMore, loading, error }) => {
+        if (!home || !hasMore) return Stream.empty
+
+        const scroll = Subscription.fromEventFilterMap({
+          target: () => window,
+          type: 'scroll',
+          filterMapEvent: () =>
+            archiveIsNear() ? Option.some(Message.LoadOlderMonths()) : Option.none(),
+        })
+        // Check once on mount and after each successful append. On failure,
+        // wait for another scroll before retrying instead of spinning requests.
+        const initial =
+          !loading && error === null && archiveIsNear()
+            ? Stream.succeed(Message.LoadOlderMonths())
+            : Stream.empty
+
+        return Stream.merge(
+          initial,
+          Stream.when(
+            scroll,
+            Effect.sync(() => !loading),
+          ),
+        )
+      },
     },
   ),
 }))

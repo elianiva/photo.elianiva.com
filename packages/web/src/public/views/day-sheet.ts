@@ -1,14 +1,14 @@
 /**
- * A section of the timeline, drawn as one sheet of proofs: the month's numeral
- * and name in a rail at the left, and its frames in a strip at the right, each
- * on its own bit of film.
+ * A section of the timeline, drawn as one sheet of proofs: the capture day's
+ * numeral and month in a rail at the left, and its frames in a strip at the
+ * right, each on its own bit of film.
  *
  * A frame is a photo at a fixed height with its width following its Ratio, so a
  * month of mixed landscapes and portraits packs into rows the way a contact
  * sheet does, and the whole archive reads at a glance instead of one column at
- * a time. The film is drawn rather than typed: the black stock, the two rows of
- * sprocket holes and the Photo Number are all CSS over the one `<img>`, so the
- * frame is still a single button to the lightbox.
+ * a time. The film is drawn rather than typed: the black stock and the two rows
+ * of sprocket holes are CSS over one `<img>`, so the frame is still a single
+ * button to the lightbox.
  *
  * The frame's title is not printed under it. It appears over the frame on
  * hover and on focus, and is the button's accessible name always, so a reader
@@ -21,24 +21,23 @@
  * did it, and the mark is a fact the data already holds — the newest published
  * Photo — not a new setting nobody has chosen. Every other frame is plain.
  *
- * The rail counts the Month's own frames and the strip draws exactly those,
+ * The rail counts the day's frames and the strip draws exactly those,
  * so the count is the same fact in both places.
  */
 
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameCount, frameNoShort, figureUrl, type Figure } from '../content'
-import type { Month } from '../content'
+import { frameCount, figureUrl, type DaySection, type Figure } from '../content'
 import { Message } from '../model'
 import { BAND, type Child } from './shared'
 
-/** The month key `2025-08` as the rail's numeral: `08`. */
-const numeralOf = (section: Month): string => section.id.slice(5, 7)
+/** The capture day is the rail's numeral; an unusable legacy date has none. */
+const numeralOf = (section: DaySection): string => (section.day === null ? '' : String(section.day))
 
 /** One row of sprocket holes along a frame's edge. */
 const SPROCKETS =
-  'pointer-events-none absolute inset-x-0 h-1.5 [background:repeating-linear-gradient(90deg,var(--role-surface)_0_6px,transparent_6px_12px)]'
+  'pointer-events-none absolute inset-x-0 h-2.5 [background:repeating-linear-gradient(90deg,var(--role-surface)_0_8px,transparent_8px_24px)]'
 
 const grease = (h: HtmlBuilder<Message>): ReadonlyArray<Child> => [
   h.span(
@@ -72,7 +71,7 @@ const frame = (
       h.button(
         [
           h.Class(
-            'group relative block w-full cursor-pointer bg-role-primary py-[9px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px] lg:w-auto',
+            'group relative block w-full cursor-pointer bg-role-primary py-[12px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px] lg:w-auto',
           ),
           h.Style({ aspectRatio: String(photo.aspect) }),
           h.OnClick(Message.ClickedFigure({ id: photo.id })),
@@ -100,14 +99,6 @@ const frame = (
               : [h.Loading('lazy'), h.Decoding('async')]),
           ]),
           h.span([h.Class(`${SPROCKETS} bottom-px`)], []),
-          h.span(
-            [
-              h.Class(
-                'type-exif-sm absolute bottom-2.5 left-1.5 text-[#ffb347] [text-shadow:0_0_4px_#000]',
-              ),
-            ],
-            [frameNoShort(photo.index)],
-          ),
           // The title, over the frame: hidden until hover or focus reaches it.
           h.span(
             [
@@ -123,15 +114,13 @@ const frame = (
     ],
   )
 
-const rail = (section: Month, h: HtmlBuilder<Message>): Child =>
+const rail = (section: DaySection, h: HtmlBuilder<Message>): Child =>
   h.div(
     [h.Class('flex items-baseline gap-3 lg:flex-col lg:items-start lg:justify-between lg:gap-0')],
     [
       h.span([h.Class('type-numeral-sm text-role-accent lg:type-numeral')], [numeralOf(section)]),
-      // The month and its count are written by hand, in blue pen, a little
-      // off the horizontal: the one place the sheet is annotated rather than
-      // printed. The pen is a role of its own so the Admin's dark branch gets
-      // a pen it can read.
+      // The month and count are written by hand, beside the actual capture day
+      // rather than a month number that can be mistaken for the date.
       h.span(
         [h.Class('type-hand -rotate-3 whitespace-nowrap text-role-pen lowercase')],
         [`${section.month} ${section.year}`, h.br([]), frameCount(section.figures.length)],
@@ -139,11 +128,11 @@ const rail = (section: Month, h: HtmlBuilder<Message>): Child =>
     ],
   )
 
-/** `headsDocument` is the home page's first Month — the one whose first frames
+/** `headsDocument` is the home page's first capture day — the one whose first frames
  *  are above the fold, and so the figures the browser is told to fetch now, and
  *  the one the grease pencil marks. */
-export const monthSheet = (
-  section: Month,
+export const daySheet = (
+  section: DaySection,
   headsDocument: boolean,
   h: HtmlBuilder<Message>,
 ): Child =>
