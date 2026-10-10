@@ -23,12 +23,12 @@ export default defineConfig({
       'node_modules/**',
       '.wrangler/**',
     ],
-    jsPlugins: [
-      {
-        name: 'foldkit',
-        specifier: '@foldkit/oxlint-plugin',
-      },
-    ],
+    // Foldkit JS plugin (`@foldkit/oxlint-plugin`) removed for now: with
+    // `jsPlugins` set, oxlint switches to fixed-size allocators (one ~4 GiB
+    // reservation per thread) and panics at startup in
+    // `crates/oxc_allocator/src/pool/fixed_size.rs` on machines with strict
+    // memory overcommit accounting. Upstream: oxc-project/oxc#20331. Re-enable
+    // once fixed: jsPlugins: [{ name: 'foldkit', specifier: '@foldkit/oxlint-plugin' }],
     options: {
       typeAware: true,
       typeCheck: true,

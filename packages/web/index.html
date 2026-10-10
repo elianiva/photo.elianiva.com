@@ -31,7 +31,10 @@
     <script>
       try {
         var t = localStorage.getItem('photo-admin:theme')
-        if ((t === 'light' || t === 'dark') && /^\/admin\/?$|^\/admin\/(?!photos\/)/.test(location.pathname)) {
+        if (
+          (t === 'light' || t === 'dark') &&
+          /^\/admin\/?$|^\/admin\/(?!photos\/)/.test(location.pathname)
+        ) {
           document.documentElement.setAttribute('data-theme', t)
         }
       } catch (e) {}

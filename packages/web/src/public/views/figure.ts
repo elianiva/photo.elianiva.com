@@ -26,7 +26,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameNo, frameNoShort, figureUrl, type Figure as Figure } from '../content'
+import { frameNo, frameNoShort, figureUrl, type Figure } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 

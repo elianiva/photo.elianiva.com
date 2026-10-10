@@ -27,7 +27,7 @@ export class ImagePipeline extends Context.Service<ImagePipeline>()('photo/Image
     const permits = yield* Semaphore.make(concurrency)
 
     /** One request in a fresh Worker, its answer decoded against `result`. */
-    const job = <A>(request: WorkerRequest, response: S.Codec<Answer<A>, any>) =>
+    const job = <A>(request: WorkerRequest, response: S.Codec<Answer<A>, unknown>) =>
       Effect.callback<unknown, WorkerFailed>((resume) => {
         const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
         worker.onmessage = (event: MessageEvent<unknown>) => {

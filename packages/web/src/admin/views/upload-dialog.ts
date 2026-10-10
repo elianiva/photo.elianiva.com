@@ -88,12 +88,7 @@ const exifLines = (item: QueueItem, h: HtmlBuilder<Msg>): ReadonlyArray<Child> =
   if (item.exifFacts === undefined) return []
   return [
     ...(item.exifFacts.length > 0
-      ? [
-          h.p(
-            [h.Class('type-exif-sm text-role-text-secondary')],
-            [item.exifFacts.join(' · ')],
-          ),
-        ]
+      ? [h.p([h.Class('type-exif-sm text-role-text-secondary')], [item.exifFacts.join(' · ')])]
       : []),
     ...(item.exifProblem === undefined
       ? []

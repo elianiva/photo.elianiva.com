@@ -9,7 +9,12 @@ describe('factsOfExif', () => {
       FNumber: 8,
       ISO: 200,
     })
-    expect(read.facts).toEqual(['Camera X-T20', 'Aperture f/8', 'ISO 200', 'Taken 2026-08-31 14.22.05'])
+    expect(read.facts).toEqual([
+      'Camera X-T20',
+      'Aperture f/8',
+      'ISO 200',
+      'Taken 2026-08-31 14.22.05',
+    ])
     expect(read.problem).toBeUndefined()
   })
 
