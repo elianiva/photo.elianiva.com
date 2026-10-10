@@ -26,11 +26,13 @@ import { cn } from '@/lib/utils'
 /** Button variant keys. Sync with `buttonVariants` is compiler-enforced:
  *  `buttonVariants` is `Record<ButtonVariant, string>` (missing key = error)
  *  and annotated object literals reject unknown keys. */
-export const buttonVariantKeys = ['default', 'secondary', 'ghost', 'destructive'] as const
+export const buttonVariantKeys = ['default', 'accent', 'secondary', 'ghost', 'destructive'] as const
 
 export const buttonVariants: Record<ButtonVariant, string> = {
   default:
     'bg-role-primary text-role-on-primary hover:bg-role-primary-hover disabled:bg-role-surface-container-high',
+  accent:
+    'bg-role-accent text-role-on-accent hover:bg-role-accent-hover disabled:bg-role-surface-container-high',
   secondary:
     'border border-role-rule text-role-text-primary hover:bg-role-surface-hover hover:border-role-rule disabled:border-role-hairline',
   ghost: 'text-role-text-primary hover:bg-role-surface-hover',

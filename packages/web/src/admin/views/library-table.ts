@@ -139,19 +139,19 @@ const row = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Child =>
 // ---------------------------------------------------------------------------
 
 /** The Bulk Bar (master `2ee1012a86fa8715`). The design draws it inverted —
- *  `ds(, theme(dark))` — even on the light Library, and one `data-theme` on
- *  this element is the dark scope saying the same thing: the role tokens below
+ *  `ds(, theme(dark))` — against the page it sits on, and one `data-theme` on
+ *  this element is the opposite scope saying the same thing: the role tokens below
  *  it resolve to their dark branch and nothing above it moves.
  *
  *  The box beside `2 SELECTED` is the design's own `state(on)`, so it reads as
  *  "a selection exists" and unticking it is `Clear` — which is the affordance
  *  printed beside it anyway.
  */
-const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
+export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const count = model.selected.length
   return h.div(
     [
-      h.Attribute('data-theme', 'dark'),
+      h.Attribute('data-theme', 'light'),
       h.DataAttribute('slot', 'bulk-bar'),
       h.Class('flex items-center justify-between gap-4 bg-role-surface py-2 pr-3 pl-3'),
     ],
@@ -210,7 +210,7 @@ const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
  *  from the upload Dialog's combo, so the one place a new label is typed is the
  *  one place a Tag comes from — a second create field here would be a second
  *  convention for one thing. */
-const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
+export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.submodel({
     slotId: 'admin-add-tag-dialog',
     model: model.addTagDialog,

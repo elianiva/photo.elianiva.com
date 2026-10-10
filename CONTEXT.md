@@ -32,8 +32,12 @@ _Avoid_: Aspect ratio, orientation, dimensions (those are the measured `width` a
 The window a Photo is presented through, authored in the Editor. `cropX` and `cropY` pan the source inside the Ratio, `cropScale` zooms it, `cropFlipX` mirrors it horizontally, and `level` is the straighten angle in degrees. The defaults — pan at origin, scale 1, un-mirrored, no level — mean an un-cropped Photo is the source as shot. A crop is authored data, so it is stored as columns and the Rendition is regenerated from it, never beside it.
 _Avoid_: Resize, Zoom (that is the Stage's own control), Aspect ratio (that is the Ratio)
 
+**Selection panel**:
+The Library's right-hand panel (`/admin`, wide screens): the one selected Photo's preview, number, Status, Ratio, taken day, frame, Tags and Exif line, with `Edit` and `Delete`. It reads the Library's own selection, so a tick in the table, a tile in the grid and the Bulk Bar agree; several selected is a count that points at the Bulk Bar.
+_Avoid_: Inspector (that is the Editor's 360px panel), Details, Preview pane
+
 **Editor**:
-The route at `/admin/photos/<id>` and the surface it draws: a Top Bar, a Stage and a 360px Inspector. It is the one site theme surface in the `dark` branch and the only route with no Sidebar, so it is a document of its own rather than a page inside the shell — the same URL space, a different shell. The Stage shows the **draft**, not the stored Presentation, so an unsaved change is visible before it is saved; the Top Bar's `UNSAVED CHANGES` indicator and its `Discard` / `Update` pair are the Editor's own, and the `HISTORY` tab is deferred (decision 8) so no third tab is drawn, not even a disabled one. The Editor is **dirty** when its draft differs from the snapshot it loaded, which is a comparison against the stored fields rather than a set of touched ones, so `Discard` is exactly "put the snapshot back". Leaving with unsaved changes asks — `Escape`, `← Library`, a clicked link, a Back press and the browser's own `beforeunload` are the same rule — because an in-app history move never reaches the browser's dialog. `← Library` returns to the route the Editor was **opened from**, so a Photo reached from a filtered Library goes back to that same filter.
+The route at `/admin/photos/<id>` and the surface it draws: a Top Bar, a Stage and a 360px Inspector. It is dark like the rest of the Desk, and the only route with no Sidebar, so it is a document of its own rather than a page inside the shell — the same URL space, a different shell. The Stage shows the **draft**, not the stored Presentation, so an unsaved change is visible before it is saved; the Top Bar's `UNSAVED CHANGES` indicator and its `Discard` / `Update` pair are the Editor's own, and the `HISTORY` tab is deferred (decision 8) so no third tab is drawn, not even a disabled one. The Editor is **dirty** when its draft differs from the snapshot it loaded, which is a comparison against the stored fields rather than a set of touched ones, so `Discard` is exactly "put the snapshot back". Leaving with unsaved changes asks — `Escape`, `← Library`, a clicked link, a Back press and the browser's own `beforeunload` are the same rule — because an in-app history move never reaches the browser's dialog. `← Library` returns to the route the Editor was **opened from**, so a Photo reached from a filtered Library goes back to that same filter.
 _Avoid_: Page (the Editor is a route and a document, not a page in the shell), Modal, Lightbox, Edit sheet (that is the retired Library overlay, decision 2), Detail (that is the `DETAILS` tab, a record)
 
 **Presentation**:
@@ -166,7 +170,7 @@ The element a site theme branch is named on: `data-theme="light" | "dark"`,
 with `.dark` on the document root the same block spelled as a class.
 The branch is a function of the Admin's **Route** and of nothing else, so the
 view names it on the app root and the HTML shell names it on `<html>` — the
-only element there is before the app has run. The Library (`/admin`) is light;
-the Editor (`/admin/photos/:id`) is dark in the same document.
+only element there is before the app has run. Every Admin route is dark — the Desk is
+the darkroom — and the public site is light.
 _Avoid_: a path prefix for the Editor, toggling the theme after mount, a second
 hand-written dark palette

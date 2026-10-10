@@ -49,6 +49,7 @@
   --role-rule: #1b1a18;
   --role-surface: #f3f0e8;
   --role-surface-container: #eae6dc;
+  --role-surface-sunken: #e2ded3;
   --role-surface-container-high: #b4aea2;
   --role-surface-hover: #eae6dc;
   /* The two quiet voices, tuned per branch for the 10px `$typography.exif`
@@ -91,6 +92,8 @@
   --role-rule: #f3f0e8;
   --role-surface: #1b1a18;
   --role-surface-container: #2f2c28;
+  /* The chrome sunk below the page: the Desk's rail and inspector. */
+  --role-surface-sunken: #141312;
   --role-surface-container-high: #46423b;
   --role-surface-hover: #2f2c28;
   /* See the light branch: the same two voices, tuned for this branch's own
@@ -129,6 +132,7 @@
   --color-role-rule: var(--role-rule);
   --color-role-surface: var(--role-surface);
   --color-role-surface-container: var(--role-surface-container);
+  --color-role-surface-sunken: var(--role-surface-sunken);
   --color-role-surface-container-high: var(--role-surface-container-high);
   --color-role-surface-hover: var(--role-surface-hover);
   --color-role-text-disabled: var(--role-text-disabled);

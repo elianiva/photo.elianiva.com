@@ -32,10 +32,24 @@ export type Theme = typeof Theme.Type
 /** The attribute the theme scopes key off. */
 export const themeAttribute = 'data-theme'
 
-/** The theme branch a route is drawn in. Light is the default, so a
- *  route the table gains later is light until someone says otherwise. */
+/** The theme branch a route is drawn in. The Desk is the dark room: every
+ *  route the Admin resolves is dark, the Editor and the Library alike. A URL
+ *  outside `/admin` is the public site's and stays light —
+ *  so a route the table gains later is light until someone says otherwise. */
 export const themeForRoute = (route: AppRoute): Theme =>
-  AppRoute.matchOrElse(route, { Photo: (): Theme => 'dark' }, (): Theme => 'light')
+  AppRoute.matchOrElse(
+    route,
+    {
+      Library: (): Theme => 'dark',
+      Scheduled: (): Theme => 'dark',
+      Settings: (): Theme => 'dark',
+      Atoms: (): Theme => 'dark',
+      Photo: (): Theme => 'dark',
+      // The Admin's own 404 is a page of the Desk; the public site's is not.
+      NotFound: ({ path }): Theme => (path === '/admin' || path.startsWith('/admin/') ? 'dark' : 'light'),
+    },
+    (): Theme => 'light',
+  )
 
 /** The theme branch a request URL is answered in. Goes through the same
  *  route table as the view, so the shell and the app cannot name two

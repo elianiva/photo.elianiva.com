@@ -136,14 +136,26 @@ const optionIconClass = 'size-3.5'
 const optionClasses = <V extends string | number>(
   option: SegmentOption<V>,
   isSelected: boolean,
+  shape: SegmentShape,
 ): string =>
   cn(
     segmentOptionClass,
     option.icon === undefined ? '' : iconOptionClass,
+    shape === 'pill' && 'rounded-full border',
     isSelected
-      ? 'bg-role-primary text-role-on-primary'
-      : 'text-role-text-secondary hover:text-role-text-primary',
+      ? cn('bg-role-primary text-role-on-primary', shape === 'pill' && 'border-role-primary')
+      : cn(
+          'text-role-text-secondary hover:text-role-text-primary',
+          shape === 'pill' && 'border-role-outline-variant hover:border-role-outline',
+        ),
   )
+
+/** How a group is framed. `box` is the Desk's atom — one 1px `color.rule` box
+ *  around square options. `pill` is the Library's own bar: no box, each option
+ *  a rounded chip, so a long filter row reads as a row of tags rather than as
+ *  a ruled table head. */
+export type SegmentShape = 'box' | 'pill'
+const pillBoxClass = 'inline-flex flex-wrap items-center gap-1.5'
 
 export interface ViewInputs<V extends string | number = string> {
   options: ReadonlyArray<SegmentOption<V>>
@@ -162,6 +174,8 @@ export interface ViewInputs<V extends string | number = string> {
    *  `flex w-full` mean what they meant when the group *was* the box. */
   className?: string
   optionClass?: string
+  /** The frame the group is drawn in. Defaults to `box`. */
+  shape?: SegmentShape
 }
 
 /** Everything one group draws, plus the pick it is showing. The submodel's
@@ -194,7 +208,7 @@ export const segmentGroup = <M, V extends string | number>(
     [
       ...(inputs.label === undefined ? [] : [h.span([h.Class(groupLabelClass)], [inputs.label])]),
       h.div(
-        [h.Class(cn(boxClass, inputs.className))],
+        [h.Class(cn(inputs.shape === 'pill' ? pillBoxClass : boxClass, inputs.className))],
         inputs.options.map((option) => {
           // Set where the printed text is not a name on its own: a glyph, or
           // a bare number with the noun left off.
@@ -209,7 +223,7 @@ export const segmentGroup = <M, V extends string | number>(
               ...(inputs.isDisabled === true ? [h.Disabled(true)] : []),
               h.Class(
                 cn(
-                  optionClasses(option, option.value === inputs.selected),
+                  optionClasses(option, option.value === inputs.selected, inputs.shape ?? 'box'),
                   inputs.isDisabled === true && 'cursor-not-allowed opacity-50',
                   inputs.optionClass,
                 ),
