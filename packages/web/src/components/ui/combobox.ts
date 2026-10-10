@@ -36,7 +36,7 @@ export type GroupHeading = FoldkitCombobox.GroupHeading
 // UI for multi-select, no clear button, no Empty row; filtering is
 // parent-owned.
 
-/** The `Select` atom, wide: the same kicker label and 1px `color.outline`
+/** The `Select` atom, wide: the same label label and 1px `color.outline`
  *  bottom rule as `Field`, the value in `$typography.exif`, and a 14px caret
  *  in `color.text.secondary`. The listbox is that box lifted onto a
  *  `color.hairline` surface, its active row in `color.surface.hover`. */
@@ -54,7 +54,7 @@ export const comboboxItemsAnimatedClass = comboboxItemsClass
 export const comboboxItemClass =
   'data-active:bg-role-surface-hover data-active:text-role-on-surface gap-2 py-1 pr-4 pl-1 type-exif flex w-full cursor-default select-none outline-hidden data-disabled:pointer-events-none data-disabled:text-role-text-disabled data-selected:text-role-text-primary'
 
-export const comboboxGroupHeadingClass = 'type-kicker text-role-text-secondary px-2 py-1'
+export const comboboxGroupHeadingClass = 'type-label text-role-text-secondary px-2 py-1'
 
 export const comboboxSeparatorClass = 'bg-role-hairline -mx-1 my-1 h-px'
 

@@ -1,6 +1,6 @@
 /**
  * Status — where a Photo sits in the publish lifecycle, as the Desk prints it
- * (master `bd6e0534ca3ace0a`). A 6px dot 8px ahead of a `$typography.kicker`
+ * (master `bd6e0534ca3ace0a`). A 6px dot 8px ahead of a `$typography.label`
  * label, in four variants.
  *
  *   published  dot and label `color.text.primary`  — a set, solid mark
@@ -63,7 +63,7 @@ export const status = <M>(config: StatusConfig, h: HtmlBuilder<M>): Html =>
         h.Class(cn('size-1.5 shrink-0 rounded-full', dotVariants[config.variant])),
       ]),
       h.span(
-        [h.Class(cn('type-kicker', statusVariants[config.variant]))],
+        [h.Class(cn('type-label', statusVariants[config.variant]))],
         [statusLabels[config.variant]],
       ),
     ],

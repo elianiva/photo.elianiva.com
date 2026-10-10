@@ -1,5 +1,5 @@
 /**
- * The broadsheet theme — the colours and the type hierarchy the site is drawn
+ * The site theme — the colours and the type hierarchy the site is drawn
  * in. Nothing else lives here: spacing, radii, durations, stroke widths and
  * breakpoints are Tailwind's own scales, written inline where they are used.
  *
@@ -20,6 +20,8 @@
   --font-sans: 'Libre Franklin', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-serif: 'Newsreader', ui-serif, Georgia, 'Times New Roman', serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-display: 'Instrument Serif', 'Newsreader', ui-serif, Georgia, serif;
+  --font-hand: 'Caveat', 'Newsreader', ui-serif, cursive;
 }
 
 /* ---------------------------------------------------------------------------
@@ -36,6 +38,7 @@
   --role-error-container: #f9f4f3;
   --role-focus: #1b1a18;
   --role-hairline: #8f8a80;
+  --role-pen: #2757d1;
   --role-on-accent: #f3f0e8;
   --role-on-primary: #f3f0e8;
   --role-on-surface: #1b1a18;
@@ -49,7 +52,7 @@
   --role-surface-container-high: #b4aea2;
   --role-surface-hover: #eae6dc;
   /* The two quiet voices, tuned per branch for the 10px `$typography.exif`
-   * and `$typography.kicker` lines they are drawn in. WCAG 1.4.3 wants 4.5:1
+   * and `$typography.label` lines they are drawn in. WCAG 1.4.3 wants 4.5:1
    * for text that size, and the values below are the nearest greys that clear
    * it on both of the branch's own surfaces — `surface` and
    * `surface-container` — with margin to spare:
@@ -77,6 +80,7 @@
   --role-error-container: #47140c;
   --role-focus: #f3f0e8;
   --role-hairline: #5e5950;
+  --role-pen: #8fb0ff;
   --role-on-accent: #1b1a18;
   --role-on-primary: #1b1a18;
   --role-on-surface: #f3f0e8;
@@ -114,6 +118,7 @@
   --color-role-error-container: var(--role-error-container);
   --color-role-focus: var(--role-focus);
   --color-role-hairline: var(--role-hairline);
+  --color-role-pen: var(--role-pen);
   --color-role-on-accent: var(--role-on-accent);
   --color-role-on-primary: var(--role-on-primary);
   --color-role-on-surface: var(--role-on-surface);
@@ -228,7 +233,7 @@
   line-height: 1.35;
 }
 
-@utility type-deck {
+@utility type-lead {
   font-family: var(--font-serif);
   font-size: 19px;
   font-weight: 400;
@@ -259,7 +264,7 @@
   letter-spacing: -0.015em;
 }
 
-@utility type-kicker {
+@utility type-label {
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 600;
@@ -267,15 +272,7 @@
   letter-spacing: 0.14em;
 }
 
-@utility type-nameplate {
-  font-family: var(--font-serif);
-  font-size: 112px;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.03em;
-}
-
-@utility type-nameplate-sm {
+@utility type-wordmark-lg {
   font-family: var(--font-serif);
   font-size: 44px;
   font-weight: 500;
@@ -283,7 +280,7 @@
   letter-spacing: -0.02em;
 }
 
-@utility type-nameplate-xs {
+@utility type-wordmark-md {
   font-family: var(--font-serif);
   font-size: 28px;
   font-weight: 500;
@@ -312,4 +309,48 @@
   font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
+}
+
+/* The home page's own voice: a tight display serif for the headline and the month
+ * numerals, and a handwritten line for the one mark made by hand. Public Home page
+ * only — the Admin stays on the three families above. */
+@utility type-display {
+  font-family: var(--font-display);
+  font-size: clamp(44px, 7vw, 112px);
+  font-weight: 400;
+  line-height: 0.88;
+  letter-spacing: -0.04em;
+}
+
+@utility type-numeral {
+  font-family: var(--font-display);
+  font-size: 84px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+}
+
+@utility type-numeral-sm {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+}
+
+@utility type-hand {
+  font-family: var(--font-hand);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+@utility type-wordmark {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1;
 }

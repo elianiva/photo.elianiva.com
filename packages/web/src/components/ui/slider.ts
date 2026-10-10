@@ -1,6 +1,6 @@
 /**
  * Slider — the Desk's numeric slider (the canvas's `Slider` master): a head row
- * with the kicker label left and the value right in `$typography.exif`, 8px
+ * with the label label left and the value right in `$typography.exif`, 8px
  * below it a 16px track carrying a 2px `color.rule` fill, a 1px `color.outline`
  * rest, and a 12px `color.surface` knob ringed in 1.5px of `color.rule`.
  *
@@ -15,7 +15,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { cn } from '@/lib/utils'
 
-export const sliderLabelClass = 'type-kicker text-role-text-secondary'
+export const sliderLabelClass = 'type-label text-role-text-secondary'
 export const sliderValueClass = 'type-exif text-role-text-primary'
 
 /** The transparent control over the drawn track. The 2px outline is the focus

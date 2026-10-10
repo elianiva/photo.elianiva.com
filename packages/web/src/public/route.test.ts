@@ -12,8 +12,8 @@ import { describe, expect, it } from 'vitest'
 import { routeHref, routeNamedBy, routePath, tagPath } from './route'
 
 describe('routeNamedBy', () => {
-  it('names the Front and the About page, trailing slash and all', () => {
-    expect(routeNamedBy('/')).toEqual({ route: 'front' })
+  it('names the home page and the About page, trailing slash and all', () => {
+    expect(routeNamedBy('/')).toEqual({ route: 'home' })
     expect(routeNamedBy('/about')).toEqual({ route: 'about' })
     expect(routeNamedBy('/about/')).toEqual({ route: 'about' })
   })
@@ -43,8 +43,8 @@ describe('routeNamedBy', () => {
 })
 
 describe('the paths a location prints', () => {
-  it('agrees between the Worker’s path and the Folio’s href', () => {
-    // The Front's two are deliberately different — `/#` so that clicking the
+  it('agrees between the Worker’s path and the Nav’s href', () => {
+    // The home page's two are deliberately different — `/#` so that clicking the
     // section the reader is on returns them to the top of it — and everything
     // else is one path.
     expect(routePath({ route: 'about' })).toBe(routeHref({ route: 'about' }))

@@ -8,12 +8,12 @@
  * hand-written `env.DB.prepare` is gone, and `frontStats` is the query behind
  * it.
  *
- * Both public documents read the same way. The Front used to be the one page on
- * the site with no data behind it — a hardcoded Edition of stock photographs — and it is
+ * Both public documents read the same way. The home page used to be the one page on
+ * the site with no data behind it — a hardcoded Timeline of stock photographs — and it is
  * now rendered from `frontPage`, the read the public `GetFrontPage` RPC
  * serves. The About page is rendered from the public list, the read
- * `ListPhotos` serves, and a Tag page from `byTag`. The Folio is rendered from
- * the Folio read rather than from a list of words in a view, so the nav is the
+ * `ListPhotos` serves, and a Tag page from `byTag`. The Nav is rendered from
+ * the Nav read rather than from a list of words in a view, so the nav is the
  * site's own Tags. Rendering them here rather than fetching over HTTP is
  * the point: the photographs are in the HTML the reader receives, so there is
  * no request to await before the first paint and no second copy of a query. It
@@ -27,7 +27,7 @@ import { MetadataLive, PublicPhotoService, PublicPhotoServiceLive } from '@photo
 import { FRONT_SECTION_COUNT } from '@photo/shared'
 import type { PhotoWithTags } from '@photo/shared'
 import type { WebsiteEnv } from '../../../../alchemy.run'
-import { type FolioEntry, type FrontRead, type TagRead } from '@/public/content'
+import { type NavEntry, type HomeRead, type TagRead } from '@/public/content'
 import { routePath, type PublicLocation } from '@/public/route'
 
 const siteLayers = (env: WebsiteEnv) => {
@@ -39,9 +39,9 @@ const siteLayers = (env: WebsiteEnv) => {
   )
 }
 
-/** The Folio a failed read leaves behind. One value rather than two literals,
+/** The Nav a failed read leaves behind. One value rather than two literals,
  *  so "no tags" is a single answer the nav and the sitemap both print. */
-const NO_FOLIO: ReadonlyArray<FolioEntry> = []
+const NO_NAV: ReadonlyArray<NavEntry> = []
 
 /** Run a public read against the Worker's own bindings, as an `Effect`. The form
  *  the Worker itself composes with, so a caller already inside a pipeline (the
@@ -58,29 +58,29 @@ export const readSite = <A, E>(
 ): Promise<A> => Effect.runPromise(readSiteEffect(env, effect))
 
 /**
- * The Front's read, off this Worker's own D1 and R2 bindings.
+ * The home page's read, off this Worker's own D1 and R2 bindings.
  *
  * `frontPage` is the whole of it: the published photographs grouped into the
- * months the Front draws them, and the cursor below the last one. The page's
+ * months the home page draws them, and the cursor below the last one. The page's
  * words are authored in the views, so there is no second read to keep in step
  * with this one. The read filters to published, non-trashed Photos inside
  * `PublicPhotoService`, so a Draft cannot reach a visitor.
  *
- * A read that fails is not a failed page: the Front renders the copy that says
- * there is nothing here yet. A visitor gets a broadsheet honest about being
+ * A read that fails is not a failed page: the home page renders the copy that says
+ * there is nothing here yet. A visitor gets a page honest about being
  * empty rather than a 500.
  */
-export const readFront = (env: WebsiteEnv): Promise<FrontRead> =>
+export const readHome = (env: WebsiteEnv): Promise<HomeRead> =>
   readSite(
     env,
     Effect.gen(function* () {
       const service = yield* PublicPhotoService
       const page = yield* service.frontPage({ sectionCount: FRONT_SECTION_COUNT })
-      return { sections: page.sections, nextSectionCursor: page.nextSectionCursor }
+      return { sections: page.sections, nextMonthCursor: page.nextSectionCursor }
     }),
   ).then(
     (read) => read,
-    () => ({ sections: [], nextSectionCursor: null }),
+    () => ({ sections: [], nextMonthCursor: null }),
   )
 
 const escapeXml = (input: string): string =>
@@ -89,13 +89,13 @@ const escapeXml = (input: string): string =>
 /**
  * How many photographs the About page leads with.
  *
- * The design's desktop master draws one plate and its mobile master draws two,
+ * The design's desktop master draws one photo and its mobile master draws two,
  * so two is what the read asks for and the view drops the second where the
  * master does not draw it. It is the page's page-weight decision, the way
- * `FRONT_SECTION_COUNT` is the Front's, and the read is never asked for more of
+ * `FRONT_SECTION_COUNT` is the home page's, and the read is never asked for more of
  * the archive than the page can show.
  */
-export const ABOUT_PLATE_COUNT = 2
+export const ABOUT_FIGURE_COUNT = 2
 
 /**
  * The About page's read: the published photographs it leads with, newest
@@ -103,52 +103,50 @@ export const ABOUT_PLATE_COUNT = 2
  *
  * The words on that page are authored in the views, so photographs are the
  * whole of the read — an empty answer is a real state and the page is the prose
- * and the kit with no plate on it. A read that fails is answered the same way,
- * for the reason `readFront` is: a visitor gets an honest broadsheet rather
+ * and the kit with no photo on it. A read that fails is answered the same way,
+ * for the reason `readHome` is: a visitor gets an honest page rather
  * than a 500.
  */
 export const readAbout = (env: WebsiteEnv): Promise<ReadonlyArray<PhotoWithTags>> =>
   readSite(
     env,
-    PublicPhotoService.use((service) => service.list({ limit: ABOUT_PLATE_COUNT })),
+    PublicPhotoService.use((service) => service.list({ limit: ABOUT_FIGURE_COUNT })),
   ).then(
     (page) => page.items,
     () => [],
   )
 
 /**
- * The Folio's entries, off this Worker's own bindings.
+ * The Nav's entries, off this Worker's own bindings.
  *
  * The nav is this read rather than a list of words in a view, so it is read on
- * every public render: the Masthead is the chrome all three documents share,
- * and a Folio one document had and another did not would be a nav that changes
+ * every public render: the Header is the chrome all three documents share,
+ * and a Nav one document had and another did not would be a nav that changes
  * with the page.
  *
- * A read that fails leaves the Folio empty, which prints `ALL` and `ABOUT` with
+ * A read that fails leaves the Nav empty, which prints `ALL` and `ABOUT` with
  * nothing between them. That is the honest answer for the same reason
- * `readFront` returns an empty Edition: a visitor gets a broadsheet that does
+ * `readHome` returns an empty Timeline: a visitor gets a page that does
  * not claim a section the database could not confirm.
  *
  * A Tag's `id` is dropped here rather than downstream: it is an internal detail
- * of the Admin's grouping, and the Folio's whole public vocabulary is the slug
+ * of the Admin's grouping, and the Nav's whole public vocabulary is the slug
  * and the label.
  */
-/** The Folio, as an `Effect`, for a caller already composing one. The
- *  empty-Folio-on-failure decision stays with the caller, so the SSR render and
+/** The Nav, as an `Effect`, for a caller already composing one. The
+ *  empty-Nav-on-failure decision stays with the caller, so the SSR render and
  *  the sitemap each make it once and visibly. */
-export const readFolioEffect = (
-  env: WebsiteEnv,
-): Effect.Effect<ReadonlyArray<FolioEntry>, unknown> =>
+export const readNavEffect = (env: WebsiteEnv): Effect.Effect<ReadonlyArray<NavEntry>, unknown> =>
   Effect.map(
     readSiteEffect(
       env,
       PublicPhotoService.use((service) => service.folio()),
     ),
-    (folio) => folio.map(({ slug, label }) => ({ slug, label })),
+    (nav) => nav.map(({ slug, label }) => ({ slug, label })),
   )
 
-export const readFolio = (env: WebsiteEnv): Promise<ReadonlyArray<FolioEntry>> =>
-  Effect.runPromise(Effect.orElseSucceed(readFolioEffect(env), () => NO_FOLIO))
+export const readNav = (env: WebsiteEnv): Promise<ReadonlyArray<NavEntry>> =>
+  Effect.runPromise(Effect.orElseSucceed(readNavEffect(env), () => NO_NAV))
 
 /**
  * A Tag page's read: the Tag and its published photographs, earliest first, so
@@ -158,7 +156,7 @@ export const readFolio = (env: WebsiteEnv): Promise<ReadonlyArray<FolioEntry>> =
  * A slug no Tag carries is `null`, and a read that fails is `null` for the same
  * reason: the site has no `404` document of its own yet (ADR 0006), so the
  * Worker answers a URL it cannot render with a 404 status rather than with the
- * Front — two URLs serving one document is a page the site does not have.
+ * Home page — two URLs serving one document is a page the site does not have.
  */
 export const readTag = (env: WebsiteEnv, slug: string): Promise<TagRead | null> =>
   readSite(
@@ -195,22 +193,22 @@ const SITEMAP_URL = 'https://photo.elianiva.com'
  *  site's public documents, so a document the Worker answers and the sitemap
  *  does not list is a document a crawler is never told about. The paths are
  *  the route table's, not a second list of them, and a Tag page's path is
- *  printed from the same Folio the Masthead draws — the two are the same list,
+ *  printed from the same Nav the Header draws — the two are the same list,
  *  so a Tag page cannot be in the nav and out of the sitemap. */
 /** `/sitemap.xml` — the crawler route. Named so the render shows up in the
  *  Worker's log beside the documents it was built from; without it a slow
- *  sitemap is indistinguishable from a slow Front. */
+ *  sitemap is indistinguishable from a slow Home page. */
 export const renderSitemap = Effect.fn('site.sitemap')(function* (env: WebsiteEnv) {
   // The two reads are independent, so they run together rather than in sequence.
-  const [lastmod, folio] = yield* Effect.all([
+  const [lastmod, nav] = yield* Effect.all([
     lastModified(env),
-    Effect.orElseSucceed(readFolioEffect(env), () => NO_FOLIO),
+    Effect.orElseSucceed(readNavEffect(env), () => NO_NAV),
   ])
   const lastmodElement = lastmod === '' ? '' : `<lastmod>${escapeXml(lastmod)}</lastmod>`
   const locations: ReadonlyArray<PublicLocation> = [
-    { route: 'front' },
+    { route: 'home' },
     { route: 'about' },
-    ...folio.map((tag): PublicLocation => ({ route: 'tag', tagSlug: tag.slug })),
+    ...nav.map((tag): PublicLocation => ({ route: 'tag', tagSlug: tag.slug })),
   ]
   const paths = locations.map((location) => routePath(location))
   const body = `<?xml version="1.0" encoding="UTF-8"?>

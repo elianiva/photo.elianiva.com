@@ -1,5 +1,5 @@
 /**
- * Select — the Desk's dropdown (the canvas's `Select` master): a kicker label
+ * Select — the Desk's dropdown (the canvas's `Select` master): a label label
  * over a 36px box with 8px of vertical padding, a 1px `color.outline` bottom
  * rule, the value in `$typography.exif` reading `color.text.primary`, and a 14px
  * caret in `color.text.secondary`. No box of its own and no corner radius.
@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 
 import { comboboxButtonClass } from './combobox'
 
-export const selectLabelClass = 'type-kicker text-role-text-secondary'
+export const selectLabelClass = 'type-label text-role-text-secondary'
 
 /** `-webkit-appearance` is spelled out because the built CSS has to carry it:
  *  `appearance-none` emits the standard property alone, and a Safari that

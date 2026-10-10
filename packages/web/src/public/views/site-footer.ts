@@ -1,31 +1,31 @@
 /**
- * Colophon: what the photographs were made with, where the sections live,
+ * Footer: what the photographs were made with, where the sections live,
  * where else to find them, and the copyright line. The nameplate repeats at
- * half size because the colophon is the last thing on the page.
+ * half size because the footer is the last thing on the page.
  *
- * Every word is written here, where it renders: a colophon is a statement about
+ * Every word is written here, where it renders: a footer is a statement about
  * how the work was made, which is the one thing a settings row cannot know. The
  * Admin's settings page used to author a copyright line and an about paragraph
  * that this column never printed, so there was a second, invisible source for
  * both.
  *
- * The one list here that is read is SECTIONS, because it is the Folio again: the
- * Colophon says where the site is, and a hand-written copy of the nav beside a
- * read one is two lists free to disagree. It is printed in the same kicker and
- * the same caps as the Folio, so the two lists are the same list twice.
+ * The one list here that is read is SECTIONS, because it is the Nav again: the
+ * Footer says where the site is, and a hand-written copy of the nav beside a
+ * read one is two lists free to disagree. It is printed in the same label and
+ * the same caps as the Nav, so the two lists are the same list twice.
  *
  * The copyright line is the one string here that will one day be wrong: it is
- * written out rather than derived, because the Colophon is handed the Folio and
+ * written out rather than derived, because the Footer is handed the Nav and
  * no dates. It read `2021–2025` through 2026. It is set in the site's own case
  * rather than in capitals, like everything else the site says.
  *
  * ELSEWHERE is plain text, not links, and that is a known gap rather than a
  * decision: the addresses are the photographer's to publish, so this file does
  * not invent a destination for any of them. `/rss.xml` used to be named here
- * and in the Folio and is not a route, so it is gone from both until a feed
+ * and in the Nav and is not a route, so it is gone from both until a feed
  * exists to point at.
  *
- * The mobile Colophon master (size=mobile) is a different composition: the
+ * The mobile Footer master (size=mobile) is a different composition: the
  * About block stands on its own above a bordered two-column row, EQUIPMENT is
  * dropped, the lists are shorter, the note is gone and the copyright loses its
  * rights clause. The columns wrapper carries those differences on `desktop`,
@@ -35,7 +35,7 @@
 
 import type { HtmlBuilder } from 'foldkit/html'
 
-import type { FolioEntry } from '../content'
+import type { NavEntry } from '../content'
 import { Message } from '../model'
 import { BAND, type Child } from './shared'
 
@@ -55,7 +55,7 @@ const about = (h: HtmlBuilder<Message>): Child =>
   h.div(
     [h.Class('flex min-w-0 flex-col gap-3 py-6 lg:py-0')],
     [
-      h.span([h.Class('type-nameplate-sm text-role-text-primary')], ['Elianiva']),
+      h.span([h.Class('type-wordmark-lg text-role-text-primary')], ['Elianiva']),
       h.p([h.Class('type-body italic text-role-text-secondary')], ['Shot on foot, usually early.']),
     ],
   )
@@ -80,7 +80,7 @@ const colophonColumn = (
   h.div(
     [h.Class(`${column.desktopOnly === true ? 'hidden lg:flex' : 'flex'} ${COLUMN}`)],
     [
-      h.span([h.Class('type-kicker text-role-text-secondary uppercase')], [column.label]),
+      h.span([h.Class('type-label text-role-text-secondary uppercase')], [column.label]),
       h.ul(
         [h.Class('flex list-none flex-col gap-1.5 lg:hidden')],
         [...(column.linesMobile ?? column.lines).map((line) => columnLine(line, true, h))],
@@ -97,7 +97,7 @@ const baseline = (h: HtmlBuilder<Message>): Child =>
     [h.Class('flex items-center justify-between gap-4 border-t border-role-hairline pb-6 pt-4')],
     [
       h.span(
-        [h.Class('type-kicker flex-1 text-role-text-disabled')],
+        [h.Class('type-label flex-1 text-role-text-disabled')],
         [
           h.span([h.Class('lg:hidden')], ['© 2021–2026 elianiva']),
           h.span([h.Class('hidden lg:inline')], ['© 2021–2026 elianiva · all rights reserved']),
@@ -108,23 +108,23 @@ const baseline = (h: HtmlBuilder<Message>): Child =>
         ['Set in Newsreader, Libre Franklin and IBM Plex Mono.'],
       ),
       h.a(
-        [h.Href('#top'), h.Class('type-kicker text-role-text-primary uppercase')],
+        [h.Href('#top'), h.Class('type-label text-role-text-primary uppercase')],
         ['back to top ↑'],
       ),
     ],
   )
 
-export const colophon = (folio: ReadonlyArray<FolioEntry>, h: HtmlBuilder<Message>): Child => {
-  // The three lists the Colophon prints, written here rather than in a table
+export const siteFooter = (nav: ReadonlyArray<NavEntry>, h: HtmlBuilder<Message>): Child => {
+  // The three lists the Footer prints, written here rather than in a table
   // the whole app reads: `linesMobile` is the plainer list, and `desktopOnly`
   // drops EQUIPMENT on mobile because the master has no room for it.
   //
-  // SECTIONS is the exception and is read: it is the Folio's own entries, in
-  // the order the Folio draws them, with the About page after them — the same
-  // list the masthead prints, so a Tag added in the Admin appears in both, and
-  // no more or fewer of them. It has no mobile variant because the Folio has
+  // SECTIONS is the exception and is read: it is the Nav's own entries, in
+  // the order the Nav draws them, with the About page after them — the same
+  // list the header prints, so a Tag added in the Admin appears in both, and
+  // no more or fewer of them. It has no mobile variant because the Nav has
   // none to shorten.
-  const sections = [...folio.map((entry) => entry.label), 'about']
+  const sections = [...nav.map((entry) => entry.label), 'about']
   const columns = [
     {
       label: 'equipment',

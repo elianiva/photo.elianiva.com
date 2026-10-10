@@ -4,9 +4,9 @@
  * `color.surface.container` behind a 1px `color.hairline` rule.
  *
  * Three bands, top to bottom: the brand, the primary nav, and the footer.
- * Every band is closed by a hairline, because a hairline is the broadsheet's one
+ * Every band is closed by a hairline, because a hairline is the site's one
  * structural device and three bands of the same grey text with nothing between
- * them read as one long list rather than as a masthead, a nav and a footer. The
+ * them read as one long list rather than as a header, a nav and a footer. The
  * primary nav's counts and the footer's meter are the same read, so the Library
  * total cannot show one number on the rail and another on the Library bar. The
  * footer's email is the verified Access claim, not a constant.
@@ -51,7 +51,7 @@ const SIDEBAR_PADDING = 'py-6 pr-3 pl-3'
 // brand
 // ---------------------------------------------------------------------------
 
-/** The rail's masthead. `Elianiva` over `THE DESK`, closed by the rule that
+/** The rail's header. `Elianiva` over `THE DESK`, closed by the rule that
  *  separates it from the nav: without it the wordmark and the first nav row sat
  *  on the same grey with nothing to say one was the rail's name and the other
  *  was a destination. */
@@ -61,8 +61,8 @@ const brand = (h: HtmlBuilder<Msg>): Child =>
     [
       // The design's wordmark. `THE DESK` is display copy for this one place —
       // it is not a route, a type, or a directory (CONTEXT.md).
-      h.span([h.Class('type-nameplate-xs leading-none text-role-text-primary')], ['Elianiva']),
-      h.span([h.Class('type-kicker text-role-text-secondary')], ['THE DESK']),
+      h.span([h.Class('type-wordmark-md leading-none text-role-text-primary')], ['Elianiva']),
+      h.span([h.Class('type-label text-role-text-secondary')], ['THE DESK']),
     ],
   )
 
@@ -91,7 +91,7 @@ const libraryMeter = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.div(
         [h.Class('flex items-baseline justify-between gap-2')],
         [
-          h.span([h.Class('type-kicker text-role-text-secondary')], ['Library']),
+          h.span([h.Class('type-label text-role-text-secondary')], ['Library']),
           h.span(
             [h.Class('type-exif text-role-text-primary'), h.DataAttribute('slot', 'library-live')],
             [`${String(byStatus.published)} OF ${String(total)} LIVE`],

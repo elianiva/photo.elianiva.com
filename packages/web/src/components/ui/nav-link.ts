@@ -1,10 +1,10 @@
 /**
  * Nav Link — the design's tab and section marker (master `46af82088f07a2de`).
- * A `$typography.kicker` label with 4px above and below and a 1.5px
+ * A `$typography.label` label with 4px above and below and a 1.5px
  * `color.rule` underline: transparent when the link is not the current one, so
  * the current section is marked by a rule and not by colour alone.
  *
- * The Editor's `EDIT` / `DETAILS` tabs and the Colophon's sections are the same
+ * The Editor's `EDIT` / `DETAILS` tabs and the Footer's sections are the same
  * link; `href` makes it a link, and the runtime intercepts it.
  */
 import type { Html, HtmlBuilder } from 'foldkit/html'
@@ -15,7 +15,7 @@ export const navLinkStateKeys = ['active', 'default'] as const
 export type NavLinkState = (typeof navLinkStateKeys)[number]
 
 export const navLinkBaseClass =
-  'focus-visible:ring-role-focus/50 inline-block border-b-[1.5px] px-0 py-1 type-kicker transition-colors duration-120 outline-none focus-visible:ring-[3px]'
+  'focus-visible:ring-role-focus/50 inline-block border-b-[1.5px] px-0 py-1 type-label transition-colors duration-120 outline-none focus-visible:ring-[3px]'
 
 export const navLinkStateClasses: Record<NavLinkState, string> = {
   active: 'border-role-rule text-role-text-primary',

@@ -504,7 +504,7 @@ export const BackCmd = Command.define('Back', {
 })
 
 /** A full document navigation — a URL the Admin's routes do not name, which
- *  includes the public Front on this same origin. */
+ *  includes the public Home page on this same origin. */
 export const LoadCmd = Command.define('Load', {
   args: { href: S.String },
   messages: [Message.CompletedLoad],

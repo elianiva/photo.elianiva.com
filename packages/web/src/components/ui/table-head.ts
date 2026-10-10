@@ -112,7 +112,7 @@ export const tableHead = <M>(config: TableHeadConfig<M>, h: HtmlBuilder<M>): Htm
         const mark = isSorted ? (config.sortDirection === 'asc' ? '↑' : '↓') : ''
         const text = mark === '' ? column.label : `${column.label} ${mark}`
         const labelClass = cn(
-          'type-kicker',
+          'type-label',
           isSorted ? 'text-role-text-primary' : 'text-role-text-secondary',
         )
         return h.div(

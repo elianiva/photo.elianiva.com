@@ -8,7 +8,7 @@ import { Flags } from './public/model'
 
 /**
  * Single SPA entry with route-based code splitting: an `/admin` URL loads the
- * Admin bundle, every other path loads the broadsheet public site. Visitors
+ * Admin bundle, every other path loads the public site. Visitors
  * never ship the admin Sheet/Dialog/FileDrop/combobox unless they visit
  * /admin. The split asks the same question the Worker does — is this the
  * Admin's URL space — so a path inside it that names no route still boots the

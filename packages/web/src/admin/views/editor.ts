@@ -12,7 +12,7 @@
  *   Top Bar     52px, 1px hairline under. `← Library`, a 1×20 divider,
  *               `NO. 024` in `$typography.exif`, the title in italic
  *               `$typography.body`, a Status chip; on the right the unsaved
- *               dot, the `UNSAVED CHANGES` kicker, `Discard` and `Update`.
+ *               dot, the `UNSAVED CHANGES` label, `Discard` and `Update`.
  *   Stage       fills, and holds the Canvas, the Mat and the Photograph.
  *   Stage Bar   52px, 1px hairline over. The Zoom and Compare Segments.
  *   Inspector   360px, `color.surface.container`, 1px hairline on the left.
@@ -140,7 +140,7 @@ const topBarLeft = (model: Model, h: HtmlBuilder<Msg>): Child => {
   )
 }
 
-/** The right group. The unsaved dot and the kicker are drawn only while the
+/** The right group. The unsaved dot and the label are drawn only while the
  *  draft differs from the snapshot, and the two buttons are disabled when it
  *  does not: a `Discard` with nothing to discard and an `Update` with nothing
  *  to send are controls that lie about what the page can do. The design holds
@@ -160,8 +160,8 @@ const topBarRight = (model: Model, h: HtmlBuilder<Msg>): Child => {
             ]),
             h.span(
               [
-                h.DataAttribute('slot', 'unsaved-kicker'),
-                h.Class('type-kicker text-role-text-secondary'),
+                h.DataAttribute('slot', 'unsaved-label'),
+                h.Class('type-label text-role-text-secondary'),
               ],
               ['UNSAVED CHANGES'],
             ),
@@ -370,22 +370,22 @@ const stage = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // Inspector
 // ---------------------------------------------------------------------------
 
-/** A labelled panel in the Inspector: a `$typography.kicker` head over the
+/** A labelled panel in the Inspector: a `$typography.label` head over the
  *  design's own section rule. The head's right half is a slot because the Crop
  *  panel prints `<ratio> · AS SHOT` there and the other panels print nothing. */
-const panelHead = (kicker: string, right: Child | undefined, h: HtmlBuilder<Msg>): Child =>
+const panelHead = (label: string, right: Child | undefined, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('flex items-center justify-between gap-2')],
     [
-      h.h2([h.Class('type-kicker text-role-text-primary')], [kicker]),
+      h.h2([h.Class('type-label text-role-text-primary')], [label]),
       ...(right === undefined ? [] : [right]),
     ],
   )
 
-const panel = (kicker: string, h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Child>): Child =>
+const panel = (label: string, h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Child>): Child =>
   h.section(
     [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-4')],
-    [panelHead(kicker, undefined, h), ...children],
+    [panelHead(label, undefined, h), ...children],
   )
 
 /** One Inspector tab.
@@ -542,7 +542,7 @@ const blurhashBlock = (model: Model, h: HtmlBuilder<Msg>): Child => {
       h.div(
         [h.Class('flex items-center justify-between gap-2')],
         [
-          h.h3([h.Class('type-kicker text-role-text-primary')], ['BLURHASH']),
+          h.h3([h.Class('type-label text-role-text-primary')], ['BLURHASH']),
           h.span(
             [
               h.DataAttribute('slot', 'blurhash-readout'),

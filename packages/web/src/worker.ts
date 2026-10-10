@@ -2,12 +2,12 @@ import { Context, Effect, Layer } from 'effect'
 import { Headers, HttpRouter, HttpServerResponse } from 'effect/http'
 import * as Server from 'foldkit/experimental/server'
 import type { WebsiteEnv } from '../../../alchemy.run'
-import { editionOf, EMPTY_EDITION, EMPTY_TAG_PAGE, figuresOf, tagPageOf } from './public/content'
+import { timelineOf, EMPTY_TIMELINE, EMPTY_TAG_PAGE, figuresOf, tagPageOf } from './public/content'
 import { Flags, Model as PublicModel } from './public/model'
 import type { PublicLocation } from './public/route'
 import { init as publicInit } from './public/update'
 import { view as publicView } from './public/view'
-import { readAbout, readFolio, readFront, readTag, renderSitemap } from './lib/public-site'
+import { readAbout, readNav, readHome, readTag, renderSitemap } from './lib/public-site'
 import { WorkerLoggerLive } from './lib/logger'
 import { themeDocument, themeForUrl } from './lib/theme'
 
@@ -68,7 +68,7 @@ const fetchTemplate = async (
   return FALLBACK_TEMPLATE
 }
 
-/** The public site's render, per document. One config, because the Front, the
+/** The public site's render, per document. One config, because the home page, the
  *  About page and a Tag page are three routes of one app rather than three
  *  apps: the Model carries the route, and the Worker hands each one the read
  *  its view draws. */
@@ -79,50 +79,50 @@ const publicConfig = {
   view: publicView,
 }
 
-/** The read each document is rendered from, before the render. The Folio is
- *  read for every document — it is the Masthead's, and the Masthead is the
- *  chrome all three share — so the two reads that are not the Folio's run
+/** The read each document is rendered from, before the render. The Nav is
+ *  read for every document — it is the Header's, and the Header is the
+ *  chrome all three share — so the two reads that are not the Nav's run
  *  beside it rather than after it.
  *
  *  A Tag page whose slug names no Tag is null: the site has no `404` document
  *  of its own yet (ADR 0006), so the Worker answers that URL with a 404 status
- *  rather than with the Front. */
+ *  rather than with the home page. */
 const readFor = async (
   env: WorkerEnvWithAssets,
   location: PublicLocation,
 ): Promise<Flags | null> => {
-  const folio = await readFolio(env)
+  const nav = await readNav(env)
   if (location.route === 'tag') {
     const read = await readTag(env, location.tagSlug)
     return read === null
       ? null
       : {
           route: 'tag',
-          edition: EMPTY_EDITION,
-          nextSectionCursor: null,
-          plates: [],
+          timeline: EMPTY_TIMELINE,
+          nextMonthCursor: null,
+          figures: [],
           tag: tagPageOf(read),
-          folio,
+          nav,
         }
   }
   if (location.route === 'about') {
     return {
       route: 'about',
-      edition: EMPTY_EDITION,
-      nextSectionCursor: null,
-      plates: figuresOf(await readAbout(env)),
+      timeline: EMPTY_TIMELINE,
+      nextMonthCursor: null,
+      figures: figuresOf(await readAbout(env)),
       tag: EMPTY_TAG_PAGE,
-      folio,
+      nav,
     }
   }
-  const front = await readFront(env)
+  const home = await readHome(env)
   return {
-    route: 'front',
-    edition: editionOf(front),
-    nextSectionCursor: front.nextSectionCursor,
-    plates: [],
+    route: 'home',
+    timeline: timelineOf(home),
+    nextMonthCursor: home.nextMonthCursor,
+    figures: [],
     tag: EMPTY_TAG_PAGE,
-    folio,
+    nav,
   }
 }
 
@@ -188,7 +188,7 @@ const securityLayer = HttpRouter.middleware(
 )
 
 /** The client template under its old spelling. It is a built asset, so the asset
- *  layer would answer it with the unfilled `#root` — a document the front page's
+ *  layer would answer it with the unfilled `#root` — a document the home page's
  *  `Runtime.hydrate` refuses. The canonical URL is `/`, so this says so instead
  *  of serving a page that cannot boot (ADR 0004). */
 const canonicalRoute = HttpRouter.add('*', '/index.html', () =>
@@ -226,7 +226,7 @@ const ssrResponse = (env: WorkerEnvWithAssets, location: PublicLocation) =>
     const request = yield* Effect.service(WebRequest)
     const rendered = yield* Effect.promise(() => renderPublicSsr(env, request, location))
     // Three answers, and each is a different party's fault: the document names a
-    // Tag that is not there, or the plate behind it is gone; the template would
+    // Tag that is not there, or the photo behind it is gone; the template would
     // not boot or the render threw; or it rendered.
     if (rendered === 'not-found') {
       return HttpServerResponse.text('Not found', { status: 404 })
@@ -237,7 +237,7 @@ const ssrResponse = (env: WorkerEnvWithAssets, location: PublicLocation) =>
     return HttpServerResponse.fromWeb(rendered)
   })
 
-/** The Front, the About page, and a Tag's page — the three the route table names.
+/** The home page, the About page, and a Tag's page — the three the route table names.
  *
  * `/tag/:slug` is a path parameter rather than the table's regex, and the slug
  * arrives already decoded by the matcher. A slug containing a slash cannot reach
@@ -245,7 +245,7 @@ const ssrResponse = (env: WorkerEnvWithAssets, location: PublicLocation) =>
  */
 const publicRoutes = (env: WorkerEnvWithAssets) =>
   Layer.mergeAll(
-    HttpRouter.add('GET', '/', () => ssrResponse(env, { route: 'front' })),
+    HttpRouter.add('GET', '/', () => ssrResponse(env, { route: 'home' })),
     HttpRouter.add('GET', '/about', () => ssrResponse(env, { route: 'about' })),
     HttpRouter.add('GET', '/tag/:slug', () =>
       Effect.gen(function* () {
@@ -261,7 +261,7 @@ const publicRoutes = (env: WorkerEnvWithAssets) =>
 
 /** The Admin's URL space: the SPA shell for every path in it, so a deep route
  *  boots the app. The client parses the route and draws NotFound for a path that
- *  names none. The shell is the same `index.html` the Front gets, with one
+ *  names none. The shell is the same `index.html` the home page gets, with one
  *  difference: the theme branch is named on `<html>`, because the Editor is dark
  *  and the first paint happens before any of this app has run. This Worker is
  *  the page host in development too — the Cloudflare Vite plugin backs the `ssr`

@@ -47,8 +47,8 @@ Two consequences of the Series non-goal that are easy to misread:
 
 - The `SERIES` nav group in the Desk sidebar (`e6a38e33273b03bf` and its
   siblings, on every Desk frame) is not dropped. The sidebar renders a `TAGS`
-  kicker with one item per tag in that slot. What does not ship is a _Series_
-  group — there is no entity behind the kicker the design drew.
+  label with one item per tag in that slot. What does not ship is a _Series_
+  group — there is no entity behind the label the design drew.
 - `Desk — Series`'s `COVER` panel — `The first frame of the series becomes the
 cover.` and a `Change cover` button — needs a `series` table. No cover column
   is added to Tag or Photo to hold it. A Series page is a Tag page ordered by
@@ -63,7 +63,7 @@ its one true value.
 ## Later chains
 
 These frames are a different chain from the one being built — admin desktop plus
-the public Front — and several will not be built as drawn, per the two sections
+the public Home page — and several will not be built as drawn, per the two sections
 above: `Lightbox — Desktop` / `— Mobile` (`27821e1abb5aa9d4` /
 `82991e981ed194a3`), `Photo` (`9a4c10e3399c7af3` / `08d2d4553da7ae6c`), `Zoom`
 (`3545605e80259537` / `97f228badc9dccdc`), `Search` (`38dcb73b9fa6dee3` / `18721083a4fbc8c2`), `404`
@@ -75,11 +75,11 @@ above: `Lightbox — Desktop` / `— Mobile` (`27821e1abb5aa9d4` /
 
 `About` (`b6d1dcfc0e6dad2a` / `ffc9476fb7c57fbf`) has left that list: the
 public page at `/about` is built, as a route of the public site's one app beside
-the Front. Its two masters are two compositions rather than one page at two
-widths — two prose columns and one plate on the desktop, one re-flowed paragraph
-and two plates on the mobile — and the plate the mobile master adds is drawn
-`lazy` and hidden at `desktop`, because a plate no layout draws must not fetch a
-Photo's original on a zone with no resizer (ADR 0002). The design's plate is a
+the home page. Its two masters are two compositions rather than one page at two
+widths — two prose columns and one photo on the desktop, one re-flowed paragraph
+and two photos on the mobile — and the photo the mobile master adds is drawn
+`lazy` and hidden at `desktop`, because a photo no layout draws must not fetch a
+Photo's original on a zone with no resizer (ADR 0002). The design's photo is a
 stock asset numbered `No. 001`; the page shows the newest published photographs
 instead, because a stock photograph is not a work this site publishes.
 
@@ -91,18 +91,18 @@ instead, because a stock photograph is not a work this site publishes.
   even disabled, because History is not built.
 - The fourth Settings section is the Storage section; there is no
   history-retention control in it.
-- The public page keeps `ARCHIVE` in its kicker, and the Folio's other entries
+- The public page keeps `ARCHIVE` in its label, and the Nav's other entries
   are the site's Tags rather than the design's `STREET` / `LANDSCAPE` / `SERIES`
   words.
 - `/about` and `/tag/<slug>` are public routes in `public/route.ts`, so they are
-  Worker-first paths and the sitemap names them (ADR 0004). The Folio is a read
+  Worker-first paths and the sitemap names them (ADR 0004). The Nav is a read
   (`PublicPhotoService.folio`): one link per Tag with a published Photo, and each
   link is a Tag page that renders — which is how the design's `SERIES` reaches the
   site without a Series entity. `ARCHIVE` is still a nav word without a page, so
-  it is not in the Folio until its chain lands, and a `/tag/<slug>` naming no Tag
+  it is not in the Nav until its chain lands, and a `/tag/<slug>` naming no Tag
   answers `404`.
 - `CONTEXT.md` gains Photo Number, Status, Ratio, Rendition, Frame, Archive,
-  Folio, Tag page and Storage, and keeps _Admin_ as the term with the
+  Nav, Tag page and Storage, and keeps _Admin_ as the term with the
   _Dashboard / CMS / Studio / Backend / The Desk_ line.
 - Image delivery is a separate decision and lives in ADR 0002: no `IMAGES`
   binding, no zone resizer, and no `thumbUrl`/`srcSet` anywhere.

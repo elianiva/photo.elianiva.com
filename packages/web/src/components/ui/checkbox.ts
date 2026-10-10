@@ -1,5 +1,5 @@
 /**
- * Checkbox, broadsheet edition. Vendored from the `@foldcn` registry and
+ * Checkbox, site edition. Vendored from the `@foldcn` registry and
  * re-cut to the design's `Checkbox` (master `74f6c9993ee394f4`):
  *
  *   off    16px square, 1px `color.outline` box, no fill, no corner radius

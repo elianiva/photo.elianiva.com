@@ -11,7 +11,7 @@
  *
  * So every image is served as the original it is, straight out of R2 through
  * the Worker's own proxy. The trade is honest and worth naming: a grid of
- * forty plates asks for forty originals. The designed answer is stored
+ * forty photos asks for forty originals. The designed answer is stored
  * Renditions (CONTEXT.md, `Rendition`; regeneration is #35), and until those
  * exist this is what a Free-plan zone can serve. Upgrading the zone would
  * bring the resizer back; that is a plan decision, not a code one.

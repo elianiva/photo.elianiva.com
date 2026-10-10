@@ -332,8 +332,8 @@ const imageProxy = Effect.fn('api.imageProxy')(function* (env: ApiEnv, rawKey: s
   }
   const object = yield* Effect.tryPromise({
     try: () => env.PHOTOS.get(r2Key),
-    // An R2 that is not answering is a 404 to the caller — a plate that cannot
-    // be fetched is a missing plate — and the span records that it happened.
+    // An R2 that is not answering is a 404 to the caller — a photo that cannot
+    // be fetched is a missing photo — and the span records that it happened.
     catch: () => null,
   })
   // An object read with a precondition carries no stream, and there is no

@@ -88,7 +88,7 @@ const detailClass = (item: QueueItem): string =>
     : 'type-exif-sm text-role-text-disabled'
 
 /** The right side of the name row: a percent while uploading, the design's
- *  `PROCESSING` kicker, a check when done, or the failed category. */
+ *  `PROCESSING` label, a check when done, or the failed category. */
 const rowMeta = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
   switch (item.status) {
     case 'uploading':
@@ -97,7 +97,7 @@ const rowMeta = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
         [`${String(uploadPercent(item))}%`],
       )
     case 'processing':
-      return h.span([h.Class('shrink-0 type-kicker text-role-text-secondary')], ['PROCESSING'])
+      return h.span([h.Class('shrink-0 type-label text-role-text-secondary')], ['PROCESSING'])
     case 'done':
       return h.span([h.Class('shrink-0 text-role-text-primary')], [icon(h, Check, 'size-3')])
     case 'failed':
@@ -105,7 +105,7 @@ const rowMeta = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
       // belongs to. The only server-side rejection today is a Ratio the frame
       // cannot be snapped to, which is a crop; anything else is generic.
       return h.span(
-        [h.Class('shrink-0 type-kicker text-role-accent')],
+        [h.Class('shrink-0 type-label text-role-accent')],
         [item.error?.startsWith('Unsupported ratio') === true ? 'CROP' : 'FAILED'],
       )
     case 'pending':
@@ -192,7 +192,7 @@ const uploadOptions = (model: Model, h: HtmlBuilder<Msg>): ReadonlyArray<Child> 
   h.div(
     [h.Class('flex flex-col gap-1.5')],
     [
-      h.span([h.Class('type-kicker text-role-text-secondary')], ['TAGS']),
+      h.span([h.Class('type-label text-role-text-secondary')], ['TAGS']),
       // The design's SERIES select is gone (decision 5): grouping is Tags, and
       // this is the picker the dialog already carried.
       embedCombo(model, h),

@@ -1,5 +1,5 @@
 /**
- * Theme scope. The broadsheet design system has two branches, `light` and
+ * Theme scope. The design system has two branches, `light` and
  * `dark`, and `theme.css` declares both as plain custom properties under a
  * scope selector. A theme is therefore a matter of naming the scope on the
  * element the app is rendered into, not of shipping a second palette.
@@ -32,12 +32,12 @@ export type Theme = typeof Theme.Type
 /** The attribute the theme scopes key off. */
 export const themeAttribute = 'data-theme'
 
-/** The broadsheet branch a route is drawn in. Light is the default, so a
+/** The theme branch a route is drawn in. Light is the default, so a
  *  route the table gains later is light until someone says otherwise. */
 export const themeForRoute = (route: AppRoute): Theme =>
   AppRoute.matchOrElse(route, { Photo: (): Theme => 'dark' }, (): Theme => 'light')
 
-/** The broadsheet branch a request URL is answered in. Goes through the same
+/** The theme branch a request URL is answered in. Goes through the same
  *  route table as the view, so the shell and the app cannot name two
  *  different branches for one URL. A URL that is not a URL at all is light. */
 export const themeForUrl = (url: string): Theme => {

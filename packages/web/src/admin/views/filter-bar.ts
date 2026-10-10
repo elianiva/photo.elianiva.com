@@ -4,7 +4,7 @@
  * decide how it is read.
  *
  * Every one of them is the same atom — `Segment`, one height, one 1px
- * `color.rule` box, a kicker naming it — because they used not to be, and the
+ * `color.rule` box, a label naming it — because they used not to be, and the
  * row read as four unrelated controls: two segments in boxes of different
  * greys at 28px, a native dropdown at 36px wearing a bottom rule, and a pair of
  * round icon buttons. Two heights, three frames, two shapes. Worse, the grid's
@@ -36,7 +36,7 @@
  *     of choices, and a dropdown is a control for a set too large to print; at
  *     36px with a bottom rule it was also the one thing in the bar that was not
  *     the height of everything beside it. Its labels drop `FIRST` for the same
- *     reason — `NEWEST` under a `SORT` kicker says it.
+ *     reason — `NEWEST` under a `SORT` label says it.
  *
  * Every filter here is the URL's, not the bar's: a pick builds the Library's
  * query and the Model reads it back, so a reload lands on the same filtered

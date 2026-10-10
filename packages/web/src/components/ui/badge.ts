@@ -1,5 +1,5 @@
 /**
- * Badge, broadsheet edition. The design's tag is `Ratio Tag`: a 1px
+ * Badge, site edition. The design's tag is `Ratio Tag`: a 1px
  * `color.outline` box around 4/8 of padding, holding one `$typography.exif`
  * label in `color.text.secondary`, with no corner radius and no fill.
  *

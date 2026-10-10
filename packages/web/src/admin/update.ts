@@ -1413,7 +1413,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     // click (popstate, or a navigation the runtime itself performed).
     ClickedLink: ({ request }) =>
       UrlRequest.match<UpdateReturn>(request, {
-        // The public Front shares this origin, and so does any other origin the
+        // The public Home page shares this origin, and so does any other origin the
         // operator links to: neither is this document. Everything inside the
         // Admin's own URL space is, including a path that names no route —
         // that one is the Admin's NotFound page, not a document to fetch.

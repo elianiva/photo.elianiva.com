@@ -34,7 +34,7 @@ const csvCell = (value: string | number | null): string => {
 
 /** The index document: a header row and one row per Photo, in the order
  *  `ListPhotoIndex` returned them, which is Photo Number ascending. The `tags`
- *  cell joins a Photo's labels with ` · ` — the separator the public Folio uses,
+ *  cell joins a Photo's labels with ` · ` — the separator the public Nav uses,
  *  so a row reads here the way it reads there. */
 export const csvIndex = (rows: ReadonlyArray<PhotoIndexRow>): string =>
   [

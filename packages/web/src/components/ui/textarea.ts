@@ -1,5 +1,5 @@
 /**
- * Textarea, broadsheet edition. The same underlined box as `input`, on a
+ * Textarea, site edition. The same underlined box as `input`, on a
  * field that grows with its content. The value is set in `$typography.body`
  * rather than `$typography.exif`: a caption is prose, not a value.
  */
@@ -17,7 +17,7 @@ export const textareaClass =
  *  state flows from the wrapper (group/field + data-disabled, mirroring
  *  switch.ts). */
 export const textareaLabelClass =
-  'type-kicker text-role-text-secondary transition-colors duration-120 flex items-center select-none group-data-[disabled]:opacity-50 group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50 group-focus-within/field:text-role-text-primary'
+  'type-label text-role-text-secondary transition-colors duration-120 flex items-center select-none group-data-[disabled]:opacity-50 group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50 group-focus-within/field:text-role-text-primary'
 
 export const textareaDescriptionClass = 'type-exif text-role-text-disabled'
 

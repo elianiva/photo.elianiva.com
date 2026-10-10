@@ -1,7 +1,7 @@
 /**
  * `/admin/atoms` — the Desk's design-system sheet. Every atom in
  * `components/ui`, drawn once in the place the design draws it, at the design's
- * own size and in its own broadsheet branch.
+ * own size and in its own site branch.
  *
  * The sheet exists because the atoms have no product page yet: the Library
  * table is #25, the Page Head is #24, the Editor panels are #30–#34. Until each
@@ -83,7 +83,7 @@ const band = (name: string, h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Chil
     [h.Class('mt-8 flex flex-col gap-4')],
     [
       h.h3(
-        [h.Class('type-kicker border-b-[3px] border-b-role-rule pb-2 text-role-text-primary')],
+        [h.Class('type-label border-b-[3px] border-b-role-rule pb-2 text-role-text-primary')],
         [name],
       ),
       h.div([h.Class('flex flex-col gap-4')], children),
@@ -101,7 +101,7 @@ const labelled = (
 ): Html =>
   h.div(
     [h.Class(cn('flex flex-col gap-2', className))],
-    [h.span([h.Class('type-kicker text-role-text-disabled')], [label]), body],
+    [h.span([h.Class('type-label text-role-text-disabled')], [label]), body],
   )
 
 /** The alignment the Editor inspector's rows use: its controls are `fill` of the
@@ -112,7 +112,7 @@ const STRETCH = 'items-stretch'
 const variants = (h: HtmlBuilder<Msg>, ...children: ReadonlyArray<Child>): Html =>
   h.div([h.Class('flex flex-wrap items-center gap-3')], children)
 
-/** The Editor is the one broadsheet branch that is dark, so the sheet draws a
+/** The Editor is the one site branch that is dark, so the sheet draws a
  *  panel in it and every atom above proves it follows the theme scope. */
 const darkPanel = (body: Child, h: HtmlBuilder<Msg>): Html =>
   h.div(
@@ -457,7 +457,7 @@ const editorPanelBand = (model: Model, h: HtmlBuilder<Msg>): Html =>
                 h.div(
                   [h.Class('flex items-center justify-between gap-2')],
                   [
-                    h.span([h.Class('type-kicker text-role-text-primary')], ['BORDER']),
+                    h.span([h.Class('type-label text-role-text-primary')], ['BORDER']),
                     ToggleRow.toggleRow(
                       {
                         id: 'atoms-border',
@@ -571,7 +571,7 @@ export const atomsPage = (model: Model, h: HtmlBuilder<Msg>): Html =>
     [
       h.h1([h.Class('mt-8 type-section text-role-text-primary')], ['Atoms']),
       h.p(
-        [h.Class('mt-1 type-deck max-w-prose text-role-text-secondary')],
+        [h.Class('mt-1 type-lead max-w-prose text-role-text-secondary')],
         ['Every atom of the Desk, drawn at its own size. Nothing on this page links anywhere yet.'],
       ),
       segmentBand(model, h),

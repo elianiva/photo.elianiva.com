@@ -151,7 +151,7 @@ const photoPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
       ),
       ...(meta.caption !== undefined
-        ? [h.p([h.Class('type-deck max-w-prose text-role-text-primary')], [meta.caption])]
+        ? [h.p([h.Class('type-lead max-w-prose text-role-text-primary')], [meta.caption])]
         : []),
       ...(meta.location !== undefined || meta.camera !== undefined || meta.lens !== undefined
         ? [
@@ -197,7 +197,7 @@ const scheduledPage = (h: HtmlBuilder<Msg>): Child =>
     [h.Class('mt-8 flex flex-col items-start gap-4')],
     [
       h.p(
-        [h.Class('type-deck max-w-prose text-role-text-secondary')],
+        [h.Class('type-lead max-w-prose text-role-text-secondary')],
         [
           'Nothing is scheduled. A scheduled photograph is a draft with a publish time, and none of the drafts has one yet.',
         ],
@@ -215,7 +215,7 @@ const notFoundPage = (path: string, h: HtmlBuilder<Msg>): Child =>
     [h.Class('mt-8 flex flex-col items-start gap-4')],
     [
       h.p(
-        [h.Class('type-deck max-w-prose text-role-text-secondary')],
+        [h.Class('type-lead max-w-prose text-role-text-secondary')],
         [`Nothing in the Admin answers to “${path}”.`],
       ),
       backToLibrary('← Library', h),

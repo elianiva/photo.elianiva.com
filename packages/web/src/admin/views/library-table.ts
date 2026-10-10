@@ -170,7 +170,7 @@ const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
             },
             h,
           ),
-          h.span([h.Class('type-kicker text-role-text-primary')], [`${String(count)} SELECTED`]),
+          h.span([h.Class('type-label text-role-text-primary')], [`${String(count)} SELECTED`]),
           h.button(
             [
               h.Type('button'),

@@ -1,8 +1,8 @@
 /**
- * Field, broadsheet edition. The design's `Field` is a kicker label over an
+ * Field, site edition. The design's `Field` is a label label over an
  * underlined box:
  *
- *   label    `$typography.kicker` in `color.text.secondary`, lifting to
+ *   label    `$typography.label` in `color.text.secondary`, lifting to
  *            `color.text.primary` while the box is focused
  *   box      8px of vertical padding on a 1px `color.outline` bottom rule,
  *            thickening to 1.5px of `color.rule` on focus, no fill, no radius
@@ -25,7 +25,7 @@ export const inputClass =
  *  state flows from the wrapper (group/field + data-disabled, mirroring
  *  switch.ts). */
 export const inputLabelClass =
-  'type-kicker text-role-text-secondary transition-colors duration-120 flex items-center select-none group-data-[disabled]:opacity-50 group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50 group-focus-within/field:text-role-text-primary'
+  'type-label text-role-text-secondary transition-colors duration-120 flex items-center select-none group-data-[disabled]:opacity-50 group-data-[disabled]/field:pointer-events-none group-data-[disabled]/field:cursor-not-allowed group-data-[disabled]/field:opacity-50 group-focus-within/field:text-role-text-primary'
 
 export const inputDescriptionClass = 'type-exif text-role-text-disabled'
 

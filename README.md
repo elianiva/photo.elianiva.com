@@ -47,9 +47,9 @@ that is one login, one application token and one first-party cookie.
 | `GET /api/image/<r2Key>` | api     | binary R2 proxy, serving the original's bytes                       | open                   |
 | `GET /api/health`        | api     | D1 probe                                                            | open                   |
 | `/admin*`                | website | the Admin SPA                                                       | Access                 |
-| `/`                      | website | the public Front, server-rendered from D1                           | open                   |
+| `/`                      | website | the public Home page, server-rendered from D1                       | open                   |
 | `/about`                 | website | the About page, server-rendered from D1 (the public route table)    | open                   |
-| `/tag/<slug>`            | website | a Tag's page, server-rendered from D1; the Folio's own entries      | open                   |
+| `/tag/<slug>`            | website | a Tag's page, server-rendered from D1; the Nav's own entries        | open                   |
 | `/sitemap.xml`           | website | the crawler route                                                   | open                   |
 | everything else          | website | static assets                                                       | open                   |
 
@@ -59,7 +59,7 @@ Images live in R2 (`photo-elianiva-originals`) and metadata in D1 (`photo-eliani
 
 **One hostname, one login.** The API is a Worker of its own but answers on the _site's_ hostname behind a route (`photo.elianiva.com/api/*`), so the Admin and everything it calls are same-origin. That is what makes the Access login work: Access issues an application token per application, and a cross-origin call to a second hostname could neither send the cookie (a browser sends none on a preflight) nor complete the interactive login. In development the two are on separate ports and CORS is answered for the localhost pair alone — including the `b3` and `traceparent` headers Effect's HTTP client stamps on every request, because a preflight that does not answer with the headers it was asked about fails, and a failed preflight reads in the Admin exactly like an unproven session.
 
-**The public Front is server-rendered by the website Worker** off its own bindings, off the same read the public RPC serves (ADR 0004).
+**The public Home page is server-rendered by the website Worker** off its own bindings, off the same read the public RPC serves (ADR 0004).
 
 **The way back into the Admin is a navigation.** Access runs at the edge, before the Worker, so the request that starts a login is a document request for the protected path itself — which is what the session-expired screen's `Sign in again` link is. It is deliberately not a `/cdn-cgi/access/login` link: that path belongs to the team domain (`<team>.cloudflareaccess.com`) and 404s on any origin without an Access edge in front of it, which is every stage but production.
 

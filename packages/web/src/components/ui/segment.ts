@@ -11,7 +11,7 @@
  * black box beside a grey one in the same row was a mistake twice over, since
  * it read as two kinds of control and only one of them was chosen.
  *
- * `label` is the group's own kicker, printed to the left of the box, so
+ * `label` is the group's own label, printed to the left of the box, so
  * `[KICKER][box]` is one aligned unit rather than a label a caller hand-writes
  * beside the atom and has to keep on the baseline. An option may carry a glyph
  * instead of text (`icon`), which is how the Library's view toggle is a Segment
@@ -106,13 +106,13 @@ export interface SegmentOption<V extends string | number = string> {
   icon?: IconNode
 }
 
-/** The group's own kicker, beside the box. `type-kicker` in
+/** The group's own label, beside the box. `type-label` in
  *  `color.text.secondary`, not `color.text.disabled`: it names a choice the
  *  operator can make, and `color.text.disabled` is 3.6:1 on the page's surface
- *  — under the 4.5:1 a 10px kicker needs. */
-const groupLabelClass = 'type-kicker text-role-text-secondary'
+ *  — under the 4.5:1 a 10px label needs. */
+const groupLabelClass = 'type-label text-role-text-secondary'
 
-/** The group row: the kicker and the box it names, on one baseline. */
+/** The group row: the label and the box it names, on one baseline. */
 const groupClass = 'inline-flex items-center gap-2'
 
 /** The 1px `color.rule` box every group's options sit in. */
@@ -149,9 +149,9 @@ export interface ViewInputs<V extends string | number = string> {
   options: ReadonlyArray<SegmentOption<V>>
   /** Names the group for assistive technology — `RATIO`, `FORMAT`, `Status`.
    *  When the group prints a `label`, this names it in words: `Ratio filter`
-   *  for a `RATIO` kicker, so the accessible name contains the visible one. */
+   *  for a `RATIO` label, so the accessible name contains the visible one. */
   ariaLabel: string
-  /** The group's kicker, printed beside the box. Omitted where the group sits
+  /** The group's label, printed beside the box. Omitted where the group sits
    *  under a panel head that already names it — the Editor's six. */
   label?: string
   /** A group with nothing to pick from yet — the Editor's Ratio segment while

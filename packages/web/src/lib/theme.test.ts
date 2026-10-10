@@ -35,7 +35,7 @@ describe('the branch a URL is drawn in', () => {
     }
   })
 
-  it('draws the front page light, because no admin route claims it', () => {
+  it('draws the home page light, because no admin route claims it', () => {
     expect(themeForUrl(`${ORIGIN}/`)).toBe('light')
   })
 

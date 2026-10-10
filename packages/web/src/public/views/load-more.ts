@@ -1,13 +1,13 @@
 /**
- * Continued: the seam between this month's photographs and the next one — a
+ * Load-more: the seam between this month's photographs and the next one — a
  * button that asks for the next month, showing a spinner while that read is in
  * flight, or the closing marker once there is nothing older.
  *
- * The row words its own three states, because the state is all the Edition
+ * The row words its own three states, because the state is all the Timeline
  * carries: what the reader is told depends on what is left, and the sentences
  * belong beside the markup that prints them.
  *
- * All three states are set in the kicker, the Masthead's furniture voice, and
+ * All three states are set in the label, the Header's furniture voice, and
  * none of them is two lines. They used to be a `type-exif` label in IBM Plex
  * Mono carrying `END OF THE ARCHIVE` beside a `type-caption` italic sentence
  * carrying `That is every photograph.` — two unrelated faces at two sizes, the
@@ -44,10 +44,10 @@ const tailBody = (
             h.Class(
               'inline-flex cursor-pointer items-center gap-2 bg-transparent disabled:cursor-progress',
             ),
-            h.OnClick(Message.LoadOlderSections()),
+            h.OnClick(Message.LoadOlderMonths()),
             h.OnKeyDownPreventDefault((key) =>
               key === 'Enter' || key === ' '
-                ? Option.some(Message.LoadOlderSections())
+                ? Option.some(Message.LoadOlderMonths())
                 : Option.none(),
             ),
             h.Disabled(loading),
@@ -58,12 +58,12 @@ const tailBody = (
               ? icon(h, LoaderCircle, 'size-2.5 animate-spin text-role-text-secondary')
               : icon(h, ArrowDown, 'size-2.5 text-role-text-secondary'),
             h.span(
-              [h.Class('type-kicker text-role-text-secondary uppercase')],
+              [h.Class('type-label text-role-text-secondary uppercase')],
               [loading ? 'loading' : 'load more'],
             ),
           ],
         ),
-        // A failed read says so. The Sections already on the page are still
+        // A failed read says so. The Months already on the page are still
         // true, so the row offers the load again rather than ending the run.
         ...(error === null
           ? []
@@ -71,19 +71,16 @@ const tailBody = (
       ]
     case 'end':
       return [
-        h.span(
-          [h.Class('type-kicker text-role-text-secondary uppercase')],
-          ['that is all of them'],
-        ),
+        h.span([h.Class('type-label text-role-text-secondary uppercase')], ['that is all of them']),
       ]
     case 'empty':
       return [
-        h.span([h.Class('type-kicker text-role-text-secondary uppercase')], ['nothing here yet']),
+        h.span([h.Class('type-label text-role-text-secondary uppercase')], ['nothing here yet']),
       ]
   }
 }
 
-export const continued = (
+export const loadMore = (
   tail: Tail,
   loading: boolean,
   error: string | null,

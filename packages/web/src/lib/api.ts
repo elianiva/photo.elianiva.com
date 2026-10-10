@@ -31,7 +31,7 @@ const devApiOrigin = 'http://localhost:13371'
  *
  * `import.meta.env.DEV` and not a `window` probe, because a server-rendered
  * view has to print the same URL the browser will. The website Worker renders
- * the Front's plates, and it has no `window`: a probe that answered the dev
+ * the home page's photos, and it has no `window`: a probe that answered the dev
  * port in the browser and `''` in the Worker stamped `/api/image/…` into the
  * HTML and asked the browser for
  * `http://localhost:13371/api/image/…`, which foldkit reports as a server DOM
@@ -72,7 +72,7 @@ export const ADMIN_RPC_PATH = `${API_PREFIX}/admin/rpc`
 /** The multipart JPEG upload. Edge-gated, and nothing else writes to R2. */
 export const UPLOAD_PATH = `${API_PREFIX}/upload`
 
-/** The R2 proxy that serves an original's bytes. Public, so the front can load a plate. */
+/** The R2 proxy that serves an original's bytes. Public, so the front can load a photo. */
 export const IMAGE_PATH = `${API_PREFIX}/image`
 
 /** Liveness, including a real D1 round trip. */

@@ -94,7 +94,7 @@ describe('the route table', () => {
     })
   })
 
-  it('declines the front page, which shares the origin', () => {
+  it('declines the home page, which shares the origin', () => {
     expect(routeOf('/')).toEqual({ _tag: 'NotFound', path: '/' })
     expect(routeOf('/about')).toEqual({ _tag: 'NotFound', path: '/about' })
   })
@@ -125,7 +125,7 @@ describe('the admin URL space', () => {
     }
   })
 
-  it('leaves the front page and anything else to its own document', () => {
+  it('leaves the home page and anything else to its own document', () => {
     for (const path of ['/', '/about', '/administrator', '/admin.php']) {
       expect(isAdminPath(path)).toBe(false)
     }
@@ -219,7 +219,7 @@ describe('an in-app navigation', () => {
     ])
   })
 
-  it('loads the document for the front page rather than pushing a URL the admin cannot draw', () => {
+  it('loads the document for the home page rather than pushing a URL the admin cannot draw', () => {
     const result = update(library, onUrlRequest(UrlRequest.Internal({ url: at('/') })))
     expect(dispatched(result)).toEqual([{ name: 'Load', args: { href: `${ORIGIN}/` } }])
   })

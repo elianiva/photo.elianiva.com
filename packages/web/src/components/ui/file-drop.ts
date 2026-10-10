@@ -1,5 +1,5 @@
 /**
- * FileDrop, broadsheet edition. The design's `Drop Zone` is a 1px dashed
+ * FileDrop, site edition. The design's `Drop Zone` is a 1px dashed
  * `color.outline` box with no fill and no corner radius, 16px of padding
  * around 12px of gap: a 16px `color.text.secondary` upload mark, an
  * `$typography.caption` italic line in `color.text.primary`, and the

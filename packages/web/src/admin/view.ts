@@ -8,7 +8,7 @@
  * The root element carries the theme scope, read off the route the Model
  * already holds. `data-theme="dark"` re-themes this whole subtree and nothing
  * above it, which is how the Editor sits dark inside a document the public
- * front page shares — see `lib/theme.ts`.
+ * home page shares — see `lib/theme.ts`.
  *
  * A session the API could not verify replaces the whole shell rather than
  * sitting in a corner of it: there is no signed-out state, so a page that

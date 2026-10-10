@@ -41,9 +41,9 @@ and D1 once the domain schemas are already here.
 
 ## Image delivery: the original's bytes, or nothing
 
-Every image — the Front's plates, the Library's grid, the Editor's stage — is
+Every image — the home page's photos, the Library's grid, the Editor's stage — is
 the Photo's original, served from R2 through the Worker's `/api/image/<key>`
-proxy and cropped to its Ratio by the plate's own `aspect-ratio` box.
+proxy and cropped to its Ratio by the photo's own `aspect-ratio` box.
 
 **There is no resizer.** Cloudflare zone image resizing
 (`/cdn-cgi/image/width=…/image/<key>`) is plan-gated, and this zone is on the
@@ -55,7 +55,7 @@ and every other URL builder for that path: a builder for a delivery path that
 cannot work is worse than no builder, because the 404 surfaces as a missing
 photograph rather than as a mistake.
 
-The trade is honest and worth naming: a grid of forty plates asks for forty
+The trade is honest and worth naming: a grid of forty photos asks for forty
 originals. Stored **Renditions** (`CONTEXT.md`) are the designed answer;
 regenerating them is a separate piece of work. A zone plan upgrade would bring
 the resizer back, which is a plan decision and not a code one.

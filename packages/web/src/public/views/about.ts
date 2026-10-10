@@ -33,29 +33,32 @@ const prose = (h: HtmlBuilder<Message>): Child =>
     ],
   )
 
-/** The plates the read returned. The first is the page's plate on both
+/** The figures the read returned. The first is the page's photo on both
  *  masters; the second is the mobile master's, so it is hidden at `desktop`
- *  and fetched lazily. A site with one published photograph draws one plate on
+ *  and fetched lazily. A site with one published photograph draws one photo on
  *  both. */
-const plates = (figures: ReadonlyArray<Figure>, h: HtmlBuilder<Message>): ReadonlyArray<Child> =>
-  figures.map((plate, index) =>
+const aboutFigures = (
+  figures: ReadonlyArray<Figure>,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Child> =>
+  figures.map((photo, index) =>
     index === 0
-      ? figure({ plate, slot: 'about' }, h)
-      : h.div([h.Class('hidden lg:block')], [figure({ plate, slot: 'about', loading: 'lazy' }, h)]),
+      ? figure({ photo, slot: 'about' }, h)
+      : h.div([h.Class('hidden lg:block')], [figure({ photo, slot: 'about', loading: 'lazy' }, h)]),
   )
 
 export const aboutBody = (figures: ReadonlyArray<Figure>, h: HtmlBuilder<Message>): Child =>
   h.div(
     [h.Id('about'), h.Class(`${BAND} flex flex-col gap-4 pt-8 lg:gap-6 lg:pt-12`)],
     [
-      h.span([h.Class('type-kicker text-role-text-secondary uppercase')], ['about']),
+      h.span([h.Class('type-label text-role-text-secondary uppercase')], ['about']),
       h.h1(
         [h.Class('type-section text-role-text-primary')],
         ['Hi there! You stumbled upon my photography website :)'],
       ),
-      h.p([h.Class('type-deck text-role-text-secondary')], [DECK]),
+      h.p([h.Class('type-lead text-role-text-secondary')], [DECK]),
       prose(h),
-      ...plates(figures, h),
+      ...aboutFigures(figures, h),
       kit(h),
     ],
   )

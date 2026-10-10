@@ -5,12 +5,12 @@ import { PhotoId } from '@photo/shared'
 
 import {
   RATIO_VALUE,
-  editionOf,
+  timelineOf,
   flowColumns,
   frameNoShort,
-  plateUrl,
-  sectionsOf,
-  type FrontRead,
+  figureUrl,
+  monthsOf,
+  type HomeRead,
 } from './content'
 
 // ---------------------------------------------------------------------------
@@ -46,9 +46,9 @@ const section = (month: string, photos: ReadonlyArray<PhotoWithTags>): PublicSec
   photos,
 })
 
-const read = (over: Partial<FrontRead> = {}): FrontRead => ({
+const read = (over: Partial<HomeRead> = {}): HomeRead => ({
   sections: [section('2025-08', [photo()])],
-  nextSectionCursor: null,
+  nextMonthCursor: null,
   ...over,
 })
 
@@ -64,18 +64,18 @@ describe('frameNoShort', () => {
 })
 
 // ---------------------------------------------------------------------------
-// the read model → plates
+// the read model → figures
 // ---------------------------------------------------------------------------
 
-describe('sectionsOf', () => {
+describe('monthsOf', () => {
   it('names a section from its month key, not from its label', () => {
-    const [mapped] = sectionsOf([section('2025-08', [photo()])])
+    const [mapped] = monthsOf([section('2025-08', [photo()])])
     expect(mapped?.month).toBe('August')
     expect(mapped?.year).toBe('2025')
   })
 
-  it('carries the Photo Number, the title and the R2 key onto the plate', () => {
-    const [mapped] = sectionsOf([
+  it('carries the Photo Number, the title and the R2 key onto the photo', () => {
+    const [mapped] = monthsOf([
       section('2025-08', [photo({ number: 7, title: 'Momo', r2Key: 'originals/momo.jpg' })]),
     ])
     expect(mapped?.figures[0]).toMatchObject({
@@ -86,7 +86,7 @@ describe('sectionsOf', () => {
   })
 
   it("builds the Exif line from the Photo's own facts", () => {
-    const [mapped] = sectionsOf([section('2025-08', [photo()])])
+    const [mapped] = monthsOf([section('2025-08', [photo()])])
     expect(mapped?.figures[0]?.exif).toBe('X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 31 AUG')
   })
 
@@ -99,7 +99,7 @@ describe('sectionsOf', () => {
       metadata: {},
       takenAt: undefined,
     })
-    const [mapped] = sectionsOf([section('2025-08', [bare])])
+    const [mapped] = monthsOf([section('2025-08', [bare])])
     // null, not an empty string: the view omits the element rather than
     // rendering a line with nothing in it.
     expect(mapped?.figures[0]?.exif).toBeNull()
@@ -107,7 +107,7 @@ describe('sectionsOf', () => {
 
   it('snaps a Photo with no Ratio of its own to the nearest supported one', () => {
     // 3000x2000 measured is 1.5, which is 3:2 exactly.
-    const [mapped] = sectionsOf([
+    const [mapped] = monthsOf([
       section('2025-08', [photo({ ratio: null, width: 3000, height: 2000 })]),
     ])
     expect(mapped?.figures[0]?.ratio).toBe('3:2')
@@ -115,7 +115,7 @@ describe('sectionsOf', () => {
 
   it('snaps a measured frame to the Ratio nearest it, not the first one listed', () => {
     // 4000x3000 measured is 1.333, which is 4:3.
-    const [mapped] = sectionsOf([
+    const [mapped] = monthsOf([
       section('2025-08', [photo({ ratio: null, width: 4000, height: 3000 })]),
     ])
     expect(mapped?.figures[0]?.ratio).toBe('4:3')
@@ -124,73 +124,73 @@ describe('sectionsOf', () => {
   it('drops a Photo whose frame snaps to no supported Ratio', () => {
     // A square frame matches none of the six, which is why an upload refuses
     // it rather than inventing one.
-    const [mapped] = sectionsOf([
+    const [mapped] = monthsOf([
       section('2025-08', [photo({ ratio: null, width: 1000, height: 1000 })]),
     ])
     expect(mapped).toBeUndefined()
   })
 
-  it('drops a Section left with no drawable Photo', () => {
-    const mapped = sectionsOf([
+  it('drops a Month left with no drawable Photo', () => {
+    const mapped = monthsOf([
       section('2025-08', [photo({ ratio: null, width: 1000, height: 1000 })]),
     ])
     expect(mapped).toEqual([])
   })
 
   it('reads a takenAt carrying a time, which is how the upload stores one', () => {
-    const [mapped] = sectionsOf([section('2025-08', [photo({ takenAt: '2026-06-11T14:27' })])])
+    const [mapped] = monthsOf([section('2025-08', [photo({ takenAt: '2026-06-11T14:27' })])])
     expect(mapped?.figures[0]?.exif).toContain('11 JUN')
   })
 })
 
 // ---------------------------------------------------------------------------
-// the Edition
+// the Timeline
 // ---------------------------------------------------------------------------
 
-describe('editionOf', () => {
-  it('carries the read as Sections and offers more while a cursor remains', () => {
-    const edition = editionOf(read({ nextSectionCursor: '2025-07' }))
-    expect(edition.sections.map((section) => section.id)).toEqual(['2025-08'])
-    expect(edition.tail).toBe('more')
+describe('timelineOf', () => {
+  it('carries the read as Months and offers more while a cursor remains', () => {
+    const timeline = timelineOf(read({ nextMonthCursor: '2025-07' }))
+    expect(timeline.months.map((month) => month.id)).toEqual(['2025-08'])
+    expect(timeline.tail).toBe('more')
   })
 
-  it('names no plate of its own — no lead, nothing pinned', () => {
-    // The Edition used to carry the newest photograph as a Page One plate and
-    // the lede drew it as the site's frontispiece. The Sections are the whole
-    // of the Front's read now, so every photograph is drawn as a plate in a
+  it('names no photo of its own — no lead, nothing pinned', () => {
+    // The Timeline used to carry the newest photograph as a Page One photo and
+    // the intro drew it as the site's cover photo. The Months are the whole
+    // of the home page's read now, so every photograph is drawn as a photo in a
     // flow and none of them is ranked above the others.
-    const edition = editionOf(read())
-    expect(Object.keys(edition).sort()).toEqual(['sections', 'tail'])
-    expect(
-      edition.sections.flatMap((section) => section.figures).map((figure) => figure.id),
-    ).toEqual([PhotoId.make('photo-1')])
+    const timeline = timelineOf(read())
+    expect(Object.keys(timeline).sort()).toEqual(['months', 'tail'])
+    expect(timeline.months.flatMap((month) => month.figures).map((figure) => figure.id)).toEqual([
+      PhotoId.make('photo-1'),
+    ])
   })
 
-  it('is an honest empty edition when nothing is published', () => {
-    const edition = editionOf(read({ sections: [], nextSectionCursor: null }))
-    expect(edition.sections).toEqual([])
-    expect(edition.tail).toBe('empty')
+  it('is an honest empty timeline when nothing is published', () => {
+    const timeline = timelineOf(read({ sections: [], nextMonthCursor: null }))
+    expect(timeline.months).toEqual([])
+    expect(timeline.tail).toBe('empty')
   })
 })
 
 // ---------------------------------------------------------------------------
-// plate bytes
+// photo bytes
 // ---------------------------------------------------------------------------
 
-describe('plateUrl', () => {
+describe('figureUrl', () => {
   it('serves the Photo’s own original out of R2 through the proxy', () => {
-    const [mapped] = sectionsOf([section('2025-08', [photo({ r2Key: 'originals/lift.jpg' })])])
-    const url = new URL(plateUrl(mapped!.figures[0]!), 'https://photo.elianiva.com')
+    const [mapped] = monthsOf([section('2025-08', [photo({ r2Key: 'originals/lift.jpg' })])])
+    const url = new URL(figureUrl(mapped!.figures[0]!), 'https://photo.elianiva.com')
     expect(url.pathname).toBe('/api/image/originals%2Flift.jpg')
   })
 })
 
 // ---------------------------------------------------------------------------
-// plate → columns
+// photo → columns
 // ---------------------------------------------------------------------------
 
 describe('flowColumns', () => {
-  const three = sectionsOf([
+  const three = monthsOf([
     section('2025-08', [
       photo({ id: PhotoId.make('a'), ratio: '2:3' }),
       photo({ id: PhotoId.make('b'), ratio: '16:9' }),
@@ -212,7 +212,7 @@ describe('flowColumns', () => {
   })
 
   it('fills the shortest column first', () => {
-    // A plate is 1 / ratio as tall as it is wide, so a 2:3 portrait costs 1.5
+    // A photo is 1 / ratio as tall as it is wide, so a 2:3 portrait costs 1.5
     // and a 16:9 landscape 0.5625: the landscape skips the column that just
     // filled up and opens the next.
     const [portrait, landscape] = three.figures.slice(0, 2)
@@ -227,8 +227,8 @@ describe('flowColumns', () => {
     const heights = columns.map((column) =>
       column.reduce((total, figure) => total + 1 / RATIO_VALUE[figure.ratio], 0),
     )
-    // Greedy fill leaves the last plate short of a full column; what matters
-    // is that no column is more than about one plate taller than another.
+    // Greedy fill leaves the last photo short of a full column; what matters
+    // is that no column is more than about one photo taller than another.
     expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(1)
   })
 

@@ -1,5 +1,5 @@
 /**
- * Switch, broadsheet edition. Vendored from the `@foldcn` registry and re-cut
+ * Switch, site edition. Vendored from the `@foldcn` registry and re-cut
  * to the design's `Toggle` (master `52b8cb8abcba5c06`):
  *
  *   off  a 34×20 pill on a 1px `color.outline` ring, a 12px

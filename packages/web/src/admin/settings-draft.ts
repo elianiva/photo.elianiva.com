@@ -13,7 +13,7 @@
  * photograph pipeline reads. The draft used to carry five more — a copyright
  * line, a motto, an about paragraph, a nav and a volume — of which one was
  * carried without a control and the other four the public site never read,
- * because every line the Front prints is written in the view that prints it
+ * because every line the home page prints is written in the view that prints it
  * (migration 0008). Copy is not a setting.
  */
 

@@ -2,12 +2,12 @@
  * Kit: the four facts a reader checking the work would want — the body, the
  * lens, since when, and what comes out. The design's Spec Row is a label and a
  * value ranged right under a hairline, so this is a description list of
- * `components/ui/spec-row` rows under a `KIT` kicker, and the values are the
- * same body and lens the Colophon's EQUIPMENT column names.
+ * `components/ui/spec-row` rows under a `KIT` label, and the values are the
+ * same body and lens the Footer's EQUIPMENT column names.
  *
  * `OUTPUT — FULL RESOLUTION ONLY` is a fact about the site rather than about
  * the kit, and it is here because that is where the design puts it: every
- * plate and every download is the original's bytes out of R2, with no resizer
+ * photo and every download is the original's bytes out of R2, with no resizer
  * on the zone (ADR 0002). It is the one row a reader is most likely to be
  * wrong about before reading.
  *
@@ -33,11 +33,11 @@ const ROWS: ReadonlyArray<{ readonly label: string; readonly value: string }> = 
 export const kit = (h: HtmlBuilder<Message>): Child =>
   h.div(
     // The body's own gap and this table's own top padding are both in the
-    // design, so the space between the last plate's Exif line and `KIT` is
+    // design, so the space between the last photo's Exif line and `KIT` is
     // their sum: 48px at `desktop`, 32px on the mobile master.
     [h.Class('flex flex-col pt-4 lg:pt-6')],
     [
-      h.span([h.Class('type-kicker text-role-text-secondary')], ['KIT']),
+      h.span([h.Class('type-label text-role-text-secondary')], ['KIT']),
       h.dl(
         [h.Class('flex flex-col')],
         ROWS.map((row) => SpecRow.specRow(row, h)),

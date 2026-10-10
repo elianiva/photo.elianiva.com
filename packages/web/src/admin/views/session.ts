@@ -57,10 +57,10 @@ export const sessionExpired = (h: HtmlBuilder<Msg>, route: AppRoute): Document =
           ),
         ],
         [
-          h.span([h.Class('type-kicker text-role-text-secondary')], ['THE DESK']),
+          h.span([h.Class('type-label text-role-text-secondary')], ['THE DESK']),
           h.h1([h.Class('type-headline text-role-text-primary')], ['Session expired']),
           h.p(
-            [h.Class('type-deck max-w-prose text-role-text-secondary')],
+            [h.Class('type-lead max-w-prose text-role-text-secondary')],
             [
               'The Cloudflare Access session behind the admin has ended. Sign in again to carry on.',
             ],

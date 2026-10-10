@@ -1,5 +1,5 @@
 /**
- * Lightbox: the only place plate bytes are fetched a second time. The figure
+ * Lightbox: the only place photo bytes are fetched a second time. The figure
  * sits on the design system's pure-white mat — no chrome beyond a close
  * affordance. Escape closes via the keydown Subscription; clicking anywhere
  * outside the image also closes.
@@ -8,7 +8,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { plateUrl, type Figure } from '../content'
+import { figureUrl, type Figure } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
@@ -21,7 +21,7 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
       ),
       h.OnClick(Message.CloseLightbox()),
       // Tab cycles back to the close button so focus never leaves the dialog.
-      // The message is benign: re-selecting the open plate changes nothing.
+      // The message is benign: re-selecting the open photo changes nothing.
       h.OnKeyDownFocus((key) =>
         key === 'Tab'
           ? Option.some({
@@ -37,7 +37,7 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
     [
       h.img([
         h.Class('max-h-full max-w-full h-auto w-auto object-contain'),
-        h.Src(plateUrl(figure)),
+        h.Src(figureUrl(figure)),
         h.Alt(figure.title),
         h.Attribute('decoding', 'async'),
         h.Attribute('fetchpriority', 'high'),
@@ -49,7 +49,7 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
           h.Id('lightbox-close'),
           h.Autofocus(true),
           h.Class(
-            'absolute top-12 right-12 type-kicker text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-16',
+            'absolute top-12 right-12 type-label text-role-text-disabled hover:text-role-text-primary transition-colors duration-120 sm:top-16 sm:right-16',
           ),
           h.OnClick(Message.CloseLightbox()),
           h.AriaLabel('Close'),

@@ -1,5 +1,5 @@
 /**
- * Button, broadsheet edition. The design gives four kinds and one geometry,
+ * Button, site edition. The design gives four kinds and one geometry,
  * with no corner radius on any of them:
  *
  *   default     fill `color.primary`, label `color.on-primary`, hover

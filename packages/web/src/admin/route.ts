@@ -250,6 +250,6 @@ export const urlToAppRoute = parseUrlWithFallback(adminParser, AppRoute.NotFound
  *  above answers "which page is this", this answers "is this the Admin's
  *  document at all". A path inside the space that names no route still has to
  *  boot the Admin, or the edge would 404 a URL whose NotFound page is the
- *  client's to draw, and a mistyped admin path would boot the public Front. */
+ *  client's to draw, and a mistyped admin path would boot the public Home page. */
 export const isAdminPath = (pathname: string): boolean =>
   pathname === `/${adminRoot}` || pathname.startsWith(`/${adminRoot}/`)

@@ -2,7 +2,7 @@
  * Spec Row — the design's label-left, value-right row (master
  * `7d93b9a0052154a9`). 12px of gap between them, 8px of vertical padding, and
  * a 1px `color.hairline` rule under the pair. The label is a
- * `$typography.kicker` in `color.text.disabled`; the value is `$typography.exif`
+ * `$typography.label` in `color.text.disabled`; the value is `$typography.exif`
  * in `color.text.primary`, ranged right.
  *
  * The row carries `dt` / `dd`, so it goes inside a `<dl>` — the design groups
@@ -27,7 +27,7 @@ export const specRow = <M>(config: SpecRowConfig, h: HtmlBuilder<M>): Html =>
   h.div(
     [h.Class(cn(specRowClass, config.className)), h.DataAttribute('slot', 'spec-row')],
     [
-      h.dt([h.Class('type-kicker text-role-text-disabled')], [config.label]),
+      h.dt([h.Class('type-label text-role-text-disabled')], [config.label]),
       h.dd([h.Class('type-exif text-right text-role-text-primary tabular-nums')], [config.value]),
     ],
   )

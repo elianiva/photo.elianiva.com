@@ -1,6 +1,6 @@
 /**
  * The Settings page — the form over the Admin's one row (master
- * `8b3ebe985801026f`). Four sections, each a kicker over its controls, each
+ * `8b3ebe985801026f`). Four sections, each a label over its controls, each
  * closed by a hairline and separated by 24px, and the page's own `Save settings`
  * / `Discard changes` at the foot. Explicit save rather than autosave, because
  * the header's `SAVED 2 MINUTES AGO` has to mean something: the stamp is
@@ -11,7 +11,7 @@
  * defaults, the watermark, the metadata policy and the retention setting. It
  * used to close with a `SITE` section — a motto, an about paragraph, a
  * copyright line and a nav repeater — whose four columns the public site never
- * read, because every line the Front prints is written in the view that prints
+ * read, because every line the home page prints is written in the view that prints
  * it. A control that edits copy nothing renders is not a setting (migration
  * 0008).
  *
@@ -62,13 +62,13 @@ const WATERMARK_POSITION_LABELS: ReadonlyArray<{ value: WatermarkPosition; label
 
 const captionClass = 'italic type-caption text-role-text-secondary'
 
-/** One section: a kicker, its controls, and the hairline the design closes
+/** One section: a label, its controls, and the hairline the design closes
  *  every section with. The 24px below the rule is the same 24px the stack
  *  leaves between sections, so the two read as one rhythm. */
-const section = (kicker: string, rows: ReadonlyArray<Child>, h: HtmlBuilder<Msg>): Child =>
+const section = (label: string, rows: ReadonlyArray<Child>, h: HtmlBuilder<Msg>): Child =>
   h.section(
     [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-6')],
-    [h.h2([h.Class('type-kicker text-role-text-secondary')], [kicker]), ...rows],
+    [h.h2([h.Class('type-label text-role-text-secondary')], [label]), ...rows],
   )
 
 // ---------------------------------------------------------------------------
@@ -352,7 +352,7 @@ const actions = (model: Model, h: HtmlBuilder<Msg>): Child => {
 const notLoaded = (h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('flex flex-col items-start gap-4 pt-6')],
-    [h.p([h.Class('type-deck text-role-text-secondary')], ['Loading settings…'])],
+    [h.p([h.Class('type-lead text-role-text-secondary')], ['Loading settings…'])],
   )
 
 const failed = (h: HtmlBuilder<Msg>): Child =>
@@ -360,7 +360,7 @@ const failed = (h: HtmlBuilder<Msg>): Child =>
     [h.Class('flex flex-col items-start gap-4 pt-6')],
     [
       h.p(
-        [h.Class('type-deck text-role-text-secondary')],
+        [h.Class('type-lead text-role-text-secondary')],
         ['The settings could not be read, so there is nothing to show.'],
       ),
       Button.button({ onClick: M.RetryFetchSettings({}), variant: 'secondary' }, 'Retry', h),
