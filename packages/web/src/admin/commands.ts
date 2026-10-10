@@ -270,7 +270,9 @@ export const BulkSetStatusCmd = Command.define('BulkSetStatus', {
   messages: [Message.SucceededSetSelectionStatus, Message.FailedRpc],
   execute: ({ ids, status, page }) =>
     Effect.gen(function* () {
-      yield* foldOverChunks(ids, (batch) => rpcAdmin('SetPhotosStatus', { ids: [...batch], status }))
+      yield* foldOverChunks(ids, (batch) =>
+        rpcAdmin('SetPhotosStatus', { ids: [...batch], status }),
+      )
       const fresh = yield* listPayload(page)
       return Message.SucceededSetSelectionStatus({
         count: ids.length,

@@ -354,7 +354,9 @@ describe('bulkDetailsPatch', () => {
   }
 
   it('sends only the fields that were filled in', () => {
-    expect(bulkDetailsPatch({ ...blank, lens: ' 35mm f/1.4 ', shutter: '1/250', iso: '400' })).toEqual({
+    expect(
+      bulkDetailsPatch({ ...blank, lens: ' 35mm f/1.4 ', shutter: '1/250', iso: '400' }),
+    ).toEqual({
       patch: { lens: '35mm f/1.4', shutter: 1 / 250, iso: 400 },
       invalid: false,
     })

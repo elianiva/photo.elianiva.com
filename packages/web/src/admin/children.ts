@@ -23,7 +23,15 @@ import {
   withOptional,
   type UpdateReturn,
 } from './helpers'
-import { AdminToast, EMPTY_BULK_DETAILS, Message, TagMultiCombo, UPLOAD_LIMITS, fileStore, previewStore } from './model'
+import {
+  AdminToast,
+  EMPTY_BULK_DETAILS,
+  Message,
+  TagMultiCombo,
+  UPLOAD_LIMITS,
+  fileStore,
+  previewStore,
+} from './model'
 import type { Message as Msg, Model } from './model'
 
 /** Closing the upload dialog (Cancel button sends the child's requested-close

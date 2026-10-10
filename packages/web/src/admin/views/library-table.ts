@@ -314,7 +314,13 @@ export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 : h.div(
                     [h.Class('grid grid-cols-2 gap-4')],
                     [
-                      tagList('Add tags', model.addTagIds, 'add-tag', (id) => M.ToggledAddTag({ id }), innerH),
+                      tagList(
+                        'Add tags',
+                        model.addTagIds,
+                        'add-tag',
+                        (id) => M.ToggledAddTag({ id }),
+                        innerH,
+                      ),
                       tagList(
                         'Remove tags',
                         model.removeTagIds,
