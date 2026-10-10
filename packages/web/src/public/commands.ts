@@ -28,7 +28,7 @@ import { Message } from './model'
  *  the site rather than this page, and the page prints neither. */
 type HomePageRead = {
   readonly sections: ReadonlyArray<PublicSection>
-  readonly nextMonthCursor: string | null
+  readonly nextSectionCursor: string | null
 }
 
 export const LoadOlderMonthsCmd = Command.define('LoadOlderMonths', {
@@ -40,7 +40,7 @@ export const LoadOlderMonthsCmd = Command.define('LoadOlderMonths', {
       (read) =>
         Message.LoadedSections({
           sections: sectionsOf(read.sections),
-          nextMonthCursor: read.nextMonthCursor,
+          nextMonthCursor: read.nextSectionCursor,
         }),
     ).pipe(
       Effect.catch((error) => Effect.succeed(Message.FailedLoadMonths({ message: error.message }))),
