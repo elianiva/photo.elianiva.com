@@ -71,6 +71,9 @@ export const QueueItem = S.Struct({
   name: S.String,
   size: S.Number,
   status: QueueStatus,
+  /** Which step of the pipeline an `uploading` row is on: the WebP
+   *  renditions, the Blurhash, then the request. */
+  stage: S.optional(S.Literals(['webp', 'blurhash', 'upload'])),
   /** Bytes confirmed uploaded so far — the bar and the `13.2 of 21.3 MB`
    *  readout. Zero before the run and for a file the client itself refused. */
   loaded: S.Number,
@@ -159,6 +162,10 @@ export const EMPTY_BULK_DETAILS: BulkDetails = {
  *  `4%` slider are the one Mat, and the toast names it so the operator is never
  *  guessing what just happened to forty photographs. */
 export const BULK_BORDER_MAT = { enabled: true, style: 'even', colour: 'paper', width: 4 } as const
+
+/** How many items prepare or upload at once. The image pipeline bounds the
+ *  decodes on its own; this bounds the requests and the files held in memory. */
+export const UPLOAD_CONCURRENCY = 4
 
 export const UPLOAD_LIMITS = {
   maxFiles: 50,
@@ -566,6 +573,8 @@ export const Message = defineMessageUnion({
     facts: S.Array(S.String),
     problem: S.optional(S.String),
   },
+  /** An item moved to the next step of its pipeline. */
+  UploadItemStage: { itemId: S.String, stage: S.Literals(['webp', 'blurhash', 'upload']) },
   /** One `XMLHttpRequest.upload.onprogress` tick. */
   UploadProgress: { itemId: S.String, loaded: S.Number },
   /** `renditionsPending` is `E6`'s signal: true holds the row at `processing`

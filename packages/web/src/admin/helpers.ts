@@ -8,7 +8,6 @@ import { modifyFields } from 'foldkit/struct'
 import * as Update from 'foldkit/update'
 
 import { AdminToast, Message, fileStore, previewStore } from './model'
-import { cancelPrepare } from './upload-prepare'
 import type { Message as Msg, Model } from './model'
 
 export type Commands = ReadonlyArray<Command.Command<Msg>>
@@ -83,7 +82,6 @@ export const photoCountLabel = (count: number): string =>
 /** Drop a queue item's upload bytes and its object-URL preview. Idempotent;
  *  only ever reached client-side (both stores are populated on drop). */
 export const disposeItemAssets = (id: string): void => {
-  cancelPrepare(id)
   fileStore.delete(id)
   const preview = previewStore.get(id)
   if (preview !== undefined) {

@@ -21,25 +21,19 @@
  * dispatch, before the browser has already acted on the key.
  */
 
-import { Effect, Option, Queue, Result, Schema as S, Stream } from 'effect'
+import { Effect, Option, Queue, Schema as S, Stream } from 'effect'
 import { Subscription } from 'foldkit'
-import {
-  PhotoId,
-  UploadErrorBody,
-  UploadSuccessBody,
-  formatMeasuredRatio,
-  nearestRatio,
-} from '@photo/shared'
+import { PhotoId } from '@photo/shared'
 
-import { UPLOAD_PATH } from '@/lib/api'
 import { compositionSource, encodeCompositionBlurhash } from '@/lib/blurhash'
 import { CompositionSpec } from '@/lib/blurhash'
 import { smallUrl } from '@/lib/image'
 
-import { Message, fileStore } from './model'
+import { Message } from './model'
 import type { Model } from './model'
 import { blurhashSignature, isEditorDirty } from './editor'
-import { awaitPrepared, startPrepare } from './upload-prepare'
+import { attachUploadSink, reconcileUploads } from './upload-run'
+import type { UploadRunOptions } from './upload-run'
 
 /** The id the Page Head's search input carries, and therefore the element the
  *  shortcut reaches for. Declared here and read by `views/page-head.ts` so the
@@ -74,180 +68,42 @@ const focusSearch = (): void => {
   if (field instanceof HTMLInputElement) field.focus()
 }
 
-/** The queue item that is in flight, or None. This is the subscription's own
- *  gate: an item at `uploading` is exactly one stream's worth of work, and the
- *  chain advances by marking the next item `uploading`, so one change of this
- *  value tears the old stream down and starts the next. */
-const inFlightUploadId = (model: Model): Option.Option<string> =>
-  Option.fromUndefinedOr(model.queue.find((item) => item.status === 'uploading')?.id)
+/** The queue items that are in flight: each is one run in `upload-run.ts`, and
+ *  the chain advances by marking more items `uploading`. */
+const inFlightUploadIds = (model: Model): ReadonlyArray<string> =>
+  model.queue.filter((item) => item.status === 'uploading').map((item) => item.id)
 
-/** The frame as the detail line prints it: the snapped Ratio when one exists,
- *  otherwise the measured proportion (so a 1:1 the server will refuse still
- *  reads `1:1` while it uploads). */
-const ratioLabel = (width: number, height: number): string =>
-  nearestRatio(width, height) ?? formatMeasuredRatio(width, height)
-
-/** `JSON.parse` as a total function: `None` for a response body that is not
- *  JSON at all. The parsed value is `unknown`; the shape is the contract's
- *  job, so parse and validate stay two separable steps. */
-const parseJson = Option.liftThrowable((raw: string): unknown => JSON.parse(raw))
-
-/** The upload route's body, decoded as the contract `@photo/shared` declares.
- *  `None` for a response that is not JSON, or is JSON the contract does not
- *  describe — an error page from something between here and the Worker, most
- *  often, which carries no message the operator could act on. */
-const decodeUploadBody = (
-  xhr: XMLHttpRequest,
-): Option.Option<typeof UploadSuccessBody.Type | typeof UploadErrorBody.Type> =>
-  Option.flatMap(parseJson(xhr.responseText), (parsed) =>
-    Option.orElse(S.decodeUnknownOption(UploadSuccessBody)(parsed), () =>
-      S.decodeUnknownOption(UploadErrorBody)(parsed),
-    ),
-  )
-
-/** E6's `processing` hold: a stored Photo that still owes a Rendition is not
- *  published yet. Read off the declared field rather than sniffed for, so a
- *  Worker that starts sending it is honoured the day it does. */
-const uploadSuccessIsPending = (xhr: XMLHttpRequest): boolean =>
-  Option.filter(decodeUploadBody(xhr), S.is(UploadSuccessBody)).pipe(
-    Option.map((body) => body.renditionsPending),
-    Option.getOrElse(() => false),
-  )
-
-/** What the failed Upload Item prints: the Worker's own reason when it gave
- *  one, and the bare status when it did not. */
-const uploadErrorMessage = (xhr: XMLHttpRequest): string =>
-  Option.filter(decodeUploadBody(xhr), S.is(UploadErrorBody)).pipe(
-    Option.map((body) => body.message),
-    Option.getOrElse(() => `upload failed (${String(xhr.status)})`),
-  )
-
-/**
- * One queue item's upload, as a stream of Messages: the decoded frame, a
- * Message per `upload.onprogress` tick, then exactly one terminal Message.
- *
- * **`XMLHttpRequest`, not `fetch`.** `fetch` cannot report upload progress —
- * no event, no `ReadableStream` for a request body a browser will let you
- * observe — and the design's filled bar needs `upload.onprogress`. This is an
- * API limitation, not a library preference; do not "simplify" it back to
- * `fetch`.
- *
- * The stream outlives its own success: the run is torn down by the Model
- * (the item leaves `uploading`) rather than by the stream ending, which is
- * what lets the scope's release abort an in-flight request when the operator
- * cancels.
- */
+/** The runs live in `upload-run.ts`, so reopening this stream when the active
+ *  set changes never aborts a request that is still going. Opening it
+ *  reconciles the runs with the set; closing it only detaches the messages. */
 const uploadStream = (
-  itemId: string,
-  options: Readonly<{
-    tagIds: ReadonlyArray<string>
-    takenAt: string
-    useExportDefaults: boolean
-    publishWhenReady: boolean
-    /** The next items in line, kept warm while this one uploads. */
-    upcoming: ReadonlyArray<string>
-  }>,
+  ids: ReadonlyArray<string>,
+  options: UploadRunOptions,
 ): Stream.Stream<Message> =>
   Stream.callback<Message>(
     Effect.fn('upload.run')(function* (queue) {
-      const offer = (message: Message): void => {
-        Queue.offerUnsafe(queue, message)
-      }
-      const fail = (message: string): void => {
-        offer(Message.FailedUploadItem({ itemId, message }))
-      }
-      const file = fileStore.get(itemId)
-      if (file === undefined) return fail('uploaded bytes are gone')
-
-      // Work ahead: the next items decode and encode while this one uploads.
-      for (const id of options.upcoming) {
-        const upcoming = fileStore.get(id)
-        if (upcoming !== undefined) startPrepare(id, upcoming)
-      }
-
-      // Everything the Worker will store is made here, in this tab. The Worker
-      // only accepts the files. A failed preparation is a failed row.
-      const prepared = yield* awaitPrepared(itemId, file).pipe(Effect.result)
-      if (Result.isFailure(prepared)) return fail(prepared.failure.message)
-      const { renditions, title, blurhash } = prepared.success
-      offer(
-        Message.UploadItemFacts({
-          itemId,
-          width: renditions.width,
-          height: renditions.height,
-          ratio: ratioLabel(renditions.width, renditions.height),
-        }),
-      )
-
-      const form = new FormData()
-      form.set('file', file)
-      form.set('small', renditions.small, 'small.webp')
-      form.set('preview', renditions.preview, 'preview.webp')
-      form.set(
-        'title',
-        Option.getOrElse(title, () => file.name.replace(/\.[^/.]+$/, '')),
-      )
-      form.set('tagIds', JSON.stringify([...options.tagIds]))
-      form.set('publishWhenReady', options.publishWhenReady ? 'true' : 'false')
-      form.set('useExportDefaults', options.useExportDefaults ? 'true' : 'false')
-      if (blurhash !== undefined) form.set('blurhash', blurhash)
-      if (options.takenAt !== '') form.set('takenAt', options.takenAt)
-      const totalBytes = file.size + renditions.small.size + renditions.preview.size
-
-      // The request is a scoped resource: the stream's scope closing — the item
-      // left `uploading`, the dialog was cancelled — aborts it.
       yield* Effect.acquireRelease(
         Effect.sync(() => {
-          const xhr = new XMLHttpRequest()
-          xhr.open('POST', UPLOAD_PATH)
-          // Harmless in production, where this is a same-origin POST the
-          // browser sends the Access cookie with either way. It earns its place
-          // on the dev port pair, which is cross-origin.
-          xhr.withCredentials = true
-          xhr.upload.onprogress = (event): void => {
-            // `event.loaded` counts the whole multipart body; the bar names the
-            // original's own bytes, scaled to how much of the body has gone.
-            offer(
-              Message.UploadProgress({
-                itemId,
-                loaded: Math.min(Math.round((event.loaded / totalBytes) * file.size), file.size),
-              }),
-            )
-          }
-          xhr.onload = (): void => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              offer(
-                Message.SucceededUploadItem({
-                  itemId,
-                  renditionsPending: uploadSuccessIsPending(xhr),
-                }),
-              )
-            } else {
-              fail(uploadErrorMessage(xhr))
-            }
-          }
-          xhr.onerror = (): void => fail('upload failed')
-          xhr.send(form)
-          return xhr
+          const detach = attachUploadSink((message) => {
+            Queue.offerUnsafe(queue, message)
+          })
+          reconcileUploads(ids, options)
+          return detach
         }),
-        (xhr) => Effect.sync(() => xhr.abort()),
+        (detach) => Effect.sync(detach),
       )
     }, Effect.andThen(Effect.never)),
   )
-
-/** How many items past the one uploading are prepared ahead of time. */
-const UPLOAD_PREFETCH = 2
 
 /** The run's options, read once when the stream opens. They are dependencies
  *  so `update` can change them before a run, but the keep-alive below ignores
  *  them: a Toggle flipped mid-run must not restart an in-flight request. */
 interface UploadDependencies {
-  readonly itemId: Option.Option<string>
+  readonly ids: ReadonlyArray<string>
   readonly tagIds: ReadonlyArray<string>
   readonly takenAt: string
   readonly useExportDefaults: boolean
   readonly publishWhenReady: boolean
-  readonly upcoming: ReadonlyArray<string>
 }
 
 /** The Stage frame the crop is authored through, when the event landed in it.
@@ -450,47 +306,37 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         ),
     },
   ),
-  // The upload run: one stream drives the one item at `uploading`, emits each
-  // progress tick, and is torn down the moment the item leaves that state.
+  // The upload run: a stream reconciles the runs with the items at `uploading` and
+  // carries their progress. It reopens when that set changes.
   uploadRun: entry(
     {
-      itemId: S.Option(S.String),
+      ids: S.Array(S.String),
       tagIds: S.Array(S.String),
       takenAt: S.String,
       useExportDefaults: S.Boolean,
       publishWhenReady: S.Boolean,
-      upcoming: S.Array(S.String),
     },
     {
       modelToDependencies: (model): UploadDependencies => ({
-        itemId: inFlightUploadId(model),
+        ids: inFlightUploadIds(model),
         tagIds: model.uploadTagIds,
         takenAt: model.uploadTakenAt,
         useExportDefaults: model.uploadUseExportDefaults,
         publishWhenReady: model.uploadPublishWhenReady,
-        upcoming: model.queue
-          .filter((item) => item.status === 'pending')
-          .slice(0, UPLOAD_PREFETCH)
-          .map((item) => item.id),
       }),
       // Only a change of item restarts the stream. Progress messages update the
       // Model dozens of times a second; without this, every one would abort and
       // restart the request.
       keepAliveEquivalence: (a: UploadDependencies, b: UploadDependencies) =>
-        Option.getOrNull(a.itemId) === Option.getOrNull(b.itemId),
+        a.ids.length === b.ids.length && a.ids.every((id, index) => id === b.ids[index]),
       dependenciesToStream: ({
-        itemId,
+        ids,
         tagIds,
         takenAt,
         useExportDefaults,
         publishWhenReady,
-        upcoming,
       }: UploadDependencies) =>
-        Option.match(itemId, {
-          onNone: () => Stream.empty,
-          onSome: (id) =>
-            uploadStream(id, { tagIds, takenAt, useExportDefaults, publishWhenReady, upcoming }),
-        }),
+        uploadStream(ids, { tagIds, takenAt, useExportDefaults, publishWhenReady }),
     },
   ),
   // Nothing in the Model changes this listener's lifetime, so it is

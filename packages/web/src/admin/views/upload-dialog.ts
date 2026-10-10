@@ -4,11 +4,11 @@
  * Items, the batch options, and a footer whose primary action counts the
  * drafts it will create.
  *
- * The queue is sequential (the design's `1 OF 4 READY · 1 FAILED` is
- * one-at-a-time). `update` marks the next `pending` item `uploading`; the
- * upload itself is the `uploadRun` subscription in `subscriptions.ts`, keyed
- * on exactly that state, so the row is the only place the run is written
- * down. A failed item does not stop the chain — the next `pending` one starts.
+ * The queue runs a few items at once. `update` marks up to
+ * `UPLOAD_CONCURRENCY` `pending` items `uploading`; each row shows its pipeline
+ * step (WebP, Blurhash, upload). The work itself is `upload-run.ts`, driven by
+ * the `uploadRun` subscription keyed on exactly that state, so the row is the
+ * only place the run is written down. A failed item does not stop the chain.
  *
  * Four item states, per the design: `done`, `processing` (`AVIF · 2400, 1600,
  * 800 px`, fed by `E6`), `uploading` (a 2px bar and a byte readout), and
@@ -70,6 +70,8 @@ const detailText = (item: QueueItem): string => {
     case 'pending':
       return formatBytes(item.size)
     case 'uploading':
+      if (item.stage === 'webp') return 'Generating WebP renditions…'
+      if (item.stage === 'blurhash') return 'Computing blurhash…'
       return [`${formatBytes(item.loaded)} of ${formatBytes(item.size)}`, frame]
         .filter((part) => part !== '')
         .join(' · ')
@@ -108,7 +110,7 @@ const rowMeta = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
     case 'uploading':
       return h.span(
         [h.Class('shrink-0 type-exif tabular-nums text-role-text-secondary')],
-        [`${String(uploadPercent(item))}%`],
+        [item.stage === 'upload' ? `${String(uploadPercent(item))}%` : 'PREPARING'],
       )
     case 'processing':
       return h.span([h.Class('shrink-0 type-label text-role-text-secondary')], ['PROCESSING'])
@@ -127,9 +129,44 @@ const rowMeta = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
   }
 }
 
-/** The 2px bar the design draws under an uploading row. */
+const STAGES = [
+  ['webp', 'WEBP'],
+  ['blurhash', 'BLURHASH'],
+  ['upload', 'UPLOAD'],
+] as const
+
+/** The pipeline an uploading row is in, every step named: done steps are
+ *  struck by a check, the current one is solid, the rest are dim. */
+const stageSteps = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
+  const current = STAGES.findIndex(([stage]) => stage === (item.stage ?? 'webp'))
+  return h.div(
+    [h.Class('flex items-center gap-3 type-label'), h.AriaLabel(`${item.name} progress steps`)],
+    STAGES.map(([, label], index) =>
+      h.span(
+        [
+          h.Class(
+            index < current
+              ? 'flex items-center gap-1 text-role-text-secondary'
+              : index === current
+                ? 'flex items-center gap-1 text-role-text-primary'
+                : 'flex items-center gap-1 text-role-text-disabled',
+          ),
+        ],
+        [...(index < current ? [icon(h, Check, 'size-3')] : []), label],
+      ),
+    ),
+  )
+}
+
+/** The 2px bar the design draws under an uploading row. Before the request
+ *  starts there is nothing to count, so it pulses instead of sitting at 0%. */
 const uploadBar = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
-  const percent = uploadPercent(item)
+  const percent = item.stage === 'upload' ? uploadPercent(item) : 0
+  if (item.stage !== 'upload')
+    return h.div(
+      [h.Class('h-0.5 w-full animate-pulse bg-role-rule'), h.AriaLabel(`${item.name} preparing`)],
+      [],
+    )
   return h.div(
     [
       h.Class('relative h-0.5 w-full overflow-hidden bg-role-hairline'),
@@ -163,7 +200,7 @@ const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
         [h.Class('flex min-w-0 flex-1 flex-col gap-1.5')],
         [
           h.span([h.Class('truncate type-exif text-role-text-primary')], [item.name]),
-          ...(item.status === 'uploading' ? [uploadBar(item, h)] : []),
+          ...(item.status === 'uploading' ? [stageSteps(item, h), uploadBar(item, h)] : []),
           h.p([h.Class(`truncate ${detailClass(item)}`)], [detailText(item)]),
           ...exifLines(item, h),
         ],

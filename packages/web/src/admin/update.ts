@@ -80,6 +80,7 @@ import {
   EMPTY_BULK_DETAILS,
   libraryFiltersOfModel,
   Message,
+  UPLOAD_CONCURRENCY,
 } from './model'
 import type { DownloadState, LibraryPage, Message as Msg, Model } from './model'
 import { originalUrl } from '@/lib/image'
@@ -357,33 +358,44 @@ const restorePending = (model: Model, itemId: string): Model =>
       model.queue.map((item) =>
         item.id === itemId
           ? // `error` is optional; spread-clear it (modifyFields cannot add keys).
-            { ...item, status: 'pending' as const, loaded: 0, error: undefined }
+            { ...item, status: 'pending' as const, stage: undefined, loaded: 0, error: undefined }
           : item,
       ),
   })
 
-/** The one way a run advances: mark the item `uploading`. The upload itself is
- *  a subscription keyed on exactly that state, so this writes the state and
- *  nothing else — the runtime tears the previous stream down and opens the
- *  next. Every chain-start site goes through here so exactly one row is ever
- *  in-flight, and a retry starts its bar at zero. */
-const startItem = (model: Model, itemId: string): UpdateReturn => ({
-  model: modifyFields(model, {
-    queue: () =>
-      model.queue.map((item) =>
-        item.id === itemId
-          ? modifyFields(item, { status: () => 'uploading', loaded: () => 0 })
-          : item,
-      ),
-  }),
-})
+/** The one way a run advances: mark pending items `uploading`, up to the
+ *  concurrency limit. The work itself is a subscription keyed on exactly that
+ *  state, so this writes the state and nothing else. Every chain-start site goes
+ *  through here, and a started row begins its pipeline (and its bar) at zero. */
+const startItems = (model: Model): UpdateReturn => {
+  const active = model.queue.filter((item) => item.status === 'uploading').length
+  const free = new Set(
+    model.queue
+      .filter((item) => item.status === 'pending')
+      .slice(0, Math.max(0, UPLOAD_CONCURRENCY - active))
+      .map((item) => item.id),
+  )
+  if (free.size === 0) return { model }
+  return {
+    model: modifyFields(model, {
+      queue: () =>
+        model.queue.map((item) =>
+          free.has(item.id)
+            ? { ...item, status: 'uploading' as const, stage: 'webp' as const, loaded: 0 }
+            : item,
+        ),
+    }),
+  }
+}
 
 /** Snapshot the finished batch's counts BEFORE any queue cleanup, so the
  *  toast stays truthful no matter what gets released afterwards. A clean
  *  batch clears itself; a partial one keeps its rows for retry. */
 const runNextOrFinish = (model: Model): UpdateReturn => {
-  const pending = model.queue.find((item) => item.status === 'pending')
-  if (pending !== undefined) return startItem(model, pending.id)
+  const started = startItems(model)
+  if (started.model !== model) return started
+  // Others are still in flight: the batch is not over.
+  if (model.queue.some((item) => item.status === 'uploading')) return { model }
   const uploadedCount = model.queue.filter(
     (item) => item.status === 'done' || item.status === 'processing',
   ).length
@@ -816,29 +828,27 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       model: modifyFields(model, { uploadPublishWhenReady: () => isChecked }),
     }),
     StartUploads: () => {
-      const pending = model.queue.find((item) => item.status === 'pending')
-      if (pending === undefined) return { model }
-      return startItem(
+      if (!model.queue.some((item) => item.status === 'pending')) return { model }
+      return startItems(
         modifyFields(model, { uploading: () => true, batchTotal: () => model.queue.length }),
-        pending.id,
       )
     },
     CancelUploads: () => {
       // The in-flight item goes back to `pending`: that is the Model change
       // that tears the upload subscription down, and the scope's release
       // aborts the request. Pending rows stay queued.
-      const inFlight = model.queue.find((item) => item.status === 'uploading')
-      const stopped = inFlight === undefined ? model : restorePending(model, inFlight.id)
+      const stopped = model.queue
+        .filter((item) => item.status === 'uploading')
+        .reduce((acc, item) => restorePending(acc, item.id), model)
       return { model: modifyFields(stopped, { uploading: () => false }) }
     },
     RetryUpload: ({ id }) => {
       const retried = restorePending(model, id)
       // A batch already in flight picks the item up on its next chain step;
       // an idle batch starts a fresh run here.
-      if (model.uploading) return { model: retried }
-      return startItem(
+      if (model.uploading) return startItems(retried)
+      return startItems(
         modifyFields(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
-        id,
       )
     },
     RetryAllFailed: () => {
@@ -851,16 +861,19 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           model.queue.map((item) =>
             item.status === 'failed'
               ? // `error` is optional; spread-clear it (modifyFields cannot add keys) and reset the bar.
-                { ...item, status: 'pending' as const, loaded: 0, error: undefined }
+                {
+                  ...item,
+                  status: 'pending' as const,
+                  stage: undefined,
+                  loaded: 0,
+                  error: undefined,
+                }
               : item,
           ),
       })
-      if (model.uploading) return { model: retried }
-      const first = failedIds[0]
-      if (first === undefined) return { model: retried }
-      return startItem(
+      if (model.uploading) return startItems(retried)
+      return startItems(
         modifyFields(retried, { uploading: () => true, batchTotal: () => retried.queue.length }),
-        first,
       )
     },
     // The frame the client measured, so the detail line can name it while the
@@ -879,6 +892,11 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           model.queue.map((item) =>
             item.id === itemId ? { ...item, exifFacts: facts, exifProblem: problem } : item,
           ),
+      }),
+    }),
+    UploadItemStage: ({ itemId, stage }) => ({
+      model: modifyFields(model, {
+        queue: () => model.queue.map((item) => (item.id === itemId ? { ...item, stage } : item)),
       }),
     }),
     UploadProgress: ({ itemId, loaded }) => ({
