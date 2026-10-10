@@ -189,11 +189,14 @@ describe('an in-app navigation', () => {
     const onAPhoto = init(at('/admin/photos/photo-1')).model
     const result = update(onAPhoto, onUrlChange(at('/admin')))
     expect(result.model.route).toEqual(libraryRoute())
-    expect(commandNames(result.commands)).toEqual([...SHELL_READS, 'FetchPhotos'])
+    expect(commandNames(result.commands)).toEqual(['FetchSession', 'FetchCounts', 'FetchPhotos'])
   })
 
-  it('re-reads the shell but not the list when the route stays', () => {
-    expect(commandNames(update(library, onUrlChange(at('/admin'))).commands)).toEqual(SHELL_READS)
+  it('re-reads the session and counts but not the list when the route stays', () => {
+    expect(commandNames(update(library, onUrlChange(at('/admin'))).commands)).toEqual([
+      'FetchSession',
+      'FetchCounts',
+    ])
   })
 
   it('re-reads the photo and its presentation when the id changes within the Photo route', () => {

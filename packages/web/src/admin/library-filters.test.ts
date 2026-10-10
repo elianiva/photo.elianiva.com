@@ -113,7 +113,7 @@ describe('the URL is the filter', () => {
     const picked = fold(Message.SelectedStatusFilter({ value: 'draft' }))
     expect(picked.model.statusFilter).toBe('draft')
     expect(picked.commands).toEqual([
-      { name: 'FetchPhotos', args: { q: '', status: 'draft' } },
+      { name: 'FetchPhotos', args: { q: '', limit: 10, status: 'draft' } },
       { name: 'ReplaceUrl', args: { url: '/admin?status=draft' } },
     ])
   })
@@ -122,7 +122,7 @@ describe('the URL is the filter', () => {
     const sorted = fold(Message.SelectedSortFilter({ value: 'oldest' }))
     expect(sorted.commands[0]).toEqual({
       name: 'FetchPhotos',
-      args: { q: '', sort: { key: 'takenAt', direction: 'asc' } },
+      args: { q: '', limit: 10, sort: { key: 'takenAt', direction: 'asc' } },
     })
     expect(sorted.commands[1]).toEqual({ name: 'ReplaceUrl', args: { url: '/admin?sort=oldest' } })
     // One fact, two places on the page: the Model's sort is what both the
@@ -180,7 +180,7 @@ describe('the URL is the filter', () => {
         args: command.args ?? {},
       })),
     ).toEqual([
-      { name: 'FetchPhotos', args: { q: '' } },
+      { name: 'FetchPhotos', args: { q: '', limit: 10 } },
       { name: 'ReplaceUrl', args: { url: '/admin?view=grid' } },
     ])
   })
@@ -194,19 +194,18 @@ describe('a reload restores the filtered page', () => {
       (coldLoad.commands ?? [])
         .filter((command) => command.name === 'FetchPhotos')
         .map((command) => command.args),
-    ).toEqual([{ q: '', status: 'draft' }])
+    ).toEqual([{ q: '', limit: 10, status: 'draft' }])
   })
 
   it('a Back press to a filter the Model does not hold re-reads it', () => {
     // The Model holds status=draft, route and all; the URL moves back to the
-    // unfiltered Library. The shell is re-read and the list is read under the
+    // unfiltered Library. The session and counts are re-read and the list is read under the
     // new filter.
     const moved = update(cold('/admin?status=draft'), Message.ChangedUrl({ url: at('/admin') }))
     expect(moved.model.statusFilter).toBe('all')
     expect((moved.commands ?? []).map((command) => command.name)).toEqual([
       'FetchSession',
       'FetchCounts',
-      'FetchTags',
       'FetchPhotos',
     ])
   })

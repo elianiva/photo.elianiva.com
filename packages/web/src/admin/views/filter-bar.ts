@@ -49,8 +49,8 @@ import { LayoutGrid, List } from 'lucide'
 import * as Segment from '@/components/ui/segment'
 import * as Select from '@/components/ui/select'
 
-import { Message as M } from '../model'
-import type { GridCols, Model, Msg } from '../model'
+import { Message as M, PAGE_SIZES } from '../model'
+import type { GridCols, Model, Msg, PageSize } from '../model'
 import { LIBRARY_RATIO_FILTERS } from '../route'
 import type { LibraryRatioFilter, LibraryStatusFilter } from '../route'
 import { libraryViewOf } from '../route'
@@ -101,6 +101,12 @@ const colsOptions: ReadonlyArray<Segment.SegmentOption<GridCols>> = COL_CHOICES.
   value: cols,
   label: String(cols),
   ariaLabel: `${String(cols)} columns`,
+}))
+
+const pageSizeOptions: ReadonlyArray<Segment.SegmentOption<PageSize>> = PAGE_SIZES.map((size) => ({
+  value: size,
+  label: String(size),
+  ariaLabel: `${String(size)} per page`,
 }))
 
 const toSelect = <T extends string | number>(
@@ -169,6 +175,14 @@ export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
         model.sortFilter,
         SORT_OPTIONS,
         (value) => M.SelectedSortFilter({ value }),
+        h,
+      ),
+      dropdown(
+        'library-page-size',
+        'PER PAGE',
+        model.pageSize,
+        pageSizeOptions,
+        (size) => M.SelectedPageSize({ size }),
         h,
       ),
       Segment.segmentGroup(

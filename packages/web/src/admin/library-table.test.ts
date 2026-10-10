@@ -72,7 +72,7 @@ const PAGE: ReadonlyArray<PhotoWithTags> = Array.from({ length: 7 }, (_, index) 
 const SECOND = Array.from({ length: 7 }, (_, index) => row(index + 8))
 const NEXT_CURSOR = 'cursor-after-page-one'
 /** The filter and the cursor a command issued from the first page carries. */
-const PAGE_ARGS = { q: '', cursor: '' }
+const PAGE_ARGS = { q: '', limit: 10, cursor: '' }
 
 const listed = (
   photos: ReadonlyArray<PhotoWithTags> = PAGE,
@@ -359,6 +359,21 @@ describe('the row ⋯ menu', () => {
 })
 
 describe('paging', () => {
+  it('a page size pick returns to page one and re-reads with that limit', () => {
+    const paged = fold(
+      Message.SteppedLibraryPage({ delta: 1 }),
+      listed(SECOND, 412, 'cursor-after-page-two'),
+    )
+    const result = update(paged.model, Message.SelectedPageSize({ size: 50 }))
+    expect(result.model.pageSize).toBe(50)
+    expect(result.model.libraryPage).toBe(0)
+    expect(result.commands?.map((command) => command.name)).toContain('PersistPageSize')
+    expect(result.commands?.find((command) => command.name === 'FetchPhotos')?.args).toEqual({
+      q: '',
+      limit: 50,
+    })
+  })
+
   it('next resumes at the keyset cursor and reports the new range', () => {
     const paged = fold(
       Message.SteppedLibraryPage({ delta: 1 }),
@@ -366,7 +381,7 @@ describe('paging', () => {
     )
     expect(paged.commands[0]).toEqual({
       name: 'FetchPhotos',
-      args: { q: '', cursor: NEXT_CURSOR },
+      args: { q: '', limit: 10, cursor: NEXT_CURSOR },
     })
     // The rows the answer carried are the rows the page is now over — the range
     // the pager prints is read off them, not off the page it was on.
@@ -392,7 +407,7 @@ describe('paging', () => {
       Message.SteppedLibraryPage({ delta: -1 }),
     )
     expect(back.commands.map((command) => command.name)).toEqual(['FetchPhotos', 'FetchPhotos'])
-    expect(back.commands[1]?.args).toEqual({ q: '', cursor: '' })
+    expect(back.commands[1]?.args).toEqual({ q: '', limit: 10, cursor: '' })
     expect(back.model.libraryPage).toBe(0)
     expect(back.model.libraryCursors).toEqual([''])
   })

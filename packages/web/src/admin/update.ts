@@ -9,7 +9,7 @@
 import { Option } from 'effect'
 import { Multi } from '@foldkit/ui/combobox'
 import { modifyFields } from 'foldkit/struct'
-import { storedCols } from './prefs'
+import { storedCols, storedPageSize } from './prefs'
 import { storedAdminTheme } from '@/lib/theme'
 import { Runtime } from 'foldkit'
 import { Transition } from 'foldkit/route'
@@ -32,6 +32,7 @@ import {
   ExportCsvIndexCmd,
   FetchCountsCmd,
   FetchLibraryPageCmd,
+  PersistPageSizeCmd,
   FetchPhotoCmd,
   FetchPhotosCmd,
   FetchPresentationCmd,
@@ -164,6 +165,7 @@ const initialModel = (route: AppRoute): Model => {
     ratioFilter: filters.ratio,
     sortFilter: filters.sort,
     cols: storedCols(),
+    pageSize: storedPageSize(),
     theme: storedAdminTheme(),
     navOpen: false,
     segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
@@ -213,7 +215,10 @@ const applyRoute = (model: Model, transition: AdminTransition): UpdateReturn => 
   // entering the Library because the shell needs it on every route — the
   // Library's Bulk Bar and the Editor read it, and a route that listed none
   // would offer `Add tag` an empty set of choices.
-  const shellCommands: Commands = [FetchSessionCmd(), FetchCountsCmd(), FetchTagsCmd()]
+  const isColdLoad = Option.isNone(transition.maybePreviousRoute)
+  const shellCommands: Commands = isColdLoad
+    ? [FetchSessionCmd(), FetchCountsCmd(), FetchTagsCmd()]
+    : [FetchSessionCmd(), ...(transition.nextRoute._tag === 'Library' ? [FetchCountsCmd()] : [])]
   const nextRoute = transition.nextRoute
   // The Settings page is a form over a row, and a form over a row is only
   // truthful if the row behind it is current. Fetched on entering, never
@@ -328,7 +333,7 @@ const withLibraryFilters = (model: Model, filters: LibraryFilters, resetCursors:
  *  a Back press to a visited page both have one — and by walking the keyset
  *  when it cannot, which is a cold load that deep-linked into a page. */
 const libraryLoadCommand = (model: Model, filters: LibraryFilters): Commands => {
-  const args = listArgsOf(filters)
+  const args = listArgsOf(filters, model.pageSize)
   const cursor = model.libraryCursors[filters.page]
   if (cursor === undefined) return [FetchLibraryPageCmd({ ...args, page: filters.page })]
   // The first page has no cursor to name, and naming an empty one would put a
@@ -448,7 +453,7 @@ const markItem = (
  *  accident while the operator is looking at page three, nor drop a filter the
  *  operator put on. */
 const currentPage = (model: Model) => ({
-  ...listArgsOf(libraryFiltersOfModel(model)),
+  ...listArgsOf(libraryFiltersOfModel(model), model.pageSize),
   cursor: model.libraryCursors[model.libraryPage] ?? '',
 })
 
@@ -547,7 +552,7 @@ const libraryFilterChange = (
   // them.
   const onLibrary = model.route._tag === 'Library'
   if (refetchRows && onLibrary && filters.status !== 'scheduled') {
-    commands.unshift(FetchPhotosCmd(listArgsOf(filters)))
+    commands.unshift(FetchPhotosCmd(listArgsOf(filters, model.pageSize)))
   }
   return { model: next, commands }
 }
@@ -711,6 +716,23 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       commands: [PersistColsCmd({ cols })],
     }),
     CompletedPersistCols: () => ({ model }),
+    // A different page size makes every held cursor and the page number
+    // meaningless, so this is a filter change with a new `limit`: back to page
+    // one, rows re-read.
+    SelectedPageSize: ({ size }) => {
+      if (size === model.pageSize) return { model }
+      const resized = modifyFields(model, { pageSize: () => size })
+      const changed = libraryFilterChange(
+        resized,
+        { ...libraryFiltersOfModel(resized), page: 0 },
+        true,
+      )
+      return {
+        model: changed.model,
+        commands: [...(changed.commands ?? []), PersistPageSizeCmd({ size })],
+      }
+    },
+    CompletedPersistPageSize: () => ({ model }),
 
     // ----- the Desk's theme ------------------------------------------------------
     ToggledTheme: () => {
@@ -1370,7 +1392,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           status: () => 'loading',
         }),
         commands: [
-          FetchPhotosCmd({ ...listArgsOf(filters), cursor }),
+          FetchPhotosCmd({ ...listArgsOf(filters, model.pageSize), cursor }),
           ReplaceUrlCmd({ url: libraryUrl(filters) }),
         ],
       }

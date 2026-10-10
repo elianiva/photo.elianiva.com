@@ -133,3 +133,39 @@ const readCols = (store: KeyValueStore.KeyValueStore): Effect.Effect<GridColsTyp
 /** Persist the column count. */
 const writeCols = (store: KeyValueStore.KeyValueStore, cols: GridColsType): Effect.Effect<void> =>
   store.set(COLS_STORAGE_KEY, String(cols)).pipe(Effect.catch(() => Effect.void))
+
+// ---------------------------------------------------------------------------
+// page size
+// ---------------------------------------------------------------------------
+
+export const PAGE_SIZE_STORAGE_KEY = 'photo-admin:library:page-size'
+
+/** Rows per Library page. The schema is the list, so a stored value outside it
+ *  falls back to the default instead of reaching the RPC. */
+export const PAGE_SIZES = [10, 50, 100] as const
+export const PageSize = S.Literals(PAGE_SIZES)
+export type PageSize = typeof PageSize.Type
+export const DEFAULT_PAGE_SIZE: PageSize = 10
+
+/** The stored page size, or the default. Total, and synchronous because `init`
+ *  is. */
+export const storedPageSize = (): PageSize => {
+  if (typeof window === 'undefined') return DEFAULT_PAGE_SIZE
+  try {
+    const n = Number(window.localStorage.getItem(PAGE_SIZE_STORAGE_KEY))
+    return PAGE_SIZES.find((size) => size === n) ?? DEFAULT_PAGE_SIZE
+  } catch {
+    return DEFAULT_PAGE_SIZE
+  }
+}
+
+/** Persist the page size; a store that refuses is not something the operator
+ *  can act on. */
+export const writePageSize = (size: PageSize): void => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(size))
+  } catch {
+    // nothing to do
+  }
+}

@@ -11,12 +11,12 @@ import type { HtmlBuilder } from 'foldkit/html'
 
 import { pager } from '@/components/ui/pager'
 
-import { LIBRARY_PAGE_SIZE, Message as M } from '../model'
+import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
 import type { Child } from './shared'
 
 export const libraryPager = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const from = model.libraryPage * LIBRARY_PAGE_SIZE + 1
+  const from = model.libraryPage * model.pageSize + 1
   return pager(
     {
       from,

@@ -29,13 +29,12 @@ import {
   DownloadFormat,
   DownloadFrame,
   GridCols,
-  LIBRARY_PAGE_SIZE,
   Message,
   PhotoDetails,
   fileStore,
 } from './model'
 import type { Counts as CountsType, LibraryPage } from './model'
-import { GridPrefs, GridPrefsLive } from './prefs'
+import { DEFAULT_PAGE_SIZE, GridPrefs, GridPrefsLive, PageSize, writePageSize } from './prefs'
 import { Theme, writeAdminTheme } from '@/lib/theme'
 
 /** `ListLibraryRows` as the wire delivers it: the page's rows under `items`,
@@ -102,7 +101,7 @@ export const FetchCountsCmd = Command.define('FetchCounts', {
 /** The RPC's list args for a filter. `status` and `ratio` are not stored
  *  values; the same function decides that as the URL does, so no caller can
  *  send the client's `all` to a column that only knows `draft`. */
-export const listArgsOf = (filters: LibraryFilters): PhotoListArgs => {
+export const listArgsOf = (filters: LibraryFilters, limit: number): PhotoListArgs => {
   const status: PhotoStatus | undefined =
     filters.status === 'all' || filters.status === 'scheduled' ? undefined : filters.status
   const ratio: PhotoRatio | undefined = filters.ratio === 'any' ? undefined : filters.ratio
@@ -110,6 +109,7 @@ export const listArgsOf = (filters: LibraryFilters): PhotoListArgs => {
     ...(status === undefined ? {} : { status }),
     ...(ratio === undefined ? {} : { ratio }),
     q: filters.q,
+    limit,
     ...(filters.sort === 'newest' ? {} : { sort: librarySortOf(filters.sort) }),
   }
 }
@@ -126,6 +126,7 @@ const photoListFields = {
   q: S.String,
   sort: S.optional(LibrarySort),
   cursor: S.optional(S.String),
+  limit: S.optional(S.Number),
 }
 export const PhotoListArgs = S.Struct(photoListFields)
 export type PhotoListArgs = typeof PhotoListArgs.Type
@@ -143,6 +144,7 @@ const listPayload = (args: {
   status?: PhotoStatus | undefined
   ratio?: PhotoRatio | undefined
   sort?: typeof LibrarySort.Type | undefined
+  limit?: number | undefined
 }) =>
   rpcAdmin<PhotoPage>('ListLibraryRows', {
     ...(args.q === '' ? {} : { q: args.q }),
@@ -150,7 +152,7 @@ const listPayload = (args: {
     ...(args.status === undefined ? {} : { status: args.status }),
     ...(args.ratio === undefined ? {} : { ratio: args.ratio }),
     ...(args.sort === undefined ? {} : { sort: args.sort }),
-    limit: LIBRARY_PAGE_SIZE,
+    limit: args.limit ?? DEFAULT_PAGE_SIZE,
   })
 
 const toLibraryPage = (page: PhotoPage): LibraryPage => ({
@@ -338,9 +340,9 @@ export const PersistThemeCmd = Command.define('PersistTheme', {
 export const FetchPhotosCmd = Command.define('FetchPhotos', {
   args: photoListFields,
   messages: [Message.SucceededFetchPhotos, Message.FailedRpc],
-  execute: ({ q, cursor, status, ratio, sort }) =>
+  execute: ({ q, cursor, status, ratio, sort, limit }) =>
     Effect.map(
-      listPayload({ q, ...(cursor === undefined ? {} : { cursor }), status, ratio, sort }),
+      listPayload({ q, ...(cursor === undefined ? {} : { cursor }), status, ratio, sort, limit }),
       (page) => Message.SucceededFetchPhotos(toLibraryPage(page)),
     ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
@@ -371,6 +373,16 @@ export const FetchLibraryPageCmd = Command.define('FetchLibraryPage', {
         total: target.total,
       })
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+export const PersistPageSizeCmd = Command.define('PersistPageSize', {
+  args: { size: PageSize },
+  messages: [Message.CompletedPersistPageSize],
+  execute: ({ size }) =>
+    Effect.sync(() => {
+      writePageSize(size)
+      return Message.CompletedPersistPageSize()
+    }),
 })
 
 export const FetchTagsCmd = Command.define('FetchTags', {

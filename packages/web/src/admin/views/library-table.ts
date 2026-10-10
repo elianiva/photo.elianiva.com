@@ -45,7 +45,7 @@ import { smallUrl } from '@/lib/image'
 import { cn } from '@/lib/utils'
 
 import { bulkDetailsPatch, parseExifNumber, parseShutter } from '../editor'
-import { LIBRARY_PAGE_SIZE, Message as M } from '../model'
+import { Message as M } from '../model'
 import type { BulkDetailField, Model, Msg } from '../model'
 import { libraryEmpty } from './library-empty'
 import { libraryPager } from './library-pager'
@@ -458,6 +458,8 @@ const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
 /** The design's loading state: rows, not a spinner, drawn on the Library Row's
  *  own geometry so the Table Head's column widths hold while the page arrives
  *  and the table does not jump when it does. */
+const SKELETON_ROWS = 10
+
 const skeletonTable = (h: HtmlBuilder<Msg>): Child => {
   const block = 'bg-role-surface-container animate-pulse'
   const one = (extra: string): Html => h.div([h.Class(cn('h-3', block, extra))], [])
@@ -484,7 +486,7 @@ const skeletonTable = (h: HtmlBuilder<Msg>): Child => {
     )
   return h.div(
     [h.DataAttribute('slot', 'library-skeleton')],
-    [tableHead({}, h), ...Array.from({ length: LIBRARY_PAGE_SIZE }, skeletonRow)],
+    [tableHead({}, h), ...Array.from({ length: SKELETON_ROWS }, skeletonRow)],
   )
 }
 

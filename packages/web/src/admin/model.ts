@@ -37,6 +37,7 @@ import {
   libraryViewOf,
 } from './route'
 import type { LibraryFilters } from './route'
+import { PAGE_SIZES, PageSize } from './prefs'
 import { SettingsDraft } from './settings-draft'
 import { Theme } from '@/lib/theme'
 
@@ -118,10 +119,7 @@ export const libraryPageFields = {
 export const LibraryPage = S.Struct(libraryPageFields)
 export type LibraryPage = typeof LibraryPage.Type
 
-/** Photos on one page of the Library table. The design draws seven and labels
- *  the Pager `1–7 OF 412` in two separate frames, so the page size is the
- *  canvas's number and this is the one place it is written down. */
-export const LIBRARY_PAGE_SIZE = 7
+export { PAGE_SIZES, PageSize }
 
 export const BULK_DETAIL_FIELDS = [
   'location',
@@ -385,6 +383,9 @@ export const Model = S.Struct({
   // grid density: number of square-tile columns (persisted to localStorage)
   cols: GridCols,
 
+  /** Rows per Library page (persisted to localStorage). */
+  pageSize: PageSize,
+
   // the Desk's light or dark branch (persisted to localStorage)
   theme: Theme,
 
@@ -519,6 +520,9 @@ export const Message = defineMessageUnion({
 
   // grid density and view
   SelectedCols: { cols: GridCols },
+  /** Rows per page. Starts the Library over from the first page. */
+  SelectedPageSize: { size: PageSize },
+  CompletedPersistPageSize: {},
   /** The Library's view mode. The URL is the state, so this only prints it:
    *  the arm writes the route and replaces the URL, and `ChangedUrl` reads it
    *  back through the same table. */
