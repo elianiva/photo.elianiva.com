@@ -25,7 +25,6 @@ import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
 import { AppRoute } from '../route'
 import { SEARCH_INPUT_ID, searchShortcutLabel } from '../subscriptions'
-import { settingsStamp } from './settings'
 import type { Child } from './shared'
 
 export interface PageHead {
@@ -37,10 +36,6 @@ export interface PageHead {
   readonly isSearchable: boolean
   /** Whether the bar carries the primary Upload button. */
   readonly isUploadable: boolean
-  /** The stamp the bar prints beside the title, for the one route that has a
-   *  form whose staleness is a thing the operator has to be told about. Absent
-   *  on every other route, which has nothing to be stale against. */
-  readonly stamp?: string
 }
 
 /** The head for a route. One table, read by the view and by the document title
@@ -63,7 +58,6 @@ export const pageHeadOf = (model: Model): PageHead =>
       // The design's Settings header carries the stamp and nothing else: no
       // search, and no Upload button over a page with no list to upload into.
       isUploadable: false,
-      stamp: settingsStamp(model),
     }),
     Atoms: (): PageHead => ({ title: 'Atoms', isSearchable: false, isUploadable: false }),
     Photo: (): PageHead => ({
@@ -137,18 +131,6 @@ export const pageHead = (model: Model, h: HtmlBuilder<Msg>, gutter: string): Chi
         [h.Class('flex flex-wrap items-end justify-between gap-x-4 gap-y-3')],
         [
           h.h1([h.Class('type-headline text-role-text-primary')], [head.title]),
-          ...(head.stamp === undefined
-            ? []
-            : [
-                h.span(
-                  [
-                    h.AriaLive('polite'),
-                    h.Class('type-exif text-role-text-disabled'),
-                    h.DataAttribute('slot', 'page-head-stamp'),
-                  ],
-                  [head.stamp],
-                ),
-              ]),
           headerActions(head, model, h),
         ],
       ),

@@ -137,106 +137,118 @@ const uploadBar = (item: QueueItem, h: HtmlBuilder<Msg>): Child => {
   )
 }
 
+/** The row's four columns: thumbnail, name over detail, the status, and a
+ *  fixed-width action cell that is there on every row — so the status column
+ *  ends in the same place whether or not a row has something to press. */
 const queueRow = (item: QueueItem, h: HtmlBuilder<Msg>): Child =>
   h.li(
-    [h.Key(item.id), h.Class('flex items-center gap-3 border-b border-role-hairline py-3')],
+    [h.Key(item.id), h.Class('flex items-center gap-4 border-b border-role-hairline py-3')],
     [
       queueThumbnail(item, h),
       h.div(
-        [h.Class('flex min-w-0 flex-1 flex-col gap-1')],
+        [h.Class('flex min-w-0 flex-1 flex-col gap-1.5')],
         [
-          h.div(
-            [h.Class('flex items-center justify-between gap-2')],
-            [
-              h.span(
-                [h.Class('min-w-0 flex-1 truncate type-exif text-role-text-primary')],
-                [item.name],
-              ),
-              rowMeta(item, h),
-            ],
-          ),
+          h.span([h.Class('truncate type-exif text-role-text-primary')], [item.name]),
           ...(item.status === 'uploading' ? [uploadBar(item, h)] : []),
           h.p([h.Class(`truncate ${detailClass(item)}`)], [detailText(item)]),
         ],
       ),
-      ...(item.status === 'failed'
-        ? [
-            Button.button(
-              {
-                onClick: M.RetryUpload({ id: item.id }),
-                variant: 'ghost',
-                attributes: [h.AriaLabel(`Retry ${item.name}`)],
-              },
-              'Retry',
-              h,
-            ),
-          ]
-        : []),
-      ...(item.status === 'pending' || item.status === 'failed'
-        ? [
-            Button.button(
-              {
-                onClick: M.RemoveQueueItem({ id: item.id }),
-                variant: 'ghost',
-                attributes: [h.AriaLabel(`Remove ${item.name}`)],
-              },
-              icon(h, X, 'size-4'),
-              h,
-            ),
-          ]
-        : []),
+      h.div([h.Class('flex w-20 shrink-0 justify-end')], [rowMeta(item, h)]),
+      h.div(
+        [h.Class('flex w-[76px] shrink-0 items-center justify-end')],
+        [
+          ...(item.status === 'failed'
+            ? [
+                Button.button(
+                  {
+                    onClick: M.RetryUpload({ id: item.id }),
+                    variant: 'ghost',
+                    className: 'px-2',
+                    attributes: [h.AriaLabel(`Retry ${item.name}`)],
+                  },
+                  'Retry',
+                  h,
+                ),
+              ]
+            : []),
+          ...(item.status === 'pending' || item.status === 'failed'
+            ? [
+                Button.button(
+                  {
+                    onClick: M.RemoveQueueItem({ id: item.id }),
+                    variant: 'ghost',
+                    className: 'w-9 shrink-0 px-0',
+                    attributes: [h.AriaLabel(`Remove ${item.name}`)],
+                  },
+                  icon(h, X, 'size-4'),
+                  h,
+                ),
+              ]
+            : []),
+        ],
+      ),
     ],
   )
 
-const uploadOptions = (model: Model, h: HtmlBuilder<Msg>): ReadonlyArray<Child> => [
+/** The batch's options: where the files land (tags, a date) and what happens
+ *  to them (export defaults, publishing). Each toggle says what it does. */
+const uploadOptions = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex flex-col gap-1.5')],
+    [h.Class('flex flex-col gap-5')],
     [
-      h.span([h.Class('type-label text-role-text-secondary')], ['TAGS']),
-      // The design's SERIES select is gone (decision 5): grouping is Tags, and
-      // this is the picker the dialog already carried.
-      embedCombo(model, h),
-    ],
-  ),
-  Input.input(
-    {
-      id: 'upload-taken-at',
-      label: 'TAKEN AT',
-      description: 'Applied to every file in this batch — overrides EXIF.',
-      type: 'datetime-local',
-      value: model.uploadTakenAt,
-      onInput: (value) => M.SetUploadTakenAt({ value }),
-    },
-    h,
-  ),
-  h.div(
-    [h.Class('flex flex-col')],
-    [
-      // Reads the Settings singleton (fetched when the dialog opens), so a
-      // new Photo's export columns are seeded from the stored defaults.
-      ToggleRow.toggleRow(
+      h.div(
+        [h.Class('flex flex-col gap-2')],
+        [
+          h.span([h.Class('type-label text-role-text-secondary')], ['TAGS']),
+          // The design's SERIES select is gone (decision 5): grouping is Tags, and
+          // this is the picker the dialog already carried.
+          embedCombo(model, h),
+        ],
+      ),
+      Input.input(
         {
-          id: 'upload-use-export-defaults',
-          label: 'Use export defaults',
-          isChecked: model.uploadUseExportDefaults,
-          onToggle: (isChecked) => M.SetUploadUseExportDefaults({ isChecked }),
+          id: 'upload-taken-at',
+          label: 'TAKEN AT',
+          description: 'Optional. Applied to every file in this batch, and overrides EXIF.',
+          type: 'datetime-local',
+          value: model.uploadTakenAt,
+          onInput: (value) => M.SetUploadTakenAt({ value }),
         },
         h,
       ),
-      // Off is the dialog's default, so an upload lands as a draft. Turning it
-      // on publishes at creation.
-      ToggleRow.toggleRow(
-        {
-          id: 'upload-publish-when-ready',
-          label: 'Publish when ready',
-          isChecked: model.uploadPublishWhenReady,
-          onToggle: (isChecked) => M.SetUploadPublishWhenReady({ isChecked }),
-        },
-        h,
+      h.div(
+        [h.Class('flex flex-col divide-y divide-role-hairline border border-role-hairline px-4')],
+        [
+          // Reads the Settings singleton (fetched when the dialog opens), so a
+          // new Photo's export columns are seeded from the stored defaults.
+          ToggleRow.toggleRow(
+            {
+              id: 'upload-use-export-defaults',
+              label: 'Use export defaults',
+              description: 'Format, quality and metadata policy from Settings.',
+              isChecked: model.uploadUseExportDefaults,
+              onToggle: (isChecked) => M.SetUploadUseExportDefaults({ isChecked }),
+              className: 'py-3',
+            },
+            h,
+          ),
+          // Off is the dialog's default, so an upload lands as a draft. Turning it
+          // on publishes at creation.
+          ToggleRow.toggleRow(
+            {
+              id: 'upload-publish-when-ready',
+              label: 'Publish when ready',
+              description: 'Off keeps every photograph a draft until you publish it.',
+              isChecked: model.uploadPublishWhenReady,
+              onToggle: (isChecked) => M.SetUploadPublishWhenReady({ isChecked }),
+              className: 'py-3',
+            },
+            h,
+          ),
+        ],
       ),
     ],
-  ),
-]
+  )
 
 /** The footer's counts, computed once so the view and its tests read the same
  *  numbers. `draftCount` is what the primary label counts: every queued file
@@ -286,15 +298,20 @@ const uploadFooter = (model: Model, h: HtmlBuilder<Msg>): Child => {
     ? M.CancelUploads()
     : M.GotUploadDialogMessage({ message: Dialog.Message.RequestedClose() })
 
-  return Dialog.footer(
-    { className: 'mt-3' },
+  return h.div(
+    [
+      h.Class(
+        'flex shrink-0 items-center justify-between gap-4 border-t border-role-hairline px-6 py-4',
+      ),
+      h.DataAttribute('slot', 'dialog-footer'),
+    ],
     [
       h.div(
-        [h.Class('flex flex-wrap items-center gap-2')],
+        [h.Class('flex min-w-0 items-center gap-2')],
         [
           h.span(
             [
-              h.Class('type-exif text-role-text-disabled'),
+              h.Class('type-exif whitespace-nowrap text-role-text-disabled'),
               h.DataAttribute('slot', 'upload-footer-status'),
             ],
             [uploadFooterStatus(summary)],
@@ -302,7 +319,11 @@ const uploadFooter = (model: Model, h: HtmlBuilder<Msg>): Child => {
           ...(summary.failed > 0
             ? [
                 Button.button(
-                  { onClick: M.RetryAllFailed(), variant: 'ghost' },
+                  {
+                    onClick: M.RetryAllFailed(),
+                    variant: 'ghost',
+                    className: 'whitespace-nowrap px-2',
+                  },
                   `Retry all (${String(summary.failed)})`,
                   h,
                 ),
@@ -311,13 +332,14 @@ const uploadFooter = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
       ),
       h.div(
-        [h.Class('flex items-center gap-2')],
+        [h.Class('flex shrink-0 items-center gap-2')],
         [
           Button.button({ onClick: onCancel, variant: 'secondary' }, 'Cancel', h),
           Button.button(
             {
               onClick: onPrimary,
               isDisabled: model.uploading || summary.draftCount === 0,
+              className: 'whitespace-nowrap',
             },
             primaryLabel,
             h,
@@ -325,7 +347,6 @@ const uploadFooter = (model: Model, h: HtmlBuilder<Msg>): Child => {
         ],
       ),
     ],
-    h,
   )
 }
 
@@ -338,51 +359,63 @@ const uploadDialogContent = (
   const uploading = model.queue.find((item) => item.status === 'uploading')
   return [
     h.div(
-      [h.Class('flex items-start justify-between gap-2')],
+      [h.Class('relative flex shrink-0 flex-col gap-1.5 px-6 pt-6 pb-4 pr-16')],
       [
         Dialog.title({ attributes: render.title }, ['Upload photographs'], h),
+        Dialog.description(
+          { attributes: render.description },
+          ['JPEG only. Dimensions and EXIF are read from the file.'],
+          h,
+        ),
         Dialog.closeButton({ attributes: render.closeButton }, [icon(h, X)], h),
       ],
     ),
-    Dialog.description(
-      { attributes: render.description },
-      ['JPEG only. Dimensions and EXIF are read server-side.'],
-      h,
-    ),
-    h.submodel({
-      slotId: 'admin-file-drop',
-      model: model.fileDrop,
-      view: FileDrop.view,
-      viewInputs: DropZone.dropZone(
-        {
-          message: hasQueue ? 'Add more photographs' : 'Drop photographs or browse',
-          constraints,
-          multiple: true,
-          accept: UPLOAD_ACCEPT,
-        },
-        h,
-      ),
-      toParentMessage: (message) => M.GotFileDropMessage({ message }),
-    }),
-    ...(hasQueue
-      ? [
-          h.ul(
-            [h.Class('flex flex-col')],
-            model.queue.map((item) => queueRow(item, h)),
+    // The body scrolls; the header and the footer do not, so the primary action
+    // is always on screen however long the queue is.
+    h.div(
+      [h.Class('flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 pb-6')],
+      [
+        h.submodel({
+          slotId: 'admin-file-drop',
+          model: model.fileDrop,
+          view: FileDrop.view,
+          viewInputs: DropZone.dropZone(
+            {
+              message: hasQueue ? 'Add more photographs' : 'Drop photographs or browse',
+              constraints,
+              multiple: true,
+              accept: UPLOAD_ACCEPT,
+              // The strip is a row with a queue under it and a roomy target
+              // without one.
+              className: hasQueue ? 'flex-row justify-center py-3' : 'py-14',
+            },
+            h,
           ),
-          h.div([h.Class('flex flex-col gap-3')], uploadOptions(model, h)),
-          // Announce the run for screen readers; the bars are per-item.
-          ...(uploading !== undefined
-            ? [
-                h.p(
-                  [h.Role('status'), h.AriaLive('polite'), h.Class('sr-only')],
-                  [`Uploading ${uploading.name} — ${String(uploadPercent(uploading))} per cent`],
-                ),
-              ]
-            : []),
-          uploadFooter(model, h),
-        ]
-      : []),
+          toParentMessage: (message) => M.GotFileDropMessage({ message }),
+        }),
+        ...(hasQueue
+          ? [
+              h.ul(
+                [h.Class('flex flex-col border-t border-role-hairline')],
+                model.queue.map((item) => queueRow(item, h)),
+              ),
+              uploadOptions(model, h),
+              // Announce the run for screen readers; the bars are per-item.
+              ...(uploading !== undefined
+                ? [
+                    h.p(
+                      [h.Role('status'), h.AriaLive('polite'), h.Class('sr-only')],
+                      [
+                        `Uploading ${uploading.name} — ${String(uploadPercent(uploading))} per cent`,
+                      ],
+                    ),
+                  ]
+                : []),
+            ]
+          : []),
+      ],
+    ),
+    ...(hasQueue ? [uploadFooter(model, h)] : []),
   ]
 }
 
@@ -393,8 +426,9 @@ export const uploadDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
     view: Dialog.view,
     viewInputs: Dialog.styledViewInputs<Msg>(
       {
-        className: 'items-start pt-[8vh]',
-        panelClass: 'w-full max-w-[600px] max-h-[84vh] overflow-y-auto',
+        // The panel's own `grid gap-4 p-4 sm:max-w-sm` is a small confirm
+        // dialog's; this one is a header, a scrolling body and a footer.
+        panelClass: 'flex max-h-[88vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]',
         content: (render, innerH) => uploadDialogContent(model, render, innerH),
       },
       h,

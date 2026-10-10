@@ -60,16 +60,55 @@ const WATERMARK_POSITION_LABELS: ReadonlyArray<{ value: WatermarkPosition; label
   { value: 'centre', label: 'CENTRE' },
 ]
 
-const captionClass = 'italic type-caption text-role-text-secondary'
+const captionClass = 'type-caption italic text-role-text-secondary'
 
-/** One section: a label, its controls, and the hairline the design closes
- *  every section with. The 24px below the rule is the same 24px the stack
- *  leaves between sections, so the two read as one rhythm. */
-const section = (label: string, rows: ReadonlyArray<Child>, h: HtmlBuilder<Msg>): Child =>
+/** One section: the title and what it governs on the left, its controls on
+ *  the right, a hairline between sections. Below `sm` the two stack. */
+const section = (
+  label: string,
+  summary: string,
+  rows: ReadonlyArray<Child>,
+  h: HtmlBuilder<Msg>,
+): Child =>
   h.section(
-    [h.Class('flex flex-col gap-3 border-b border-role-hairline pb-6')],
-    [h.h2([h.Class('type-label text-role-text-secondary')], [label]), ...rows],
+    [
+      h.Class(
+        'grid gap-x-12 gap-y-5 border-b border-role-hairline py-8 sm:grid-cols-[200px_minmax(0,1fr)]',
+      ),
+    ],
+    [
+      h.div(
+        [h.Class('flex flex-col gap-2')],
+        [
+          h.h2([h.Class('type-label text-role-text-secondary')], [label]),
+          h.p([h.Class(captionClass)], [summary]),
+        ],
+      ),
+      h.div([h.Class('flex max-w-[560px] flex-col gap-6')], rows),
+    ],
   )
+
+/** Two controls side by side, so a short Select does not take a whole line. */
+const pair = (children: ReadonlyArray<Child>, h: HtmlBuilder<Msg>): Child =>
+  h.div([h.Class('grid gap-6 sm:grid-cols-2')], children)
+
+/** Switches in one hairline box, each with the sentence that says what it does. */
+const toggleGroup = (rows: ReadonlyArray<Child>, h: HtmlBuilder<Msg>): Child =>
+  h.div(
+    [h.Class('flex flex-col divide-y divide-role-hairline border border-role-hairline px-4')],
+    rows,
+  )
+
+const toggle = (
+  config: Readonly<{
+    id: string
+    label: string
+    description: string
+    isChecked: boolean
+    onToggle: (isChecked: boolean) => Msg
+  }>,
+  h: HtmlBuilder<Msg>,
+): Child => ToggleRow.toggleRow({ ...config, className: 'py-3' }, h)
 
 // ---------------------------------------------------------------------------
 // EXPORT DEFAULTS
@@ -90,29 +129,35 @@ const exportDefaults = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const draft = model.settingsDraft
   return section(
     'EXPORT DEFAULTS',
+    'What a new photograph is exported with, unless the Editor overrides it.',
     [
-      Select.select(
-        {
-          id: 'settings-preview-long-edge',
-          label: 'PREVIEW LONG EDGE',
-          value: String(draft.defaultPreviewLongEdge),
-          options: longEdgeOptions,
-          onChange: (raw) =>
-            M.SetSettingsNumber({ field: 'defaultPreviewLongEdge', value: Number(raw) }),
-        },
-        h,
-      ),
-      Select.select(
-        {
-          id: 'settings-preview-format',
-          label: 'FORMAT',
-          value: draft.defaultPreviewFormat,
-          options: formatOptions,
-          onChange: (raw) =>
-            M.SetPreviewFormat({
-              value: raw === 'jpeg' || raw === 'webp' || raw === 'avif' ? raw : 'avif',
-            }),
-        },
+      pair(
+        [
+          Select.select(
+            {
+              id: 'settings-preview-long-edge',
+              label: 'PREVIEW LONG EDGE',
+              value: String(draft.defaultPreviewLongEdge),
+              options: longEdgeOptions,
+              onChange: (raw) =>
+                M.SetSettingsNumber({ field: 'defaultPreviewLongEdge', value: Number(raw) }),
+            },
+            h,
+          ),
+          Select.select(
+            {
+              id: 'settings-preview-format',
+              label: 'FORMAT',
+              value: draft.defaultPreviewFormat,
+              options: formatOptions,
+              onChange: (raw) =>
+                M.SetPreviewFormat({
+                  value: raw === 'jpeg' || raw === 'webp' || raw === 'avif' ? raw : 'avif',
+                }),
+            },
+            h,
+          ),
+        ],
         h,
       ),
       Slider.slider(
@@ -150,53 +195,79 @@ const exportDefaults = (model: Model, h: HtmlBuilder<Msg>): Child => {
 
 const watermark = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const draft = model.settingsDraft
+  const isOn = draft.watermarkEnabled
   return section(
     'WATERMARK',
+    // A contract, not a description of what ships today: nothing stamps a
+    // watermark yet (that is E2), and this string is the promise it inherits.
+    // If E2 ever bakes the mark into the original as well, this line and
+    // `CONTEXT.md` change in the same commit.
+    'Stamped on published renditions. Downloads always serve the unmarked original.',
     [
-      ToggleRow.toggleRow(
-        {
-          id: 'settings-watermark-enabled',
-          label: 'Watermark new uploads',
-          isChecked: draft.watermarkEnabled,
-          onToggle: (isChecked) => M.SetWatermarkEnabled({ isChecked }),
-        },
-        h,
-      ),
-      h.div(
-        [h.Class('flex items-center gap-2'), h.Role('group'), h.AriaLabel('Watermark colour')],
-        WATERMARK_COLOURS.map((entry) =>
-          Swatch.swatch(
+      toggleGroup(
+        [
+          toggle(
             {
-              colour: entry.colour,
-              label: entry.label,
-              isSelected: draft.watermarkColour === entry.colour,
-              onSelect: M.SetWatermarkColour({ colour: entry.colour }),
+              id: 'settings-watermark-enabled',
+              label: 'Watermark new uploads',
+              description: 'Off leaves every rendition unmarked.',
+              isChecked: isOn,
+              onToggle: (isChecked) => M.SetWatermarkEnabled({ isChecked }),
             },
             h,
           ),
-        ),
-      ),
-      h.p([h.Class(captionClass)], ['White, paper or ink.']),
-      Select.select(
-        {
-          id: 'settings-watermark-position',
-          label: 'POSITION',
-          value: draft.watermarkPosition,
-          options: WATERMARK_POSITION_LABELS,
-          onChange: (raw) =>
-            M.SetWatermarkPosition({
-              value: WATERMARK_POSITIONS.find((position) => position === raw) ?? 'bottom-right',
-            }),
-        },
+        ],
         h,
       ),
-      // A contract, not a description of what ships today: nothing stamps a
-      // watermark yet (that is E2), and this string is the promise it inherits.
-      // If E2 ever bakes the mark into the original as well, this line and
-      // `CONTEXT.md` change in the same commit.
-      h.p(
-        [h.Class(captionClass)],
-        ['Applies to published renditions. Downloads always serve the unmarked original.'],
+      // The choices below only mean something while the mark is on, so they
+      // stand down with it rather than staying live and inert.
+      h.div(
+        [
+          h.Class(
+            `flex flex-col gap-6 transition-opacity duration-120 ${isOn ? '' : 'pointer-events-none opacity-50'}`,
+          ),
+          ...(isOn ? [] : [h.AriaDisabled(true)]),
+        ],
+        [
+          h.div(
+            [h.Class('flex flex-col gap-2')],
+            [
+              h.span([h.Class('type-label text-role-text-secondary')], ['COLOUR']),
+              h.div(
+                [
+                  h.Class('flex items-center gap-1'),
+                  h.Role('group'),
+                  h.AriaLabel('Watermark colour'),
+                ],
+                WATERMARK_COLOURS.flatMap((entry) => [
+                  Swatch.swatch(
+                    {
+                      colour: entry.colour,
+                      label: entry.label,
+                      isSelected: draft.watermarkColour === entry.colour,
+                      onSelect: M.SetWatermarkColour({ colour: entry.colour }),
+                    },
+                    h,
+                  ),
+                ]),
+              ),
+            ],
+          ),
+          Select.select(
+            {
+              id: 'settings-watermark-position',
+              label: 'POSITION',
+              value: draft.watermarkPosition,
+              options: WATERMARK_POSITION_LABELS,
+              isDisabled: !isOn,
+              onChange: (raw) =>
+                M.SetWatermarkPosition({
+                  value: WATERMARK_POSITIONS.find((position) => position === raw) ?? 'bottom-right',
+                }),
+            },
+            h,
+          ),
+        ],
       ),
     ],
     h,
@@ -211,23 +282,32 @@ const metadata = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const draft = model.settingsDraft
   return section(
     'METADATA',
+    'What a published rendition carries from the original file.',
     [
-      ToggleRow.toggleRow(
-        {
-          id: 'settings-keep-exif',
-          label: 'Keep EXIF data',
-          isChecked: draft.defaultKeepExif,
-          onToggle: (isChecked) => M.SetMetadataPolicy({ field: 'defaultKeepExif', isChecked }),
-        },
-        h,
-      ),
-      ToggleRow.toggleRow(
-        {
-          id: 'settings-remove-gps',
-          label: 'Remove GPS location',
-          isChecked: draft.defaultRemoveGps,
-          onToggle: (isChecked) => M.SetMetadataPolicy({ field: 'defaultRemoveGps', isChecked }),
-        },
+      toggleGroup(
+        [
+          toggle(
+            {
+              id: 'settings-keep-exif',
+              label: 'Keep EXIF data',
+              description: 'Camera, lens and exposure details stay in the file.',
+              isChecked: draft.defaultKeepExif,
+              onToggle: (isChecked) => M.SetMetadataPolicy({ field: 'defaultKeepExif', isChecked }),
+            },
+            h,
+          ),
+          toggle(
+            {
+              id: 'settings-remove-gps',
+              label: 'Remove GPS location',
+              description: 'Strips where the photograph was taken.',
+              isChecked: draft.defaultRemoveGps,
+              onToggle: (isChecked) =>
+                M.SetMetadataPolicy({ field: 'defaultRemoveGps', isChecked }),
+            },
+            h,
+          ),
+        ],
         h,
       ),
     ],
@@ -239,58 +319,64 @@ const metadata = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // STORAGE
 // ---------------------------------------------------------------------------
 
-/** The block's one figure: what the Library holds and how much of it is out of
- *  sight. Both numbers come from `GetCounts`, which counts rows — the design's
- *  `4.2 GB OF 20 GB` came from `SUM(bytes)`, a column only an upload writes, so
- *  it read `0.0 GB` for every Photograph older than the column. The Trash count
- *  is the half of this block that is new information: nothing else in the Admin
- *  lists the Trash, so this is the one place the operator can see that three
- *  photographs are waiting there. */
-const storageFigure = (model: Model): string => {
-  const { total, trashed } = model.counts
-  return `${String(total)} FRAMES · ${String(trashed)} IN TRASH`
-}
+/** One figure and what it counts. Both numbers come from `GetCounts`, which
+ *  counts rows — the design's `4.2 GB OF 20 GB` came from `SUM(bytes)`, a
+ *  column only an upload writes, so it read `0.0 GB` for every Photograph older
+ *  than the column. The Trash count is the half of this block that is new
+ *  information: nothing else in the Admin lists the Trash, so this is the one
+ *  place the operator can see that three photographs are waiting there. */
+const stat = (value: number, label: string, h: HtmlBuilder<Msg>): Child =>
+  h.div(
+    [h.Class('flex flex-col gap-1')],
+    [
+      h.span([h.Class('type-headline tabular-nums text-role-text-primary')], [String(value)]),
+      h.span([h.Class('type-label text-role-text-secondary')], [label]),
+    ],
+  )
 
 const storage = (model: Model, h: HtmlBuilder<Msg>): Child =>
   section(
     'STORAGE',
+    'What the Library holds, and a copy of it you can keep.',
     [
-      h.p([h.Class('type-exif text-role-text-primary')], [storageFigure(model)]),
-      Button.button(
-        {
-          onClick: M.ExportCsvIndex({}),
-          variant: 'ghost',
-          isDisabled: model.settingsIndexing,
-        },
-        model.settingsIndexing ? 'Building the index…' : 'Export a CSV index',
-        h,
+      h.div(
+        [h.Class('flex gap-12')],
+        [stat(model.counts.total, 'FRAMES', h), stat(model.counts.trashed, 'IN TRASH', h)],
       ),
-      Select.select(
-        {
-          id: 'settings-retain',
-          label: 'RETAIN',
-          value: draftRetainValue(model),
-          options: [{ value: 'forever', label: 'FOREVER' }],
-          onChange: (raw) => M.SetRetention({ forever: raw !== 'never' }),
-          // Nothing purges on a timer anywhere in the chain, so the only value
-          // this offers is the one that is true. A second option would be a
-          // setting for a purge that does not exist.
-          isDisabled: true,
-        },
-        h,
-      ),
-      h.p(
-        [h.Class(captionClass)],
+      h.div(
+        [h.Class('flex flex-col items-start gap-2')],
         [
-          'Nothing is purged on a timer. A deleted photograph keeps its original in R2 until a purge runs.',
+          Button.button(
+            {
+              onClick: M.ExportCsvIndex({}),
+              variant: 'secondary',
+              isDisabled: model.settingsIndexing,
+            },
+            model.settingsIndexing ? 'Building the index…' : 'Export a CSV index',
+            h,
+          ),
+          h.p([h.Class(captionClass)], ['One row per photograph, with its metadata.']),
+        ],
+      ),
+      // Nothing purges on a timer anywhere in the chain, so retention is a
+      // fact to read rather than a control: a Select with one option is a
+      // setting for a purge that does not exist.
+      h.div(
+        [h.Class('flex flex-col gap-1')],
+        [
+          h.span([h.Class('type-label text-role-text-secondary')], ['RETENTION']),
+          h.span([h.Class('type-exif text-role-text-primary')], ['FOREVER']),
+          h.p(
+            [h.Class(captionClass)],
+            [
+              'Nothing is purged on a timer. A deleted photograph keeps its original in R2 until a purge runs.',
+            ],
+          ),
         ],
       ),
     ],
     h,
   )
-
-const draftRetainValue = (model: Model): string =>
-  model.settingsDraft.retainForever ? 'forever' : 'never'
 
 // ---------------------------------------------------------------------------
 // the header's stamp
@@ -328,22 +414,45 @@ export const settingsStamp = (model: Model, now: DateTime.Utc = DateTime.nowUnsa
 // ---------------------------------------------------------------------------
 
 /** `Save settings` and `Discard changes`, both inert until the draft differs
- *  from the row. A discard with nothing to discard and a save with nothing to
- *  save are the same no-op, and both buttons say so by being off. */
+ *  from the row, in a bar that sticks to the foot of the viewport so a long
+ *  form never hides them. The stamp rides with them: it is the answer to "did
+ *  that save?", so it belongs next to the button that saves. */
 const actions = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const unsaved = settingsUnsaved(model.settingsDraft, model.settings)
   return h.div(
-    [h.Class('flex items-center gap-2')],
     [
-      Button.button(
-        { onClick: M.SaveSettings({}), isDisabled: !unsaved || model.settingsSaving },
-        model.settingsSaving ? 'Saving…' : 'Save settings',
-        h,
+      h.Class(
+        'sticky bottom-0 z-10 flex items-center justify-between gap-4 border-t border-role-hairline bg-role-surface py-4',
       ),
-      Button.button(
-        { onClick: M.DiscardSettings({}), variant: 'secondary', isDisabled: !unsaved },
-        'Discard changes',
-        h,
+      h.DataAttribute('slot', 'settings-actions'),
+    ],
+    [
+      h.span(
+        [
+          h.AriaLive('polite'),
+          h.Class(`type-exif ${unsaved ? 'text-role-text-primary' : 'text-role-text-disabled'}`),
+          h.DataAttribute('slot', 'page-head-stamp'),
+        ],
+        [settingsStamp(model)],
+      ),
+      h.div(
+        [h.Class('flex items-center gap-2')],
+        [
+          Button.button(
+            { onClick: M.DiscardSettings({}), variant: 'secondary', isDisabled: !unsaved },
+            'Discard changes',
+            h,
+          ),
+          Button.button(
+            {
+              onClick: M.SaveSettings({}),
+              isDisabled: !unsaved || model.settingsSaving,
+              className: 'whitespace-nowrap',
+            },
+            model.settingsSaving ? 'Saving…' : 'Save settings',
+            h,
+          ),
+        ],
       ),
     ],
   )
@@ -373,7 +482,7 @@ export const settingsPage = (model: Model, h: HtmlBuilder<Msg>): Child => {
   // column defaults would invite a save that overwrites a row nobody read.
   if (model.settings === undefined) return notLoaded(h)
   return h.div(
-    [h.Class('flex flex-col gap-6 pt-8')],
+    [h.Class('flex flex-col pt-2')],
     [
       exportDefaults(model, h),
       watermark(model, h),

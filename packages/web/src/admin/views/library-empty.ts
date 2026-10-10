@@ -40,7 +40,17 @@ type PickerConfig = Readonly<{
 
 const picker = (config: PickerConfig, h: HtmlBuilder<Msg>): Child =>
   h.label(
-    [h.Class(cn(Button.buttonClass(config.variant), 'cursor-pointer', pickerFocusClass))],
+    [
+      h.Class(
+        cn(
+          Button.buttonClass(config.variant),
+          // A `<label>` is inline, so unlike a `<button>` it does not centre its
+          // text in the 36px box on its own.
+          'inline-flex cursor-pointer items-center justify-center whitespace-nowrap',
+          pickerFocusClass,
+        ),
+      ),
+    ],
     [
       config.label,
       h.input([

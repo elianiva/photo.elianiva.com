@@ -21,7 +21,7 @@ export const sliderValueClass = 'type-exif text-role-text-primary'
 /** The transparent control over the drawn track. The 2px outline is the focus
  *  ring the invisible element would otherwise lose. */
 export const sliderInputClass =
-  'focus-visible:outline-role-focus absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent outline-2 outline-offset-2 [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:opacity-0 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:opacity-0'
+  'focus-visible:outline-role-focus absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent outline-0 focus-visible:outline-2 focus-visible:outline-offset-2 [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:opacity-0 [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:opacity-0'
 
 export type SliderConfig<M> = Readonly<{
   id: string

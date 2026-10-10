@@ -35,8 +35,7 @@ export const previewUrl = (photo: Pick<PhotoWithTags, 'id'>): string =>
 export const originalUrl = (photo: PhotoWithTags): string => imageUrl(photo.r2Key)
 
 /** By key rather than by Photo, for a view holding only what it needs. */
-export const imageUrl = (r2Key: string): string =>
-  `${IMAGE_PATH}/${encodeURIComponent(r2Key)}`
+export const imageUrl = (r2Key: string): string => `${IMAGE_PATH}/${encodeURIComponent(r2Key)}`
 
 /** Sizes attribute for admin cards: justified rows inside a max-w-6xl
  *  container put a typical card near half the content width (≤ 552px). */
