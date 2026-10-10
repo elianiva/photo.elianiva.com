@@ -3,7 +3,7 @@
  * page's whole body are the same arrangement at the same measure, so the flow
  * lives here once rather than twice.
  *
- * Desktop flows them into three columns with a hairline between them; mobile
+ * Desktop flows them into two columns with a hairline between them; mobile
  * flows them into two, without rules, at a 12px beat. The flow is computed per
  * breakpoint because the column count changes the assignment, so this draws
  * both trees and lets `lg` pick one. The columns are not
@@ -25,9 +25,9 @@ import { Message } from '../model'
 import { figure } from './figure'
 import type { Child } from './shared'
 
-/** The two column counts this file draws: three across on the desktop tree, two
+/** The two column counts this file draws: two across on the desktop tree, two
  *  on the mobile one. */
-const DESKTOP_COLUMNS = 3
+const DESKTOP_COLUMNS = 2
 const MOBILE_COLUMNS = 2
 
 const column = (

@@ -64,6 +64,9 @@ export const FigureSchema = S.Struct({
   index: S.Number,
   title: S.String,
   ratio: FigureRatioSchema,
+  /** The original's own width / height. Frames draw with this, not the snapped
+   *  `ratio`, so a photo is never cropped to the nearest of the six Ratios. */
+  aspect: S.Number,
   /** 'X-T20 · 25MM · F/2 · 1/500 · ISO 200 · 31 AUG', or null when the Photo
    *  carries none of the facts the line is made of. */
   exif: S.NullOr(S.String),
@@ -206,6 +209,7 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
     index: photo.number ?? 0,
     title: photo.title,
     ratio,
+    aspect: photo.width > 0 && photo.height > 0 ? photo.width / photo.height : RATIO_VALUE[ratio],
     exif: formatExifLine(photo),
     r2Key: photo.r2Key,
   }
@@ -331,11 +335,11 @@ export const figurePreviewUrl = (figure: Figure): string => renditionUrl(figure.
 // ---------------------------------------------------------------------------
 
 /** A column's height, in column-widths. Every photo renders at the column's
- *  width, so its height is `1 / RATIO_VALUE` of that width: a `16:9` photo is
+ *  width, so its height is `1 / aspect` of that width: a `16:9` photo is
  *  barely half as tall as a `9:16` one. The ratio itself would rank those
  *  the wrong way round, which is why the cost inverts it. */
 const columnCost = (figures: ReadonlyArray<Figure>): number =>
-  figures.reduce((total, figure) => total + 1 / RATIO_VALUE[figure.ratio], 0)
+  figures.reduce((total, figure) => total + 1 / figure.aspect, 0)
 
 /** The design's three columns are a flow, not authored structure: each photo
  *  drops into whichever column is shortest so far, which is what leaves the

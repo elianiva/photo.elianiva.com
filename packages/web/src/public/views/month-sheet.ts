@@ -28,7 +28,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameCount, frameNoShort, figureUrl, RATIO_VALUE, type Figure } from '../content'
+import { frameCount, frameNoShort, figureUrl, type Figure } from '../content'
 import type { Month } from '../content'
 import { Message } from '../model'
 import { BAND, type Child } from './shared'
@@ -74,7 +74,7 @@ const frame = (
           h.Class(
             'group relative block h-24 cursor-pointer bg-role-primary py-[9px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px]',
           ),
-          h.Style({ aspectRatio: String(RATIO_VALUE[photo.ratio]) }),
+          h.Style({ aspectRatio: String(photo.aspect) }),
           h.OnClick(Message.ClickedFigure({ id: photo.id })),
           // Enter and Space are the button's own keys; the handler is here so a
           // keyboard reader gets the lightbox the mouse does.

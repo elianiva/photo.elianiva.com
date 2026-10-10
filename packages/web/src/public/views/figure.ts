@@ -26,7 +26,7 @@
 import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
-import { frameNo, frameNoShort, figureUrl, RATIO_VALUE, type Figure as Figure } from '../content'
+import { frameNo, frameNoShort, figureUrl, type Figure as Figure } from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
@@ -61,7 +61,7 @@ export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => 
       h.button(
         [
           h.Class('block w-full cursor-pointer overflow-hidden bg-role-surface-container'),
-          h.Style({ aspectRatio: String(RATIO_VALUE[photo.ratio]) }),
+          h.Style({ aspectRatio: String(photo.aspect) }),
           h.OnClick(Message.ClickedFigure({ id: photo.id })),
           // Enter and Space are the button's own keys; the handler is here so a
           // keyboard reader gets the lightbox the mouse does.
