@@ -35,11 +35,7 @@ export const libraryIsEmpty = (model: Model): boolean =>
  *  Library read, so the two views share the recovery as well as the message. */
 export const libraryError = (model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [
-      h.Class(
-        'mt-12 border border-role-error bg-role-error-container p-4 type-ui text-role-error',
-      ),
-    ],
+    [h.Class('mt-12 border border-role-error bg-role-error-container p-4 type-ui text-role-error')],
     [
       h.p([], [model.error ?? 'Failed to load photos']),
       Button.button(

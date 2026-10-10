@@ -46,7 +46,8 @@ export const themeForRoute = (route: AppRoute): Theme =>
       Atoms: (): Theme => 'dark',
       Photo: (): Theme => 'dark',
       // The Admin's own 404 is a page of the Desk; the public site's is not.
-      NotFound: ({ path }): Theme => (path === '/admin' || path.startsWith('/admin/') ? 'dark' : 'light'),
+      NotFound: ({ path }): Theme =>
+        path === '/admin' || path.startsWith('/admin/') ? 'dark' : 'light',
     },
     (): Theme => 'light',
   )

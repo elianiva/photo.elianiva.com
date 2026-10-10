@@ -102,7 +102,10 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
               variant: 'accent',
               className: 'flex-1 justify-center',
             },
-            h.span([h.Class('inline-flex items-center gap-2')], [icon(h, Pencil, 'size-4'), 'Edit']),
+            h.span(
+              [h.Class('inline-flex items-center gap-2')],
+              [icon(h, Pencil, 'size-4'), 'Edit'],
+            ),
             h,
           ),
           Button.button(
@@ -126,8 +129,7 @@ const photoCard = (photo: PhotoWithTags, h: HtmlBuilder<Msg>): Child => {
  *  count says so rather than the panel going quiet. */
 export const selectionPanel = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const ids = model.selected
-  const shown =
-    ids.length === 1 ? model.photos.find((photo) => photo.id === ids[0]) : undefined
+  const shown = ids.length === 1 ? model.photos.find((photo) => photo.id === ids[0]) : undefined
   return h.aside(
     [
       h.AriaLabel('Selection panel'),
