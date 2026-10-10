@@ -140,17 +140,24 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
         [h.Class('flex min-w-0 flex-1 flex-col gap-1')],
         [
           h.span([h.Class('type-body text-role-text-primary')], [inputs.title]),
-          h.span([h.Class('type-exif text-role-text-disabled')], [inputs.fileLine]),
+          h.span([h.Class('type-exif break-words text-role-text-disabled')], [inputs.fileLine]),
+          h.div(
+            [h.Class('flex items-center gap-3 md:hidden')],
+            [ratioTag({ ratio: inputs.ratio }, h), status({ variant: inputs.status }, h)],
+          ),
         ],
       ),
       h.div(
-        [h.Class(cn('flex shrink-0 items-center', columnWidths.ratio))],
+        [h.Class(cn('flex shrink-0 items-center max-md:hidden', columnWidths.ratio))],
         [ratioTag({ ratio: inputs.ratio }, h)],
       ),
       h.span(
         [
           h.Class(
-            cn('type-exif shrink-0 tabular-nums text-role-text-secondary', columnWidths.taken),
+            cn(
+              'type-exif shrink-0 tabular-nums text-role-text-secondary max-md:hidden',
+              columnWidths.taken,
+            ),
           ),
         ],
         [inputs.taken],
@@ -158,13 +165,16 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
       h.span(
         [
           h.Class(
-            cn('type-exif shrink-0 tabular-nums text-role-text-secondary', columnWidths.dimensions),
+            cn(
+              'type-exif shrink-0 tabular-nums text-role-text-secondary max-md:hidden',
+              columnWidths.dimensions,
+            ),
           ),
         ],
         [inputs.dimensions],
       ),
       h.div(
-        [h.Class(cn('flex shrink-0 items-center', columnWidths.status))],
+        [h.Class(cn('flex shrink-0 items-center max-md:hidden', columnWidths.status))],
         [status({ variant: inputs.status }, h)],
       ),
       h.div(

@@ -46,8 +46,8 @@ import type { Child } from './shared'
 // ---------------------------------------------------------------------------
 
 /** The design's 248px column, and the padding either side of the brand. */
-const SIDEBAR_WIDTH = 'w-[232px]'
-const SIDEBAR_PADDING = 'px-3 py-6'
+const SIDEBAR_WIDTH = 'w-full lg:w-[232px]'
+const SIDEBAR_PADDING = 'px-3 py-3 lg:py-6'
 
 // ---------------------------------------------------------------------------
 // brand
@@ -59,7 +59,11 @@ const SIDEBAR_PADDING = 'px-3 py-6'
  *  was a destination. */
 const brand = (h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex shrink-0 flex-col gap-1.5 px-3 pb-6')],
+    [
+      h.Class(
+        'flex shrink-0 flex-row items-baseline gap-2 px-3 pb-2 lg:flex-col lg:gap-1.5 lg:pb-6',
+      ),
+    ],
     [
       // The design's wordmark. `THE DESK` is display copy for this one place —
       // it is not a route, a type, or a directory (CONTEXT.md).
@@ -88,7 +92,7 @@ const libraryMeter = (model: Model, h: HtmlBuilder<Msg>): Child => {
   // be NaN, and a NaN width would silently vanish.
   const livePercent = total > 0 ? Math.min(100, Math.max(0, (byStatus.published / total) * 100)) : 0
   return h.div(
-    [h.Class('flex flex-col gap-2 px-3')],
+    [h.Class('hidden flex-col gap-2 px-3 lg:flex')],
     [
       h.div(
         [h.Class('flex items-baseline justify-between gap-2')],
@@ -174,7 +178,7 @@ const primaryNav = (model: Model, h: HtmlBuilder<Msg>): Child => {
     [
       h.AriaLabel('Admin sections'),
       h.DataAttribute('slot', 'sidebar-nav'),
-      h.Class('flex shrink-0 flex-col gap-0.5'),
+      h.Class('flex shrink-0 flex-row gap-1 overflow-x-auto lg:flex-col lg:gap-0.5'),
     ],
     rows.map((row) => navRow(model, row, h)),
   )
@@ -204,7 +208,9 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const signOut = signOutUrl(model)
   return h.div(
     [
-      h.Class('mt-auto flex shrink-0 flex-col gap-3 border-t border-role-outline-variant pt-4'),
+      h.Class(
+        'flex shrink-0 flex-row flex-wrap items-center gap-x-2 lg:mt-auto lg:flex-col lg:items-stretch lg:gap-3 lg:border-t lg:border-role-outline-variant lg:pt-4',
+      ),
       h.DataAttribute('slot', 'sidebar-footer'),
     ],
     [
@@ -215,7 +221,7 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
         : [
             h.p(
               [
-                h.Class('type-exif-sm truncate text-role-text-secondary'),
+                h.Class('type-exif-sm hidden truncate text-role-text-secondary lg:block'),
                 h.Title(model.session.email),
               ],
               [model.session.email],
@@ -265,7 +271,7 @@ export const sidebar = (model: Model, h: HtmlBuilder<Msg>): Child =>
     [
       h.AriaLabel('Admin'),
       h.Class(
-        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-sunken sticky top-0 flex h-dvh shrink-0 flex-col`,
+        `${SIDEBAR_WIDTH} ${SIDEBAR_PADDING} bg-role-surface-sunken flex shrink-0 flex-col lg:sticky lg:top-0 lg:h-dvh`,
       ),
       h.DataAttribute('slot', 'sidebar'),
     ],

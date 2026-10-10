@@ -472,10 +472,13 @@ const skeletonTable = (h: HtmlBuilder<Msg>): Child => {
         h.span([h.Class(tableCheckboxWidthClass)]),
         h.div([h.Class(cn('size-16 shrink-0', block))]),
         h.div([h.Class('flex min-w-0 flex-1 flex-col gap-1')], [one('h-4 w-2/3'), one('w-1/3')]),
-        h.div([h.Class(cn('flex shrink-0 items-center', columnWidths.ratio))], [one('h-5 w-10')]),
-        h.span([h.Class(cn('shrink-0', columnWidths.taken))], [one('w-16')]),
-        h.span([h.Class(cn('shrink-0', columnWidths.dimensions))], [one('w-16')]),
-        h.span([h.Class(cn('shrink-0', columnWidths.status))]),
+        h.div(
+          [h.Class(cn('flex shrink-0 items-center max-md:hidden', columnWidths.ratio))],
+          [one('h-5 w-10')],
+        ),
+        h.span([h.Class(cn('shrink-0 max-md:hidden', columnWidths.taken))], [one('w-16')]),
+        h.span([h.Class(cn('shrink-0 max-md:hidden', columnWidths.dimensions))], [one('w-16')]),
+        h.span([h.Class(cn('shrink-0 max-md:hidden', columnWidths.status))]),
         h.span([h.Class(tableActionsWidthClass)]),
       ],
     )

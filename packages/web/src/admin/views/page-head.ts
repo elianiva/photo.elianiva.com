@@ -79,7 +79,7 @@ const searchField = (model: Model, h: HtmlBuilder<Msg>): Child =>
       h.OnSubmit(M.SubmittedSearch()),
       h.AriaLabel('Search photos'),
       h.DataAttribute('slot', 'search-form'),
-      h.Class('w-[260px]'),
+      h.Class('w-full sm:w-[260px]'),
     ],
     [
       Search.search(
@@ -113,7 +113,7 @@ const uploadAction = (model: Model, h: HtmlBuilder<Msg>): Child =>
 
 const headerActions = (head: PageHead, model: Model, h: HtmlBuilder<Msg>): Child =>
   h.div(
-    [h.Class('flex items-center gap-4')],
+    [h.Class('flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-4')],
     [
       ...(head.isSearchable ? [searchField(model, h)] : []),
       ...(head.isUploadable ? [uploadAction(model, h)] : []),
@@ -125,7 +125,7 @@ const headerActions = (head: PageHead, model: Model, h: HtmlBuilder<Msg>): Child
 export const pageHead = (model: Model, h: HtmlBuilder<Msg>, gutter: string): Child => {
   const head = pageHeadOf(model)
   return h.header(
-    [h.DataAttribute('slot', 'page-head'), h.Class(cn(gutter, 'pb-2 pt-10'))],
+    [h.DataAttribute('slot', 'page-head'), h.Class(cn(gutter, 'pb-2 pt-6 lg:pt-10'))],
     [
       h.div(
         [h.Class('flex flex-wrap items-end justify-between gap-x-4 gap-y-3')],

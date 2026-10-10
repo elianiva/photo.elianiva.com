@@ -41,7 +41,7 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
   body: h.div(
     [
       scopeTheme(themeForRoute(model.route, model.theme), h),
-      h.Class('bg-role-surface flex min-h-dvh text-role-text-primary'),
+      h.Class('bg-role-surface flex min-h-dvh flex-col text-role-text-primary lg:flex-row'),
     ],
     [
       sidebar(model, h),

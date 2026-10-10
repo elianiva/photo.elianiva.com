@@ -116,7 +116,10 @@ export const tableHead = <M>(config: TableHeadConfig<M>, h: HtmlBuilder<M>): Htm
           isSorted ? 'text-role-text-primary' : 'text-role-text-secondary',
         )
         return h.div(
-          [h.Key(column.key), h.Class(cn('flex shrink-0 items-center', columnWidths[column.key]))],
+          [
+            h.Key(column.key),
+            h.Class(cn('flex shrink-0 items-center max-md:hidden', columnWidths[column.key])),
+          ],
           [
             isSorted && config.onToggleSort !== undefined
               ? h.button(

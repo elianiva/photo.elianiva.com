@@ -67,12 +67,12 @@ const frame = (
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [h.Key(photo.id), h.Class('relative')],
+    [h.Key(photo.id), h.Class(`relative lg:w-auto ${photo.aspect < 1 ? 'w-[68%]' : 'w-full'}`)],
     [
       h.button(
         [
           h.Class(
-            'group relative block h-24 cursor-pointer bg-role-primary py-[9px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px]',
+            'group relative block w-full cursor-pointer bg-role-primary py-[9px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px] lg:w-auto',
           ),
           h.Style({ aspectRatio: String(photo.aspect) }),
           h.OnClick(Message.ClickedFigure({ id: photo.id })),
@@ -159,7 +159,11 @@ export const monthSheet = (
         [
           rail(section, h),
           h.div(
-            [h.Class('flex flex-wrap items-start gap-2.5 pb-5 pt-9 lg:pt-0')],
+            [
+              h.Class(
+                'flex flex-col items-start gap-5 pb-5 pt-9 lg:flex-row lg:flex-wrap lg:gap-2.5 lg:pt-0',
+              ),
+            ],
             section.figures.map((photo, index) =>
               frame(
                 photo,

@@ -47,6 +47,7 @@ import type { HtmlBuilder } from 'foldkit/html'
 import { LayoutGrid, List } from 'lucide'
 
 import * as Segment from '@/components/ui/segment'
+import * as Select from '@/components/ui/select'
 
 import { Message as M } from '../model'
 import type { GridCols, Model, Msg } from '../model'
@@ -102,95 +103,98 @@ const colsOptions: ReadonlyArray<Segment.SegmentOption<GridCols>> = COL_CHOICES.
   ariaLabel: `${String(cols)} columns`,
 }))
 
-/** A tier of the bar: one row of groups, wrapping as a unit. */
-const tierClass = 'flex flex-wrap items-end gap-x-6 gap-y-3'
+const toSelect = <T extends string | number>(
+  options: ReadonlyArray<Segment.SegmentOption<T>>,
+): ReadonlyArray<Select.SelectOption> =>
+  options.map((option) => ({ value: String(option.value), label: option.label }))
+
+/** Maps a picked string back to the typed option it came from. */
+const pick = <T extends string | number>(
+  options: ReadonlyArray<Segment.SegmentOption<T>>,
+  raw: string,
+): T | undefined => options.find((option) => String(option.value) === raw)?.value
+
+const dropdown = <T extends string | number>(
+  id: string,
+  label: string,
+  selected: T,
+  options: ReadonlyArray<Segment.SegmentOption<T>>,
+  onPick: (value: T) => Msg,
+  h: HtmlBuilder<Msg>,
+): Child =>
+  Select.select(
+    {
+      id,
+      label,
+      value: String(selected),
+      options: toSelect(options),
+      onChange: (raw) => {
+        const value = pick(options, raw)
+        return onPick(value ?? selected)
+      },
+      className: 'sm:w-44',
+    },
+    h,
+  )
 
 export const libraryFilterBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const view = libraryViewOf(model.route)
   return h.div(
     [
       h.DataAttribute('slot', 'library-filter-bar'),
-      // Two tiers, stacked, and that is the shape the measure allows rather
-      // than a wrap that happened: the page column is `max-w-[1080px]` — the
-      // Library table's own width — and the five groups need about 1285px of
-      // it, so no viewport makes them one row. Letting the clusters wrap on
-      // their own is what left the sort and the view toggle stranded on a
-      // third line with nothing relating them to the filters above.
-      h.Class('mt-6 flex flex-col gap-y-4'),
+      // Dropdowns, two to a row on a phone and one row on anything wider: a
+      // wall of pills is five groups of buttons to scan, a select is one line.
+      h.Class('mt-6 grid grid-cols-2 items-end gap-x-4 gap-y-4 sm:flex sm:flex-wrap sm:gap-x-6'),
     ],
     [
-      h.div(
-        [h.Class(tierClass)],
-        [
-          Segment.segmentGroup(
-            {
-              selected: model.statusFilter,
-              options: statusOptions(model),
-              label: 'STATUS',
-              ariaLabel: 'Status filter',
-              shape: 'pill',
-            },
-            (value) => M.SelectedStatusFilter({ value }),
-            h,
-          ),
-          Segment.segmentGroup(
-            {
-              selected: model.ratioFilter,
-              options: ratioOptions,
-              label: 'RATIO',
-              ariaLabel: 'Ratio filter',
-              shape: 'pill',
-            },
-            (value) => M.SelectedRatioFilter({ value }),
-            h,
-          ),
-        ],
+      dropdown(
+        'library-status',
+        'STATUS',
+        model.statusFilter,
+        statusOptions(model),
+        (value) => M.SelectedStatusFilter({ value }),
+        h,
       ),
-      h.div(
-        [h.Class(tierClass)],
-        [
-          Segment.segmentGroup(
-            {
-              selected: model.sortFilter,
-              options: SORT_OPTIONS,
-              label: 'SORT',
-              ariaLabel: 'Sort',
-              shape: 'pill',
-            },
-            (value) => M.SelectedSortFilter({ value }),
-            h,
-          ),
-          Segment.segmentGroup(
-            {
-              selected: view,
-              options: VIEW_OPTIONS,
-              label: 'VIEW',
-              ariaLabel: 'View',
-              shape: 'pill',
-            },
-            (value) => M.SelectedView({ view: value === 'grid' ? 'grid' : 'list' }),
-            h,
-          ),
-          // Only in the grid, because only the grid has a density. It is in the
-          // bar rather than on a row above it: the density is the grid's, so it
-          // is read beside the choice that turns the grid on.
-          ...(view === 'grid'
-            ? [
-                Segment.segmentGroup(
-                  {
-                    selected: model.cols,
-                    options: colsOptions,
-                    label: 'DENSITY',
-                    ariaLabel: 'Grid density',
-                    shape: 'pill',
-                  },
-                  (cols) => M.SelectedCols({ cols }),
-                  h,
-                ),
-              ]
-            : []),
-        ],
+      dropdown(
+        'library-ratio',
+        'RATIO',
+        model.ratioFilter,
+        ratioOptions,
+        (value) => M.SelectedRatioFilter({ value }),
+        h,
       ),
+      dropdown(
+        'library-sort',
+        'SORT',
+        model.sortFilter,
+        SORT_OPTIONS,
+        (value) => M.SelectedSortFilter({ value }),
+        h,
+      ),
+      Segment.segmentGroup(
+        {
+          selected: view,
+          options: VIEW_OPTIONS,
+          label: 'VIEW',
+          ariaLabel: 'View',
+          shape: 'pill',
+        },
+        (value) => M.SelectedView({ view: value === 'grid' ? 'grid' : 'list' }),
+        h,
+      ),
+      // Only in the grid, because only the grid has a density.
+      ...(view === 'grid'
+        ? [
+            dropdown(
+              'library-cols',
+              'DENSITY',
+              model.cols,
+              colsOptions,
+              (cols) => M.SelectedCols({ cols }),
+              h,
+            ),
+          ]
+        : []),
     ],
   )
 }
