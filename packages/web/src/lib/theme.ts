@@ -32,22 +32,43 @@ export type Theme = typeof Theme.Type
 /** The attribute the theme scopes key off. */
 export const themeAttribute = 'data-theme'
 
-/** The theme branch a route is drawn in. The Desk is the dark room: every
- *  route the Admin resolves is dark, the Editor and the Library alike. A URL
- *  outside `/admin` is the public site's and stays light —
- *  so a route the table gains later is light until someone says otherwise. */
-export const themeForRoute = (route: AppRoute): Theme =>
+/** Where the operator's choice of Desk theme is kept. The shell's inline
+ *  script in `index.html` reads the same key before first paint. */
+export const THEME_STORAGE_KEY = 'photo-admin:theme'
+
+/** The theme the Desk is drawn in until the operator picks the other. */
+export const DEFAULT_ADMIN_THEME: Theme = 'dark'
+
+/** The operator's stored Desk theme, or the default. Synchronous because
+ *  Foldkit's `init` is, and total: a storage that throws or holds something
+ *  else is the default rather than a broken first paint. */
+export const storedAdminTheme = (): Theme => {
+  if (typeof window === 'undefined') return DEFAULT_ADMIN_THEME
+  try {
+    const raw = window.localStorage.getItem(THEME_STORAGE_KEY)
+    return raw === 'light' || raw === 'dark' ? raw : DEFAULT_ADMIN_THEME
+  } catch {
+    return DEFAULT_ADMIN_THEME
+  }
+}
+
+/** The theme branch a route is drawn in. The Desk follows `adminTheme`, the
+ *  operator's choice. The Editor is the exception: it is the dark room whatever
+ *  the choice, and has no sidebar to change it from. A URL outside `/admin` is
+ *  the public site's and stays light — so a route the table gains later is
+ *  light until someone says otherwise. */
+export const themeForRoute = (route: AppRoute, adminTheme: Theme = DEFAULT_ADMIN_THEME): Theme =>
   AppRoute.matchOrElse(
     route,
     {
-      Library: (): Theme => 'dark',
-      Scheduled: (): Theme => 'dark',
-      Settings: (): Theme => 'dark',
-      Atoms: (): Theme => 'dark',
+      Library: (): Theme => adminTheme,
+      Scheduled: (): Theme => adminTheme,
+      Settings: (): Theme => adminTheme,
+      Atoms: (): Theme => adminTheme,
       Photo: (): Theme => 'dark',
       // The Admin's own 404 is a page of the Desk; the public site's is not.
       NotFound: ({ path }): Theme =>
-        path === '/admin' || path.startsWith('/admin/') ? 'dark' : 'light',
+        path === '/admin' || path.startsWith('/admin/') ? adminTheme : 'light',
     },
     (): Theme => 'light',
   )
@@ -58,6 +79,16 @@ export const themeForRoute = (route: AppRoute): Theme =>
 export const themeForUrl = (url: string): Theme => {
   const parsed = urlFromString(url)
   return Option.isNone(parsed) ? 'light' : themeForRoute(urlToAppRoute(parsed.value))
+}
+
+/** Persist the Desk theme. Failing to remember a preference is not something
+ *  the operator can act on, so a blocked storage is swallowed. */
+export const writeAdminTheme = (theme: Theme): void => {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+  } catch {
+    // see above
+  }
 }
 
 /** The scope attribute for a branch, as a foldkit attribute. */

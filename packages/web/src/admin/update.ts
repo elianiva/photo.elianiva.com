@@ -10,6 +10,7 @@ import { Option } from 'effect'
 import { Multi } from '@foldkit/ui/combobox'
 import { modifyFields } from 'foldkit/struct'
 import { storedCols } from './prefs'
+import { storedAdminTheme } from '@/lib/theme'
 import { Runtime } from 'foldkit'
 import { Transition } from 'foldkit/route'
 import { UrlRequest } from 'foldkit/navigation'
@@ -39,6 +40,7 @@ import {
   LoadCmd,
   NavigateCmd,
   PersistColsCmd,
+  PersistThemeCmd,
   ReplaceUrlCmd,
   SaveSettingsCmd,
   DownloadPhotoCmd,
@@ -153,6 +155,7 @@ const initialModel = (route: AppRoute): Model => {
     ratioFilter: filters.ratio,
     sortFilter: filters.sort,
     cols: storedCols(),
+    theme: storedAdminTheme(),
     segmentGroups: { ...initSheetSegments(), ...initEditorSegments() },
     atoms: initAtomsState(),
     photoStatus: 'loading',
@@ -676,6 +679,16 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       commands: [PersistColsCmd({ cols })],
     }),
     CompletedPersistCols: () => ({ model }),
+
+    // ----- the Desk's theme ------------------------------------------------------
+    ToggledTheme: () => {
+      const theme = model.theme === 'dark' ? 'light' : 'dark'
+      return {
+        model: modifyFields(model, { theme: () => theme }),
+        commands: [PersistThemeCmd({ theme })],
+      }
+    },
+    CompletedPersistTheme: () => ({ model }),
 
     // ----- the atoms sheet -------------------------------------------------------
     // Every handler here moves one of the sheet's own pieces of state. Nothing

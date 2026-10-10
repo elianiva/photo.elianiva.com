@@ -32,6 +32,7 @@ import {
 } from './model'
 import type { Counts as CountsType, LibraryPage } from './model'
 import { GridPrefs, GridPrefsLive } from './prefs'
+import { Theme, writeAdminTheme } from '@/lib/theme'
 
 /** `ListLibraryRows` as the wire delivers it: the page's rows under `items`,
  *  the cursor that would follow, and the filtered total behind both. */
@@ -243,6 +244,18 @@ export const PersistColsCmd = Command.define('PersistCols', {
       // act on, so a failing store still completes the command and the grid
       // keeps the columns it was just given.
       Effect.catch(() => Effect.succeed(Message.CompletedPersistCols())),
+    ),
+})
+
+/** The Desk's theme, persisted across sessions. A storage that cannot be
+ *  written still completes the command: the theme the operator just chose
+ *  stays on screen. */
+export const PersistThemeCmd = Command.define('PersistTheme', {
+  args: { theme: Theme },
+  messages: [Message.CompletedPersistTheme],
+  execute: ({ theme }) =>
+    Effect.sync(() => writeAdminTheme(theme)).pipe(
+      Effect.as(Message.CompletedPersistTheme()),
     ),
 })
 

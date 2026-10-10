@@ -23,12 +23,13 @@
  */
 
 import type { HtmlBuilder } from 'foldkit/html'
-import { ArrowUpRight, Clock, Images, LogOut, Settings } from 'lucide'
+import { ArrowUpRight, Clock, Images, LogOut, Moon, Settings, Sun } from 'lucide'
 import type { IconNode } from 'lucide'
 
 import * as SidebarItem from '@/components/ui/sidebar-item'
 import { icon } from '@/lib/icons'
 
+import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
 import {
   AppRoute,
@@ -221,6 +222,15 @@ const footer = (model: Model, h: HtmlBuilder<Msg>): Child => {
             ),
           ]),
       libraryMeter(model, h),
+      SidebarItem.sidebarItem(
+        {
+          label: model.theme === 'dark' ? 'Light mode' : 'Dark mode',
+          state: 'default',
+          icon: model.theme === 'dark' ? Sun : Moon,
+          onClick: M.ToggledTheme(),
+        },
+        h,
+      ),
       ...(signOut === undefined
         ? []
         : [

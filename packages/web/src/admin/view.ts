@@ -40,7 +40,7 @@ const shell = (model: Model, h: HtmlBuilder<Msg>): Document => ({
   title: documentTitle(model),
   body: h.div(
     [
-      scopeTheme(themeForRoute(model.route), h),
+      scopeTheme(themeForRoute(model.route, model.theme), h),
       h.Class('bg-role-surface flex min-h-dvh text-role-text-primary'),
     ],
     [

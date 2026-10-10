@@ -25,6 +25,17 @@
       rel="stylesheet"
     />
     <link href="/src/styles.css" rel="stylesheet" />
+    <!-- The Desk's saved theme, applied before first paint so a light Desk never
+         flashes dark. Keep the key in step with `THEME_STORAGE_KEY` in
+         src/lib/theme.ts. -->
+    <script>
+      try {
+        var t = localStorage.getItem('photo-admin:theme')
+        if ((t === 'light' || t === 'dark') && /^\/admin\/?$|^\/admin\/(?!photos\/)/.test(location.pathname)) {
+          document.documentElement.setAttribute('data-theme', t)
+        }
+      } catch (e) {}
+    </script>
     <title>photo.elianiva.com — Photography</title>
   </head>
   <body>

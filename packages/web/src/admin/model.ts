@@ -38,6 +38,7 @@ import {
 } from './route'
 import type { LibraryFilters } from './route'
 import { SettingsDraft } from './settings-draft'
+import { Theme } from '@/lib/theme'
 
 // ---------------------------------------------------------------------------
 // Submodel bundles
@@ -331,6 +332,9 @@ export const Model = S.Struct({
   // grid density: number of square-tile columns (persisted to localStorage)
   cols: GridCols,
 
+  // the Desk's light or dark branch (persisted to localStorage)
+  theme: Theme,
+
   // the Desk atoms sheet: one Segment group per single-select it draws
   segmentGroups: Segment.Groups,
   atoms: AtomsState,
@@ -460,6 +464,10 @@ export const Message = defineMessageUnion({
    *  back through the same table. */
   SelectedView: { view: LibraryView },
   CompletedPersistCols: {},
+
+  // the Desk's light or dark branch
+  ToggledTheme: {},
+  CompletedPersistTheme: {},
 
   // create a Tag inline, from the upload Dialog's combo
   CreateTagRequested: {
