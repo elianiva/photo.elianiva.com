@@ -30,7 +30,7 @@ import type { HtmlBuilder } from 'foldkit/html'
 
 import { frameCount, figureUrl, placeholderStyle, type DaySection, type Figure } from '../content'
 import { Message } from '../model'
-import { BAND, type Child } from './shared'
+import { BAND, tiltFor, type Child } from './shared'
 
 /** The capture day is the rail's numeral; an unusable legacy date has none. */
 const numeralOf = (section: DaySection): string => (section.day === null ? '' : String(section.day))
@@ -62,18 +62,21 @@ const grease = (h: HtmlBuilder<Message>): ReadonlyArray<Child> => [
 
 const frame = (
   photo: Figure,
-  config: { readonly eager: boolean; readonly marked: boolean },
+  config: { readonly eager: boolean; readonly marked: boolean; readonly tilt: number },
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
-    [h.Key(photo.id), h.Class(`relative lg:w-auto ${photo.aspect < 1 ? 'w-[68%]' : 'w-full'}`)],
+    [
+      h.Key(photo.id),
+      h.Class(`relative lg:w-auto ${photo.aspect < 1 ? 'w-[68%]' : 'w-full'}`),
+      h.Style({ transform: `rotate(${config.tilt}deg)` }),
+    ],
     [
       h.button(
         [
           h.Class(
-            'group relative block w-full cursor-pointer bg-role-primary-hover py-[4px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:h-[150px] lg:w-auto',
+            'group relative block w-full cursor-pointer bg-role-primary-hover py-[4px] transition-transform duration-200 hover:z-20 hover:-translate-y-1 hover:-rotate-[0.6deg] focus-visible:z-20 focus-visible:ring-role-focus/50 outline-none focus-visible:ring-[3px] lg:w-fit',
           ),
-          h.Style({ aspectRatio: String(photo.aspect) }),
           h.OnClick(Message.ClickedFigure({ id: photo.id })),
           // Enter and Space are the button's own keys; the handler is here so a
           // keyboard reader gets the lightbox the mouse does.
@@ -89,8 +92,8 @@ const frame = (
         [
           h.span([h.Class(`${SPROCKETS} top-[0.5px]`)], []),
           h.img([
-            h.Class('block h-full w-full object-cover'),
-            h.Style(placeholderStyle(photo)),
+            h.Class('block h-auto w-full lg:h-[142px] lg:w-auto'),
+            h.Style({ ...placeholderStyle(photo), aspectRatio: String(photo.aspect) }),
             h.Src(figureUrl(photo)),
             // The button's label is the photo's accessible name; a second
             // reading of the same sentence would only make the frame noisier.
@@ -161,7 +164,11 @@ export const daySheet = (
             section.figures.map((photo, index) =>
               frame(
                 photo,
-                { eager: headsDocument && index < 4, marked: headsDocument && index === 0 },
+                {
+                  eager: headsDocument && index < 4,
+                  marked: headsDocument && index === 0,
+                  tilt: tiltFor(photo.id, index),
+                },
                 h,
               ),
             ),

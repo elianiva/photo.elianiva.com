@@ -340,9 +340,7 @@ export const frameCount = (count: number): string =>
  *  until the bitmap arrives. Empty when the Photo has none. */
 export const placeholderStyle = (figure: Figure): Record<string, string> => {
   const url = figure.blurhash === null ? null : placeholderDataUrl(figure.blurhash)
-  return url === null
-    ? {}
-    : { backgroundImage: `url(${url})`, backgroundSize: '100% 100%' }
+  return url === null ? {} : { backgroundImage: `url(${url})`, backgroundSize: '100% 100%' }
 }
 
 export const figureUrl = (figure: Figure): string => renditionUrl(figure.id, 'small')

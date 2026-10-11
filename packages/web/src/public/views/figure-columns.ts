@@ -24,23 +24,12 @@ import type { HtmlBuilder } from 'foldkit/html'
 import { flowColumns, type Figure } from '../content'
 import { Message } from '../model'
 import { figure } from './figure'
-import type { Child } from './shared'
+import { tiltFor, type Child } from './shared'
 
 /** The two column counts this file draws: two across on the desktop tree, two
  *  on the mobile one. */
 const DESKTOP_COLUMNS = 2
 const MOBILE_COLUMNS = 2
-
-/** A small, stable tilt in degrees. The magnitude comes from the photo's id so
- *  it never changes between renders; the sign alternates down a column and
- *  flips between neighbouring columns, so a right tilt is always followed by a
- *  left one. */
-const tiltFor = (id: string, position: number): number => {
-  let hash = 0
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  const magnitude = 0.3 + (hash % 100) / 100 * 0.9
-  return (position % 2 === 0 ? 1 : -1) * Math.round(magnitude * 100) / 100
-}
 
 const column = (
   figures: ReadonlyArray<Figure>,
