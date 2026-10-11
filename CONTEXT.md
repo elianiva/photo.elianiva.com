@@ -127,7 +127,7 @@ One month of the home page's Timeline — `August 2025`, headed by the design's 
 _Avoid_: Section (ambiguous — a Site Section was the nav entry), Edition, Page
 
 **Timeline**:
-The home page's list of **Month**s, newest first, plus the **tail** that says whether more can be loaded (`more`, `end` or `empty`). Drawn as a contact sheet: one row per Month, a numeral and a handwritten month-and-count note in the rail, and the Month's Photos in a strip of film frames. The newest frame on the page is circled by hand; that is the only mark that is not printed, and it is a fact the data holds (the newest published Photo), not a setting. It is a read of the Photo list, not a stored entity.
+The home page's list of **Month**s, newest first, plus the **tail** that says whether more can be loaded (`more`, `end` or `empty`). Drawn as a contact sheet: one row per Month, a numeral and a handwritten month-and-count note in the rail, and the Month's Photos in a strip of film frames. A few frames, picked by a hash of the Photo's id, carry a small hand-drawn doodle (star, heart, underline); they are decoration and say nothing about the Photo. It is a read of the Photo list, not a stored entity.
 _Avoid_: Edition, Feed, Gallery
 
 **Collection** _(deferred)_:
