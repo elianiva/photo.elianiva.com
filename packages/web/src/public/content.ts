@@ -218,7 +218,7 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
     title: photo.title,
     takenAt: photo.takenAt ?? null,
     ratio,
-    aspect: photo.width > 0 && photo.height > 0 ? photo.width / photo.height : RATIO_VALUE[ratio],
+    aspect: RATIO_VALUE[ratio],
     exif: formatExifLine(photo),
     details: exifDetails(photo),
     r2Key: photo.r2Key,

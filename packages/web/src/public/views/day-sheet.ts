@@ -92,7 +92,7 @@ const frame = (
         [
           h.span([h.Class(`${SPROCKETS} top-[0.5px]`)], []),
           h.img([
-            h.Class('block h-auto w-full lg:h-[142px] lg:w-auto'),
+            h.Class('block h-auto w-full object-cover lg:h-[142px] lg:w-auto'),
             h.Style({ ...placeholderStyle(photo), aspectRatio: String(photo.aspect) }),
             h.Src(figureUrl(photo)),
             // The button's label is the photo's accessible name; a second
