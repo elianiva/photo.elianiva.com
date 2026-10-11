@@ -31,17 +31,37 @@ import type { Child } from './shared'
 const DESKTOP_COLUMNS = 2
 const MOBILE_COLUMNS = 2
 
+/** A small, stable tilt in degrees. The magnitude comes from the photo's id so
+ *  it never changes between renders; the sign alternates down a column and
+ *  flips between neighbouring columns, so a right tilt is always followed by a
+ *  left one. */
+const tiltFor = (id: string, position: number): number => {
+  let hash = 0
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  const magnitude = 0.3 + (hash % 100) / 100 * 0.9
+  return (position % 2 === 0 ? 1 : -1) * Math.round(magnitude * 100) / 100
+}
+
 const column = (
   figures: ReadonlyArray<Figure>,
   gap: string,
   eagerHead: boolean,
+  columnIndex: number,
   h: HtmlBuilder<Message>,
 ): Child =>
   h.div(
     [h.Class(`flex min-w-0 flex-1 flex-col ${gap}`)],
     [
       ...figures.map((photo, index) =>
-        figure({ photo, slot: 'column', loading: eagerHead && index === 0 ? 'eager' : 'lazy' }, h),
+        figure(
+          {
+            photo,
+            slot: 'column',
+            loading: eagerHead && index === 0 ? 'eager' : 'lazy',
+            tilt: tiltFor(photo.id, index + columnIndex),
+          },
+          h,
+        ),
       ),
     ],
   )
@@ -57,7 +77,7 @@ const columnsDesktop = (
     // `flowColumns` puts the run's first photo at the head of the first column
     // on both masters, so one photo per tree is the eager one whichever way the
     // flow broke.
-    children.push(column(columnFigures, 'gap-4', headsDocument && index === 0, h))
+    children.push(column(columnFigures, 'gap-4', headsDocument && index === 0, index, h))
     if (index < flowed.length - 1) {
       children.push(h.div([h.Class('w-px shrink-0 bg-role-hairline')], []))
     }
@@ -74,7 +94,7 @@ const columnsMobile = (
     [h.Class('-mx-2 flex items-stretch gap-2 lg:hidden')],
     [
       ...flowColumns(figures, MOBILE_COLUMNS).map((columnFigures, index) =>
-        column(columnFigures, 'gap-3', headsDocument && index === 0, h),
+        column(columnFigures, 'gap-3', headsDocument && index === 0, index, h),
       ),
     ],
   )

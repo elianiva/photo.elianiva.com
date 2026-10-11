@@ -42,6 +42,8 @@ export type FigureConfig = Readonly<{
    *  answer: a photo in a flow is below the fold, the About page's own photo is
    *  the page. */
   loading?: 'eager' | 'lazy'
+  /** Degrees to rotate the photo by, so a run reads as hand-placed prints. */
+  tilt?: number
 }>
 
 /** The placard title's measure. The mobile master clamps the caption to two
@@ -61,7 +63,10 @@ export const figure = (config: FigureConfig, h: HtmlBuilder<Message>): Child => 
       h.button(
         [
           h.Class('block w-full cursor-pointer overflow-hidden bg-role-surface-container'),
-          h.Style({ aspectRatio: String(photo.aspect) }),
+          h.Style({
+            aspectRatio: String(photo.aspect),
+            ...(config.tilt ? { transform: `rotate(${config.tilt}deg)` } : {}),
+          }),
           h.OnClick(Message.ClickedFigure({ id: photo.id })),
           // Enter and Space are the button's own keys; the handler is here so a
           // keyboard reader gets the lightbox the mouse does.
