@@ -54,7 +54,7 @@ export const describeCause = (cause: unknown): string => {
 
 // ---------------------------------------------------------------------------
 // Public reads — everything a visitor's browser or the server-rendered Front
-// asks for, on the ungated `/rpc`. Nothing here can reach a Draft or a trashed
+// asks for, on the ungated `/rpc`. Nothing here can reach a Draft or a failed
 // Photo: the filter lives in `PublicPhotoService`, so it cannot be forgotten
 // per handler (ADR 0004). The Admin reads the admin group instead.
 // ---------------------------------------------------------------------------
@@ -75,8 +75,8 @@ export class ListPhotos extends Rpc.make('ListPhotos', {
 
 /** One Photo by id — and the one RPC both groups declare. The wire shape is the
  *  same; the answer is not. On `/rpc` the id has to name a published,
- *  non-trashed Photo or the call is `PhotoNotFound`, and on `/admin/rpc` it
- *  answers for a Draft, a failed upload or anything but the Trash, because
+ *  Photo or the call is `PhotoNotFound`, and on `/admin/rpc` it
+ *  answers for a Draft or a failed upload too, because
  *  that is the Editor's Photo. */
 export class GetPhoto extends Rpc.make('GetPhoto', {
   payload: { id: S.String },
@@ -122,7 +122,7 @@ export type PublicSection = typeof PublicSection.Type
 
 /** The site's counters, in one read: the last published Photo Number, how many
  *  photographs are published, and the day the newest of them was taken.
- *  `number` moves back when the highest-numbered Photo is trashed
+ *  `number` moves back when the highest-numbered Photo is deleted
  *  (CONTEXT.md, Photo Number).
  *
  *  There is no site copy here. The Masthead, the lede, the Colophon and the
@@ -279,16 +279,11 @@ export class GetSession extends Rpc.make('GetSession', {
 }) {}
 
 /** Every stored Status, always. `scheduled` is a display label over a draft
- *  (CONTEXT.md), not a fourth value with a count.
- *
- *  `trashed` is the one count that is not over live Photos, and it is the only
- *  one that can be: nothing in the Admin lists the Trash, so its count is
- *  reported here rather than drawn by a page. */
+ *  (CONTEXT.md), not a fourth value with a count. */
 export class GetCounts extends Rpc.make('GetCounts', {
   payload: {},
   success: S.Struct({
     total: S.Number,
-    trashed: S.Number,
     byStatus: S.Struct({ draft: S.Number, published: S.Number, failed: S.Number }),
   }),
   error: StorageError,
@@ -333,7 +328,7 @@ export class ListLibraryRows extends Rpc.make('ListLibraryRows', {
 }) {}
 
 // ---------------------------------------------------------------------------
-// Admin mutations — the Desk's single-Photo edits, its Bulk Bar and its Trash.
+// Admin mutations — the Desk's single-Photo edits, and its Bulk Bar.
 // ---------------------------------------------------------------------------
 
 /** Publish and unpublish are one call: the Status is not a field on
@@ -389,33 +384,28 @@ export class UpdatePhotoPresentation extends Rpc.make('UpdatePhotoPresentation',
   error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
 }) {}
 
-/** The Bulk Bar is multi-select and the Trash has `Restore all`, so the
- *  lifecycle moves in arrays. These answer `void` on purpose: the fold is
- *  all-or-nothing — a Photo that must exist has to, and a Photo that must be
- *  in the Trash has to be — so a partial count cannot happen, and a count the
- *  handler read off its own payload would report nothing. The Bulk Bar knows
- *  its selection; it re-reads the list and the counts after the call. */
+/** The Bulk Bar is multi-select, so the lifecycle moves in arrays. These
+ *  answer `void` on purpose: the fold is all-or-nothing — a Photo that must
+ *  exist has to — so a partial count cannot happen, and a count the handler
+ *  read off its own payload would report nothing. The Bulk Bar knows its
+ *  selection; it re-reads the list and the counts after the call. */
 const PhotoIds = S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(
   S.check(S.isMinLength(1)),
   S.check(S.isMaxLength(100)),
 )
 
-export class TrashPhotos extends Rpc.make('TrashPhotos', {
+/** Deletes for good: the row and every R2 object. There is no Trash. */
+export class DeletePhotos extends Rpc.make('DeletePhotos', {
   payload: { ids: PhotoIds },
   success: S.Void,
   error: S.Union([PhotoNotFound, StorageError]),
 }) {}
 
-export class RestorePhotos extends Rpc.make('RestorePhotos', {
-  payload: { ids: PhotoIds },
-  success: S.Void,
-  error: S.Union([PhotoNotFound, StorageError]),
-}) {}
-
-export class PurgePhotos extends Rpc.make('PurgePhotos', {
-  payload: { ids: PhotoIds },
-  success: S.Void,
-  error: S.Union([PhotoNotFound, InvalidInput, StorageError]),
+/** Deletes every R2 object no Photo owns. Admin-only; answers with how many. */
+export class SweepOrphans extends Rpc.make('SweepOrphans', {
+  payload: {},
+  success: S.Struct({ deleted: S.Number }),
+  error: StorageError,
 }) {}
 
 const TagIds = S.Array(S.String.pipe(S.check(S.isMaxLength(128)))).pipe(
@@ -507,7 +497,7 @@ export class UpdateSettings extends Rpc.make('UpdateSettings', {
   error: S.Union([InvalidInput, StorageError]),
 }) {}
 
-/** Every non-trashed Photo as the Storage block's CSV index names it, in Photo
+/** Every Photo as the Storage block's CSV index names it, in Photo
  *  Number order. The rows, not the document: the quoting, the header and the
  *  download are the page's business, and a column added to the index then costs
  *  one schema rather than a migration. */
@@ -531,9 +521,8 @@ export const PhotoAdminRpcs = RpcGroup.make(
   SetPhotosStatus,
   BulkUpdatePhotos,
   UpdatePhotoPresentation,
-  TrashPhotos,
-  RestorePhotos,
-  PurgePhotos,
+  DeletePhotos,
+  SweepOrphans,
   BulkAddTags,
   BulkRemoveTags,
   AddBorderToPhotos,

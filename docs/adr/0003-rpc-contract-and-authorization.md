@@ -25,7 +25,7 @@ and the browser builds URLs from, so a route cannot exist on one side only.
 | Path                   | Audience                                                            | Gate                   |
 | ---------------------- | ------------------------------------------------------------------- | ---------------------- |
 | `POST /api/rpc`        | public reads (`ListPhotos`, `GetPhoto`, `ListTags`, `GetFrontPage`) | none, by design        |
-| `POST /api/admin/rpc`  | every Admin read and write, Drafts and Trash included               | Access + in-Worker JWT |
+| `POST /api/admin/rpc`  | every Admin read and write, Drafts included                         | Access + in-Worker JWT |
 | `POST /api/upload`     | multipart JPEG → R2 + D1                                            | Access + in-Worker JWT |
 | `GET /api/image/<key>` | the original's bytes                                                | none                   |
 | `GET /api/health`      | a real D1 round trip                                                | none                   |

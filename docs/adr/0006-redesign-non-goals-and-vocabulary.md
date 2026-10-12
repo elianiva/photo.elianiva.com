@@ -18,17 +18,15 @@ it is the companion to `CONTEXT.md`, which carries the vocabulary.
 says Photo. The design says `412 FRAMES`; that is a label, not a schema.
 
 The `Archive` collision is split. `Archive — Desktop` (`1b23a3dbfc26d60c`) is a
-public page; the Settings block `4961410296c710f0` in `Desk — Settings`
-(`8b3ebe985801026f`) is a byte meter and a retention policy; and the Admin
-already calls its soft-deleted Photographs the `Trash`, so an Admin surface
-named `Archive` would be a near-synonym for something that already exists. The
-`Trash` is that state and not a page the Admin lists, which does not change what
-the word means.
+public page; and the Settings block `4961410296c710f0` in `Desk — Settings`
+(`8b3ebe985801026f`) is a byte meter and a retention policy. (The Admin once
+also had a soft-delete `Trash`; it has since been removed, and deletes are
+permanent.)
 
 - **Archive** is the public chronological index of published Photos at
   `/archive`, a read of the Photo list rather than a stored entity.
 - **Storage** is the Admin Settings block: frame count, bytes against quota, CSV
-  index, and the RETAIN setting for the Trash purge. The design already calls
+  index, and the orphan sweep (the design's RETAIN setting governed a Trash that no longer exists). The design already calls
   the sidebar's meter `Storage` (`f9d7fbd1cc8e9944`), so the split follows the
   design's own lead.
 - The Settings section the design labels `ARCHIVE` is the **Storage** section.
@@ -55,10 +53,7 @@ cover.` and a `Change cover` button — needs a `series` table. No cover column
   `takenAt` whose cover is the earliest published Photo, which is why a Tag's
   `slug` is not editable: a slug is a live URL.
 
-`RETAIN FOREVER` in Settings therefore governs **only** the Trash purge. It is
-not a history-retention policy, and nothing else in the product may be
-described as one. Nothing purges on a timer, so the control is drawn disabled at
-its one true value.
+`RETAIN FOREVER` in Settings governed **only** the Trash purge, and the Trash is gone, so the control is no longer drawn. It was never a history-retention policy, and nothing else in the product may be described as one.
 
 ## Later chains
 

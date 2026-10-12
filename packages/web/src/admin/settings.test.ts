@@ -200,6 +200,33 @@ describe('the CSV index', () => {
     expect(update(exporting.model, Message.ExportCsvIndex({})).commands ?? []).toEqual([])
   })
 
+  it('sweeps orphans once at a time and toasts how many files went', () => {
+    const sweeping = update(loaded(), Message.SweepOrphans({}))
+
+    expect(sweeping.model.settingsSweeping).toBe(true)
+    expect(sweeping.commands?.map((command) => command.name)).toEqual(['SweepOrphans'])
+    // A second press while one is in flight dispatches nothing.
+    expect(update(sweeping.model, Message.SweepOrphans({})).commands ?? []).toEqual([])
+
+    const swept = update(sweeping.model, Message.SweptOrphans({ deleted: 3 }))
+    expect(swept.model.settingsSweeping).toBe(false)
+    expect(swept.model.toast.toast.entries.map((entry) => entry.payload.title)).toEqual([
+      'Swept 3 orphaned files from R2',
+    ])
+
+    const none = update(sweeping.model, Message.SweptOrphans({ deleted: 0 }))
+    expect(none.model.toast.toast.entries.map((entry) => entry.payload.title)).toEqual([
+      'No orphaned files found',
+    ])
+  })
+
+  it('releases the button when the sweep fails', () => {
+    const sweeping = update(loaded(), Message.SweepOrphans({}))
+    const failed = update(sweeping.model, Message.FailedRpc({ message: 'R2 is down' }))
+
+    expect(failed.model.settingsSweeping).toBe(false)
+  })
+
   it('quotes a cell the way a spreadsheet needs, and leaves a plain one alone', () => {
     const document = csvIndex([
       {

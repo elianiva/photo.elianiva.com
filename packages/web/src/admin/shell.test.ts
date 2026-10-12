@@ -30,7 +30,6 @@ const at = (pathname: string) => {
 
 const COUNTS: Counts = {
   total: 412,
-  trashed: 3,
   byStatus: { draft: 7, published: 402, failed: 1 },
 }
 
@@ -84,7 +83,6 @@ describe('the rail\u2019s meter', () => {
     // zero for the whole of an existing Library.
     const { counts } = signedIn('/admin')
     expect(counts.total).toBe(COUNTS.total)
-    expect(counts.trashed).toBe(COUNTS.trashed)
     expect(counts.byStatus.published).toBe(COUNTS.byStatus.published)
   })
 })

@@ -8,7 +8,7 @@ import {
   type PhotoListPage,
   PhotoService,
 } from './photo'
-import { createPhoto, createTag, setPhotoStatus, trashPhoto } from './testing/fixtures'
+import { createPhoto, createTag, setPhotoStatus } from './testing/fixtures'
 import { makeTestHarness, withTestServices, type TestHarness } from './testing/harness'
 
 describe('photo helpers', () => {
@@ -131,16 +131,6 @@ describe('PhotoService.count', () => {
     // that matched nothing rather than one that was ignored.
     expect(await count(harness, { ratio: '3:2' })).toBe(3)
     expect(await count(harness, { ratio: '2:3' })).toBe(0)
-  })
-
-  it('leaves a trashed photo out of the count, as it does out of every page', async () => {
-    const harness = makeTestHarness()
-    const kept = await createPhoto(harness, { slug: 'kept', title: 'Kept' })
-    const binned = await createPhoto(harness, { slug: 'binned', title: 'Binned' })
-    await trashPhoto(harness, binned.id)
-
-    expect(await count(harness, {})).toBe(1)
-    expect((await list(harness, {})).items.map((item) => item.id)).toEqual([kept.id])
   })
 
   it('is zero, not null, for a library nothing matches', async () => {

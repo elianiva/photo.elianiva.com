@@ -1,10 +1,10 @@
 /**
  * PublicPhotoService — the public site's read model (see CONTEXT.md).
  *
- * Every method here filters to `status = 'published' AND deletedAt IS NULL`
+ * Every method here filters to `status = 'published'`
  * inside the service, so a caller cannot forget the filter and a draft or a
- * trashed Photo cannot leak to a visitor. `PhotoService` is the Admin's read
- * model and deliberately answers for drafts, failed uploads and the Trash;
+ * failed upload cannot leak to a visitor. `PhotoService` is the Admin's read
+ * model and deliberately answers for drafts and failed uploads;
  * this is the other audience, over the same `SqlClient` and through the same row
  * decoder, so the two cannot disagree about what a Photo is.
  *
@@ -45,8 +45,7 @@ import {
  * second copy of it: `frontPage` and `bySlug` cannot drift into disagreeing
  * about who is visible, and neither can the Folio's own read.
  */
-const publicWhere = (alias: string): string =>
-  `${alias}.status = 'published' AND ${alias}.deletedAt IS NULL`
+const publicWhere = (alias: string): string => `${alias}.status = 'published'`
 
 const PUBLIC = publicWhere('photos')
 
@@ -114,10 +113,10 @@ export interface PublicListInput {
 
 export interface FrontStats {
   /**
-   * `MAX(number)` over published, non-trashed Photos: the site's public
-   * counter, read as *the last photograph a visitor can see*. Trashing the
-   * highest-numbered Photo moves this back while that Photo keeps its number
-   * in the Trash — intended, and not a bug to be fixed here.
+   * `MAX(number)` over published Photos: the site's public counter, read as
+   * *the last photograph a visitor can see*. Deleting or unpublishing the
+   * highest-numbered Photo moves this back — intended, and not a bug to be
+   * fixed here.
    */
   readonly number: number | null
   /** `COUNT(*)` over the same set — the folio's `412 FRAMES`.
@@ -278,7 +277,7 @@ const STATS_SQL = `
 /**
  * The Folio's rows: the Tags a visitor can actually go to.
  *
- * A Tag with no published, non-trashed Photo is not a destination, so it is not
+ * A Tag with no published Photo is not a destination, so it is not
  * a link — the nav is a list of places that exist, and an `EXISTS` over the
  * published set is what decides that in one pass rather than a count per Tag.
  * The order is the label's, which is the same order the Admin's tag list is in,

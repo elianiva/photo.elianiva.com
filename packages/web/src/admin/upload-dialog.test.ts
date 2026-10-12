@@ -50,7 +50,6 @@ const cold = (): Model =>
     Message.SucceededGetSession({ email: 'owner@photo.test', teamDomain: 'https://team.test' }),
     Message.SucceededGetCounts({
       total: 1,
-      trashed: 0,
       byStatus: { draft: 0, published: 1, failed: 0 },
     }),
     Message.SucceededFetchTags({ tags: [] }),

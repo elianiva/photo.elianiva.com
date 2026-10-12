@@ -6,7 +6,7 @@
  * throw away the sections already
  * rendered and make the reader scroll back past them.
  *
- * The read goes to the public group, which filters to published, non-trashed
+ * The read goes to the public group, which filters to published
  * Photos inside `PublicPhotoService`, so a Draft cannot be appended to the home page
  * by asking for an older month. The response is mapped by `sectionsOf`, the
  * same function the Worker used for the first read, so appended photos are

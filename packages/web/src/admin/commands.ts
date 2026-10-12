@@ -186,17 +186,15 @@ const foldOverChunks = <E>(
 // Status moved, so the sidebar's numbers moved too.
 // ---------------------------------------------------------------------------
 
-/** A soft delete. The Bulk Bar's `Delete` and the Trash it lands in are one
- *  decision: nothing here touches R2, and the purge that does is the Trash's
- *  own irreversible step. */
-export const BulkTrashCmd = Command.define('BulkTrash', {
+/** The Bulk Bar's `Delete`: a hard delete of each row and its R2 objects. */
+export const BulkDeleteCmd = Command.define('BulkDelete', {
   args: { ids: S.Array(S.String), page: PageArgs },
-  messages: [Message.SucceededBulkTrash, Message.FailedRpc],
+  messages: [Message.SucceededBulkDelete, Message.FailedRpc],
   execute: ({ ids, page }) =>
     Effect.gen(function* () {
-      yield* foldOverChunks(ids, (batch) => rpcAdmin('TrashPhotos', { ids: [...batch] }))
+      yield* foldOverChunks(ids, (batch) => rpcAdmin('DeletePhotos', { ids: [...batch] }))
       const fresh = yield* listPayload(page)
-      return Message.SucceededBulkTrash({ count: ids.length, ...toLibraryPage(fresh) })
+      return Message.SucceededBulkDelete({ count: ids.length, ...toLibraryPage(fresh) })
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
@@ -673,6 +671,15 @@ export const ExportCsvIndexCmd = Command.define('ExportCsvIndex', {
       Effect.succeed(Message.FailedExportCsvIndex({ message: error.message })),
     ),
   ),
+})
+
+/** The Storage block's `Sweep orphans`: R2 objects no Photo owns, deleted. The
+ *  API answers with how many, and the count is all the Model needs. */
+export const SweepOrphansCmd = Command.define('SweepOrphans', {
+  messages: [Message.SweptOrphans, Message.FailedRpc],
+  execute: Effect.map(rpcAdmin<{ deleted: number }>('SweepOrphans', {}), ({ deleted }) =>
+    Message.SweptOrphans({ deleted }),
+  ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
 // ---------------------------------------------------------------------------

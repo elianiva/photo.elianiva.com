@@ -47,10 +47,10 @@
  */
 export const API_PREFIX = '/api'
 
-/** Public reads: published, non-trashed Photos. Ungated by design. */
+/** Public reads: published Photos. Ungated by design. */
 export const RPC_PATH = `${API_PREFIX}/rpc`
 
-/** Every read and write the Admin needs, including Drafts and the Trash. */
+/** Every read and write the Admin needs, including Drafts. */
 export const ADMIN_RPC_PATH = `${API_PREFIX}/admin/rpc`
 
 /** The multipart JPEG upload. Edge-gated, and nothing else writes to R2. */

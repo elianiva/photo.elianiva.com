@@ -63,7 +63,7 @@ export const readSite = <A, E>(
  * `frontPage` is the whole of it: the published photographs grouped into the
  * months the home page draws them, and the cursor below the last one. The page's
  * words are authored in the views, so there is no second read to keep in step
- * with this one. The read filters to published, non-trashed Photos inside
+ * with this one. The read filters to published Photos inside
  * `PublicPhotoService`, so a Draft cannot reach a visitor.
  *
  * A read that fails is not a failed page: the home page renders the copy that says

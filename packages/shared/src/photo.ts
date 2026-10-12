@@ -238,8 +238,6 @@ export const DbPhotoRow = S.Struct({
   focalLength: S.NullOr(S.Number),
   metadata: S.String,
   blurhash: S.NullOr(S.String),
-  /** `YYYY-MM-DD`. Non-null on a trashed Photo; no read path returns one. */
-  deletedAt: S.NullOr(S.String),
 })
 export type DbPhotoRow = typeof DbPhotoRow.Type
 

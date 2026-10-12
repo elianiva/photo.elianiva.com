@@ -145,8 +145,8 @@ export const withTestServices = <A, E>(
     ),
   )
 
-/** The public read model over `harness` — the one that filters to published,
- *  non-trashed Photos inside itself, so a test cannot leak a Draft by asking
+/** The public read model over `harness` — the one that filters to published
+ *  Photos inside itself, so a test cannot leak a Draft by asking
  *  for one. */
 export const withPublicRead = <A, E>(
   effect: Effect.Effect<A, E, PublicPhotoService>,

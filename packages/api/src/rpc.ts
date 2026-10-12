@@ -5,7 +5,7 @@
  * `/admin/rpc` (ADR 0003).
  *
  * A handler translates a payload and a result, and owns no visibility rule.
- * The public group answers for published, non-trashed Photos because
+ * The public group answers for published Photos because
  * `PublicPhotoService` filters to them, so the ungated `/rpc` cannot leak a
  * Draft by someone forgetting a `where`; the admin group answers through
  * `PhotoService`, which deliberately sees Drafts, failed uploads and the
@@ -22,8 +22,7 @@ import { TagService } from './tag'
 
 /**
  * The single-Photo operations, folded over a set in order. The lifecycle and
- * the presentation rules stay owned by the service — a Photo must exist, only
- * a trashed Photo can be purged — rather than being restated as bulk SQL that
+ * the presentation rules stay owned by the service — a Photo must exist — rather than being restated as bulk SQL that
  * can drift from them.
  */
 const foldOver = <A, E>(
@@ -64,7 +63,7 @@ export const PublicRpcHandlersLive = PhotoPublicRpcs.toLayer({
 
 export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
   // The same wire shape the public group declares, and the Editor's Photo: a
-  // Draft, a failed upload, anything but the Trash.
+  // Draft, a failed upload.
   GetPhoto: (payload) => PhotoService.use((service) => service.get(payload.id)),
   // The Editor's loaded snapshot. The gated group only: the public site reads
   // the Rendition the Presentation produced, not the authoring state.
@@ -103,11 +102,10 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
         }),
       )
     }),
-  // `DeletePhoto` is a soft delete: the row is stamped `deletedAt` and its
-  // original stays in R2 until the Trash purges it.
+  // `DeletePhoto` removes the Photo outright: the row and its R2 objects.
   DeletePhoto: (payload) =>
     Effect.as(
-      PhotoService.use((service) => service.trash(payload.id)),
+      PhotoService.use((service) => service.remove(payload.id)),
       true,
     ),
   CreateTag: (payload) =>
@@ -204,12 +202,9 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
   // `void` on purpose: the fold is all-or-nothing, so there is no partial
   // count to report, and a number read off the payload would report the
   // request back to the client. The Bulk Bar re-reads the list and the counts.
-  TrashPhotos: (payload) =>
-    PhotoService.use((service) => foldOver(payload.ids, (id) => service.trash(id))),
-  RestorePhotos: (payload) =>
-    PhotoService.use((service) => foldOver(payload.ids, (id) => service.restore(id))),
-  PurgePhotos: (payload) =>
-    PhotoService.use((service) => foldOver(payload.ids, (id) => service.purge(id))),
+  DeletePhotos: (payload) =>
+    PhotoService.use((service) => foldOver(payload.ids, (id) => service.remove(id))),
+  SweepOrphans: () => PhotoService.use((service) => service.sweepOrphans()),
   BulkAddTags: (payload) =>
     PhotoService.use((service) => service.addTags(payload.photoIds, payload.tagIds)),
   BulkRemoveTags: (payload) =>

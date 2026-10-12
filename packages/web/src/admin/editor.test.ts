@@ -91,7 +91,6 @@ const shellReads: ReadonlyArray<Message> = [
   Message.SucceededGetSession({ email: null, teamDomain: null }),
   Message.SucceededGetCounts({
     total: 412,
-    trashed: 3,
     byStatus: { draft: 7, published: 402, failed: 1 },
   }),
 ]

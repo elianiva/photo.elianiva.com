@@ -21,13 +21,7 @@ import { PublicPhotoService, PublicPhotoServiceLive } from '../public-photo'
 import { AdminSession, type AdminSessionValue } from '../session'
 import { SettingsServiceLive, type SettingsService } from '../settings'
 import { TagServiceLive, type TagService } from '../tag'
-import {
-  createPhoto,
-  createTag,
-  PRESENTATION_DEFAULTS,
-  setPhotoStatus,
-  trashPhoto,
-} from './fixtures'
+import { createPhoto, createTag, PRESENTATION_DEFAULTS, setPhotoStatus } from './fixtures'
 import { makeTestHarness, queryRow, queryRows, type TestHarness } from './harness'
 
 /**
@@ -203,20 +197,6 @@ describe('ListPhotos handler', () => {
     await expect(listPhotos(harness, { tagSlug: 'a,b' })).rejects.toThrow(/one tag/i)
   })
 
-  it('keeps a trashed photo out of the public list', async () => {
-    const harness = makeTestHarness()
-    const kept = await createPhoto(harness, { slug: 'kept', title: 'Kept' })
-    const binned = await createPhoto(harness, { slug: 'binned', title: 'Binned' })
-    await queryRows(
-      harness,
-      (sql) => sql`UPDATE photos SET deletedAt = '2026-01-01' WHERE id = ${binned.id}`,
-    )
-
-    const page = await listPhotos(harness, { limit: 60 })
-
-    expect(page.items.map((item) => item.id)).toEqual([kept.id])
-  })
-
   it('passes q and limit through', async () => {
     const harness = makeTestHarness()
     await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })
@@ -248,24 +228,16 @@ const seedMonths = async (harness: TestHarness): Promise<void> => {
   }
 }
 
-/** A Draft and a trashed Photo in a fifth month: the two rows no public read
- *  may return, however it is addressed. */
-const seedHidden = async (
-  harness: TestHarness,
-): Promise<{ readonly draft: Hidden; readonly trashed: Hidden }> => {
+/** A Draft in a fifth month: the row no public read may return, however it is
+ *  addressed. */
+const seedHidden = async (harness: TestHarness): Promise<{ readonly draft: Hidden }> => {
   const created = await createPhoto(harness, {
     slug: 'september-draft',
     title: 'A draft.',
     takenAt: '2025-09-02',
   })
-  const binned = await createPhoto(harness, {
-    slug: 'september-trashed',
-    title: 'A trashed photo.',
-    takenAt: '2025-09-03',
-  })
   await setPhotoStatus(harness, created.id, 'draft')
-  await trashPhoto(harness, binned.id)
-  return { draft: created, trashed: binned }
+  return { draft: created }
 }
 
 interface Hidden {
@@ -283,7 +255,7 @@ const numberOf = async (harness: TestHarness, id: string): Promise<number> => {
 }
 
 describe('the public group only answers for published photos', () => {
-  it('leaves a draft and a trashed photo out of ListPhotos', async () => {
+  it('leaves a draft out of ListPhotos', async () => {
     const harness = makeTestHarness()
     const kept = await createPhoto(harness, {
       slug: 'kept',
@@ -297,20 +269,20 @@ describe('the public group only answers for published photos', () => {
     expect(page.items.map((item) => item.id)).toEqual([kept.id])
   })
 
-  it('reports a draft and a trashed id from GetPhoto as not found', async () => {
+  it('reports a draft id from GetPhoto as not found', async () => {
     const harness = makeTestHarness()
     const shown = await createPhoto(harness, {
       slug: 'shown',
       title: 'Shown',
       takenAt: '2025-08-01',
     })
-    const { draft, trashed } = await seedHidden(harness)
+    const { draft } = await seedHidden(harness)
 
     expect((await publicRpc(harness, (client) => client.GetPhoto({ id: shown.id }))).slug).toBe(
       'shown',
     )
 
-    for (const hidden of [draft, trashed]) {
+    for (const hidden of [draft]) {
       const error = await publicRpc(harness, (client) =>
         client.GetPhoto({ id: hidden.id }).pipe(Effect.flip),
       )
@@ -318,14 +290,14 @@ describe('the public group only answers for published photos', () => {
     }
   })
 
-  it('answers null from GetPublicPhoto and GetPublicPhotoByNumber for either', async () => {
+  it('answers null from GetPublicPhoto and GetPublicPhotoByNumber for a draft', async () => {
     const harness = makeTestHarness()
     const shown = await createPhoto(harness, {
       slug: 'shown',
       title: 'Shown',
       takenAt: '2025-08-01',
     })
-    const { draft, trashed } = await seedHidden(harness)
+    const { draft } = await seedHidden(harness)
     const shownNumber = await numberOf(harness, shown.id)
 
     // The two URLs a Photo page is addressable by.
@@ -336,7 +308,7 @@ describe('the public group only answers for published photos', () => {
       (await publicRpc(harness, (c) => c.GetPublicPhotoByNumber({ number: shownNumber })))?.slug,
     ).toBe('shown')
 
-    for (const hidden of [draft, trashed]) {
+    for (const hidden of [draft]) {
       const hiddenNumber = await numberOf(harness, hidden.id)
       expect(await publicRpc(harness, (c) => c.GetPublicPhoto({ slug: hidden.slug }))).toBeNull()
       expect(
@@ -413,7 +385,7 @@ describe('GetFrontPage handler', () => {
     )
   })
 
-  it('leaves a draft and a trashed photo out of the sections and the stats', async () => {
+  it('leaves a draft out of the sections and the stats', async () => {
     const harness = makeTestHarness()
     await seedMonths(harness)
     await seedHidden(harness)
@@ -430,15 +402,14 @@ describe('GetFrontPage handler', () => {
 })
 
 describe('DeletePhoto handler', () => {
-  it('is a soft delete: the row stays, stamped, and R2 keeps the original', async () => {
+  it('removes the row and its R2 objects', async () => {
     const harness = makeTestHarness()
     const created = await createPhoto(harness, { slug: 'sunset', title: 'Sunset' })
 
     expect(await deletePhoto(harness, created.id)).toBe(true)
 
-    expect(await slugsIn(harness)).toEqual(['sunset'])
-    expect(await harness.photos.head(created.r2Key)).not.toBeNull()
-    expect((await listPhotos(harness, { limit: 60 })).items).toEqual([])
+    expect(await slugsIn(harness)).toEqual([])
+    expect(await harness.photos.head(created.r2Key)).toBeNull()
   })
 })
 
@@ -460,26 +431,23 @@ describe('the admin group GetPhoto', () => {
 })
 
 describe('GetCounts handler', () => {
-  it('reports the total, each status and the trashed count, with no scheduled key', async () => {
+  it('reports the total and each status, with no scheduled key', async () => {
     const harness = makeTestHarness()
-    const published = await createPhoto(harness, {
+    await createPhoto(harness, {
       slug: 'temple',
       title: 'Temple',
       takenAt: '2024-05-01',
     })
     const draft = await createPhoto(harness, { slug: 'alley', title: 'Alley' })
     await setPhotoStatus(harness, draft.id, 'draft')
-    await trashPhoto(harness, published.id)
 
     const result = await adminRpc(harness, (client) => client.GetCounts({}))
 
-    // The trashed Photo is out of every live count and in `trashed`.
     // `toEqual` pins the key set, so a `scheduled` count appearing here fails
     // this without a second assertion.
     expect(result).toEqual({
-      total: 1,
-      trashed: 1,
-      byStatus: { draft: 1, published: 0, failed: 0 },
+      total: 2,
+      byStatus: { draft: 1, published: 1, failed: 0 },
     })
   })
 })
@@ -723,78 +691,24 @@ describe('UpdatePhotoPresentation handler', () => {
   })
 })
 
-describe('TrashPhotos, RestorePhotos and PurgePhotos handlers', () => {
-  it('takes arrays in and moves every id in the set', async () => {
+describe('DeletePhotos handler', () => {
+  it('removes every id in the set, rows and R2 objects both', async () => {
     const harness = makeTestHarness()
-    const first = await createPhoto(harness, {
-      slug: 'a',
-      title: 'A',
-      r2Key: 'o/a.jpg',
-      takenAt: '2024-05-01',
-    })
-    const second = await createPhoto(harness, {
-      slug: 'b',
-      title: 'B',
-      r2Key: 'o/b.jpg',
-      takenAt: '2024-04-01',
-    })
-    const third = await createPhoto(harness, {
-      slug: 'c',
-      title: 'C',
-      takenAt: '2024-03-01',
-    })
+    const first = await createPhoto(harness, { slug: 'a', title: 'A', r2Key: 'o/a.jpg' })
+    const second = await createPhoto(harness, { slug: 'b', title: 'B', r2Key: 'o/b.jpg' })
+    const third = await createPhoto(harness, { slug: 'c', title: 'C', r2Key: 'o/c.jpg' })
+    const fourth = await createPhoto(harness, { slug: 'd', title: 'D', r2Key: 'o/d.jpg' })
 
     expect(
-      await adminRpc(harness, (client) => client.TrashPhotos({ ids: [first.id, second.id] })),
+      await adminRpc(harness, (client) =>
+        client.DeletePhotos({ ids: [first.id, second.id, third.id] }),
+      ),
     ).toBeUndefined()
-    expect((await listPhotos(harness, { limit: 60 })).items.map((item) => item.id)).toEqual([
-      third.id,
-    ])
-
-    expect(
-      await adminRpc(harness, (client) => client.RestorePhotos({ ids: [first.id] })),
-    ).toBeUndefined()
-    expect((await listPhotos(harness, { limit: 60 })).items.map((item) => item.id)).toEqual([
-      first.id,
-      third.id,
-    ])
-
-    expect(
-      await adminRpc(harness, (client) => client.PurgePhotos({ ids: [second.id] })),
-    ).toBeUndefined()
-    expect(await harness.photos.head('o/b.jpg')).toBeNull()
-  })
-
-  it('leaves a photo already in the target state in it', async () => {
-    const harness = makeTestHarness()
-    const created = await createPhoto(harness, { slug: 'a', title: 'A' })
-
-    await adminRpc(harness, (client) => client.TrashPhotos({ ids: [created.id] }))
-    await adminRpc(harness, (client) => client.TrashPhotos({ ids: [created.id] }))
-
-    // Idempotent means still trashed, not "reported done again": the Photo
-    // stays out of the list and its original stays in R2.
-    expect(await listPhotos(harness, { limit: 60 })).toEqual({ items: [], nextCursor: null })
-    expect(await harness.photos.head('originals/a.jpg')).not.toBeNull()
-
-    await adminRpc(harness, (client) => client.RestorePhotos({ ids: [created.id] }))
-    await adminRpc(harness, (client) => client.RestorePhotos({ ids: [created.id] }))
 
     expect((await listPhotos(harness, { limit: 60 })).items.map((item) => item.id)).toEqual([
-      created.id,
+      fourth.id,
     ])
-  })
-
-  it('refuses to purge a photo that is not in the trash', async () => {
-    const harness = makeTestHarness()
-    const created = await createPhoto(harness, { slug: 'a', title: 'A' })
-
-    const error = await adminRpc(harness, (client) =>
-      client.PurgePhotos({ ids: [created.id] }).pipe(Effect.flip),
-    )
-
-    expect(error._tag).toBe('InvalidInput')
-    expect(await slugsIn(harness)).toEqual(['a'])
+    expect((await harness.photos.list()).objects.map((object) => object.key)).toEqual(['o/d.jpg'])
   })
 })
 

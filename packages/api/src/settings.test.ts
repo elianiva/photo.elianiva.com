@@ -9,7 +9,7 @@ import { PhotoService, PhotoServiceLive } from './photo'
 import { PublicPhotoServiceLive } from './public-photo'
 import { AdminSession } from './session'
 import { TagServiceLive } from './tag'
-import { createPhoto, createTag, fail, SETTINGS_DEFAULTS, trashPhoto } from './testing/fixtures'
+import { createPhoto, createTag, fail, SETTINGS_DEFAULTS } from './testing/fixtures'
 import {
   makeTestHarness,
   queryRow,
@@ -194,7 +194,6 @@ interface IndexRowSeed {
   readonly takenAt?: string | null
   readonly bytes?: number | null
   readonly metadata?: string
-  readonly deletedAt?: string | null
   readonly tagIds?: ReadonlyArray<string>
 }
 
@@ -204,11 +203,11 @@ const seedIndexRow = async (harness: TestHarness, row: IndexRowSeed): Promise<vo
   await queryRows(
     harness,
     (sql) =>
-      sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, number, ratio, bytes, takenAt, metadata, blurhash, deletedAt)
+      sql`INSERT INTO photos (id, slug, title, r2Key, width, height, status, number, ratio, bytes, takenAt, metadata, blurhash)
         VALUES (${row.id}, ${row.slug}, ${row.title ?? row.slug}, ${`originals/${row.id}.jpg`},
                 1200, 800, 'published', ${row.number ?? null},
                 ${row.ratio === undefined ? '3:2' : row.ratio}, ${row.bytes ?? null},
-                ${row.takenAt ?? null}, ${row.metadata ?? '{}'}, ${null}, ${row.deletedAt ?? null})`,
+                ${row.takenAt ?? null}, ${row.metadata ?? '{}'}, ${null})`,
   )
   for (const tagId of row.tagIds ?? []) {
     await queryRows(
@@ -315,19 +314,6 @@ describe('the admin group settings calls', () => {
 })
 
 describe('the CSV index', () => {
-  it('leaves a trashed photo out', async () => {
-    const harness = makeTestHarness()
-    const kept = await createPhoto(harness, { slug: 'kept', title: 'Kept' })
-    const binned = await createPhoto(harness, { slug: 'binned', title: 'Binned' })
-    await trashPhoto(harness, binned.id)
-
-    const rows = await indexRows(harness)
-
-    expect(rows.map((row) => row.slug)).toEqual(['kept'])
-    expect(rows[0]?.number).toBe(1)
-    expect(kept.id).not.toBe(binned.id)
-  })
-
   it('lists a photo with no number and no tags as null and an empty list', async () => {
     const harness = makeTestHarness()
     await seedIndexRow(harness, {

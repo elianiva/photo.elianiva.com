@@ -42,7 +42,6 @@ const TAGS: ReadonlyArray<Tag> = [tag('kyoto', 'Kyoto'), tag('nyc', 'New York')]
 
 const COUNTS: Counts = {
   total: 412,
-  trashed: 3,
   byStatus: { draft: 7, published: 402, failed: 1 },
 }
 
@@ -100,7 +99,7 @@ const cold = (
 const ADMIN_COMMANDS = new Set([
   'AddBorder',
   'BulkAddTags',
-  'BulkTrash',
+  'BulkDelete',
   'FetchCounts',
   'FetchPhotos',
   'Navigate',
@@ -218,48 +217,46 @@ describe('the Bulk Bar', () => {
     ).toEqual(['Border added to 7 photos — Even mat, paper, 4%.'])
   })
 
-  it('trashes the selection in the table’s row order, not the order it was ticked', () => {
+  it('deletes the selection in the table’s row order, not the order it was ticked', () => {
     // Ticked out of order on purpose: the payload follows the table.
-    const trashed = fold(
+    const deleted = fold(
       Message.ToggledRowSelection({ id: PAGE[1]?.id ?? '' }),
       Message.ToggledRowSelection({ id: PAGE[0]?.id ?? '' }),
-      Message.RequestBulkTrash({ count: 2 }),
+      Message.RequestBulkDelete({ count: 2 }),
       Message.ConfirmPending({}),
-      Message.SucceededBulkTrash({
+      Message.SucceededBulkDelete({
         count: 2,
         photos: PAGE.slice(2),
         nextCursor: NEXT_CURSOR,
         total: 410,
       }),
     )
-    expect(trashed.commands[0]).toEqual({
-      name: 'BulkTrash',
+    expect(deleted.commands[0]).toEqual({
+      name: 'BulkDelete',
       args: { ids: [PAGE[0]?.id, PAGE[1]?.id], page: PAGE_ARGS },
     })
-    // A soft delete touches no R2 object, and every write here ends by reading
+    // Every write here ends by reading
     // the list and the counts back. One command, not one per Photograph: the
     // contract's hundred-id cap is folded inside it.
-    expect(trashed.commands.map((command) => command.name)).toEqual(['BulkTrash', 'FetchCounts'])
+    expect(deleted.commands.map((command) => command.name)).toEqual(['BulkDelete', 'FetchCounts'])
     // The Photographs left the list, so the selection went with them and the
     // filtered total moved with the rows.
-    expect(trashed.model.selected).toEqual([])
-    expect(trashed.model.libraryTotal).toBe(410)
-    expect(trashed.model.photos).toHaveLength(5)
+    expect(deleted.model.selected).toEqual([])
+    expect(deleted.model.libraryTotal).toBe(410)
+    expect(deleted.model.photos).toHaveLength(5)
     expect(
       told(
         Message.ToggledRowSelection({ id: PAGE[0]?.id ?? '' }),
-        Message.RequestBulkTrash({ count: 1 }),
+        Message.RequestBulkDelete({ count: 1 }),
         Message.ConfirmPending({}),
-        Message.SucceededBulkTrash({
+        Message.SucceededBulkDelete({
           count: 1,
           photos: PAGE.slice(1),
           nextCursor: NEXT_CURSOR,
           total: 411,
         }),
       ),
-    ).toEqual([
-      '1 photo moved to Trash — Nothing was purged. Originals stay in R2, and no number is ever reused.',
-    ])
+    ).toEqual(['1 photo deleted — Their originals are gone from R2, and no number is ever reused.'])
   })
 
   it('Add tag is Move to series, re-pointed, and it applies exactly what was ticked', () => {
@@ -343,10 +340,10 @@ describe('the row ⋯ menu', () => {
     expect(published.model.photos[0]?.status).toBe('draft')
   })
 
-  it('moves one Photograph to Trash through the same confirm as the bulk', () => {
+  it('deletes one Photograph through the same confirm as the bulk', () => {
     const asked = fold(
       Message.OpenedRowMenu({ id: PAGE[0]?.id ?? '' }),
-      Message.RequestedRowTrash({ id: PAGE[0]?.id ?? '', title: 'Photograph 1' }),
+      Message.RequestedRowDelete({ id: PAGE[0]?.id ?? '', title: 'Photograph 1' }),
     )
     // The menu has done its job: one confirm Dialog, not two stacked.
     expect(asked.model.rowMenuId).toBeUndefined()

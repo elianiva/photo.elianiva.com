@@ -23,7 +23,7 @@ and D1 once the domain schemas are already here.
   tag-scoped queries and renames are cheap. A JSON array on the Photo was
   rejected: it cannot back real filtering without a migration.
 - **Columns for what is queried.** `id` (ULID), `slug` (unique, editable),
-  `title`, `r2Key`, `width`, `height`, `takenAt`, `status`, `deletedAt`,
+  `title`, `r2Key`, `width`, `height`, `takenAt`, `status`,
   `photoNumber`, `blurhash`, the crop/level/border columns and the four EXIF
   facts the public Exif line prints. Everything else — caption, location,
   camera, lens — is one JSON `metadata` column, promoted out of it only when it

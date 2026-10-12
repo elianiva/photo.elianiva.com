@@ -230,7 +230,7 @@ export const bulkBar = (model: Model, h: HtmlBuilder<Msg>): Child => {
           Button.button({ onClick: M.OpenedAddTag(), variant: 'ghost' }, 'Edit', h),
           Button.button(
             {
-              onClick: M.RequestBulkTrash({ count }),
+              onClick: M.RequestBulkDelete({ count }),
               variant: 'destructive',
               isDisabled: bulkBusy,
             },
@@ -415,7 +415,7 @@ export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
 }
 
 /** The row `⋯` menu. `Publish` / `Unpublish` is the one row-scoped lifecycle
- *  move (`SetPhotoStatus`); `Move to Trash` is the destructive one and goes
+ *  move (`SetPhotoStatus`); `Delete` is the destructive one and goes
  *  through the shared confirm Dialog rather than acting here. */
 const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
   const photo = model.photos.find((candidate) => candidate.id === model.rowMenuId)
@@ -461,12 +461,12 @@ const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
                       ),
                       Button.button(
                         {
-                          onClick: M.RequestedRowTrash({ id: photo.id, title: photo.title }),
+                          onClick: M.RequestedRowDelete({ id: photo.id, title: photo.title }),
                           variant: 'destructive',
                           className: 'justify-start',
                           isDisabled: isBusy(model, 'row-status'),
                         },
-                        'Move to Trash',
+                        'Delete',
                         innerH,
                       ),
                     ],

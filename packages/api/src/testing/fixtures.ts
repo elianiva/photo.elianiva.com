@@ -81,14 +81,6 @@ export const setPhotoStatus = (harness: TestHarness, id: string, status: PhotoSt
     ),
   )
 
-export const trashPhoto = (harness: TestHarness, id: string) =>
-  Effect.runPromise(
-    withTestServices(
-      PhotoService.use((service) => service.trash(id)),
-      harness,
-    ),
-  )
-
 /**
  * What migration 0004 gives a Photo nobody has edited, written out once. Both
  * the service and the RPC handler answer for an unedited row, and a second

@@ -23,7 +23,7 @@ export const WatermarkPosition = S.Literals(WATERMARK_POSITIONS)
 export type WatermarkPosition = typeof WatermarkPosition.Type
 
 /**
- * One non-trashed Photo as the Storage block's CSV index reads it: the columns
+ * One Photo as the Storage block's CSV index reads it: the columns
  * the index names, nothing else. Narrower than `PhotoWithTags` on purpose — the
  * export does not want an `r2Key`, a Blurhash or a Tag id on the wire, only a
  * number, the copy, where the frame was taken, its labels and its size.

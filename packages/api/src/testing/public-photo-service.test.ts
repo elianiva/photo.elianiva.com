@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Effect } from 'effect'
 import { InvalidInput } from '@photo/shared'
 import { PublicPhotoService, type FrontPageInput } from '../public-photo'
-import { createPhoto, createTag, fail, setPhotoStatus, trashPhoto } from './fixtures'
+import { createPhoto, createTag, fail, setPhotoStatus } from './fixtures'
 import { makeTestHarness, withPublicRead, type TestHarness } from './harness'
 
 /** Six published Photos over three months, created oldest first so the Photo
@@ -158,7 +158,7 @@ describe('PublicPhotoService.frontPage', () => {
     expect(error.message).toContain('YYYY-MM')
   })
 
-  it('omits a draft and a trashed photo from every section', async () => {
+  it('omits a draft from every section', async () => {
     const harness = makeTestHarness()
     await seed(harness)
     const draft = await createPhoto(harness, {
@@ -166,13 +166,7 @@ describe('PublicPhotoService.frontPage', () => {
       title: 'A draft.',
       takenAt: '2025-09-02',
     })
-    const trashed = await createPhoto(harness, {
-      slug: 'september-trashed',
-      title: 'A trashed photo.',
-      takenAt: '2025-09-03',
-    })
     await setPhotoStatus(harness, draft.id, 'draft')
-    await trashPhoto(harness, trashed.id)
 
     const page = await frontPage(harness, { sectionCount: 3 })
 
@@ -180,9 +174,6 @@ describe('PublicPhotoService.frontPage', () => {
     expect(slugsOf(page.sections.flatMap((section) => section.photos))).not.toContain(
       'september-draft',
     )
-    expect(
-      page.sections.flatMap((section) => section.photos).map((photo) => photo.slug),
-    ).not.toContain('september-trashed')
   })
 
   it('leaves a published photo with no takenAt out of every section', async () => {
@@ -209,7 +200,7 @@ describe('PublicPhotoService.frontStats', () => {
     expect(stats.latestTakenAt).toBe('2025-08-27')
   })
 
-  it('omits a draft and a trashed photo from the count and from the number', async () => {
+  it('omits a draft from the count and from the number', async () => {
     const harness = makeTestHarness()
     await seed(harness)
     const draft = await createPhoto(harness, {
@@ -217,34 +208,13 @@ describe('PublicPhotoService.frontStats', () => {
       title: 'A draft.',
       takenAt: '2025-09-02',
     })
-    const trashed = await createPhoto(harness, {
-      slug: 'september-trashed',
-      title: 'A trashed photo.',
-      takenAt: '2025-09-03',
-    })
     await setPhotoStatus(harness, draft.id, 'draft')
-    await trashPhoto(harness, trashed.id)
 
     const stats = await frontStats(harness)
 
     expect(stats.total).toBe(6)
     expect(stats.number).toBe(6)
     expect(stats.latestTakenAt).toBe('2025-08-27')
-  })
-
-  it('reads the public counter back a step when the highest photo is trashed', async () => {
-    const harness = makeTestHarness()
-    await seed(harness)
-    const last = await createPhoto(harness, {
-      slug: 'august-03',
-      title: 'A third August frame.',
-      takenAt: '2025-08-29',
-    })
-    expect((await frontStats(harness)).number).toBe(7)
-
-    await trashPhoto(harness, last.id)
-
-    expect((await frontStats(harness)).number).toBe(6)
   })
 })
 
@@ -280,21 +250,6 @@ describe('PublicPhotoService.folio', () => {
     // links; the rest are in the Admin's own tag-list order.
     expect((await folio(harness)).map((tag) => tag.label)).toEqual(['Night', 'Street'])
   })
-
-  it('drops a tag from the nav when its last published photo is trashed', async () => {
-    const harness = makeTestHarness()
-    await seed(harness)
-    const night = await createTag(harness, 'night', 'Night')
-    const tagged = await createPhoto(harness, {
-      slug: 'august-03',
-      title: 'A third August frame.',
-      takenAt: '2025-08-14',
-      tagIds: [night.id],
-    })
-    await trashPhoto(harness, tagged.id)
-
-    expect(await folio(harness)).toEqual([])
-  })
 })
 
 describe('PublicPhotoService direct reads', () => {
@@ -310,7 +265,7 @@ describe('PublicPhotoService direct reads', () => {
     expect(bySerial?.slug).toBe('july-01')
   })
 
-  it('answers nothing for a draft, a trashed photo, or a slug no photo has', async () => {
+  it('answers nothing for a draft or a slug no photo has', async () => {
     const harness = makeTestHarness()
     await seed(harness)
     const draft = await createPhoto(harness, {
@@ -318,13 +273,7 @@ describe('PublicPhotoService direct reads', () => {
       title: 'A draft.',
       takenAt: '2025-09-02',
     })
-    const trashed = await createPhoto(harness, {
-      slug: 'september-trashed',
-      title: 'A trashed photo.',
-      takenAt: '2025-09-03',
-    })
     await setPhotoStatus(harness, draft.id, 'draft')
-    await trashPhoto(harness, trashed.id)
 
     expect(await bySlug(harness, 'september-draft')).toBeNull()
     expect(await byNumber(harness, 7)).toBeNull()

@@ -98,7 +98,7 @@ export type QueueItem = typeof QueueItem.Type
 
 /** One photo, or the whole ticked selection, awaiting destructive
  *  confirmation. `bulk` carries a count because there is no single label to
- *  name forty photographs by, and it is a soft delete like the single one. */
+ *  name forty photographs by. */
 export const PendingConfirm = S.Union([
   S.Struct({ kind: S.Literal('photo'), id: S.String, label: S.String }),
   S.Struct({ kind: S.Literal('bulk'), count: S.Number }),
@@ -212,7 +212,6 @@ export type Session = typeof Session.Type
  *  so the Model's Struct and the Message that fills it cannot disagree. */
 const countsFields = {
   total: S.Number,
-  trashed: S.Number,
   byStatus: S.Struct({ draft: S.Number, published: S.Number, failed: S.Number }),
 }
 export const Counts = S.Struct(countsFields)
@@ -439,6 +438,8 @@ export const Model = S.Struct({
   settingsSaving: S.Boolean,
   /** The CSV index is being built and downloaded. */
   settingsIndexing: S.Boolean,
+  /** The orphan sweep is running. */
+  settingsSweeping: S.Boolean,
 
   /** Keys of the mutations in flight (`BusyKey`). A button whose action is in
    *  this list draws a spinner and ignores clicks; dialogs that wait on the
@@ -639,15 +640,14 @@ export const Message = defineMessageUnion({
   SetWatermarkEnabled: { isChecked: S.Boolean },
   SetWatermarkColour: { colour: MatColour },
   SetWatermarkPosition: { value: WatermarkPosition },
-  /** Retention is display-only — nothing purges on a timer — so this is one
-   *  boolean and the page offers no other value. */
-  SetRetention: { forever: S.Boolean },
   SaveSettings: {},
   SavedSettings: { settings: Settings },
   DiscardSettings: {},
   ExportCsvIndex: {},
   ExportedCsvIndex: { photos: S.Number },
   FailedExportCsvIndex: { message: S.String },
+  SweepOrphans: {},
+  SweptOrphans: { deleted: S.Number },
 
   // ----- the Library table -----------------------------------------------------
   /** Row click and the row's own box are the same gesture, so they are the same
@@ -661,16 +661,16 @@ export const Message = defineMessageUnion({
   SteppedLibraryPage: { delta: S.Literals([-1, 1]) },
   OpenedRowMenu: { id: S.String },
   GotRowMenuMessage: { message: Dialog.Message },
-  /** The `⋯` menu's publish toggle. A soft delete is the other row action and
+  /** The `⋯` menu's publish toggle. Delete is the other row action and
    *  goes through the shared confirm instead. */
   SetRowStatus: { id: S.String, status: S.Literals(['draft', 'published']) },
   SucceededSetRowStatus: {
     status: S.Literals(['draft', 'published']),
     ...libraryPageFields,
   },
-  /** The `⋯` menu's destructive action. A soft delete like the Bulk Bar's, and
-   *  through the same confirm Dialog. */
-  RequestedRowTrash: { id: S.String, title: S.String },
+  /** The `⋯` menu's destructive action, through the same confirm Dialog as
+   *  the Bulk Bar's. */
+  RequestedRowDelete: { id: S.String, title: S.String },
   OpenedAddTag: {},
   GotAddTagDialogMessage: { message: Dialog.Message },
   ToggledAddTag: { id: S.String },
@@ -680,9 +680,8 @@ export const Message = defineMessageUnion({
   SucceededAddTag: { count: S.Number, ...libraryPageFields },
   AddBorderToSelection: {},
   SucceededAddBorder: { count: S.Number, ...libraryPageFields },
-  /** The Bulk Bar's `Delete`. A soft delete: it moves the selection to the
-   *  Trash, and the Trash is where the irreversible act lives. */
-  RequestBulkTrash: { count: S.Number },
+  /** The Bulk Bar's `Delete`: opens the confirm for the whole selection. */
+  RequestBulkDelete: { count: S.Number },
   /** The Bulk Bar's `Publish` / `Unpublish`: one Status on the whole selection. */
   SetSelectionStatus: { status: S.Literals(['draft', 'published']) },
   SucceededSetSelectionStatus: {
@@ -693,7 +692,7 @@ export const Message = defineMessageUnion({
   /** The Editor Top Bar's `Publish` / `Unpublish`. The same write as the
    *  Status group, one click from wherever the operator is on the page. */
   SetEditorPhotoStatus: { status: S.Literals(['draft', 'published']) },
-  SucceededBulkTrash: { count: S.Number, ...libraryPageFields },
+  SucceededBulkDelete: { count: S.Number, ...libraryPageFields },
   /** The row's pencil. The Editor is the Photo route, so the row navigates
    *  rather than opening the legacy edit Sheet. */
   OpenedPhoto: { id: PhotoId },

@@ -87,8 +87,8 @@ ADR 0005's harness.
 **Two read models, one Photo.** `PublicPhotoService`
 (`packages/api/src/public-photo.ts`) sits beside `PhotoService` rather than
 inside it, because the two answer for different audiences: `PhotoService` is the
-Admin's and deliberately sees Drafts, failed uploads and the Trash, while every
-`PublicPhotoService` method filters to `published` and non-Trashed _inside
+Admin's and deliberately sees Drafts and failed uploads, while every
+`PublicPhotoService` method filters to `published` _inside
 itself_, so no caller can forget. They share the `Gateway`, the `PHOTO_COLUMNS`
 list, the tag loader and the row decoder, so they cannot disagree about what a
 Photo is.
@@ -112,8 +112,8 @@ line on every request.
   there is nothing here yet, and the sitemap's `lastmod` is left out rather
   than failing the route: a sitemap without `lastmod` is valid, and one that
   500s tells a crawler the site is broken over a date it does not need.
-- The sitemap's `lastmod` is `MAX(takenAt)` over **published, non-trashed**
-  Photos, so a trashed photograph stops dating the sitemap.
+- The sitemap's `lastmod` is `MAX(takenAt)` over **published**
+  Photos, so a deleted photograph stops dating the sitemap.
 - API URLs are root-relative paths in every stage (the dev server proxies `/api`
   to the API Worker). They must not depend on a `window` probe: the Worker
   renders the home page's photo URLs and has no `window`, so a browser-only

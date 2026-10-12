@@ -12,22 +12,17 @@ import { AdminToast, Message as M, isBusy } from '../model'
 import type { Model, Msg, PendingConfirm } from '../model'
 import type { Child } from './shared'
 
-/** What the confirm asks. A bulk delete is a soft delete, and the button says
- *  what it does rather than calling a move to the Trash a delete. The Trash is
- *  a state and not a place the Admin lists (CONTEXT.md, Trash), so the copy
- *  promises what is actually true of a trashed Photo and no more: it leaves
- *  every list, its original stays in R2, and only a purge is irreversible. */
-const confirmLabel = (pending: PendingConfirm | undefined): string =>
-  pending?.kind === 'bulk' ? 'Yes, move to Trash' : 'Yes, delete'
+/** What the confirm button says. Delete is permanent: there is no Trash. */
+const confirmLabel = (_pending: PendingConfirm | undefined): string => 'Yes, delete'
 
 const confirmCopy = (pending: PendingConfirm | undefined): string => {
   if (pending === undefined) return ''
   if (pending.kind === 'photo') {
-    return `“${pending.label}” will be moved to Trash: it leaves the Library, its original stays in R2, and its number is never reused.`
+    return `“${pending.label}” will be deleted for good: it leaves the Library, its original is removed from R2, and its number is never reused.`
   }
   return `${String(pending.count)} photograph${
     pending.count === 1 ? '' : 's'
-  } will be moved to Trash: they leave the Library, their originals stay in R2, and their numbers are never reused.`
+  } will be deleted for good: they leave the Library, their originals are removed from R2, and their numbers are never reused.`
 }
 
 export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>

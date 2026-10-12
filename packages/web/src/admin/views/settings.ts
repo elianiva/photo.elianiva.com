@@ -8,7 +8,7 @@
  * rather than leaving a page that claims to be saved while it is not.
  *
  * What the page edits is what the photograph pipeline reads: the export
- * defaults, the watermark, the metadata policy and the retention setting. It
+ * defaults, the watermark, and the metadata policy. It
  * used to close with a `SITE` section — a motto, an about paragraph, a
  * copyright line and a nav repeater — whose four columns the public site never
  * read, because every line the home page prints is written in the view that prints
@@ -21,7 +21,7 @@
  * `Storage` — and ADR 0006 split the collision.
  *
  * The block reads `GetCounts`, the same payload the sidebar's meter and the
- * nav's rows read, so the frame count, the Trash count and the Library's own
+ * nav's rows read, so the frame count and the Library's own
  * total cannot come to disagree.
  */
 
@@ -319,12 +319,10 @@ const metadata = (model: Model, h: HtmlBuilder<Msg>): Child => {
 // STORAGE
 // ---------------------------------------------------------------------------
 
-/** One figure and what it counts. Both numbers come from `GetCounts`, which
+/** One figure and what it counts. The number comes from `GetCounts`, which
  *  counts rows — the design's `4.2 GB OF 20 GB` came from `SUM(bytes)`, a
  *  column only an upload writes, so it read `0.0 GB` for every Photograph older
- *  than the column. The Trash count is the half of this block that is new
- *  information: nothing else in the Admin lists the Trash, so this is the one
- *  place the operator can see that three photographs are waiting there. */
+ *  than the column. */
 const stat = (value: number, label: string, h: HtmlBuilder<Msg>): Child =>
   h.div(
     [h.Class('flex flex-col gap-1')],
@@ -339,10 +337,7 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child =>
     'STORAGE',
     'What the Library holds, and a copy of it you can keep.',
     [
-      h.div(
-        [h.Class('flex gap-12')],
-        [stat(model.counts.total, 'FRAMES', h), stat(model.counts.trashed, 'IN TRASH', h)],
-      ),
+      h.div([h.Class('flex gap-12')], [stat(model.counts.total, 'FRAMES', h)]),
       h.div(
         [h.Class('flex flex-col items-start gap-2')],
         [
@@ -358,20 +353,19 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child =>
           h.p([h.Class(captionClass)], ['One row per photograph, with its metadata.']),
         ],
       ),
-      // Nothing purges on a timer anywhere in the chain, so retention is a
-      // fact to read rather than a control: a Select with one option is a
-      // setting for a purge that does not exist.
       h.div(
-        [h.Class('flex flex-col gap-1')],
+        [h.Class('flex flex-col items-start gap-2')],
         [
-          h.span([h.Class('type-label text-role-text-secondary')], ['RETENTION']),
-          h.span([h.Class('type-exif text-role-text-primary')], ['FOREVER']),
-          h.p(
-            [h.Class(captionClass)],
-            [
-              'Nothing is purged on a timer. A deleted photograph keeps its original in R2 until a purge runs.',
-            ],
+          Button.button(
+            {
+              onClick: M.SweepOrphans({}),
+              variant: 'secondary',
+              isLoading: model.settingsSweeping,
+            },
+            model.settingsSweeping ? 'Sweeping…' : 'SWEEP ORPHANS',
+            h,
           ),
+          h.p([h.Class(captionClass)], ['Deletes files in R2 that no photograph owns.']),
         ],
       ),
     ],

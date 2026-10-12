@@ -58,7 +58,6 @@ const COLD_READS = [
   Message.SucceededGetSession({ email: 'owner@photo.test', teamDomain: 'https://a.test' }),
   Message.SucceededGetCounts({
     total: 412,
-    trashed: 3,
     byStatus: { draft: 7, published: 402, failed: 1 },
   }),
   Message.SucceededFetchTags({ tags: [] }),

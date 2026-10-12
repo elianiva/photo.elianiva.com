@@ -4,7 +4,7 @@
  * `metadata` blob. Tags join through `photo_tags`.
  */
 
-import { Context, DateTime, Effect, Layer, Schema as S } from 'effect'
+import { Context, DateTime, Duration, Effect, Layer, Schedule, Schema as S } from 'effect'
 import * as SqlClient from 'effect/sql/SqlClient'
 import type { Fragment } from 'effect/sql/Statement'
 import {
@@ -78,11 +78,8 @@ export interface PhotoListPage {
 }
 
 export interface PhotoCounts {
-  /** Every live Photo — the Filter Bar's `ALL`. */
+  /** Every Photo — the Filter Bar's `ALL`. */
   readonly total: number
-  /** Every trashed Photo. The only count not over live Photos, and the only
-   *  one that can be: the Trash is out of every list the others read. */
-  readonly trashed: number
   /** One entry per stored Status. `scheduled` is not a Status, so it has none. */
   readonly byStatus: Readonly<Record<PhotoStatus, number>>
 }
@@ -219,21 +216,26 @@ export interface PhotoServiceContract {
     id: string,
     status: PhotoStatus,
   ) => Effect.Effect<PhotoWithTags, StorageError | PhotoNotFound>
-  /** Soft delete: stamps `deletedAt` and leaves R2 alone. Idempotent. */
-  readonly trash: (id: string) => Effect.Effect<void, StorageError | PhotoNotFound>
-  /** Clears `deletedAt`. R2 is never touched, so a restored Photo still has
-   *  its original. Idempotent. */
-  readonly restore: (id: string) => Effect.Effect<void, StorageError | PhotoNotFound>
-  /** The irreversible one: drops the row, then the R2 object. Only a trashed
-   *  Photo can be purged, so `Delete` in the Bulk Bar cannot skip the Trash. */
-  readonly purge: (id: string) => Effect.Effect<void, StorageError | PhotoNotFound | InvalidInput>
-  /** Per Status, per Tag, grand total and trashed total, in one read. */
+  /** Removes the Photo for good: the row and its links, then the original and
+   *  both renditions from R2, retrying a failed R2 delete a few times. There
+   *  is no soft delete and no undo. Anything still left behind in R2 is
+   *  {@link sweepOrphans}'s to collect. */
+  readonly remove: (id: string) => Effect.Effect<void, StorageError | PhotoNotFound>
+  /** Deletes every R2 object no D1 row owns: not a row's `r2Key`, and not one
+   *  of its two renditions. Objects younger than `minAgeMs` (default ten
+   *  minutes) are left alone, because an upload inserts its row before it
+   *  writes the bytes and the sweep must not race that window. Returns how
+   *  many objects it deleted. */
+  readonly sweepOrphans: (
+    minAgeMs?: number,
+  ) => Effect.Effect<{ readonly deleted: number }, StorageError>
+  /** Per Status, per Tag, grand total, in one read. */
   readonly counts: () => Effect.Effect<PhotoCounts, StorageError>
-  /** Every live Photo as the Storage block's CSV index reads it: Photo Number
+  /** Every Photo as the Storage block's CSV index reads it: Photo Number
    *  order, tags resolved, place out of the metadata blob. */
   readonly index: () => Effect.Effect<ReadonlyArray<PhotoIndexRow>, StorageError>
   /** The Editor's loaded snapshot: one Photo's whole Presentation as stored, or
-   *  `PhotoNotFound` for a Photo that is gone or in the Trash. `setPresentation`
+   *  `PhotoNotFound` for a Photo that is gone. `setPresentation`
    *  returns this shape too, so the snapshot a save produces and the one a
    *  cold load produces are the same value. */
   readonly presentation: (
@@ -284,18 +286,16 @@ const chunkOf = (ids: ReadonlyArray<string>, size: number): ReadonlyArray<Readon
     ids.slice(index * size, (index + 1) * size),
   )
 
-/**
- * Every read is scoped to live Photos. The lifecycle operations address a row
- * whatever its `deletedAt` and say so where they do it, so a trashed Photo can
- * be restored or purged but can never leak out of a list, a count or a lookup.
- */
-const LIVE = 'deletedAt IS NULL'
+/** The audience predicate of the Admin's reads: every Photo. The public read
+ *  model passes `published` where this passes nothing, so `pagePhotos` takes
+ *  the predicate rather than assuming one. */
+const EVERY_PHOTO = '1 = 1'
 
 /** The Photo columns every read returns. One string, so `list` and `get`
  *  cannot disagree about the shape of a row — and so the public read model in
  *  `public-photo.ts` selects the same row this one does. */
 export const PHOTO_COLUMNS =
-  'id, slug, title, r2Key, width, height, status, number, ratio, bytes, aperture, shutter, iso, focalLength, takenAt, metadata, blurhash, deletedAt'
+  'id, slug, title, r2Key, width, height, status, number, ratio, bytes, aperture, shutter, iso, focalLength, takenAt, metadata, blurhash'
 
 /**
  * LIKE reads `%` and `_` as wildcards, so a search for `100%` would otherwise
@@ -487,38 +487,23 @@ export const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): Phot
   tags: [...tags],
 })
 
-/**
- * One row by id. `scope: 'live'` is the default every read path wants;
- * `scope: 'any'` is for the lifecycle operations, which have to find a Photo
- * the soft delete has already hidden.
- */
 /** One row, or null. D1's `.first()` said "at most one"; a statement answers
  *  with an array, and what makes it at-most-one is the `WHERE` above it.
  *  Exported because the public read model asks the same question of its own
  *  statements. */
 export const firstRow = <A>(rows: ReadonlyArray<A>): A | null => rows[0] ?? null
 
-/** One row by id, or null. `scope: 'any'` is for the lifecycle operations,
- *  which have to find a Photo the soft delete has already hidden; everything
- *  else takes the live scope.
- *
- *  The audience predicate is composed *before* the template rather than
- *  interpolated conditionally: a missing fragment inside `${}` binds as a
- *  parameter, so the conditional form compiled to `WHERE id = ??`. */
-const rowById = (sql: Db, id: string, scope: 'live' | 'any' = 'live') =>
+/** One row by id, or null. */
+const rowById = (sql: Db, id: string) =>
   Effect.mapError(
-    sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos WHERE id = ${id}${
-      scope === 'live' ? sql.literal(` AND ${LIVE}`) : sql.literal('')
-    }`,
+    sql<DbPhotoRow>`SELECT ${sql.literal(PHOTO_COLUMNS)} FROM photos WHERE id = ${id}`,
     (cause) =>
       new StorageError({ message: `Failed to get photo ${id}`, cause: describeCause(cause) }),
   ).pipe(Effect.map(firstRow))
 
 /** The row an operation is about to act on, or `PhotoNotFound`. Every method
- *  in this layer resolves its Photo through here, so a Photo that is gone and
- *  one that is in the Trash are the same answer everywhere, and the only
- *  difference between the lifecycle operations and the rest is which row they
- *  ask for — the failure is written once, here. */
+ *  in this layer resolves its Photo through here, so the failure for a
+ *  Photo that is gone is written once, here. */
 const requireRow = <A>(
   row: Effect.Effect<NonNullable<A> | null, StorageError>,
   id: string,
@@ -582,7 +567,7 @@ const toPhotoPresentation = (row: DbPresentationRow): PhotoPresentation => ({
 
 const presentationRow = (sql: Db, id: string) =>
   Effect.mapError(
-    sql<DbPresentationRow>`SELECT ${sql.literal(PRESENTATION_COLUMNS)} FROM photos WHERE id = ${id} AND ${sql.literal(LIVE)}`,
+    sql<DbPresentationRow>`SELECT ${sql.literal(PRESENTATION_COLUMNS)} FROM photos WHERE id = ${id}`,
     (cause) =>
       new StorageError({
         message: `Failed to get presentation for photo ${id}`,
@@ -648,7 +633,7 @@ const assertLivePhotos = (sql: Db, photoIds: ReadonlyArray<string>) =>
       const raw = yield* Effect.mapError(
         sql<{
           id: string
-        }>`SELECT id FROM photos WHERE ${sql.literal(LIVE)} AND ${sql.in('id', chunk)}`,
+        }>`SELECT id FROM photos WHERE ${sql.in('id', chunk)}`,
         (cause) =>
           new StorageError({ message: 'Failed to check photos', cause: describeCause(cause) }),
       )
@@ -804,9 +789,19 @@ const deletePhoto = (sql: Db, photoId: string): ReadonlyArray<BatchStatement> =>
   sql`DELETE FROM photos WHERE id = ${photoId}`,
 ]
 
-/** True when no other photo owns this slug. Trashed Photos are in scope: a
- *  slug stays taken while its Photo is in the Trash, or a restore could hand
- *  two Photos the same one. */
+/** Three retries, 200ms then doubling: enough to ride out a transient R2 error
+ *  without holding the request open for long. */
+const R2_RETRY = { schedule: Schedule.exponential(Duration.millis(200)), times: 3 } as const
+
+/** Every object a Photo owns in R2. The two renditions are derived from the
+ *  id, so this is the one place that list is written down. */
+const photoObjectKeys = (id: string, r2Key: string): ReadonlyArray<string> => [
+  r2Key,
+  renditionKey(id, 'small'),
+  renditionKey(id, 'preview'),
+]
+
+/** True when no other photo owns this slug. */
 const slugAvailable = (sql: Db, slug: string, exceptPhotoId?: string) =>
   Effect.mapError(
     sql<{
@@ -844,16 +839,14 @@ interface CountRow {
 /**
  * The counts the sidebar and the Filter Bar need, in one statement and one
  * round trip. `kind` is the discriminator: the Status counts, the grand
- * total and the trashed total have different key spaces, so a UNION keeps them
- * in one result rather than three queries.
+ * total have different key spaces, so a UNION keeps them in one result rather
+ * than two queries.
  */
 const COUNTS_SQL = `
   SELECT 'status' AS kind, status AS key, COUNT(*) AS n
-    FROM photos WHERE ${LIVE} GROUP BY status
+    FROM photos GROUP BY status
   UNION ALL
-  SELECT 'total', 'all', COUNT(*) FROM photos WHERE ${LIVE}
-  UNION ALL
-  SELECT 'total', 'trashed', COUNT(*) FROM photos WHERE deletedAt IS NOT NULL`
+  SELECT 'total', 'all', COUNT(*) FROM photos`
 
 /** The row the CSV index reads, plus the two columns it needs but does not
  *  name: `id` keys the tag join, and the place is in the metadata blob. */
@@ -890,7 +883,7 @@ export const PhotoServiceLive = Layer.effect(
 
     const list: PhotoServiceContract['list'] = (filter) =>
       Effect.gen(function* () {
-        const { rows, nextCursor } = yield* pagePhotos(sql, sql.literal(LIVE), filter)
+        const { rows, nextCursor } = yield* pagePhotos(sql, sql.literal(EVERY_PHOTO), filter)
         const tagMap = yield* tagsForPhotos(
           sql,
           rows.map((row) => row.id),
@@ -907,7 +900,7 @@ export const PhotoServiceLive = Layer.effect(
         const row = yield* Effect.mapError(
           sql<{ n: number }>`SELECT COUNT(*) AS n FROM photos WHERE ${andFilter(
             sql,
-            sql.literal(LIVE),
+            sql.literal(EVERY_PHOTO),
             filterWhere(sql, filter),
           )}`,
           (cause) =>
@@ -952,7 +945,7 @@ export const PhotoServiceLive = Layer.effect(
         // the counter is bumped in the same transaction that spends it: a
         // read-then-write hands two concurrent uploads the same serial, and
         // `idx_photos_number` turns that into a failed upload. The counter
-        // lives outside `photos` (migration 0006) because a purge deletes the
+        // lives outside `photos` (migration 0006) because a delete removes the
         // row a `MAX` would have read, and a Photo Number is never reused.
         //
         // `status` and the export columns are only listed when the caller
@@ -1127,56 +1120,64 @@ export const PhotoServiceLive = Layer.effect(
         return yield* withTags(sql, row)
       })
 
-    const trash: PhotoServiceContract['trash'] = (id) =>
+    const remove: PhotoServiceContract['remove'] = (id) =>
       Effect.gen(function* () {
-        // Any row, live or not: trashing a trashed Photo is the end state it
-        // is already in, and re-stamping the date would make the Trash's
-        // ordering depend on how many times it was clicked.
-        const row = yield* requireRow(rowById(sql, id, 'any'), id)
-        if (row.deletedAt !== null) return
-        yield* Effect.mapError(
-          // `YYYY-MM-DD`, the format #14 gives `deletedAt` and `takenAt`.
-          sql`UPDATE photos SET deletedAt = ${DateTime.formatIsoDateUtc(DateTime.nowUnsafe())} WHERE id = ${id} AND ${sql.literal(LIVE)}`
-            .raw,
-          (cause) =>
-            new StorageError({ message: 'Failed to trash photo', cause: describeCause(cause) }),
-        )
-      })
-
-    const restore: PhotoServiceContract['restore'] = (id) =>
-      Effect.gen(function* () {
-        const row = yield* requireRow(rowById(sql, id, 'any'), id)
-        if (row.deletedAt === null) return
-        yield* Effect.mapError(
-          sql`UPDATE photos SET deletedAt = NULL WHERE id = ${id}`.raw,
-          (cause) =>
-            new StorageError({ message: 'Failed to restore photo', cause: describeCause(cause) }),
-        )
-      })
-
-    const purge: PhotoServiceContract['purge'] = (id) =>
-      Effect.gen(function* () {
-        const row = yield* requireRow(rowById(sql, id, 'any'), id)
-        if (row.deletedAt === null) {
-          return yield* Effect.fail(
-            new InvalidInput({ message: 'only a trashed photo can be purged' }),
-          )
-        }
+        const row = yield* requireRow(rowById(sql, id), id)
         yield* Effect.mapError(
           batch.run(deletePhoto(sql, id)),
           (cause) =>
-            new StorageError({ message: 'Failed to purge photo', cause: describeCause(cause) }),
+            new StorageError({ message: 'Failed to delete photo', cause: describeCause(cause) }),
         )
+        // The row is already gone, so a delete that never succeeds must not
+        // fail the call: it would report the Photo as still there. What is
+        // left behind is an orphan, and `sweepOrphans` removes it.
         yield* Effect.tryPromise({
-          try: () =>
-            gateway.photos.delete([
-              row.r2Key,
-              renditionKey(id, 'small'),
-              renditionKey(id, 'preview'),
-            ]),
+          try: () => gateway.photos.delete(photoObjectKeys(id, row.r2Key)),
           catch: (cause) =>
             new StorageError({ message: 'R2 delete failed', cause: describeCause(cause) }),
-        }).pipe(Effect.orElseSucceed(() => undefined))
+        }).pipe(
+          Effect.retry(R2_RETRY),
+          Effect.tapError((error) =>
+            Effect.logWarning(`R2 cleanup for photo ${id} failed: ${error.message}`),
+          ),
+          Effect.orElseSucceed(() => undefined),
+        )
+      })
+
+    const sweepOrphans: PhotoServiceContract['sweepOrphans'] = (minAgeMs = 10 * 60 * 1000) =>
+      Effect.gen(function* () {
+        // D1 first, then R2: a Photo created in between has a row we did not
+        // read, which is what the age guard below is for.
+        const rows = yield* Effect.mapError(
+          sql<{ id: string; r2Key: string }>`SELECT id, r2Key FROM photos`,
+          (cause) =>
+            new StorageError({ message: 'Failed to read photos', cause: describeCause(cause) }),
+        )
+        const owned = new Set(rows.flatMap((row) => photoObjectKeys(row.id, row.r2Key)))
+        const cutoff = DateTime.toEpochMillis(DateTime.nowUnsafe()) - minAgeMs
+        const orphans: Array<string> = []
+        let cursor: string | undefined
+        do {
+          const page = yield* Effect.tryPromise({
+            try: () => gateway.photos.list({ cursor, limit: 1000 }),
+            catch: (cause) =>
+              new StorageError({ message: 'R2 list failed', cause: describeCause(cause) }),
+          })
+          for (const object of page.objects) {
+            if (!owned.has(object.key) && object.uploaded.getTime() <= cutoff) {
+              orphans.push(object.key)
+            }
+          }
+          cursor = page.truncated ? page.cursor : undefined
+        } while (cursor !== undefined)
+        for (const keys of chunkOf(orphans, 1000)) {
+          yield* Effect.tryPromise({
+            try: () => gateway.photos.delete(keys),
+            catch: (cause) =>
+              new StorageError({ message: 'R2 delete failed', cause: describeCause(cause) }),
+          }).pipe(Effect.retry(R2_RETRY))
+        }
+        return { deleted: orphans.length }
       })
 
     const counts: PhotoServiceContract['counts'] = () =>
@@ -1188,7 +1189,6 @@ export const PhotoServiceLive = Layer.effect(
         )
         const byStatus: Record<PhotoStatus, number> = { ...NO_STATUSES }
         let total = 0
-        let trashed = 0
         for (const status of PHOTO_STATUSES) {
           const row = raw.find(
             (candidate) => candidate.kind === 'status' && candidate.key === status,
@@ -1196,19 +1196,16 @@ export const PhotoServiceLive = Layer.effect(
           if (row !== undefined) byStatus[status] = row.n
         }
         for (const row of raw) {
-          if (row.kind === 'total') {
-            if (row.key === 'trashed') trashed = row.n
-            else total = row.n
-          }
+          if (row.kind === 'total') total = row.n
         }
-        return { total, trashed, byStatus }
+        return { total, byStatus }
       })
 
     const index: PhotoServiceContract['index'] = () =>
       Effect.gen(function* () {
         const rows = yield* Effect.mapError(
           sql<DbPhotoIndexRow>`SELECT id, number, title, slug, ratio, takenAt, bytes, metadata
-             FROM photos WHERE ${sql.literal(LIVE)} ORDER BY ${sql.literal(INDEX_ORDER)}`,
+             FROM photos ORDER BY ${sql.literal(INDEX_ORDER)}`,
           (cause) =>
             new StorageError({
               message: 'Failed to read the photo index',
@@ -1236,9 +1233,6 @@ export const PhotoServiceLive = Layer.effect(
 
     const presentation: PhotoServiceContract['presentation'] = (id) =>
       Effect.gen(function* () {
-        // The read is scoped to live Photos, exactly as the write is: a
-        // trashed Photo has a stored Presentation, and the Editor is not where
-        // the Trash is edited.
         const row = yield* requireRow(presentationRow(sql, id), id)
         return toPhotoPresentation(row)
       })
@@ -1284,7 +1278,7 @@ export const PhotoServiceLive = Layer.effect(
           linkPhotoChunks(photoIds).map(
             (chunk) =>
               sql`INSERT OR IGNORE INTO photo_tags (photoId, tagId)
-                SELECT id, ${tagId} FROM photos WHERE ${sql.literal(LIVE)} AND ${sql.in('id', chunk)}`,
+                SELECT id, ${tagId} FROM photos WHERE ${sql.in('id', chunk)}`,
           ),
         )
         if (statements.length === 0) return
@@ -1320,9 +1314,8 @@ export const PhotoServiceLive = Layer.effect(
       create,
       update,
       setStatus,
-      trash,
-      restore,
-      purge,
+      remove,
+      sweepOrphans,
       counts,
       index,
       presentation,

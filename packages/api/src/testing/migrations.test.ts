@@ -135,7 +135,8 @@ describe('migration 0004', () => {
     expect(Object.keys(indexes).sort()).toEqual(
       expect.arrayContaining(['idx_photos_number', 'idx_photos_ratio', 'idx_photos_status']),
     )
-    expect(indexes['idx_photos_live']).toBeDefined()
+    // 0009 has dropped the live index by the time the whole set is applied.
+    expect(indexes['idx_photos_live']).toBeUndefined()
   })
 
   it('applies cleanly to a database that already has 0001–0003 with rows in it', async () => {
@@ -184,7 +185,8 @@ describe('migration 0004', () => {
     const firstPass = { numbers: numbersById(engine), ratios: ratiosById(engine) }
 
     // A Photo the operator has since trashed and one they have numbered by
-    // hand: a re-run must leave both alone.
+    // hand: a re-run must leave both alone. (The Trash is dropped by 0009, but
+    // this runs at the 0004 schema, where the column still exists.)
     engine
       .prepare(`UPDATE photos SET status = 'draft', deletedAt = '2026-01-01' WHERE id = 'a'`)
       .run()
@@ -247,7 +249,7 @@ describe('migration 0004', () => {
     insertLegacy(engine, { id: 'fresh', takenAt: '2025-01-01', width: 6000, height: 4000 })
     const row = one<Record<string, unknown>>(
       engine,
-      `SELECT status, deletedAt, number, cropX, cropY, cropScale, cropFlip, level,
+      `SELECT status, number, cropX, cropY, cropScale, cropFlip, level,
                 borderEnabled, borderStyle, borderColour, borderWidth,
                 aperture, shutter, iso, focalLength,
                 previewLongEdge, previewFormat, previewQuality, fullQuality,
@@ -257,7 +259,6 @@ describe('migration 0004', () => {
     )
     expect(row).toEqual({
       status: 'published',
-      deletedAt: null,
       number: null,
       cropX: 0,
       cropY: 0,
@@ -461,5 +462,45 @@ describe('migration 0007_crop_flip.sql', () => {
     expect(() => engine.prepare(`UPDATE photos SET cropFlip = NULL WHERE id = 'p1'`).run()).toThrow(
       /NOT NULL/i,
     )
+  })
+})
+
+describe('migration 0009_drop_trash.sql', () => {
+  const DROP_TRASH = '0009_drop_trash.sql'
+  const BEFORE_DROP = '0008_settings_pipeline_columns.sql'
+
+  it('drops deletedAt and the live index, and keeps the status index', async () => {
+    const engine = migrated(repoMigrations())
+
+    const columns = all<{ name: string }>(engine, 'PRAGMA table_info(photos)').map((c) => c.name)
+    const indexes = all<{ name: string }>(engine, 'PRAGMA index_list(photos)').map((i) => i.name)
+
+    expect(columns).not.toContain('deletedAt')
+    expect(indexes).toContain('idx_photos_status')
+    expect(indexes).not.toContain('idx_photos_live')
+    const plan = all<{ detail: string }>(
+      engine,
+      `EXPLAIN QUERY PLAN SELECT id FROM photos WHERE status = 'draft'`,
+    ).map((row) => row.detail)
+    expect(plan.join(' ')).toMatch(/USING (COVERING )?INDEX idx_photos_status/)
+  })
+
+  it('keeps every other column of a row that was in the Trash', async () => {
+    const engine = migrated(migrationsThrough(BEFORE_DROP))
+    insertLegacy(engine, { id: 'p1', takenAt: '2024-01-15', width: 6000, height: 4000 })
+    engine.prepare(`UPDATE photos SET deletedAt = '2026-01-01', number = 5 WHERE id = 'p1'`).run()
+
+    engine.exec(migrationSql(DROP_TRASH))
+
+    expect(
+      one<{ id: string; number: number; width: number; takenAt: string }>(
+        engine,
+        'SELECT id, number, width, takenAt FROM photos WHERE id = ?',
+        'p1',
+      ),
+    ).toEqual({ id: 'p1', number: 5, width: 6000, takenAt: '2024-01-15' })
+    expect(
+      all<{ name: string }>(engine, 'PRAGMA table_info(photos)').map((c) => c.name),
+    ).not.toContain('deletedAt')
   })
 })

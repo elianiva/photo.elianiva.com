@@ -26,10 +26,11 @@ import {
   BackCmd,
   BulkAddTagsCmd,
   BulkSetStatusCmd,
-  BulkTrashCmd,
+  BulkDeleteCmd,
   CreateTagCmd,
   DeletePhotoCmd,
   ExportCsvIndexCmd,
+  SweepOrphansCmd,
   FetchCountsCmd,
   FetchLibraryPageCmd,
   PersistPageSizeCmd,
@@ -158,7 +159,7 @@ const initialModel = (route: AppRoute): Model => {
     nextCursor: null,
     loadingMore: false,
     session: { status: 'loading', email: null, teamDomain: null },
-    counts: { total: 0, trashed: 0, byStatus: { draft: 0, published: 0, failed: 0 } },
+    counts: { total: 0, byStatus: { draft: 0, published: 0, failed: 0 } },
     searchQuery: filters.q,
     // The committed search, which is the URL's `q` as of the last load.
     appliedQuery: filters.q,
@@ -191,6 +192,7 @@ const initialModel = (route: AppRoute): Model => {
     settingsDraft: emptySettingsDraft,
     settingsSaving: false,
     settingsIndexing: false,
+    settingsSweeping: false,
     busy: [],
 
     selected: [],
@@ -634,6 +636,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       // the toast with nothing in flight.
       const unstuck = modifyFields(model, {
         loadingMore: () => false,
+        settingsSweeping: () => false,
         editor: () => ({ ...model.editor, saving: false }),
       })
       const errored = withOptional(unstuck, { status: 'error', error: failure })
@@ -956,7 +959,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const command =
         pending.kind === 'photo'
           ? DeletePhotoCmd({ id: pending.id, page: currentPage(model) })
-          : BulkTrashCmd({ ids: selectedIds(model), page: currentPage(model) })
+          : BulkDeleteCmd({ ids: selectedIds(model), page: currentPage(model) })
       return { model, commands: [command] }
     },
     DeletedPhoto: ({ photos, nextCursor, total }) => {
@@ -1295,7 +1298,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     SetWatermarkPosition: ({ value }) => ({
       model: setDraftField(model, 'watermarkPosition', value),
     }),
-    SetRetention: ({ forever }) => ({ model: setDraftField(model, 'retainForever', forever) }),
     // A save with nothing to save is not a save: it would stamp a new
     // `updatedAt` and make the header claim a write the operator did not make.
     SaveSettings: () => {
@@ -1339,6 +1341,21 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const failed = modifyFields(model, { settingsIndexing: () => false })
       return showToast(failed, 'Could not export the index', 'Error', failure)
     },
+    SweepOrphans: () => {
+      if (model.settingsSweeping) return { model }
+      return {
+        model: modifyFields(model, { settingsSweeping: () => true }),
+        commands: [SweepOrphansCmd()],
+      }
+    },
+    SweptOrphans: ({ deleted }) =>
+      showToast(
+        modifyFields(model, { settingsSweeping: () => false }),
+        deleted === 0
+          ? 'No orphaned files found'
+          : `Swept ${deleted} orphaned ${deleted === 1 ? 'file' : 'files'} from R2`,
+        'Success',
+      ),
 
     // ----- the Library table ---------------------------------------------------------
     ToggledRowSelection: ({ id }) => ({
@@ -1416,10 +1433,10 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           ? 'A visitor can see it on the public site.'
           : 'A visitor can no longer see it.',
       ),
-    /** The row menu's `Move to Trash`. The menu closes before the confirm
+    /** The row menu's `Delete`. The menu closes before the confirm
      *  opens: the confirm is the same Dialog every other destructive action
      *  uses, and two stacked dialogs are two ways to cancel one thing. */
-    RequestedRowTrash: ({ id, title }) => {
+    RequestedRowDelete: ({ id, title }) => {
       const closed = Dialog.close(model.rowMenu)
       const dismissed = modifyFields(withOptional(model, { rowMenuId: undefined }), {
         rowMenu: () => closed.model,
@@ -1554,18 +1571,18 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
         commands: [SetEditorStatusCmd({ id: model.route.id, status })],
       }
     },
-    RequestBulkTrash: ({ count }) => openConfirm(model, { kind: 'bulk', count }),
-    SucceededBulkTrash: ({ count, ...page }) => {
+    RequestBulkDelete: ({ count }) => openConfirm(model, { kind: 'bulk', count }),
+    SucceededBulkDelete: ({ count, ...page }) => {
       // Every selected Photo left every list, so the selection goes with them:
       // it named rows this page can no longer show, and a Bulk Bar still
       // offering them would offer a second delete of photographs that are
-      // already in the Trash.
+      // already gone.
       const cleared = clearSelection(model)
       return settled(
         cleared,
         page,
-        `${photoCountLabel(count)} moved to Trash`,
-        'Nothing was purged. Originals stay in R2, and no number is ever reused.',
+        `${photoCountLabel(count)} deleted`,
+        'Their originals are gone from R2, and no number is ever reused.',
       )
     },
 
@@ -1828,7 +1845,7 @@ const busyStartedBy = (message: Msg): BusyKey | undefined => {
 const busyEndedBy = (message: Msg): ReadonlyArray<string> => {
   switch (message._tag) {
     case 'DeletedPhoto':
-    case 'SucceededBulkTrash':
+    case 'SucceededBulkDelete':
       return ['confirm']
     case 'SucceededAddTag':
       return ['bulk-tags']
