@@ -11,7 +11,7 @@
  *
  * The composition is the design's own document shape — a headline, a deck and
  * figures — at the home page's measure, because a Tag's photographs are a run of
- * figures rather than the About page's single wide one. The count rides under
+ * justified rows rather than the About page's single wide one. The count rides under
  * the name the way a Timeline Month's does, and it counts photographs, which
  * is the one thing the site counts.
  *
@@ -25,7 +25,7 @@ import type { HtmlBuilder } from 'foldkit/html'
 
 import { frameCount, type TagPage } from '../content'
 import { Message } from '../model'
-import { figureColumns } from './figure-columns'
+import { rows } from './rows'
 import { BAND, type Child } from './shared'
 
 export const tagBody = (tag: TagPage, h: HtmlBuilder<Message>): Child =>
@@ -50,6 +50,6 @@ export const tagBody = (tag: TagPage, h: HtmlBuilder<Message>): Child =>
       // A Tag with no published photograph under it is a page with a name and
       // no photo on it — the same honest state the About page draws for an
       // empty read, rather than an empty column of frames.
-      ...(tag.figures.length === 0 ? [] : figureColumns(tag.figures, h)),
+      ...(tag.figures.length === 0 ? [] : [rows(tag.figures, 6, h)]),
     ],
   )

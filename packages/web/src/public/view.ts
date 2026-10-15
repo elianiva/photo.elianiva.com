@@ -28,14 +28,12 @@ import type { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import { Message } from './model'
 import type { Model } from './model'
-import { routeHref, tagPath } from './route'
 import { aboutBody } from './views/about'
 import { siteFooter } from './views/site-footer'
 import { archiveEnd } from './views/archive-end'
-import { intro } from './views/intro'
 import { lightbox } from './views/lightbox'
 import { siteHeader } from './views/site-header'
-import { daySheet } from './views/day-sheet'
+import { rows } from './views/rows'
 import { tagBody } from './views/tag-page'
 
 const TITLES: Record<Exclude<Model['route'], 'tag'>, string> = {
@@ -47,13 +45,17 @@ const TITLES: Record<Exclude<Model['route'], 'tag'>, string> = {
 const titleOf = (model: Model): string =>
   model.route === 'tag' ? `photo.elianiva.com — ${model.tag.label}` : TITLES[model.route]
 
-/**
- * The `href` the Nav marks as current: the document's own URL, printed by the
- * route table. A Tag page is named by its Tag's slug, so its href is that Tag's
- * path; the other two are named by their route alone.
- */
-const currentHref = (model: Model): string =>
-  model.route === 'tag' ? tagPath(model.tag.slug) : routeHref({ route: model.route })
+/** What the home page says about itself, at the right of the header. It is the
+ *  site's own voice, so it is written here and is true whatever the archive
+ *  holds. */
+const HOME_CONTEXT =
+  'Aside from writing software, I like doing photography. I mostly take street photos because I like to walk around the neighbourhood and interact with people.'
+
+/** A site with nothing published says so rather than drawing an empty page. */
+const EMPTY_NOTE = 'Nothing posted yet, check back later.'
+
+/** The first photos of the home page's run are above the fold and fetched now. */
+const EAGER_FRAMES = 6
 
 /**
  * The document shell both pages share.
@@ -64,19 +66,29 @@ const currentHref = (model: Model): string =>
  * shows the mobile composition at the wider margin — the design has no tablet
  * frame to follow.
  */
-const shell = (model: Model, h: HtmlBuilder<Message>, body: ReadonlyArray<Html>) =>
-  h.div(
-    [h.Id('top'), h.Class('min-h-screen bg-role-surface px-4 text-role-text-primary md:px-12')],
+const shell = (model: Model, h: HtmlBuilder<Message>, body: ReadonlyArray<Html>) => {
+  // The home page is full-bleed: its side padding is only the rows' own gap, and
+  // its header and footer run the same width. The other documents sit in the
+  // page's content column behind the wider margin.
+  const wide = model.route === 'home'
+  return h.div(
     [
-      siteHeader(currentHref(model), model.nav, h),
+      h.Id('top'),
+      h.Class(
+        `min-h-screen bg-role-surface text-role-text-primary ${wide ? 'px-2 lg:px-2.5' : 'px-4 md:px-12'}`,
+      ),
+    ],
+    [
+      siteHeader(wide ? HOME_CONTEXT : null, wide, h),
       ...body,
-      siteFooter(model.nav, h),
+      siteFooter(model.nav, wide, h),
       // The lightbox is chrome too: a photo opens the same way on either
       // document, so the overlay is drawn by the same view for both, over a
       // selection either document's figures can make.
       ...(model.selected === null ? [] : [lightbox(model.selected, h)]),
     ],
   )
+}
 
 const homeDocument = (model: Model, h: HtmlBuilder<Message>): Document => ({
   title: titleOf(model),
@@ -85,10 +97,15 @@ const homeDocument = (model: Model, h: HtmlBuilder<Message>): Document => ({
     h.main(
       [h.Class('flex flex-col')],
       [
-        intro(model.timeline, h),
-        // The first capture day heads the page, so its first photo is the one
-        // the browser fetches eagerly; later sections load as the reader scrolls.
-        ...model.timeline.sections.map((section, index) => daySheet(section, index === 0, h)),
+        // Every photo in one run, newest first: the months the read pages
+        // through are how the page loads, not how it looks.
+        model.timeline.tail === 'empty'
+          ? h.p([h.Class('type-caption py-8 text-role-text-secondary')], [EMPTY_NOTE])
+          : rows(
+              model.timeline.sections.flatMap((section) => section.figures),
+              EAGER_FRAMES,
+              h,
+            ),
         archiveEnd(model.timeline.tail, model.loadingMonths, model.monthsError, h),
       ],
     ),

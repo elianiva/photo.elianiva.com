@@ -65,7 +65,7 @@ A label for grouping/filtering Photos (e.g., `kyoto`, `film`, `portrait`). Free-
 _Avoid_: Collection (deferred), Category, Album, Series (that is a Tag page, not a stored entity)
 
 **Nav**:
-The public nav under the Header's edge — `ALL`, then one link per **Tag** that has a published Photo, then `ABOUT`. It is a **public read** (`PublicPhotoService.folio`), not a list of words in a view: a Tag is created, renamed and deleted in the Admin, and a nav written beside the header outlives every one of those. A Tag with nothing published under it is not a link, because the nav is a list of places that exist; the read is ordered by label, the same order the Admin's tag list is in. `ALL` is the home page and `ABOUT` is the About page, and the current section is marked by the document's own href rather than by a position in the list. The Footer prints the same entries again under `SECTIONS` — one list, read twice.
+The list of places on the public site — one link per **Tag** that has a published Photo, then `ABOUT`. The Header carries no nav (the home page is the wordmark, one line of context and the Photos); the Nav is printed once, in the Footer under `SECTIONS`, as links. It is a **public read** (`PublicPhotoService.folio`), not a list of words in a view: a Tag is created, renamed and deleted in the Admin, and a nav written beside the footer outlives every one of those. A Tag with nothing published under it is not a link, because the nav is a list of places that exist; the read is ordered by label, the same order the Admin's tag list is in.
 _Avoid_: Nav menu (the links are sections, not menus), Menu bar, Categories, Site Section (retired)
 
 **Image**:

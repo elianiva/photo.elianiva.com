@@ -3,15 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { PhotoWithTags, PublicSection } from '@photo/shared'
 import { PhotoId } from '@photo/shared'
 
-import {
-  RATIO_VALUE,
-  timelineOf,
-  flowColumns,
-  figurePreviewUrl,
-  figureUrl,
-  sectionsOf,
-  type HomeRead,
-} from './content'
+import { timelineOf, figurePreviewUrl, figureUrl, sectionsOf, type HomeRead } from './content'
 
 // ---------------------------------------------------------------------------
 // fixtures
@@ -208,57 +200,5 @@ describe('figureUrl', () => {
     const [mapped] = sectionsOf([section('2025-08', [photo({ id: PhotoId.make('lift') })])])
     const url = new URL(figurePreviewUrl(mapped!.figures[0]!), 'https://photo.elianiva.com')
     expect(url.pathname).toBe('/api/image/renditions%2Flift%2Fpreview.webp')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// photo → columns
-// ---------------------------------------------------------------------------
-
-describe('flowColumns', () => {
-  const three = sectionsOf([
-    section('2025-08', [
-      photo({ id: PhotoId.make('a'), ratio: '2:3' }),
-      photo({ id: PhotoId.make('b'), ratio: '16:9' }),
-      photo({ id: PhotoId.make('c'), ratio: '3:2' }),
-    ]),
-  ])[0]!
-
-  it('places every figure exactly once, and each column in reading order', () => {
-    const columns = flowColumns(three.figures, 3)
-    // Written out rather than compared against a sorted copy of the input: a
-    // figure dropped and a figure placed twice both survive a set comparison,
-    // and neither is visible in "the same ids, reordered".
-    expect(columns.flat().map((figure) => figure.id)).toEqual(['a', 'b', 'c'])
-    expect(columns.map((column) => column.map((figure) => figure.id))).toEqual([
-      ['a'],
-      ['b'],
-      ['c'],
-    ])
-  })
-
-  it('fills the shortest column first', () => {
-    // A photo is 1 / ratio as tall as it is wide, so a 2:3 portrait costs 1.5
-    // and a 16:9 landscape 0.5625: the landscape skips the column that just
-    // filled up and opens the next.
-    const [portrait, landscape] = three.figures.slice(0, 2)
-    const columns = flowColumns([portrait!, landscape!], 3)
-    expect(columns.map((column) => column.length)).toEqual([1, 1, 0])
-    expect(columns[0]![0]!.id).toBe(portrait!.id)
-    expect(columns[1]![0]!.id).toBe(landscape!.id)
-  })
-
-  it('balances the sections it is given', () => {
-    const columns = flowColumns(three.figures, 3)
-    const heights = columns.map((column) =>
-      column.reduce((total, figure) => total + 1 / RATIO_VALUE[figure.ratio], 0),
-    )
-    // Greedy fill leaves the last photo short of a full column; what matters
-    // is that no column is more than about one photo taller than another.
-    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(1)
-  })
-
-  it('returns empty columns rather than throwing on no figures', () => {
-    expect(flowColumns([], 3)).toEqual([[], [], []])
   })
 })

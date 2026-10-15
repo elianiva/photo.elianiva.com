@@ -347,33 +347,3 @@ export const figureUrl = (figure: Figure): string => renditionUrl(figure.id, 'sm
 
 /** The lightbox's image: the `preview` WebP at the original's pixel size. */
 export const figurePreviewUrl = (figure: Figure): string => renditionUrl(figure.id, 'preview')
-
-// ---------------------------------------------------------------------------
-// photo → columns
-// ---------------------------------------------------------------------------
-
-/** A column's height, in column-widths. Every photo renders at the column's
- *  width, so its height is `1 / aspect` of that width: a `16:9` photo is
- *  barely half as tall as a `9:16` one. The ratio itself would rank those
- *  the wrong way round, which is why the cost inverts it. */
-const columnCost = (figures: ReadonlyArray<Figure>): number =>
-  figures.reduce((total, figure) => total + 1 / figure.aspect, 0)
-
-/** The design's three columns are a flow, not authored structure: each photo
- *  drops into whichever column is shortest so far, which is what leaves the
- *  ragged bottom edge the frame shows. Ties keep the leftmost column, so the
- *  fill is deterministic. */
-export const flowColumns = (
-  figures: ReadonlyArray<Figure>,
-  count: number,
-): ReadonlyArray<ReadonlyArray<Figure>> => {
-  const columns: Array<Array<Figure>> = Array.from({ length: count }, () => [])
-  for (const figure of figures) {
-    const shortest = columns.reduce(
-      (best, column) => (columnCost(column) < columnCost(best) ? column : best),
-      columns[0] ?? [],
-    )
-    shortest.push(figure)
-  }
-  return columns
-}

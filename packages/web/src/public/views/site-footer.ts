@@ -12,7 +12,7 @@
  * The one list here that is read is SECTIONS, because it is the Nav again: the
  * Footer says where the site is, and a hand-written copy of the nav beside a
  * read one is two lists free to disagree. It is printed in the same label and
- * the same caps as the Nav, so the two lists are the same list twice.
+ * the same caps as the rest of the footer.
  *
  * The copyright line is the one string here that will one day be wrong: it is
  * written out rather than derived, because the Footer is handed the Nav and
@@ -37,6 +37,7 @@ import type { HtmlBuilder } from 'foldkit/html'
 
 import type { NavEntry } from '../content'
 import { Message } from '../model'
+import { routeHref, tagPath } from '../route'
 import { BAND, type Child } from './shared'
 
 /**
@@ -60,10 +61,17 @@ const about = (h: HtmlBuilder<Message>): Child =>
     ],
   )
 
-const columnLine = (line: string, mobile: boolean, h: HtmlBuilder<Message>): Child =>
+/** A footer line is plain text, or a link when it names a page of the site. */
+type Line = string | { readonly label: string; readonly href: string }
+
+const columnLine = (line: Line, mobile: boolean, h: HtmlBuilder<Message>): Child =>
   h.li(
     [h.Class(`${mobile ? 'type-exif-sm' : 'type-exif'} uppercase text-role-text-primary`)],
-    [line],
+    [
+      typeof line === 'string'
+        ? line
+        : h.a([h.Href(line.href), h.Class('hover:underline')], [line.label]),
+    ],
   )
 
 /** One column, printed twice: the mobile list is the plainer of the two when
@@ -71,8 +79,8 @@ const columnLine = (line: string, mobile: boolean, h: HtmlBuilder<Message>): Chi
 const colophonColumn = (
   column: {
     readonly label: string
-    readonly lines: ReadonlyArray<string>
-    readonly linesMobile?: ReadonlyArray<string>
+    readonly lines: ReadonlyArray<Line>
+    readonly linesMobile?: ReadonlyArray<Line>
     readonly desktopOnly?: boolean
   },
   h: HtmlBuilder<Message>,
@@ -114,17 +122,24 @@ const baseline = (h: HtmlBuilder<Message>): Child =>
     ],
   )
 
-export const siteFooter = (nav: ReadonlyArray<NavEntry>, h: HtmlBuilder<Message>): Child => {
+export const siteFooter = (
+  nav: ReadonlyArray<NavEntry>,
+  wide: boolean,
+  h: HtmlBuilder<Message>,
+): Child => {
   // The three lists the Footer prints, written here rather than in a table
   // the whole app reads: `linesMobile` is the plainer list, and `desktopOnly`
   // drops EQUIPMENT on mobile because the master has no room for it.
   //
-  // SECTIONS is the exception and is read: it is the Nav's own entries, in
-  // the order the Nav draws them, with the About page after them — the same
-  // list the header prints, so a Tag added in the Admin appears in both, and
-  // no more or fewer of them. It has no mobile variant because the Nav has
-  // none to shorten.
-  const sections = [...nav.map((entry) => entry.label), 'about']
+  // SECTIONS is the exception and is read: it is the Nav's entries, in order,
+  // with the About page after them, and it is the only place the site links to
+  // them now that the header carries no nav — so a Tag added in the Admin
+  // appears here, as a link. It has no mobile variant because there is none to
+  // shorten.
+  const sections: ReadonlyArray<Line> = [
+    ...nav.map((entry) => ({ label: entry.label, href: tagPath(entry.slug) })),
+    { label: 'about', href: routeHref({ route: 'about' }) },
+  ]
   const columns = [
     {
       label: 'equipment',
@@ -145,7 +160,11 @@ export const siteFooter = (nav: ReadonlyArray<NavEntry>, h: HtmlBuilder<Message>
     [h.Class('flex flex-col')],
     [
       h.div(
-        [h.Class(`${BAND} flex flex-col border-t border-role-hairline pt-12 lg:pt-16`)],
+        [
+          h.Class(
+            `${wide ? 'w-full' : BAND} flex flex-col border-t border-role-hairline pt-12 lg:pt-16`,
+          ),
+        ],
         [
           h.div(
             [h.Class(COLUMNS)],
