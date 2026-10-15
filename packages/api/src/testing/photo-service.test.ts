@@ -572,6 +572,7 @@ describe('PhotoService.get', () => {
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour', location: 'Kyoto' },
       blurhash: null,
+      thumb: false,
       aperture: null,
       shutter: null,
       iso: null,
@@ -644,6 +645,7 @@ describe('PhotoService.create', () => {
       takenAt: '2024-04-01',
       metadata: { caption: 'Golden hour' },
       blurhash: 'LEHV6nWB2',
+      thumb: false,
       aperture: null,
       shutter: null,
       iso: null,
@@ -1002,6 +1004,75 @@ describe('PhotoService.create renditions', () => {
     await remove(harness, created.id)
     expect(await keys()).toEqual([])
   })
+
+  it('stores a thumb at upload, flags the row, and remove takes it down', async () => {
+    const harness = makeTestHarness()
+    const created = await Effect.runPromise(
+      withTestServices(
+        PhotoService.use((service) =>
+          service.create({
+            slug: 'one',
+            title: 'One',
+            r2Key: 'originals/one.jpg',
+            width: 1200,
+            height: 800,
+            metadata: '{}',
+            contentType: 'image/jpeg',
+            bytes: JPEG_BYTES(),
+            renditions: { small: webp(), preview: webp(), thumb: webp() },
+            tagIds: [],
+          }),
+        ),
+        harness,
+      ),
+    )
+    expect(await harness.photos.head(`renditions/${created.id}/thumb.webp`)).not.toBeNull()
+    const photo = await Effect.runPromise(
+      withTestServices(
+        PhotoService.use((service) => service.get(created.id)),
+        harness,
+      ),
+    )
+    expect(photo.thumb).toBe(true)
+
+    await remove(harness, created.id)
+    expect((await harness.photos.list()).objects).toEqual([])
+  })
+
+  it('backfills a thumb once, never replaces one, and lists only the missing', async () => {
+    const harness = makeTestHarness()
+    const old = await seed(harness, { slug: 'old', title: 'Old', r2Key: 'originals/old.jpg' })
+    const run = <A, E>(effect: Effect.Effect<A, E, PhotoService>) =>
+      Effect.runPromise(withTestServices(effect, harness))
+    expect(await run(PhotoService.use((service) => service.missingThumbs()))).toEqual([old.id])
+
+    await run(PhotoService.use((service) => service.attachThumb(old.id, webp())))
+    expect(await run(PhotoService.use((service) => service.missingThumbs()))).toEqual([])
+    expect((await run(PhotoService.use((service) => service.get(old.id)))).thumb).toBe(true)
+
+    // Served immutable for a year: a second attach must not write.
+    const before = await harness.photos.head(`renditions/${old.id}/thumb.webp`)
+    const other = new Uint8Array([
+      0x52, 0x49, 0x46, 0x46, 9, 9, 9, 9, 0x57, 0x45, 0x42, 0x50, 1, 2, 3, 4,
+    ])
+    await run(PhotoService.use((service) => service.attachThumb(old.id, other.buffer)))
+    const after = await harness.photos.head(`renditions/${old.id}/thumb.webp`)
+    expect(after?.size).toBe(before?.size)
+  })
+
+  it('refuses a thumb for a Photo that does not exist and stores nothing', async () => {
+    const harness = makeTestHarness()
+    const result = await Effect.runPromise(
+      Effect.result(
+        withTestServices(
+          PhotoService.use((service) => service.attachThumb('nope', webp())),
+          harness,
+        ),
+      ),
+    )
+    expect(result._tag).toBe('Failure')
+    expect((await harness.photos.list()).objects).toEqual([])
+  })
 })
 
 describe('PhotoService.update', () => {
@@ -1040,6 +1111,7 @@ describe('PhotoService.update', () => {
       takenAt: '2024-07-04',
       metadata: { caption: 'new', camera: 'Ricoh GR III' },
       blurhash: null,
+      thumb: false,
       aperture: null,
       shutter: null,
       iso: null,
@@ -1110,6 +1182,7 @@ describe('PhotoService.update', () => {
       takenAt: '2024-01-01',
       metadata: {},
       blurhash: null,
+      thumb: false,
       aperture: null,
       shutter: null,
       iso: null,
@@ -1269,6 +1342,7 @@ describe('PhotoService.sweepOrphans', () => {
     const kept = await seed(harness, { slug: 'kept', title: 'Kept', r2Key: 'originals/kept.jpg' })
     await harness.photos.put(`renditions/${kept.id}/small.webp`, 'x')
     await harness.photos.put(`renditions/${kept.id}/preview.webp`, 'x')
+    await harness.photos.put(`renditions/${kept.id}/thumb.webp`, 'x')
     await harness.photos.put('originals/orphan.jpg', 'x')
     await harness.photos.put('renditions/gone/small.webp', 'x')
 
@@ -1278,6 +1352,7 @@ describe('PhotoService.sweepOrphans', () => {
       'originals/kept.jpg',
       `renditions/${kept.id}/preview.webp`,
       `renditions/${kept.id}/small.webp`,
+      `renditions/${kept.id}/thumb.webp`,
     ])
   })
 

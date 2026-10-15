@@ -15,6 +15,10 @@ import { PhotoId, PhotoMetadata, PhotoPresentation, SettingsInput } from '@photo
 import { LibrarySort, PhotoRatio, PhotoStatus } from '@photo/shared'
 import type { PhotoIndexRow, PhotoWithTags, Settings, Tag } from '@photo/shared'
 
+import { THUMB_LONG_EDGE, THUMB_QUALITY, renditionKey } from '@photo/shared'
+
+import { THUMB_PATH } from '@/lib/api'
+import { imageUrl } from '@/lib/image'
 import { RpcFailure, rpcAdmin, rpcPublic } from '@/lib/rpc'
 
 import { CSV_INDEX_FILENAME, csvIndex, downloadCsv } from './storage-index'
@@ -680,6 +684,50 @@ export const SweepOrphansCmd = Command.define('SweepOrphans', {
   execute: Effect.map(rpcAdmin<{ deleted: number }>('SweepOrphans', {}), ({ deleted }) =>
     Message.SweptOrphans({ deleted }),
   ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
+/** One Photo's thumb: read its stored `small` rendition (far lighter than the
+ *  original), shrink it, and hand the WebP to the Worker. Any failure is a
+ *  `false`, so one bad file does not stop the rest of the run. */
+const backfillOne = (id: string) =>
+  Effect.gen(function* () {
+    const pipeline = yield* ImagePipeline
+    const small = yield* Effect.tryPromise(() =>
+      fetch(imageUrl(renditionKey(id, 'small'))).then((response) => {
+        if (!response.ok) throw new Error(String(response.status))
+        return response.blob()
+      }),
+    )
+    const { thumb } = yield* pipeline.thumb(small, {
+      longEdge: THUMB_LONG_EDGE,
+      quality: THUMB_QUALITY,
+    })
+    yield* Effect.tryPromise(() =>
+      fetch(`${THUMB_PATH}/${encodeURIComponent(id)}`, {
+        method: 'POST',
+        body: thumb,
+        credentials: 'include',
+      }).then((response) => {
+        if (!response.ok) throw new Error(String(response.status))
+      }),
+    )
+    return true
+  }).pipe(Effect.orElseSucceed(() => false))
+
+/** Settings' `Backfill thumbnails`: every Photo uploaded before `thumb`
+ *  existed gets one, made here in the browser (the Worker never decodes
+ *  pixels). Answers once, with how many were made and how many were not. */
+export const BackfillThumbsCmd = Command.define('BackfillThumbs', {
+  messages: [Message.BackfilledThumbs, Message.FailedRpc],
+  execute: Effect.gen(function* () {
+    const { ids } = yield* rpcAdmin<{ ids: ReadonlyArray<string> }>('ListMissingThumbs', {})
+    const outcomes = yield* Effect.forEach(ids, backfillOne, { concurrency: 3 })
+    const made = outcomes.filter(Boolean).length
+    return Message.BackfilledThumbs({ made, failed: outcomes.length - made })
+  }).pipe(
+    Effect.provide(ImagePipeline.layer),
+    Effect.catch((error) => Effect.succeed(failWith(error))),
+  ),
 })
 
 // ---------------------------------------------------------------------------

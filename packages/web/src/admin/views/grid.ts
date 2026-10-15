@@ -30,7 +30,7 @@ import type { StatusVariant } from '@/components/ui/status'
 import { icon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { placeholderDataUrl } from '@/lib/blurhash'
-import { smallUrl } from '@/lib/image'
+import { gridUrl } from '@/lib/image'
 
 import { Message as M } from '../model'
 import type { Model, Msg } from '../model'
@@ -90,7 +90,7 @@ const photoTile = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Chi
         [
           h.img([
             h.Class('max-h-full max-w-full object-contain'),
-            h.Src(smallUrl(photo)),
+            h.Src(gridUrl(photo)),
             h.Alt(''),
             h.Attribute('loading', 'lazy'),
             h.Attribute('decoding', 'async'),

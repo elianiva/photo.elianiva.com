@@ -1,9 +1,11 @@
 /**
  * The files a Photo is stored as, and where each one lives in R2.
  *
- * Three files, all produced in the browser before the upload (the Worker only
- * accepts and stores them):
+ * Four files, all produced in the browser (the Worker only accepts and stores
+ * them):
  *
+ * - `thumb`   — WebP, long edge capped at {@link THUMB_LONG_EDGE}. What the
+ *               grids and the Library draw. Optional: older Photos have none.
  * - `small`   — WebP, long edge capped at {@link SMALL_LONG_EDGE}. The grids,
  *               the Library and the public frontpage.
  * - `preview` — WebP at the original's own pixel size. What a click opens.
@@ -16,7 +18,14 @@
 export const SMALL_LONG_EDGE = 1600
 export const RENDITION_QUALITY = 90
 
-export type RenditionKind = 'small' | 'preview'
+/** The grid's file: the long edge a justified row ever draws a frame at, with
+ *  headroom for a 2x screen, and a quality the eye cannot tell from 90 at
+ *  that size. A photograph uploaded before `thumb` existed has none until the
+ *  Library's backfill makes it (`photos.thumb` says which). */
+export const THUMB_LONG_EDGE = 640
+export const THUMB_QUALITY = 80
+
+export type RenditionKind = 'small' | 'preview' | 'thumb'
 
 export const RENDITION_PREFIX = 'renditions/'
 export const ORIGINAL_PREFIX = 'originals/'

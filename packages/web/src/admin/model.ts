@@ -440,6 +440,8 @@ export const Model = S.Struct({
   settingsIndexing: S.Boolean,
   /** The orphan sweep is running. */
   settingsSweeping: S.Boolean,
+  /** The thumbnail backfill is running. */
+  settingsBackfilling: S.Boolean,
 
   /** Keys of the mutations in flight (`BusyKey`). A button whose action is in
    *  this list draws a spinner and ignores clicks; dialogs that wait on the
@@ -648,6 +650,8 @@ export const Message = defineMessageUnion({
   FailedExportCsvIndex: { message: S.String },
   SweepOrphans: {},
   SweptOrphans: { deleted: S.Number },
+  BackfillThumbs: {},
+  BackfilledThumbs: { made: S.Number, failed: S.Number },
 
   // ----- the Library table -----------------------------------------------------
   /** Row click and the row's own box are the same gesture, so they are the same

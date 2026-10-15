@@ -172,7 +172,14 @@ export interface CreatePhotoInput {
   /** The two WebP files the browser produced. Stored under keys derived from
    *  the new Photo's id (`renditionKey`), so they are written after the id is
    *  known and removed with the Photo. */
-  readonly renditions?: { readonly small: ArrayBuffer; readonly preview: ArrayBuffer } | undefined
+  readonly renditions?:
+    | {
+        readonly small: ArrayBuffer
+        readonly preview: ArrayBuffer
+        /** Optional so an older client's upload still lands. */
+        readonly thumb?: ArrayBuffer | undefined
+      }
+    | undefined
   readonly tagIds: ReadonlyArray<string>
 }
 
@@ -210,6 +217,15 @@ export interface PhotoServiceContract {
     id: string,
     patch: PhotoUpdatePatch,
   ) => Effect.Effect<PhotoWithTags, StorageError | PhotoNotFound | SlugConflict>
+  /** Stores a Photo's `thumb` rendition after the fact (the Library's
+   *  backfill) and marks the row. The object is written before the flag, so a
+   *  Photo never claims a file that is not there. */
+  readonly attachThumb: (
+    id: string,
+    body: ArrayBuffer,
+  ) => Effect.Effect<void, StorageError | PhotoNotFound>
+  /** Ids of Photos whose `thumb` has not been made, oldest first. */
+  readonly missingThumbs: () => Effect.Effect<ReadonlyArray<string>, StorageError>
   /** Publish and unpublish are this one call. The Status type is the guard;
    *  the column's CHECK is the backstop. */
   readonly setStatus: (
@@ -295,7 +311,7 @@ const EVERY_PHOTO = '1 = 1'
  *  cannot disagree about the shape of a row — and so the public read model in
  *  `public-photo.ts` selects the same row this one does. */
 export const PHOTO_COLUMNS =
-  'id, slug, title, r2Key, width, height, status, number, ratio, bytes, aperture, shutter, iso, focalLength, takenAt, metadata, blurhash'
+  'id, slug, title, r2Key, width, height, status, number, ratio, bytes, aperture, shutter, iso, focalLength, takenAt, metadata, blurhash, thumb'
 
 /**
  * LIKE reads `%` and `_` as wildcards, so a search for `100%` would otherwise
@@ -484,6 +500,7 @@ export const toPhotoWithTags = (row: DbPhotoRow, tags: ReadonlyArray<Tag>): Phot
   focalLength: row.focalLength,
   metadata: parseMetadataObject(row.metadata),
   blurhash: row.blurhash ?? null,
+  thumb: row.thumb === 1,
   tags: [...tags],
 })
 
@@ -799,6 +816,7 @@ const photoObjectKeys = (id: string, r2Key: string): ReadonlyArray<string> => [
   r2Key,
   renditionKey(id, 'small'),
   renditionKey(id, 'preview'),
+  renditionKey(id, 'thumb'),
 ]
 
 /** True when no other photo owns this slug. */
@@ -980,6 +998,7 @@ export const PhotoServiceLive = Layer.effect(
           { column: 'takenAt', value: sql`${input.takenAt ?? null}` },
           { column: 'metadata', value: sql`${input.metadata}` },
           { column: 'blurhash', value: sql`${input.blurhash ?? null}` },
+          { column: 'thumb', value: sql`${input.renditions?.thumb === undefined ? 0 : 1}` },
         ]
         if (input.status !== undefined) {
           columns.push({ column: 'status', value: sql`${input.status}` })
@@ -1026,6 +1045,13 @@ export const PhotoServiceLive = Layer.effect(
               type: 'image/webp',
             },
           )
+          if (input.renditions.thumb !== undefined) {
+            objects.push({
+              key: renditionKey(id, 'thumb'),
+              body: input.renditions.thumb,
+              type: 'image/webp',
+            })
+          }
         }
         yield* Effect.tryPromise({
           try: () =>
@@ -1119,6 +1145,36 @@ export const PhotoServiceLive = Layer.effect(
         const row = yield* requireRow(rowById(sql, id), id)
         return yield* withTags(sql, row)
       })
+
+    const attachThumb: PhotoServiceContract['attachThumb'] = (id, body) =>
+      Effect.gen(function* () {
+        const row = yield* requireRow(rowById(sql, id), id)
+        // Served `immutable` for a year, so a stored thumb is never replaced.
+        if (row.thumb === 1) return
+        yield* Effect.tryPromise({
+          try: () =>
+            gateway.photos.put(renditionKey(id, 'thumb'), body, {
+              httpMetadata: { contentType: 'image/webp' },
+            }),
+          catch: (cause) =>
+            new StorageError({
+              message: 'Failed to store thumb in R2',
+              cause: describeCause(cause),
+            }),
+        })
+        yield* Effect.mapError(
+          sql`UPDATE photos SET thumb = 1 WHERE id = ${id}`.raw,
+          (cause) =>
+            new StorageError({ message: 'Failed to mark thumb', cause: describeCause(cause) }),
+        )
+      })
+
+    const missingThumbs: PhotoServiceContract['missingThumbs'] = () =>
+      Effect.mapError(
+        sql<{ id: string }>`SELECT id FROM photos WHERE thumb = 0 ORDER BY id`,
+        (cause) =>
+          new StorageError({ message: 'Failed to read photos', cause: describeCause(cause) }),
+      ).pipe(Effect.map((rows) => rows.map((row) => row.id)))
 
     const remove: PhotoServiceContract['remove'] = (id) =>
       Effect.gen(function* () {
@@ -1316,6 +1372,8 @@ export const PhotoServiceLive = Layer.effect(
       setStatus,
       remove,
       sweepOrphans,
+      attachThumb,
+      missingThumbs,
       counts,
       index,
       presentation,

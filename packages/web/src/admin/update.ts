@@ -31,6 +31,7 @@ import {
   DeletePhotoCmd,
   ExportCsvIndexCmd,
   SweepOrphansCmd,
+  BackfillThumbsCmd,
   FetchCountsCmd,
   FetchLibraryPageCmd,
   PersistPageSizeCmd,
@@ -193,6 +194,7 @@ const initialModel = (route: AppRoute): Model => {
     settingsSaving: false,
     settingsIndexing: false,
     settingsSweeping: false,
+    settingsBackfilling: false,
     busy: [],
 
     selected: [],
@@ -637,6 +639,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       const unstuck = modifyFields(model, {
         loadingMore: () => false,
         settingsSweeping: () => false,
+        settingsBackfilling: () => false,
         editor: () => ({ ...model.editor, saving: false }),
       })
       const errored = withOptional(unstuck, { status: 'error', error: failure })
@@ -1355,6 +1358,22 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
           ? 'No orphaned files found'
           : `Swept ${deleted} orphaned ${deleted === 1 ? 'file' : 'files'} from R2`,
         'Success',
+      ),
+
+    BackfillThumbs: () => {
+      if (model.settingsBackfilling) return { model }
+      return {
+        model: modifyFields(model, { settingsBackfilling: () => true }),
+        commands: [BackfillThumbsCmd()],
+      }
+    },
+    BackfilledThumbs: ({ made, failed }) =>
+      showToast(
+        modifyFields(model, { settingsBackfilling: () => false }),
+        made === 0 && failed === 0
+          ? 'Every photograph already has a thumbnail'
+          : `Made ${made} ${made === 1 ? 'thumbnail' : 'thumbnails'}${failed === 0 ? '' : `, ${failed} failed`}`,
+        failed === 0 ? 'Success' : 'Error',
       ),
 
     // ----- the Library table ---------------------------------------------------------

@@ -27,6 +27,13 @@ export const renditionUrl = (photoId: string, kind: RenditionKind): string =>
 export const smallUrl = (photo: Pick<PhotoWithTags, 'id'>): string =>
   renditionUrl(photo.id, 'small')
 
+/** What the grids and the Library draw: the `thumb` when the Photo has one,
+ *  otherwise `small` (a Photo uploaded before `thumb` existed). */
+export const gridUrl = (photo: {
+  readonly id: string
+  readonly thumb?: boolean | undefined
+}): string => renditionUrl(photo.id, photo.thumb === true ? 'thumb' : 'small')
+
 /** What a click opens: the original's pixel size, as WebP. */
 export const previewUrl = (photo: Pick<PhotoWithTags, 'id'>): string =>
   renditionUrl(photo.id, 'preview')

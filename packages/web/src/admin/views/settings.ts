@@ -368,6 +368,26 @@ const storage = (model: Model, h: HtmlBuilder<Msg>): Child =>
           h.p([h.Class(captionClass)], ['Deletes files in R2 that no photograph owns.']),
         ],
       ),
+      h.div(
+        [h.Class('flex flex-col items-start gap-2')],
+        [
+          Button.button(
+            {
+              onClick: M.BackfillThumbs({}),
+              variant: 'secondary',
+              isLoading: model.settingsBackfilling,
+            },
+            model.settingsBackfilling ? 'Making thumbnails…' : 'BACKFILL THUMBNAILS',
+            h,
+          ),
+          h.p(
+            [h.Class(captionClass)],
+            [
+              'Makes the small grid file for photographs uploaded before it existed. Keep this tab open until it finishes.',
+            ],
+          ),
+        ],
+      ),
     ],
     h,
   )

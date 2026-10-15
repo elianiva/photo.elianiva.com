@@ -507,6 +507,13 @@ export class ListPhotoIndex extends Rpc.make('ListPhotoIndex', {
   error: S.Union([InvalidInput, StorageError]),
 }) {}
 
+/** The ids of Photos with no `thumb` yet, for the Settings backfill. */
+export class ListMissingThumbs extends Rpc.make('ListMissingThumbs', {
+  payload: {},
+  success: S.Struct({ ids: S.Array(S.String) }),
+  error: StorageError,
+}) {}
+
 export const PhotoAdminRpcs = RpcGroup.make(
   GetPhoto,
   GetPhotoPresentation,
@@ -530,4 +537,5 @@ export const PhotoAdminRpcs = RpcGroup.make(
   GetSettings,
   UpdateSettings,
   ListPhotoIndex,
+  ListMissingThumbs,
 )

@@ -5,13 +5,21 @@
  */
 
 import { Effect, Match, Schema as S } from 'effect'
-import { exportImage, makeRenditions } from './encode'
+import { exportImage, makeRenditions, makeThumb } from './encode'
 import { WorkerFailed, WorkerRequest, type PipelineError } from './schema'
 
 const run = Match.type<WorkerRequest>().pipe(
   Match.tagsExhaustive({
     renditions: (request) =>
-      makeRenditions(request.file, request.smallLongEdge, request.quality).pipe(
+      makeRenditions(
+        request.file,
+        request.smallLongEdge,
+        request.quality,
+        request.thumbLongEdge,
+        request.thumbQuality,
+      ).pipe(Effect.map((result) => ({ _tag: 'success', result }) as const)),
+    thumb: (request) =>
+      makeThumb(request.file, request.longEdge, request.quality).pipe(
         Effect.map((result) => ({ _tag: 'success', result }) as const),
       ),
     export: (request) =>

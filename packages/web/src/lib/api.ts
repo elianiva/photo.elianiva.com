@@ -56,6 +56,10 @@ export const ADMIN_RPC_PATH = `${API_PREFIX}/admin/rpc`
 /** The multipart JPEG upload. Edge-gated, and nothing else writes to R2. */
 export const UPLOAD_PATH = `${API_PREFIX}/upload`
 
+/** Backfills one Photo's `thumb` rendition: `POST /api/thumb/<photoId>` with
+ *  the WebP as the body. Edge-gated like the upload. */
+export const THUMB_PATH = `${API_PREFIX}/thumb`
+
 /** The R2 proxy that serves an original's bytes. Public, so the front can load a photo. */
 export const IMAGE_PATH = `${API_PREFIX}/image`
 

@@ -41,7 +41,7 @@ import {
   tableCheckboxWidthClass,
   tableHead,
 } from '@/components/ui/table-head'
-import { smallUrl } from '@/lib/image'
+import { gridUrl } from '@/lib/image'
 import { cn } from '@/lib/utils'
 
 import { bulkDetailsPatch, parseExifNumber, parseShutter } from '../editor'
@@ -116,7 +116,7 @@ const row = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Child =>
       isSelected: model.selected.includes(photo.id),
       onToggleSelection: M.ToggledRowSelection({ id: photo.id }),
       onSelect: M.ToggledRowSelection({ id: photo.id }),
-      thumb: { src: smallUrl(photo), alt: photo.title },
+      thumb: { src: gridUrl(photo), alt: photo.title },
       title: photo.title,
       fileLine: fileLine(photo),
       // A Ratio nobody has set yet prints the design's own `—` rather than a

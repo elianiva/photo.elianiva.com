@@ -118,6 +118,7 @@ const runItem = (itemId: string, options: UploadRunOptions, offer: () => Offer |
     form.set('file', file)
     form.set('small', renditions.small, 'small.webp')
     form.set('preview', renditions.preview, 'preview.webp')
+    form.set('thumb', renditions.thumb, 'thumb.webp')
     form.set(
       'title',
       Option.getOrElse(title, () => file.name.replace(/\.[^/.]+$/, '')),
@@ -127,7 +128,8 @@ const runItem = (itemId: string, options: UploadRunOptions, offer: () => Offer |
     form.set('useExportDefaults', options.useExportDefaults ? 'true' : 'false')
     if (blurhash !== undefined) form.set('blurhash', blurhash)
     if (options.takenAt !== '') form.set('takenAt', options.takenAt)
-    const totalBytes = file.size + renditions.small.size + renditions.preview.size
+    const totalBytes =
+      file.size + renditions.small.size + renditions.preview.size + renditions.thumb.size
 
     const sent = yield* send(form, (loaded) => {
       // `event.loaded` counts the whole multipart body; the bar names the

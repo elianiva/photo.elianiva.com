@@ -31,7 +31,7 @@ import { Schema as S } from 'effect'
 import { PHOTO_RATIOS, exifDetails, formatExifLine, nearestRatio } from '@photo/shared'
 import type { PhotoWithTags, PublicSection } from '@photo/shared'
 
-import { renditionUrl } from '@/lib/image'
+import { gridUrl, renditionUrl } from '@/lib/image'
 
 // ---------------------------------------------------------------------------
 // figures
@@ -79,6 +79,8 @@ export const FigureSchema = S.Struct({
   /** The placeholder the frame paints until its bytes arrive; null for a Photo
    *  uploaded before Blurhash existed. */
   blurhash: S.NullOr(S.String),
+  /** Whether the Photo has a `thumb` file; the grids draw `small` without. */
+  thumb: S.Boolean,
 })
 export type Figure = typeof FigureSchema.Type
 
@@ -223,6 +225,7 @@ const figureOf = (photo: PhotoWithTags): Figure | null => {
     details: exifDetails(photo),
     r2Key: photo.r2Key,
     blurhash: photo.blurhash ?? null,
+    thumb: photo.thumb === true,
   }
 }
 
@@ -343,7 +346,11 @@ export const placeholderStyle = (figure: Figure): Record<string, string> => {
   return url === null ? {} : { backgroundImage: `url(${url})`, backgroundSize: '100% 100%' }
 }
 
-export const figureUrl = (figure: Figure): string => renditionUrl(figure.id, 'small')
+/** The grid's file: the `thumb` when the Photo has one, else `small`. */
+export const figureUrl = (figure: Figure): string => gridUrl(figure)
+
+/** The lightbox's first paint, while `preview` loads: always the `small`. */
+export const figureSmallUrl = (figure: Figure): string => renditionUrl(figure.id, 'small')
 
 /** The lightbox's image: the `preview` WebP at the original's pixel size. */
 export const figurePreviewUrl = (figure: Figure): string => renditionUrl(figure.id, 'preview')

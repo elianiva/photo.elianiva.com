@@ -10,7 +10,13 @@ import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
 import { imageUrl } from '@/lib/image'
-import { figurePreviewUrl, figureUrl, placeholderStyle, type Figure } from '../content'
+import {
+  figurePreviewUrl,
+  figureSmallUrl,
+  figureUrl,
+  placeholderStyle,
+  type Figure,
+} from '../content'
 import { Message } from '../model'
 import type { Child } from './shared'
 
@@ -40,16 +46,29 @@ export const lightbox = (figure: Figure, h: HtmlBuilder<Message>): Child =>
       h.div(
         [h.Class('flex min-h-0 w-full flex-1 items-center justify-center')],
         [
-          // The 1600px small rendition (usually already cached from the
-          // timeline) paints at once and the full-size preview fades in over it
-          // when it lands, so opening never waits on the big file.
+          // The grid's thumb (already cached from the timeline) paints at once,
+          // the 1600px small rendition covers it when it lands, and the
+          // full-size preview covers that, so opening never waits on a big file.
           h.div(
             [h.Class('grid h-full w-full min-h-0')],
             [
+              ...(figure.thumb
+                ? [
+                    h.img([
+                      h.Class('col-start-1 row-start-1 h-full w-full min-h-0 object-contain'),
+                      h.Style(placeholderStyle(figure)),
+                      h.Src(figureUrl(figure)),
+                      h.Alt(''),
+                      h.AriaHidden(true),
+                      h.Attribute('decoding', 'async'),
+                      h.OnClick(Message.ClickedFigure({ id: figure.id })),
+                    ]),
+                  ]
+                : []),
               h.img([
                 h.Class('col-start-1 row-start-1 h-full w-full min-h-0 object-contain'),
-                h.Style(placeholderStyle(figure)),
-                h.Src(figureUrl(figure)),
+                ...(figure.thumb ? [] : [h.Style(placeholderStyle(figure))]),
+                h.Src(figureSmallUrl(figure)),
                 h.Alt(figure.title),
                 h.Attribute('decoding', 'async'),
                 h.OnClick(Message.ClickedFigure({ id: figure.id })),

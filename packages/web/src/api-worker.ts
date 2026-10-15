@@ -30,7 +30,14 @@ import {
   isServableKey,
 } from '@photo/shared'
 import { rejectionResponse, verifyAdminAccess } from './access'
-import { ADMIN_RPC_PATH, HEALTH_PATH, IMAGE_PATH, RPC_PATH, UPLOAD_PATH } from './lib/api'
+import {
+  ADMIN_RPC_PATH,
+  HEALTH_PATH,
+  IMAGE_PATH,
+  RPC_PATH,
+  THUMB_PATH,
+  UPLOAD_PATH,
+} from './lib/api'
 import { WorkerLoggerLive } from './lib/logger'
 import { RateLimit, RateLimitLive, clientKey } from './rate-limit'
 
@@ -102,6 +109,9 @@ const securityHeaders = (): Record<string, string> => ({
 // 80 MB fits with headroom on the cheapest plan and there is no reason to raise
 // it. Verified against Cloudflare's Workers limits before settling on it.
 const UPLOAD_MAX_BYTES = 80 * 1024 * 1024
+
+/** A 640px WebP is tens of kilobytes; 5 MB is a wrong file, not a thumb. */
+const THUMB_MAX_BYTES = 5 * 1024 * 1024
 
 const sanitizeError = (error: unknown): string => {
   if (error instanceof Error) {
@@ -181,6 +191,15 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
     ) {
       return uploadError('renditions must be non-empty and under 80MB', 413)
     }
+    // `thumb` is optional: an older tab's upload lands without one and the
+    // Library's backfill makes it later.
+    const thumb = form.get('thumb')
+    if (thumb !== null && !(thumb instanceof File)) {
+      return uploadError('thumb must be a file', 400)
+    }
+    if (thumb !== null && (thumb.size <= 0 || thumb.size > UPLOAD_MAX_BYTES)) {
+      return uploadError('renditions must be non-empty and under 80MB', 413)
+    }
     const takenAtRaw = form.get('takenAt')
     // The dialog's two Toggle Rows. `Publish when ready` off (the default)
     // creates a draft; `Use export defaults` on seeds the six export columns
@@ -212,7 +231,18 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
       try: () => Promise.all([small.arrayBuffer(), preview.arrayBuffer()]),
       catch: () => new Error('failed to read upload'),
     })
-    if (!hasWebpMagic(new Uint8Array(smallBytes)) || !hasWebpMagic(new Uint8Array(previewBytes))) {
+    const thumbBytes =
+      thumb === null
+        ? undefined
+        : yield* Effect.tryPromise({
+            try: () => thumb.arrayBuffer(),
+            catch: () => new Error('failed to read upload'),
+          })
+    if (
+      !hasWebpMagic(new Uint8Array(smallBytes)) ||
+      !hasWebpMagic(new Uint8Array(previewBytes)) ||
+      (thumbBytes !== undefined && !hasWebpMagic(new Uint8Array(thumbBytes)))
+    ) {
       return uploadError('renditions must be WebP', 415)
     }
 
@@ -276,7 +306,7 @@ const handleUpload = (env: ApiEnv, request: Request): Promise<Response> => {
         blurhash: parseBlurhash(form.get('blurhash')),
         contentType: 'image/jpeg',
         bytes,
-        renditions: { small: smallBytes, preview: previewBytes },
+        renditions: { small: smallBytes, preview: previewBytes, thumb: thumbBytes },
         tagIds,
       }),
     )
@@ -430,7 +460,7 @@ const adminGate = (env: ApiEnv, request: globalThis.Request) =>
  * middleware cannot require a layer-provided service — which is also what the
  * hand-written dispatcher did.
  */
-export type RouteName = 'upload' | 'adminRpc' | 'publicRpc'
+export type RouteName = 'upload' | 'thumb' | 'adminRpc' | 'publicRpc'
 
 const limited = (route: RouteName, limit: number, windowMs: number, request: globalThis.Request) =>
   HttpRouter.middleware((httpEffect) =>
@@ -460,6 +490,50 @@ const uploadRoute = (env: ApiEnv, request: globalThis.Request) =>
   ).pipe(
     Layer.provide(adminGate(env, request)),
     Layer.provide(limited('upload', 10, 60_000, request)),
+  )
+
+/** The thumb backfill's body: raw WebP bytes, checked by their own magic like
+ *  every other file this Worker stores. */
+const handleThumb = (env: ApiEnv, request: Request, photoId: string): Promise<Response> => {
+  const attach = Effect.fn('api.thumb')(function* () {
+    const bytes: ArrayBuffer = yield* Effect.tryPromise({
+      try: () => request.arrayBuffer(),
+      catch: () => new Error('failed to read upload'),
+    })
+    if (bytes.byteLength === 0 || bytes.byteLength > THUMB_MAX_BYTES) {
+      return uploadError('thumb must be non-empty and under 5MB', 413)
+    }
+    if (!hasWebpMagic(new Uint8Array(bytes))) return uploadError('renditions must be WebP', 415)
+    const outcome = yield* PhotoService.use((service) => service.attachThumb(photoId, bytes)).pipe(
+      Effect.map(() => 'stored' as const),
+      Effect.catchTag('PhotoNotFound', () => Effect.succeed('missing' as const)),
+    )
+    return outcome === 'missing'
+      ? uploadError('photo not found', 404)
+      : jsonResponse({ ok: true }, { status: 200 })
+  })
+  return Effect.runPromise(
+    attach().pipe(
+      Effect.provide(PhotoServiceLive.pipe(Layer.provide(metadataLayer(env)))),
+      Effect.provide(WorkerLoggerLive),
+      Effect.catch((error) => Effect.succeed(uploadError(sanitizeError(error), 500))),
+    ),
+  )
+}
+
+const thumbRoute = (env: ApiEnv, request: globalThis.Request) =>
+  HttpRouter.add('POST', `${THUMB_PATH}/:id`, () =>
+    Effect.gen(function* () {
+      const params = yield* HttpRouter.params
+      const id = params['id'] ?? ''
+      // A key is built from this id, so it is checked before it is used.
+      if (!/^[0-9a-zA-Z-]{1,64}$/.test(id))
+        return HttpServerResponse.fromWeb(uploadError('photo not found', 404))
+      return HttpServerResponse.fromWeb(yield* Effect.promise(() => handleThumb(env, request, id)))
+    }),
+  ).pipe(
+    Layer.provide(adminGate(env, request)),
+    Layer.provide(limited('thumb', 300, 60_000, request)),
   )
 
 /** The admin group. The gate is what makes it reachable, and it is mounted under
@@ -603,6 +677,7 @@ const appLayer = (env: ApiEnv, request: globalThis.Request) =>
   Layer.mergeAll(
     healthRoute(env),
     uploadRoute(env, request),
+    thumbRoute(env, request),
     adminRpcRoute(env, request),
     publicRpcRoute(env, request),
     imageRoute(env),
@@ -657,8 +732,31 @@ const handlerFor = (env: ApiEnv, request: globalThis.Request) =>
     routerConfig: { ignoreTrailingSlash: true },
   }).handler
 
+/** Workers' per-colo cache. Its `default` member is not in the DOM typings the
+ *  rest of the package compiles against, and Node (the tests) has no `caches`. */
+const edgeCache = (): Cache | undefined => {
+  if (typeof caches === 'undefined') return undefined
+  const candidate: unknown = Reflect.get(caches, 'default')
+  return candidate instanceof Cache ? candidate : undefined
+}
+
 export default {
-  fetch(request: globalThis.Request, env: ApiEnv): Promise<globalThis.Response> {
-    return handlerFor(env, request)(request)
+  async fetch(
+    request: globalThis.Request,
+    env: ApiEnv,
+    ctx?: { waitUntil(promise: Promise<unknown>): void },
+  ): Promise<globalThis.Response> {
+    const handle = handlerFor(env, request)
+    // Image keys never change (`immutable`), so an edge hit answers without
+    // waking R2 or the router. Only whole 200s are stored: `cache.put`
+    // refuses a 206, and a 404 must not outlive the upload that fixes it.
+    const edge = edgeCache()
+    if (edge === undefined || ctx === undefined || request.method !== 'GET') return handle(request)
+    if (!new URL(request.url).pathname.startsWith(`${IMAGE_PATH}/`)) return handle(request)
+    const hit = await edge.match(request)
+    if (hit !== undefined) return hit
+    const response = await handle(request)
+    if (response.status === 200) ctx.waitUntil(edge.put(request, response.clone()))
+    return response
   },
 }

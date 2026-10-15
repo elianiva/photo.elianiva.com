@@ -39,25 +39,31 @@ and D1 once the domain schemas are already here.
 - **Auth is Cloudflare Access** (OTP IdP, an allowlist of one email). No app
   login form exists anywhere in the product (ADR 0006).
 
-## Image delivery: three files, made in the browser
+## Image delivery: four files, made in the browser
 
-Every Photo is three files in R2:
+Every Photo is up to four files in R2 (`thumb` is absent on a Photo uploaded
+before it existed, until the Settings backfill makes it; `photos.thumb` says
+which):
 
 | file      | what                                    | used for                          |
 | --------- | --------------------------------------- | --------------------------------- |
-| `small`   | WebP, 1600 px long edge, quality 90     | Library, grids, public frontpage  |
+| `thumb`   | WebP, 640 px long edge, quality 80      | Library and public grids          |
+| `small`   | WebP, 1600 px long edge, quality 90     | lightbox first paint, Editor      |
 | `preview` | WebP, the original's pixels, quality 90 | what a click opens (the lightbox) |
 | `full`    | the original JPEG, untouched            | the Editor's Download             |
 
-All three are served from R2 through the Worker's `/api/image/<key>` proxy.
+All of them are served from R2 through the Worker's `/api/image/<key>` proxy.
 
 **There is still no zone resizer.** Cloudflare zone image resizing
 (`/cdn-cgi/image/…`) is plan-gated and this zone is on the Free plan, so every
 request to it answers 404; nothing may reintroduce `thumbUrl`, `srcSet` or that
 path. What replaces it is not a server transform but **client-side
 processing**: the Admin decodes the JPEG in a Web Worker (jsquash: Lanczos3
-resize, WebP/JPEG/PNG encode), produces `small` and `preview`, and uploads all
-three in one multipart request. The Worker never decodes pixels; it validates
+resize, WebP/JPEG/PNG encode), produces `thumb`, `small` and `preview`, and uploads
+them with the original in one multipart request. An older Photo's `thumb` is
+made later by the Settings backfill from its stored `small`, one `POST
+/api/thumb/<id>` each; a stored `thumb` is never replaced, because it is cached
+`immutable`. The Worker never decodes pixels; it validates
 the declared type and the bytes' own magic (JPEG SOI, WebP `RIFF…WEBP`) and
 stores. The same pipeline powers Download: the browser fetches the original and
 re-encodes it at any width, frame and border the operator picks. The server's

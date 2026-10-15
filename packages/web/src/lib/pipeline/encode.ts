@@ -16,6 +16,7 @@ import {
   type ExportSettings,
   type OutputFormat,
   type RenditionSet,
+  type ThumbResult,
 } from './schema'
 
 /** How far the browser's own scaler may shrink a photo before jsquash takes
@@ -158,31 +159,64 @@ export const exportImage = Effect.fn('pipeline.export')(function* (
   } satisfies ExportResult
 }, Effect.scoped)
 
-/** The two stored WebP renditions from one decode: `small` capped at
- *  `smallLongEdge` on its long edge, `preview` at the source's own size. */
+/** `bitmap` shrunk so its long edge is at most `longEdge`; never enlarged. */
+const capped = (bitmap: ImageBitmap, longEdge: number) => {
+  const k = Math.min(1, longEdge / Math.max(bitmap.width, bitmap.height))
+  return scaled(
+    bitmap,
+    {
+      width: Math.max(1, Math.round(bitmap.width * k)),
+      height: Math.max(1, Math.round(bitmap.height * k)),
+    },
+    'lanczos3',
+  )
+}
+
+/** The three stored WebP renditions from one decode: `small` capped at
+ *  `smallLongEdge` on its long edge, `preview` at the source's own size, and
+ *  `thumb` capped at `thumbLongEdge` at its own quality. */
 export const makeRenditions = Effect.fn('pipeline.renditions')(function* (
   file: Blob,
   smallLongEdge: number,
   quality: number,
+  thumbLongEdge: number,
+  thumbQuality: number,
 ) {
   const bitmap = yield* decode(file)
   const { width, height } = bitmap
-  const k = Math.min(1, smallLongEdge / Math.max(width, height))
-  const small = yield* scaled(
-    bitmap,
-    { width: Math.max(1, Math.round(width * k)), height: Math.max(1, Math.round(height * k)) },
-    'lanczos3',
-  )
+  const small = yield* capped(bitmap, smallLongEdge)
+  const thumb = yield* capped(bitmap, thumbLongEdge)
   const preview = yield* drawToImageData(bitmap, bitmap)
-  const [smallBytes, previewBytes] = yield* Effect.tryPromise({
+  const [smallBytes, previewBytes, thumbBytes] = yield* Effect.tryPromise({
     try: () =>
-      Promise.all([CODECS.webp.encode(small, quality), CODECS.webp.encode(preview, quality)]),
+      Promise.all([
+        CODECS.webp.encode(small, quality),
+        CODECS.webp.encode(preview, quality),
+        CODECS.webp.encode(thumb, thumbQuality),
+      ]),
     catch: (cause) => new EncodeFailed({ message: `webp: ${String(cause)}` }),
   })
   return {
     small: new Blob([smallBytes], { type: CODECS.webp.type }),
     preview: new Blob([previewBytes], { type: CODECS.webp.type }),
+    thumb: new Blob([thumbBytes], { type: CODECS.webp.type }),
     width,
     height,
   } satisfies RenditionSet
+}, Effect.scoped)
+
+/** Just the `thumb`, for the Library's backfill. The source is the stored
+ *  `small` rendition, which is already far smaller than the original. */
+export const makeThumb = Effect.fn('pipeline.thumb')(function* (
+  file: Blob,
+  longEdge: number,
+  quality: number,
+) {
+  const bitmap = yield* decode(file)
+  const image = yield* capped(bitmap, longEdge)
+  const bytes = yield* Effect.tryPromise({
+    try: () => CODECS.webp.encode(image, quality),
+    catch: (cause) => new EncodeFailed({ message: `webp: ${String(cause)}` }),
+  })
+  return { thumb: new Blob([bytes], { type: CODECS.webp.type }) } satisfies ThumbResult
 }, Effect.scoped)

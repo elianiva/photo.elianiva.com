@@ -8,7 +8,7 @@
  */
 
 import { Effect, Option } from 'effect'
-import { RENDITION_QUALITY, SMALL_LONG_EDGE } from '@photo/shared'
+import { RENDITION_QUALITY, SMALL_LONG_EDGE, THUMB_LONG_EDGE, THUMB_QUALITY } from '@photo/shared'
 
 import { encodeBlurhash } from '@/lib/blurhash'
 import { titleFromExif } from '@/lib/exif-title'
@@ -36,7 +36,12 @@ export const prepare = Effect.fn('upload.prepare')(function* (
   // The title read is cheap and independent of the encode, so it overlaps it.
   const [renditions, title] = yield* Effect.all(
     [
-      pipeline.renditions(file, { smallLongEdge: SMALL_LONG_EDGE, quality: RENDITION_QUALITY }),
+      pipeline.renditions(file, {
+        smallLongEdge: SMALL_LONG_EDGE,
+        quality: RENDITION_QUALITY,
+        thumbLongEdge: THUMB_LONG_EDGE,
+        thumbQuality: THUMB_QUALITY,
+      }),
       titleFromExif(file),
     ],
     { concurrency: 'unbounded' },

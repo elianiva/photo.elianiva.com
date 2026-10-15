@@ -215,6 +215,9 @@ export const PhotoWithTags = S.Struct({
   /** Client-decoded placeholder source. Absent for Photos uploaded before
    *  blurhash existed — views fall back to a plain background. */
   blurhash: S.optional(S.NullOr(S.String)),
+  /** Whether the `thumb` rendition is stored. False for a Photo uploaded
+   *  before it existed; the grids then draw `small`. */
+  thumb: S.optional(S.Boolean),
   tags: S.optional(S.Array(Tag)),
 })
 export type PhotoWithTags = typeof PhotoWithTags.Type
@@ -238,6 +241,7 @@ export const DbPhotoRow = S.Struct({
   focalLength: S.NullOr(S.Number),
   metadata: S.String,
   blurhash: S.NullOr(S.String),
+  thumb: S.Number,
 })
 export type DbPhotoRow = typeof DbPhotoRow.Type
 

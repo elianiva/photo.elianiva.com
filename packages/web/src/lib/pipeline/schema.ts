@@ -64,6 +64,14 @@ export const RenditionsRequest = S.TaggedStruct('renditions', {
   file: File_,
   smallLongEdge: S.Number,
   quality: S.Number,
+  thumbLongEdge: S.Number,
+  thumbQuality: S.Number,
+})
+
+export const ThumbRequest = S.TaggedStruct('thumb', {
+  file: File_,
+  longEdge: S.Number,
+  quality: S.Number,
 })
 
 export const ExportRequest = S.TaggedStruct('export', {
@@ -71,17 +79,21 @@ export const ExportRequest = S.TaggedStruct('export', {
   settings: ExportSettings,
 })
 
-export const WorkerRequest = S.Union([RenditionsRequest, ExportRequest])
+export const WorkerRequest = S.Union([RenditionsRequest, ThumbRequest, ExportRequest])
 export type WorkerRequest = typeof WorkerRequest.Type
 
 /** The two WebP renditions from one decode. */
 export const RenditionSet = S.Struct({
   small: File_,
   preview: File_,
+  thumb: File_,
   width: S.Number,
   height: S.Number,
 })
 export type RenditionSet = typeof RenditionSet.Type
+
+export const ThumbResult = S.Struct({ thumb: File_ })
+export type ThumbResult = typeof ThumbResult.Type
 
 export const ExportResult = S.Struct({
   blob: File_,
@@ -102,5 +114,7 @@ export const RenditionsAnswer = S.Union([
   S.TaggedStruct('success', { result: RenditionSet }),
   failure,
 ])
+
+export const ThumbAnswer = S.Union([S.TaggedStruct('success', { result: ThumbResult }), failure])
 
 export const ExportAnswer = S.Union([S.TaggedStruct('success', { result: ExportResult }), failure])

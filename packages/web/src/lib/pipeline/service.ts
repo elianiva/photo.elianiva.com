@@ -13,6 +13,7 @@ import { Context, Effect, Layer, Schema as S, Semaphore } from 'effect'
 import {
   ExportAnswer,
   RenditionsAnswer,
+  ThumbAnswer,
   WorkerFailed,
   type Answer,
   type ExportSettings,
@@ -63,9 +64,21 @@ export class ImagePipeline extends Context.Service<ImagePipeline>()('photo/Image
       /** The `small` and `preview` WebP files, from one decode of the original. */
       renditions: Effect.fn('ImagePipeline.renditions')(function* (
         file: Blob,
-        options: { readonly smallLongEdge: number; readonly quality: number },
+        options: {
+          readonly smallLongEdge: number
+          readonly quality: number
+          readonly thumbLongEdge: number
+          readonly thumbQuality: number
+        },
       ) {
         return yield* job({ _tag: 'renditions', file, ...options }, RenditionsAnswer)
+      }),
+      /** Only the `thumb`, for the Library's backfill. */
+      thumb: Effect.fn('ImagePipeline.thumb')(function* (
+        file: Blob,
+        options: { readonly longEdge: number; readonly quality: number },
+      ) {
+        return yield* job({ _tag: 'thumb', file, ...options }, ThumbAnswer)
       }),
       /** Resize, frame, border and re-encode, for the Download panel. */
       export: Effect.fn('ImagePipeline.export')(function* (file: Blob, settings: ExportSettings) {
@@ -77,4 +90,10 @@ export class ImagePipeline extends Context.Service<ImagePipeline>()('photo/Image
   static readonly layer = Layer.effect(this, this.make)
 }
 
-export type { ExportResult, ExportSettings, PipelineError, RenditionSet } from './schema'
+export type {
+  ExportResult,
+  ExportSettings,
+  PipelineError,
+  RenditionSet,
+  ThumbResult,
+} from './schema'

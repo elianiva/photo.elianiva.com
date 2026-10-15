@@ -229,6 +229,11 @@ export const AdminRpcHandlersLive = PhotoAdminRpcs.toLayer({
   UpdateSettings: (payload) => SettingsService.use((service) => service.update(payload)),
   // The rows, not the document: the Storage block's CSV is assembled from
   // these, and the join and the order are the service's to get right.
+  ListMissingThumbs: () =>
+    Effect.map(
+      PhotoService.use((service) => service.missingThumbs()),
+      (ids) => ({ ids }),
+    ),
   ListPhotoIndex: () =>
     Effect.map(
       PhotoService.use((service) => service.index()),
