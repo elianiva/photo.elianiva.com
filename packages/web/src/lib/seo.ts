@@ -65,7 +65,7 @@ export interface Seo {
 }
 
 const HOME_DESCRIPTION =
-  'Street photography by elianiva, a software engineer who walks around the neighbourhood with a camera. Every photo is the original file, shown as shot.'
+  'Software engineer by trade, street photographer by hobby. These are moments I noticed through my lens.'
 
 const ABOUT_DESCRIPTION =
   'About photo.elianiva.com: a software engineer’s hobby street photography, shot on a Fujifilm X-T20 and shown as the original files.'
