@@ -23,6 +23,8 @@ import {
 import { Multi } from '@foldkit/ui/combobox'
 import { Frame } from '@/lib/pipeline/schema'
 import * as Dialog from '@/components/ui/dialog'
+import * as Menu from '@/components/ui/menu'
+import * as Sheet from '@/components/ui/sheet'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Segment from '@/components/ui/segment'
 import * as Swatch from '@/components/ui/swatch'
@@ -50,6 +52,13 @@ import { Theme } from '@/lib/theme'
 /** Explicit annotation: the inferred bundle type is not portable. The
  *  Model schema comes from the same namespace (`Multi.Model`). */
 export const TagMultiCombo: Multi.Bundle<string> = Multi.create()
+
+/** What the row `⋯` menu offers. `status` is the publish / unpublish toggle,
+ *  whichever way the Photo currently sits. */
+export type RowAction = 'edit' | 'editor' | 'status' | 'delete'
+export const ROW_ACTIONS: ReadonlyArray<RowAction> = ['edit', 'editor', 'status', 'delete']
+/** One menu, shared by every row: only the row it was opened on draws it. */
+export const RowMenu: Menu.Bundle<RowAction> = Menu.create<RowAction>()
 
 /** Toast payload: what the operator sees in the corner stack. */
 export const AdminToast = Toast.make(
@@ -266,6 +275,21 @@ export const PhotoDetails = S.Struct({
 })
 export type PhotoDetails = typeof PhotoDetails.Type
 
+/** The fields the row menu's metadata sheet edits: everything in
+ *  `PhotoDetails` except the slug, which belongs to the Editor. */
+export const META_DETAIL_FIELDS = [
+  'title',
+  'location',
+  'takenAt',
+  'camera',
+  'lens',
+  'focalLength',
+  'aperture',
+  'shutter',
+  'iso',
+] as const
+export type MetaDetailField = (typeof META_DETAIL_FIELDS)[number]
+
 /** A pan in flight. The pointer's origin and the frame's own box, in client
  *  coordinates, plus the crop the drag started from — a drag is measured
  *  against its origin rather than accumulated, so a pointer that wanders back
@@ -466,7 +490,12 @@ export const Model = S.Struct({
   libraryTotal: S.Number,
   /** The Photo whose `⋯` menu is open, and the menu itself. */
   rowMenuId: S.optional(S.String),
-  rowMenu: Dialog.Model,
+  rowMenu: Menu.Model,
+  /** The row menu's `Edit details` sheet: the Photo it was opened on, and the
+   *  details being typed. Only the record's metadata — the Editor owns the rest. */
+  metaSheet: Sheet.Model,
+  metaPhotoId: S.optional(S.String),
+  metaDraft: S.optional(PhotoDetails),
   /** The Bulk Bar's `Add tag` picker: the Dialog, and the Tags ticked in it. */
   addTagDialog: Dialog.Model,
   addTagIds: S.Array(S.String),
@@ -664,7 +693,13 @@ export const Message = defineMessageUnion({
   ClearedSelection: {},
   SteppedLibraryPage: { delta: S.Literals([-1, 1]) },
   OpenedRowMenu: { id: S.String },
-  GotRowMenuMessage: { message: Dialog.Message },
+  GotRowMenuMessage: { message: Menu.Message },
+  /** The row menu's `Edit details`: the metadata sheet, from the right. */
+  OpenedPhotoMeta: { id: S.String },
+  GotMetaSheetMessage: { message: Sheet.Message },
+  SetMetaDetail: { field: S.Literals(META_DETAIL_FIELDS), value: S.String },
+  SubmitPhotoMeta: {},
+  SucceededPhotoMeta: { photo: PhotoWithTags },
   /** The `⋯` menu's publish toggle. Delete is the other row action and
    *  goes through the shared confirm instead. */
   SetRowStatus: { id: S.String, status: S.Literals(['draft', 'published']) },
@@ -820,6 +855,7 @@ export type BusyKey =
   | 'confirm'
   | 'bulk-tags'
   | 'row-status'
+  | 'photo-meta'
   | 'bulk-border'
   | 'bulk-publish'
   | 'bulk-unpublish'

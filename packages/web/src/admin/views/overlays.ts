@@ -13,7 +13,7 @@ import type { Model, Msg, PendingConfirm } from '../model'
 import type { Child } from './shared'
 
 /** What the confirm button says. Delete is permanent: there is no Trash. */
-const confirmLabel = (_pending: PendingConfirm | undefined): string => 'Yes, delete'
+const confirmLabel = (_pending: PendingConfirm | undefined): string => 'Delete'
 
 const confirmCopy = (pending: PendingConfirm | undefined): string => {
   if (pending === undefined) return ''
@@ -66,7 +66,7 @@ export const confirmDialog = (model: Model, h: HtmlBuilder<Msg>): Child =>
                   Button.button(
                     {
                       onClick: M.ConfirmPending(),
-                      variant: 'destructive',
+                      variant: 'default',
                       isLoading: isBusy(model, 'confirm'),
                     },
                     confirmLabel(model.pendingConfirm),

@@ -14,6 +14,10 @@
  * Nothing here knows that: the atom renders the variant it is handed.
  */
 import type { Html, HtmlBuilder } from 'foldkit/html'
+import { Clock, Eye, EyeOff, TriangleAlert } from 'lucide'
+import type { IconNode } from 'lucide'
+
+import { icon } from '@/lib/icons'
 
 import { cn } from '@/lib/utils'
 
@@ -44,27 +48,50 @@ export const statusLabels: Record<StatusVariant, string> = {
   failed: 'FAILED',
 }
 
+/** The glyph the icon-only form draws: seen, hidden, waiting, wrong. */
+const glyphs: Record<StatusVariant, IconNode> = {
+  published: Eye,
+  draft: EyeOff,
+  scheduled: Clock,
+  failed: TriangleAlert,
+}
+
 export type StatusConfig = Readonly<{
   variant: StatusVariant
   className?: string
+  /** Draw a glyph in the label's colour instead of the dot and word. The name
+   *  moves to the accessible label and the tooltip. */
+  iconOnly?: boolean
 }>
 
 /** A Photo's Status, as a dot and its label. */
 export const status = <M>(config: StatusConfig, h: HtmlBuilder<M>): Html =>
-  h.div(
-    [
-      h.Class(cn('inline-flex items-center gap-2', config.className)),
-      h.DataAttribute('slot', 'status'),
-      h.DataAttribute('variant', config.variant),
-    ],
-    [
-      h.span([
-        h.AriaHidden(true),
-        h.Class(cn('size-1.5 shrink-0 rounded-full', dotVariants[config.variant])),
-      ]),
-      h.span(
-        [h.Class(cn('type-label', statusVariants[config.variant]))],
-        [statusLabels[config.variant]],
-      ),
-    ],
-  )
+  config.iconOnly === true
+    ? h.span(
+        [
+          h.Role('img'),
+          h.AriaLabel(statusLabels[config.variant]),
+          h.Title(statusLabels[config.variant]),
+          h.Class(cn('inline-flex', statusVariants[config.variant], config.className)),
+          h.DataAttribute('slot', 'status'),
+          h.DataAttribute('variant', config.variant),
+        ],
+        [icon(h, glyphs[config.variant], 'size-4')],
+      )
+    : h.div(
+        [
+          h.Class(cn('inline-flex items-center gap-2', config.className)),
+          h.DataAttribute('slot', 'status'),
+          h.DataAttribute('variant', config.variant),
+        ],
+        [
+          h.span([
+            h.AriaHidden(true),
+            h.Class(cn('size-1.5 shrink-0 rounded-full', dotVariants[config.variant])),
+          ]),
+          h.span(
+            [h.Class(cn('type-label', statusVariants[config.variant]))],
+            [statusLabels[config.variant]],
+          ),
+        ],
+      )

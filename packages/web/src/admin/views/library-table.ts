@@ -9,8 +9,8 @@
  * Three row-scoped things the design states once and this module makes explicit:
  *
  *   - Clicking a row toggles its selection. The row is the selection target and
- *     the pencil is the Editor; they are different gestures on different
- *     elements, and `libraryRow`'s `onSelect` / `onEdit` are different messages.
+ *     the `⋯` menu opens the Editor; they are different gestures on different
+ *     elements, and `libraryRow`'s `onSelect` and its action cell are different controls.
  *   - The head's box is tri-state over *this page*, not over the filtered total.
  *   - `OF 412` is the filtered total from `ListLibraryRows`, and the Pager's
  *     range is the page's own first and last row.
@@ -26,12 +26,16 @@
  * page, the rows and the message in step.
  */
 
+import { MoreHorizontal } from 'lucide'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import type { PhotoWithTags } from '@photo/shared'
 
 import * as Button from '@/components/ui/button'
 import { checkbox } from '@/components/ui/checkbox'
 import * as Dialog from '@/components/ui/dialog'
+import { iconButton } from '@/components/ui/icon-button'
+import * as Menu from '@/components/ui/menu'
+import * as Sheet from '@/components/ui/sheet'
 import * as Input from '@/components/ui/input'
 import { libraryRow, libraryRowClass } from '@/components/ui/library-row'
 import type { StatusVariant } from '@/components/ui/status'
@@ -41,12 +45,13 @@ import {
   tableCheckboxWidthClass,
   tableHead,
 } from '@/components/ui/table-head'
+import { icon } from '@/lib/icons'
 import { gridUrl } from '@/lib/image'
 import { cn } from '@/lib/utils'
 
-import { bulkDetailsPatch, parseExifNumber, parseShutter } from '../editor'
-import { Message as M, isBusy } from '../model'
-import type { BulkDetailField, Model, Msg } from '../model'
+import { bulkDetailsPatch, metaDetailsInvalid, parseExifNumber, parseShutter } from '../editor'
+import { Message as M, ROW_ACTIONS, RowMenu, isBusy } from '../model'
+import type { BulkDetailField, MetaDetailField, Model, Msg, RowAction } from '../model'
 import { libraryEmpty } from './library-empty'
 import { libraryPager } from './library-pager'
 import { libraryError, libraryIsEmpty, libraryNoMatch } from './library-states'
@@ -130,8 +135,7 @@ const row = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Child =>
       // prints that instead. Named on issue #25.
       dimensions: `${String(photo.width)} × ${String(photo.height)}`,
       status: statusVariant(photo),
-      onEdit: M.OpenedPhoto({ id: photo.id }),
-      onMenu: M.OpenedRowMenu({ id: photo.id }),
+      actions: rowActions(photo, model, h),
     },
     h,
   )
@@ -414,70 +418,163 @@ export const addTagDialog = (model: Model, h: HtmlBuilder<Msg>): Child => {
   })
 }
 
-/** The row `⋯` menu. `Publish` / `Unpublish` is the one row-scoped lifecycle
- *  move (`SetPhotoStatus`); `Delete` is the destructive one and goes
- *  through the shared confirm Dialog rather than acting here. */
-const rowMenu = (model: Model, h: HtmlBuilder<Msg>): Child => {
-  const photo = model.photos.find((candidate) => candidate.id === model.rowMenuId)
+/** The row `⋯` menu. One Menu is shared by every row, so only the row it was
+ *  last opened on draws it; every other row draws a plain button that opens it
+ *  there. `Edit details` opens the metadata sheet, `Open editor` goes to the
+ *  full Editor, `Publish` / `Unpublish` is the one lifecycle move, and
+ *  `Delete` goes through the shared confirm Dialog rather than acting here. */
+const rowActionLabel = (photo: PhotoWithTags, action: RowAction): string => {
+  switch (action) {
+    case 'edit':
+      return 'Edit details'
+    case 'editor':
+      return 'Open editor'
+    case 'status':
+      return photo.status === 'published' ? 'Unpublish' : 'Publish'
+    case 'delete':
+      return 'Delete'
+  }
+}
+
+const rowActions = (photo: PhotoWithTags, model: Model, h: HtmlBuilder<Msg>): Html => {
+  const ariaLabel = `More actions for ${photo.title}`
+  if (model.rowMenuId !== photo.id) {
+    return iconButton(
+      { ariaLabel, kind: 'ghost', onClick: M.OpenedRowMenu({ id: photo.id }) },
+      MoreHorizontal,
+      h,
+    )
+  }
   return h.submodel({
     slotId: 'admin-row-menu',
     model: model.rowMenu,
-    view: Dialog.view,
-    viewInputs: Dialog.styledViewInputs<Msg>(
+    view: RowMenu.view,
+    viewInputs: Menu.viewInputs<RowAction>({
+      items: ROW_ACTIONS,
+      anchor: { placement: 'bottom-end', gap: 4, padding: 8 },
+      buttonContent: icon(h, MoreHorizontal, 'size-[18px]'),
+      triggerClass: 'size-9',
+      ariaLabel,
+      triggerLabel: ariaLabel,
+      isItemDisabled: (action) => action === 'status' && isBusy(model, 'row-status'),
+      itemToConfig: (action) => ({
+        className: action === 'delete' ? 'text-role-error' : '',
+        content: h.span([], [rowActionLabel(photo, action)]),
+      }),
+    }),
+    toParentMessage: (message) => M.GotRowMenuMessage({ message }),
+  })
+}
+
+/** The metadata sheet, from the right: the Photo's own record without the
+ *  Editor's crop, mat and export. A save writes only these fields. */
+const metaField = (
+  model: Model,
+  field: MetaDetailField,
+  label: string,
+  h: HtmlBuilder<Msg>,
+  options: { type?: 'date'; invalid?: boolean; placeholder?: string } = {},
+): Child =>
+  Input.input(
+    {
+      id: `meta-${field}`,
+      label,
+      value: model.metaDraft?.[field] ?? '',
+      className: 'h-auto',
+      isInvalid: options.invalid === true,
+      ...(options.placeholder === undefined ? {} : { placeholder: options.placeholder }),
+      ...(options.type === undefined ? {} : { type: options.type }),
+      onInput: (value) => M.SetMetaDetail({ field, value }),
+    },
+    h,
+  )
+
+const metaSheet = (model: Model, h: HtmlBuilder<Msg>): Child => {
+  const draft = model.metaDraft
+  const busy = isBusy(model, 'photo-meta')
+  const invalid = draft === undefined || metaDetailsInvalid(draft)
+  const numberInvalid = (field: 'focalLength' | 'aperture' | 'iso'): boolean =>
+    draft !== undefined && parseExifNumber(draft[field]) === undefined
+  return h.submodel({
+    slotId: 'admin-meta-sheet',
+    model: model.metaSheet,
+    view: Sheet.view,
+    viewInputs: Sheet.styledViewInputs<Msg>(
       {
-        panelClass: 'w-full max-w-sm',
+        panelClass: 'overflow-y-auto',
         content: (render, innerH) => [
-          h.div(
-            [h.Class('flex flex-col gap-4')],
+          Sheet.header(
+            {},
             [
+              Sheet.title({ attributes: render.title }, ['Edit details'], innerH),
+              Sheet.description(
+                { attributes: render.description },
+                ['The record only. Crop, mat and export stay in the editor.'],
+                innerH,
+              ),
+              Sheet.closeButton({ attributes: render.closeButton }, ['×'], innerH),
+            ],
+            innerH,
+          ),
+          h.div(
+            [h.Class('flex flex-col gap-5 px-4')],
+            [
+              metaField(model, 'title', 'TITLE', h, {
+                invalid: draft !== undefined && draft.title.trim() === '',
+              }),
+              metaField(model, 'location', 'PLACE', h),
+              metaField(model, 'takenAt', 'TAKEN', h, { type: 'date' }),
+              metaField(model, 'camera', 'CAMERA', h),
+              metaField(model, 'lens', 'LENS', h),
               h.div(
-                [h.Class('flex items-start justify-between gap-2')],
+                [h.Class('grid grid-cols-2 gap-3')],
                 [
-                  Dialog.title(
-                    { attributes: render.title },
-                    [photo === undefined ? 'Photograph' : photo.title],
-                    innerH,
-                  ),
-                  Dialog.closeButton({ attributes: render.closeButton }, ['×'], innerH),
+                  metaField(model, 'focalLength', 'FOCAL LENGTH (MM)', h, {
+                    invalid: numberInvalid('focalLength'),
+                  }),
+                  metaField(model, 'aperture', 'APERTURE (F/)', h, {
+                    invalid: numberInvalid('aperture'),
+                  }),
+                  metaField(model, 'shutter', 'SHUTTER (S)', h, {
+                    placeholder: '1/250',
+                    invalid: draft !== undefined && parseShutter(draft.shutter) === undefined,
+                  }),
+                  metaField(model, 'iso', 'ISO', h, { invalid: numberInvalid('iso') }),
                 ],
               ),
-              h.div(
-                [h.Class('flex flex-col')],
-                photo === undefined
-                  ? []
-                  : [
-                      Button.button(
-                        {
-                          onClick: M.SetRowStatus({
-                            id: photo.id,
-                            status: photo.status === 'published' ? 'draft' : 'published',
-                          }),
-                          variant: 'ghost',
-                          className: 'justify-start',
-                          isLoading: isBusy(model, 'row-status'),
-                        },
-                        photo.status === 'published' ? 'Unpublish' : 'Publish',
-                        innerH,
-                      ),
-                      Button.button(
-                        {
-                          onClick: M.RequestedRowDelete({ id: photo.id, title: photo.title }),
-                          variant: 'destructive',
-                          className: 'justify-start',
-                          isDisabled: isBusy(model, 'row-status'),
-                        },
-                        'Delete',
-                        innerH,
-                      ),
-                    ],
+            ],
+          ),
+          Sheet.footer(
+            { className: 'flex-row justify-end' },
+            [
+              Button.button(
+                {
+                  onClick: M.GotMetaSheetMessage({ message: Sheet.Message.RequestedClose() }),
+                  variant: 'secondary',
+                  isDisabled: busy,
+                },
+                'Cancel',
+                innerH,
+              ),
+              Button.button(
+                {
+                  onClick: M.SubmitPhotoMeta(),
+                  variant: 'default',
+                  isDisabled: invalid,
+                  isLoading: busy,
+                  attributes: [h.DataAttribute('slot', 'meta-save')],
+                },
+                'Save',
+                innerH,
               ),
             ],
+            innerH,
           ),
         ],
       },
       h,
     ),
-    toParentMessage: (message) => M.GotRowMenuMessage({ message }),
+    toParentMessage: (message) => M.GotMetaSheetMessage({ message }),
   })
 }
 
@@ -551,7 +648,7 @@ export const libraryTable = (model: Model, h: HtmlBuilder<Msg>): Child => {
                 libraryPager(model, h),
               ],
             )
-  return h.div([], [body, rowMenu(model, h), addTagDialog(model, h)])
+  return h.div([], [body, metaSheet(model, h), addTagDialog(model, h)])
 }
 
 /** The head's tri-state box, measured over the page. `1–7 OF 412` is a page of

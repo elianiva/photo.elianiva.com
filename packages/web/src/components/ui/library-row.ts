@@ -2,7 +2,7 @@
  * Library Row — one Photo in the Library table (master `d8102c6e776b1223`), the
  * most complex atom in the set: a select box, a 64×64 thumb, the Title Block
  * (title over `NO. 024 · DSCF4821.JPG · KOTA TUA, JAKARTA`), the boxed Ratio, the
- * taken date, the frame's dimensions, the Status, and two ghost Icon Buttons.
+ * taken date, the frame's dimensions, the Status, and one ghost Icon Button (the `⋯` menu).
  *
  * Two states. Default is a `color.hairline` rule under the row; selected fills
  * `color.surface.container` and lifts the thumb onto `color.surface`. The row's
@@ -22,13 +22,11 @@
  * visibly changes nothing, which is worse than no row click at all. The
  * controls above the overlay are the two `z-10` cells.
  */
-import { MoreHorizontal, Pencil } from 'lucide'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { cn } from '@/lib/utils'
 
 import { checkbox } from './checkbox'
-import { iconButton } from './icon-button'
 import { ratioTag } from './ratio-tag'
 import { status } from './status'
 import type { StatusVariant } from './status'
@@ -58,8 +56,9 @@ export type LibraryRowInputs<M> = Readonly<{
    *  the design's `SIZE` cell printed, which only an upload writes. */
   dimensions: string
   status: StatusVariant
-  onEdit?: M
-  onMenu?: M
+  /** The row's one action cell — the `⋯` menu, drawn by the page because it
+   *  owns the menu's state. */
+  actions?: Html
   /** Dispatched when the row itself is clicked. Omit it and the row is not a
    *  selection target and the design's selected state is unreachable by hand. */
   onSelect?: M
@@ -143,7 +142,10 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
           h.span([h.Class('type-exif break-words text-role-text-disabled')], [inputs.fileLine]),
           h.div(
             [h.Class('flex items-center gap-3 md:hidden')],
-            [ratioTag({ ratio: inputs.ratio }, h), status({ variant: inputs.status }, h)],
+            [
+              ratioTag({ ratio: inputs.ratio }, h),
+              status({ variant: inputs.status, iconOnly: true }, h),
+            ],
           ),
         ],
       ),
@@ -175,7 +177,7 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
       ),
       h.div(
         [h.Class(cn('flex shrink-0 items-center max-md:hidden', columnWidths.status))],
-        [status({ variant: inputs.status }, h)],
+        [status({ variant: inputs.status, iconOnly: true }, h)],
       ),
       h.div(
         [
@@ -187,34 +189,7 @@ export const libraryRow = <M>(inputs: LibraryRowInputs<M>, h: HtmlBuilder<M>): H
             ),
           ),
         ],
-        [
-          ...(inputs.onEdit === undefined
-            ? []
-            : [
-                iconButton(
-                  {
-                    ariaLabel: `Edit ${inputs.title}`,
-                    kind: 'ghost',
-                    onClick: inputs.onEdit,
-                  },
-                  Pencil,
-                  h,
-                ),
-              ]),
-          ...(inputs.onMenu === undefined
-            ? []
-            : [
-                iconButton(
-                  {
-                    ariaLabel: `More actions for ${inputs.title}`,
-                    kind: 'ghost',
-                    onClick: inputs.onMenu,
-                  },
-                  MoreHorizontal,
-                  h,
-                ),
-              ]),
-        ],
+        inputs.actions === undefined ? [] : [inputs.actions],
       ),
     ],
   )

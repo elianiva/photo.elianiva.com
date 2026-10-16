@@ -116,7 +116,9 @@ const headerActions = (head: PageHead, model: Model, h: HtmlBuilder<Msg>): Child
     [h.Class('flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-4')],
     [
       ...(head.isSearchable ? [searchField(model, h)] : []),
-      ...(head.isUploadable ? [uploadAction(model, h)] : []),
+      // The Library's own drop zone is the way in; the button only appears
+      // while a batch is running, as the one way back to its progress.
+      ...(head.isUploadable && model.uploading ? [uploadAction(model, h)] : []),
     ],
   )
 

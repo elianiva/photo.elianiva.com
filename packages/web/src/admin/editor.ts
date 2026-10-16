@@ -373,6 +373,16 @@ export const bulkDetailsPatch = (
   }
 }
 
+/** Is any numeric field of a details record unreadable? Such a record is not
+ *  saved from the metadata sheet: `exifPatchOfDetails` would drop the field
+ *  and the sheet would close having saved less than the operator typed. */
+export const metaDetailsInvalid = (details: PhotoDetails): boolean =>
+  details.title.trim() === '' ||
+  [details.focalLength, details.aperture, details.iso].some(
+    (text) => parseExifNumber(text) === undefined,
+  ) ||
+  parseShutter(details.shutter) === undefined
+
 /** Write a `DETAILS` field on the draft. A control that fires before the Photo
  *  read answers is dropped rather than resurrecting a half-built record. */
 export const withEditorDetails = (

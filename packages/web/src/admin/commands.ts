@@ -299,6 +299,24 @@ export const SetRowStatusCmd = Command.define('SetRowStatus', {
     }).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
 })
 
+/** The row menu's metadata sheet. One `UpdatePhoto` with only the record's own
+ *  fields; the answer is the stored row, which replaces the table's. */
+export const UpdatePhotoMetaCmd = Command.define('UpdatePhotoMeta', {
+  args: { id: S.String, details: PhotoDetails, metadata: PhotoMetadata },
+  messages: [Message.SucceededPhotoMeta, Message.FailedRpc],
+  execute: ({ id, details, metadata }) =>
+    Effect.map(
+      rpcAdmin<PhotoWithTags>('UpdatePhoto', {
+        id,
+        title: details.title,
+        takenAt: details.takenAt,
+        ...exifPatchOfDetails(details),
+        metadata,
+      }),
+      (photo) => Message.SucceededPhotoMeta({ photo }),
+    ).pipe(Effect.catch((error) => Effect.succeed(failWith(error)))),
+})
+
 /** The grid's column count, persisted across sessions.
  *
  *  The read lives in `./prefs` as a synchronous function because Foldkit's

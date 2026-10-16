@@ -13,6 +13,7 @@ import { Multi } from '@foldkit/ui/combobox'
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
 import * as Segment from '@/components/ui/segment'
+import * as Sheet from '@/components/ui/sheet'
 
 import { CreateTagCmd, ReadUploadExifCmd } from './commands'
 import {
@@ -283,18 +284,19 @@ export const foldUploadCombo: ComboFold = Update.foldChild({
   },
 })
 
-/** The row `⋯` menu. Closing it forgets which Photo it was opened on, so a
- *  later menu cannot act on a row the operator has paged away from. */
-export const foldRowMenu = Update.foldChild({
-  update: Dialog.update,
-  read: (model: Model) => Opt.some(model.rowMenu),
-  write: (model: Model, nextDialog: typeof model.rowMenu) =>
-    modifyFields(model, { rowMenu: () => nextDialog }),
-  toParentMessage: (message: typeof Dialog.Message.Type) => Message.GotRowMenuMessage({ message }),
+/** The row menu's metadata sheet. Closing it drops the draft, so the next
+ *  Photo opens on its own values rather than on what was left behind. */
+export const foldMetaSheet = Update.foldChild({
+  update: Sheet.update,
+  read: (model: Model) => Opt.some(model.metaSheet),
+  write: (model: Model, nextSheet: typeof model.metaSheet) =>
+    modifyFields(model, { metaSheet: () => nextSheet }),
+  toParentMessage: (message: typeof Sheet.Message.Type) => Message.GotMetaSheetMessage({ message }),
   foldOutMessage: (out): Update.Step<Model, Msg> =>
     out._tag === 'Closed'
-      ? // `rowMenuId` is optional; clear it with a spread (see `withOptional`).
-        (writtenModel) => ({ model: withOptional(writtenModel, { rowMenuId: undefined }) })
+      ? (writtenModel) => ({
+          model: withOptional(writtenModel, { metaPhotoId: undefined, metaDraft: undefined }),
+        })
       : (writtenModel) => ({ model: writtenModel }),
 })
 

@@ -1,7 +1,8 @@
 /**
  * Table Head — the Library's column header (master `36e23128f2187522`). The
  * design fixes the widths (16 / 520 / 64 / 112 / 112 / 112 / 72 across 16px
- * gaps), so they live here once and `library-row.ts` reads the same table: a
+ * gaps; the photograph column flexes, so the head's labels sit over the row's
+ * cells at any width, and the Status is an icon in a 64px column), so they live here once and `library-row.ts` reads the same table: a
  * head and a row that disagree on a column width are a table that jitters. The
  * one column this table does not take from the drawing is `DIMENSIONS`, which
  * replaces the design's `SIZE`: the byte count that cell printed came from a
@@ -36,11 +37,11 @@ export type TableColumnKey = 'photograph' | 'ratio' | 'taken' | 'dimensions' | '
  *  column width are a table that jitters. The design's pixels (520 / 64 / 112 /
  *  112 / 112) sit on Tailwind's spacing scale. */
 export const columnWidths = {
-  photograph: 'w-130',
+  photograph: 'min-w-0 flex-1',
   ratio: 'w-16',
   taken: 'w-28',
   dimensions: 'w-28',
-  status: 'w-28',
+  status: 'w-16',
 } as const satisfies Readonly<Record<TableColumnKey, string>>
 
 export const tableColumns: ReadonlyArray<TableColumn> = [
@@ -51,8 +52,8 @@ export const tableColumns: ReadonlyArray<TableColumn> = [
   { key: 'status', label: 'STATUS' },
 ]
 
-/** The row-action column: two 36px Icon Buttons. */
-export const tableActionsWidthClass = 'w-18 shrink-0'
+/** The row-action column: one 36px Icon Button. */
+export const tableActionsWidthClass = 'w-9 shrink-0'
 
 /** The select-all box, the same 16px the rows carry. */
 export const tableCheckboxWidthClass = 'w-4 shrink-0'

@@ -7,6 +7,8 @@
  */
 
 import { Option } from 'effect'
+import { PhotoId } from '@photo/shared'
+import type { PhotoWithTags } from '@photo/shared'
 import { Multi } from '@foldkit/ui/combobox'
 import { modifyFields } from 'foldkit/struct'
 import { storedCols, storedPageSize } from './prefs'
@@ -19,7 +21,9 @@ import type { Url } from 'foldkit/url'
 
 import * as Dialog from '@/components/ui/dialog'
 import * as FileDrop from '@/components/ui/file-drop'
+import * as Menu from '@/components/ui/menu'
 import * as Segment from '@/components/ui/segment'
+import * as Sheet from '@/components/ui/sheet'
 
 import {
   AddBorderCmd,
@@ -50,6 +54,7 @@ import {
   DownloadPhotoCmd,
   SetEditorStatusCmd,
   SetRowStatusCmd,
+  UpdatePhotoMetaCmd,
   UpdateEditorCmd,
   listArgsOf,
 } from './commands'
@@ -58,7 +63,7 @@ import {
   foldConfirm,
   foldEditorLeave,
   foldFileDrop,
-  foldRowMenu,
+  foldMetaSheet,
   foldSegmentGroup,
   foldToast,
   foldUploadCombo,
@@ -85,7 +90,8 @@ import {
   Message,
   UPLOAD_CONCURRENCY,
 } from './model'
-import { isBusy } from './model'
+import { RowMenu, isBusy } from './model'
+import type { RowAction } from './model'
 import type { BusyKey, DownloadState, LibraryPage, Message as Msg, Model } from './model'
 import { originalUrl } from '@/lib/image'
 import {
@@ -105,6 +111,7 @@ import {
   EDITOR_STATUS_SEGMENT,
   blurhashSignature,
   bulkDetailsPatch,
+  metaDetailsInvalid,
   detailsOfPhoto,
   editorReturnUrl,
   initEditorSegments,
@@ -201,7 +208,8 @@ const initialModel = (route: AppRoute): Model => {
     libraryPage: filters.page,
     libraryCursors: [''],
     libraryTotal: 0,
-    rowMenu: Dialog.init({ id: 'admin-row-menu' }),
+    rowMenu: Menu.init({ id: 'admin-row-menu', isAnimated: true }),
+    metaSheet: Sheet.init({ id: 'admin-meta-sheet' }),
     addTagDialog: Dialog.init({ id: 'admin-add-tag-dialog' }),
     addTagIds: [],
     removeTagIds: [],
@@ -1427,7 +1435,7 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
 
     OpenedRowMenu: ({ id }) => {
-      const opened = Dialog.open(model.rowMenu)
+      const opened = RowMenu.open(model.rowMenu)
       return {
         model: modifyFields(withOptional(model, { rowMenuId: id }), {
           rowMenu: () => opened.model,
@@ -1439,8 +1447,6 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     },
     SetRowStatus: ({ id, status }) => {
       if (isBusy(model, 'row-status')) return { model }
-      // The menu stays up, its button spinning, until the write settles and
-      // `applyBusy` closes it.
       return { model, commands: [SetRowStatusCmd({ id, status, page: currentPage(model) })] }
     },
     SucceededSetRowStatus: ({ status, ...page }) =>
@@ -1455,19 +1461,60 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
     /** The row menu's `Delete`. The menu closes before the confirm
      *  opens: the confirm is the same Dialog every other destructive action
      *  uses, and two stacked dialogs are two ways to cancel one thing. */
-    RequestedRowDelete: ({ id, title }) => {
-      const closed = Dialog.close(model.rowMenu)
-      const dismissed = modifyFields(withOptional(model, { rowMenuId: undefined }), {
-        rowMenu: () => closed.model,
-      })
-      const confirmed = openConfirm(dismissed, { kind: 'photo', id, label: title })
+    RequestedRowDelete: ({ id, title }) => openConfirm(model, { kind: 'photo', id, label: title }),
+    OpenedPhotoMeta: ({ id }) => {
+      const photo = model.photos.find((candidate) => candidate.id === id)
+      if (photo === undefined) return { model }
+      const opened = Sheet.open(model.metaSheet)
       return {
-        model: confirmed.model,
+        model: modifyFields(
+          withOptional(model, { metaPhotoId: id, metaDraft: detailsOfPhoto(photo) }),
+          { metaSheet: () => opened.model },
+        ),
+        commands: liftChildCommands(opened.commands ?? [], (message) =>
+          Message.GotMetaSheetMessage({ message }),
+        ),
+      }
+    },
+    SetMetaDetail: ({ field, value }) =>
+      model.metaDraft === undefined
+        ? { model }
+        : { model: withOptional(model, { metaDraft: { ...model.metaDraft, [field]: value } }) },
+    SubmitPhotoMeta: () => {
+      const { metaPhotoId, metaDraft } = model
+      if (metaPhotoId === undefined || metaDraft === undefined || isBusy(model, 'photo-meta')) {
+        return { model }
+      }
+      if (metaDetailsInvalid(metaDraft)) return { model }
+      const photo = model.photos.find((candidate) => candidate.id === metaPhotoId)
+      return {
+        model,
         commands: [
+          UpdatePhotoMetaCmd({
+            id: metaPhotoId,
+            details: metaDraft,
+            metadata: metadataWithDetails(photo?.metadata, metaDraft),
+          }),
+        ],
+      }
+    },
+    SucceededPhotoMeta: ({ photo }) => {
+      const closed = Sheet.close(model.metaSheet)
+      const saved = modifyFields(
+        withOptional(model, { metaPhotoId: undefined, metaDraft: undefined }),
+        {
+          photos: () => model.photos.map((row) => (row.id === photo.id ? photo : row)),
+          metaSheet: () => closed.model,
+        },
+      )
+      const toasted = showToast(saved, 'Details saved', 'Success')
+      return {
+        model: toasted.model,
+        commands: [
+          ...(toasted.commands ?? []),
           ...liftChildCommands(closed.commands ?? [], (message) =>
-            Message.GotRowMenuMessage({ message }),
+            Message.GotMetaSheetMessage({ message }),
           ),
-          ...(confirmed.commands ?? []),
         ],
       }
     },
@@ -1705,7 +1752,23 @@ const transition = (model: Model, message: Msg): UpdateReturn =>
       isBusy(model, 'confirm') && message._tag === 'RequestedClose'
         ? { model }
         : foldConfirm(model, message),
-    GotRowMenuMessage: ({ message }) => foldRowMenu(model, message),
+    GotRowMenuMessage: ({ message }) => {
+      const stepped = RowMenu.update(model.rowMenu, message)
+      const written = modifyFields(model, { rowMenu: () => stepped.model })
+      const lifted = liftChildCommands(stepped.commands ?? [], (m) =>
+        Message.GotRowMenuMessage({ message: m }),
+      )
+      const photo = written.photos.find((candidate) => candidate.id === written.rowMenuId)
+      if (stepped.outMessage === undefined || photo === undefined) {
+        return { model: written, commands: lifted }
+      }
+      const follow = update(written, rowActionMessage(photo, stepped.outMessage.value))
+      return { model: follow.model, commands: [...lifted, ...(follow.commands ?? [])] }
+    },
+    GotMetaSheetMessage: ({ message }) =>
+      isBusy(model, 'photo-meta') && message._tag === 'RequestedClose'
+        ? { model }
+        : foldMetaSheet(model, message),
     GotAddTagDialogMessage: ({ message }) =>
       isBusy(model, 'bulk-tags') && message._tag === 'RequestedClose'
         ? { model }
@@ -1848,6 +1911,8 @@ const busyStartedBy = (message: Msg): BusyKey | undefined => {
       return 'bulk-tags'
     case 'SetRowStatus':
       return 'row-status'
+    case 'SubmitPhotoMeta':
+      return 'photo-meta'
     case 'AddBorderToSelection':
       return 'bulk-border'
     case 'SetSelectionStatus':
@@ -1870,6 +1935,8 @@ const busyEndedBy = (message: Msg): ReadonlyArray<string> => {
       return ['bulk-tags']
     case 'SucceededSetRowStatus':
       return ['row-status']
+    case 'SucceededPhotoMeta':
+      return ['photo-meta']
     case 'SucceededAddBorder':
       return ['bulk-border']
     case 'SucceededSetSelectionStatus':
@@ -1882,6 +1949,7 @@ const busyEndedBy = (message: Msg): ReadonlyArray<string> => {
         'confirm',
         'bulk-tags',
         'row-status',
+        'photo-meta',
         'bulk-border',
         'bulk-publish',
         'bulk-unpublish',
@@ -1915,13 +1983,6 @@ const applyBusy = (before: Model, message: Msg, result: UpdateReturn): UpdateRet
       ...liftChildCommands(closed.commands ?? [], (m) => Message.GotConfirmMessage({ message: m })),
     )
   }
-  if (before.busy.includes('row-status') && ended.includes('row-status') && model.rowMenu.isOpen) {
-    const closed = Dialog.close(model.rowMenu)
-    model = modifyFields(model, { rowMenu: () => closed.model })
-    commands.push(
-      ...liftChildCommands(closed.commands ?? [], (m) => Message.GotRowMenuMessage({ message: m })),
-    )
-  }
   if (
     before.busy.includes('bulk-tags') &&
     ended.includes('bulk-tags') &&
@@ -1936,6 +1997,24 @@ const applyBusy = (before: Model, message: Msg, result: UpdateReturn): UpdateRet
     )
   }
   return commands.length > 0 ? { model, commands } : { model }
+}
+
+/** What a row-menu pick does, as the message the rest of the Library already
+ *  answers: the menu only names the action. */
+const rowActionMessage = (photo: PhotoWithTags, action: RowAction): Msg => {
+  switch (action) {
+    case 'edit':
+      return Message.OpenedPhotoMeta({ id: photo.id })
+    case 'editor':
+      return Message.OpenedPhoto({ id: PhotoId.make(photo.id) })
+    case 'status':
+      return Message.SetRowStatus({
+        id: photo.id,
+        status: photo.status === 'published' ? 'draft' : 'published',
+      })
+    case 'delete':
+      return Message.RequestedRowDelete({ id: photo.id, title: photo.title })
+  }
 }
 
 export function update(model: Model, message: Msg): UpdateReturn {

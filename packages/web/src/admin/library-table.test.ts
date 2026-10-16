@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { PhotoId, TagId } from '@photo/shared'
 import type { PhotoWithTags, Tag } from '@photo/shared'
 
+import * as Menu from '@/components/ui/menu'
 import { Message, UPLOAD_LIMITS } from './model'
 import type { Counts, Model } from './model'
 import { init, update } from './update'
@@ -104,6 +105,7 @@ const ADMIN_COMMANDS = new Set([
   'FetchPhotos',
   'Navigate',
   'SetRowStatus',
+  'UpdatePhotoMeta',
 ])
 
 /** Fold a run of messages over a cold Library and report what each fold
@@ -343,15 +345,47 @@ describe('the row ⋯ menu', () => {
   it('deletes one Photograph through the same confirm as the bulk', () => {
     const asked = fold(
       Message.OpenedRowMenu({ id: PAGE[0]?.id ?? '' }),
-      Message.RequestedRowDelete({ id: PAGE[0]?.id ?? '', title: 'Photograph 1' }),
+      Message.GotRowMenuMessage({
+        message: Menu.Message.SelectedItem({ index: 3, item: 'delete' }),
+      }),
     )
-    // The menu has done its job: one confirm Dialog, not two stacked.
-    expect(asked.model.rowMenuId).toBeUndefined()
     expect(asked.model.pendingConfirm).toEqual({
       kind: 'photo',
       id: PAGE[0]?.id,
       label: 'Photograph 1',
     })
+  })
+})
+
+describe("the row menu's Edit details sheet", () => {
+  it("saves only the record's fields, then swaps the stored row in", () => {
+    const id = PAGE[0]?.id ?? ''
+    const edited = fold(
+      Message.OpenedRowMenu({ id }),
+      Message.GotRowMenuMessage({
+        message: Menu.Message.SelectedItem({ index: 0, item: 'edit' }),
+      }),
+      Message.SetMetaDetail({ field: 'title', value: 'Harbour at dusk' }),
+      Message.SetMetaDetail({ field: 'iso', value: '400' }),
+      Message.SubmitPhotoMeta(),
+    )
+    expect(edited.model.metaSheet.isOpen).toBe(true)
+    expect(edited.commands.map((command) => command.name)).toEqual(['UpdatePhotoMeta'])
+    const saved = update(
+      edited.model,
+      Message.SucceededPhotoMeta({ photo: row(1, { title: 'Harbour at dusk' }) }),
+    )
+    expect(saved.model.photos.find((photo) => photo.id === id)?.title).toBe('Harbour at dusk')
+    expect(saved.model.metaDraft).toBeUndefined()
+  })
+
+  it('does not save a number the operator typed wrongly', () => {
+    const invalid = fold(
+      Message.OpenedPhotoMeta({ id: PAGE[0]?.id ?? '' }),
+      Message.SetMetaDetail({ field: 'iso', value: 'fast' }),
+      Message.SubmitPhotoMeta(),
+    )
+    expect(invalid.commands).toEqual([])
   })
 })
 
