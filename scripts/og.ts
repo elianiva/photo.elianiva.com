@@ -8,6 +8,11 @@
  * palette changes. The card is the same for every page because nothing on it
  * depends on the archive: no photograph, no counter.
  *
+ * The touch icon is the favicon's own mark on paper: `/favicon.svg` is read and
+ * rasterized here rather than redrawn, so the tab icon and the home-screen icon
+ * cannot drift apart. It takes the light branch's colours — iOS composites the
+ * icon on its own ground, not on the browser's.
+ *
  * Takumi does not resolve CSS custom properties, so the colours below are the
  * site's roles (`packages/web/src/theme.css`) written out. Re-check them when
  * the palette moves.
@@ -46,10 +51,11 @@ const CARD = `
   </div>
 </div>`
 
-/** 180x180 touch icon: the pink dot on paper, the site's dot at rest. */
-const TOUCH_ICON = `
+/** 180x180 touch icon: the favicon's mark on paper, at 156 of the 180. The SVG
+ *  is inlined, so the raster follows the vector whenever the mark is redrawn. */
+const TOUCH_ICON = (mark: string): string => `
 <div style="display:flex;width:180px;height:180px;background:${PAPER};align-items:center;justify-content:center">
-  <div style="width:84px;height:84px;border-radius:9999px;background:${ACCENT}"></div>
+  <img src="data:image/svg+xml;base64,${mark}" style="width:156px;height:156px">
 </div>`
 
 const write = (name: string, bytes: Uint8Array): void => {
@@ -59,8 +65,11 @@ const write = (name: string, bytes: Uint8Array): void => {
   console.log(`wrote ${name} (${bytes.byteLength} bytes)`)
 }
 
+/** The mark, read as bytes so the raster cannot disagree with the vector. */
+const favicon = (): string => readFileSync(resolve(PUBLIC_DIR, 'favicon.svg')).toString('base64')
+
 write('og.png', await render(CARD, { width: 1200, height: 630, format: 'png', fonts: FONTS }))
 write(
   'apple-touch-icon.png',
-  await render(TOUCH_ICON, { width: 180, height: 180, format: 'png', fonts: FONTS }),
+  await render(TOUCH_ICON(favicon()), { width: 180, height: 180, format: 'png', fonts: FONTS }),
 )

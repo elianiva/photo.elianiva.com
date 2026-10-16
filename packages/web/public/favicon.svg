@@ -1,8 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The wordmark's own voice: Newsreader italic 500, the initial and the
+       accent full stop, in the site theme's roles. The glyph is the real
+       outline, not a redrawing. -->
   <style>
-    .ring { fill: none; stroke: #1b1a18; stroke-width: 2.5 }
-    @media (prefers-color-scheme: dark) { .ring { stroke: #f3f0e8 } }
+    .mark { fill: #1b1a18 }
+    .dot { fill: #c8105f }
+    @media (prefers-color-scheme: dark) {
+      .mark { fill: #f3f0e8 }
+      .dot { fill: #ff5fa2 }
+    }
   </style>
-  <circle class="ring" cx="16" cy="16" r="13" />
-  <circle cx="16" cy="16" r="5" fill="#c8105f" />
+  <path class="mark" transform="translate(4.3044 23.95) scale(0.0115176 -0.0115176)" d="M489 1256 348 1303 363 1352H726L315 0H-42L-26 50L137 99ZM1192 1281 1234 1245H575L610 1352H1228L1352 1410H1387L1309 966H1242ZM945 -66 857 0H196L231 107H925L830 72L1147 403L1204 384L983 -66ZM893 448H806L850 656H397L429 761H882L966 969H1053L973 708Z"/>
+  <circle class="dot" cx="25.2803" cy="21.05" r="2.9"/>
 </svg>
