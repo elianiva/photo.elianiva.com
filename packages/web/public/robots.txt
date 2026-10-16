@@ -1,5 +1,8 @@
 User-agent: *
 Allow: /
+# Every photograph is served from /api/image/, so a crawler that cannot read it
+# cannot index the photos or show them in image search.
+Allow: /api/image/
 Disallow: /admin
 Disallow: /api/
 

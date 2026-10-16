@@ -28,6 +28,7 @@ import { FRONT_SECTION_COUNT } from '@photo/shared'
 import type { PhotoWithTags } from '@photo/shared'
 import type { WebsiteEnv } from '../../../../alchemy.run'
 import { type NavEntry, type HomeRead, type TagRead } from '@/public/content'
+import { SITE } from '@/lib/seo'
 import { routePath, type PublicLocation } from '@/public/route'
 
 const siteLayers = (env: WebsiteEnv) => {
@@ -187,8 +188,6 @@ const lastModified = (env: WebsiteEnv): Effect.Effect<string, never> =>
     (stats) => stats?.latestTakenAt?.slice(0, 10) ?? '',
   )
 
-const SITEMAP_URL = 'https://photo.elianiva.com'
-
 /** `/sitemap.xml` — the crawler route (robots.txt points here). It names the
  *  site's public documents, so a document the Worker answers and the sitemap
  *  does not list is a document a crawler is never told about. The paths are
@@ -213,7 +212,7 @@ export const renderSitemap = Effect.fn('site.sitemap')(function* (env: WebsiteEn
   const paths = locations.map((location) => routePath(location))
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${paths.map((path) => `  <url><loc>${SITEMAP_URL}${path}</loc>${lastmodElement}</url>`).join('\n')}
+${paths.map((path) => `  <url><loc>${SITE.url}${path}</loc>${lastmodElement}</url>`).join('\n')}
 </urlset>
 `
   return new Response(body, {

@@ -9,6 +9,7 @@ import { init as publicInit } from './public/update'
 import { view as publicView } from './public/view'
 import { readAbout, readNav, readHome, readTag, renderSitemap } from './lib/public-site'
 import { WorkerLoggerLive } from './lib/logger'
+import { NOINDEX_TAG, injectHead, headTags, seoFor } from './lib/seo'
 import { themeDocument, themeForUrl } from './lib/theme'
 
 type WorkerEnvWithAssets = WebsiteEnv & {
@@ -47,7 +48,7 @@ class WebRequest extends Context.Service<WebRequest, Request>()('photo/PageWebRe
 const BUILD_ID = import.meta.env.FOLDKIT_BUILD_ID
 
 const FALLBACK_TEMPLATE =
-  '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="description" content="Photography by elianiva — curated works." /><title>photo.elianiva.com — Photography</title></head><body><div id="root"></div><script type="module" src="/src/entry.ts"></script></body></html>'
+  '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>photo.elianiva.com — Photography</title></head><body><div id="root"></div><script type="module" src="/src/entry.ts"></script></body></html>'
 
 const fetchTemplate = async (
   env: WorkerEnvWithAssets,
@@ -134,6 +135,7 @@ const renderPublicSsr = async (
   const template = await fetchTemplate(env, request)
   if (template === null) return null
   let rendered: Server.RenderedApplication | null = null
+  let seoTemplate = template
   try {
     // The photographs are read here, before the render, and handed to `init` as
     // Flags. `init` is synchronous, so this is the only place a read can happen
@@ -145,6 +147,13 @@ const renderPublicSsr = async (
     // A Tag page's slug naming no Tag is the one answer here that is not a
     // fault: the URL is a real path and there is no document at it.
     if (flags === null) return 'not-found'
+    // The page's own head tags, written into the template before Foldkit
+    // rewrites its title: the template is one file for every document, so the
+    // canonical URL and the description cannot live in it.
+    seoTemplate = injectHead(
+      template,
+      headTags(seoFor(location, location.route === 'tag' ? flags.tag : null)),
+    )
     rendered = await Effect.runPromise(
       Server.renderToString(publicConfig, { buildId: BUILD_ID, flags }).pipe(
         Effect.provide(WorkerLoggerLive),
@@ -155,7 +164,7 @@ const renderPublicSsr = async (
   }
   if (rendered === null) return null
   try {
-    return Server.toResponse(template, Server.Rendered(rendered))
+    return Server.toResponse(seoTemplate, Server.Rendered(rendered))
   } catch {
     return null
   }
@@ -276,8 +285,18 @@ const adminRoute = HttpRouter.add('*', '/admin/*', () =>
     )
     if (!shell.ok) return HttpServerResponse.text('Not found', { status: 404 })
     return HttpServerResponse.text(
-      themeDocument(yield* Effect.promise(() => shell.text()), themeForUrl(request.url)),
-      { headers: { 'content-type': 'text/html; charset=utf-8' } },
+      injectHead(
+        themeDocument(yield* Effect.promise(() => shell.text()), themeForUrl(request.url)),
+        NOINDEX_TAG,
+      ),
+      {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          // The meta tag is for a crawler that reads the page; the header is for
+          // one that only reads the response.
+          'x-robots-tag': 'noindex, nofollow',
+        },
+      },
     )
   }),
 )

@@ -121,3 +121,35 @@ describe('the page host routes', () => {
     expect(response.status).toBe(404)
   })
 })
+
+describe('the head of a public document', () => {
+  /** A template with a head, which the routing tests' shell does not have: the
+   *  SEO tags are written into it, and Foldkit needs its `<title>` to rewrite. */
+  const TEMPLATE =
+    '<!doctype html><html lang="en"><head><meta charset="UTF-8" /><title>x</title></head><body><div id="root"></div></body></html>'
+
+  const withHead = (path: string): Promise<Response> =>
+    worker.fetch(
+      new Request(`https://photo.elianiva.com${path}`),
+      {
+        ...env(),
+        ASSETS: {
+          fetch: () =>
+            Promise.resolve(new Response(TEMPLATE, { headers: { 'content-type': 'text/html' } })),
+        },
+      },
+      undefined,
+    )
+
+  it('names its own URL as canonical on the About page', async () => {
+    const html = await (await withHead('/about')).text()
+    expect(html).toContain('<link rel="canonical" href="https://photo.elianiva.com/about" />')
+    expect(html).not.toContain('href="https://photo.elianiva.com/"')
+  })
+
+  it('keeps the Admin shell out of search results', async () => {
+    const response = await withHead('/admin')
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow')
+    expect(await response.text()).toContain('<meta name="robots" content="noindex, nofollow" />')
+  })
+})

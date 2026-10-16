@@ -26,6 +26,7 @@
 
 import type { Document, Html, HtmlBuilder } from 'foldkit/html'
 
+import { titleFor } from '@/lib/seo'
 import { Message } from './model'
 import type { Model } from './model'
 import { aboutBody } from './views/about'
@@ -36,14 +37,10 @@ import { siteHeader } from './views/site-header'
 import { rows } from './views/rows'
 import { tagBody } from './views/tag-page'
 
-const TITLES: Record<Exclude<Model['route'], 'tag'>, string> = {
-  home: 'photo.elianiva.com — photography',
-  about: 'photo.elianiva.com — about',
-}
-
-/** The title of the document the Model is drawing. */
-const titleOf = (model: Model): string =>
-  model.route === 'tag' ? `photo.elianiva.com — ${model.tag.label}` : TITLES[model.route]
+/** The title of the document the Model is drawing. Written in `lib/seo.ts`, so
+ *  the title the Worker puts in a crawler's head and the one this writes to the
+ *  tab are one string. */
+const titleOf = (model: Model): string => titleFor(model.route, model.tag.label)
 
 /** What the home page says about itself, at the right of the header. It is the
  *  site's own voice, so it is written here and is true whatever the archive
@@ -79,7 +76,7 @@ const shell = (model: Model, h: HtmlBuilder<Message>, body: ReadonlyArray<Html>)
       ),
     ],
     [
-      siteHeader(wide ? HOME_CONTEXT : null, wide, h),
+      siteHeader(wide ? HOME_CONTEXT : null, wide, wide, h),
       ...body,
       siteFooter(model.nav, wide, h),
       // The lightbox is chrome too: a photo opens the same way on either
