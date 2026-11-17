@@ -41,6 +41,9 @@ overrides:
   '@effect/sql-sqlite-node': 4.0.0
   '@effect/vitest': 4.0.0
   effect: 4.0.0
+  # Vite+ 1.7.0 bundles Vitest 5.1.0. One copy keeps `vp` and the packages'
+  # own `vitest` runs on the same runner instead of splitting the internals.
+  vitest: 5.1.0
   # alchemy asks for undici 7; this flattens the tree onto the current line
   # instead of carrying a second copy of undici.
   undici: 8.11.2

@@ -385,10 +385,7 @@ export const metaDetailsInvalid = (details: PhotoDetails): boolean =>
 
 /** Write a `DETAILS` field on the draft. A control that fires before the Photo
  *  read answers is dropped rather than resurrecting a half-built record. */
-export const withEditorDetails = (
-  editor: EditorState,
-  patch: Partial<PhotoDetails>,
-): EditorState =>
+export const withEditorDetails = (editor: EditorState, patch: Partial<PhotoDetails>): EditorState =>
   editor.detailsDraft === undefined
     ? editor
     : { ...editor, detailsDraft: { ...editor.detailsDraft, ...patch } }

@@ -48,7 +48,7 @@ Two consequences of the Series non-goal that are easy to misread:
   label with one item per tag in that slot. What does not ship is a _Series_
   group — there is no entity behind the label the design drew.
 - `Desk — Series`'s `COVER` panel — `The first frame of the series becomes the
-cover.` and a `Change cover` button — needs a `series` table. No cover column
+  cover.` and a `Change cover` button — needs a `series` table. No cover column
   is added to Tag or Photo to hold it. A Series page is a Tag page ordered by
   `takenAt` whose cover is the earliest published Photo, which is why a Tag's
   `slug` is not editable: a slug is a live URL.

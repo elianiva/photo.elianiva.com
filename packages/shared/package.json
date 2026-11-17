@@ -7,15 +7,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
-    "typecheck": "tsc --noEmit",
+    "build": "tsrs -p tsconfig.json --noEmit --fast",
+    "typecheck": "tsrs -p tsconfig.json --noEmit --fast",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "effect": "4.0.0"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.0"
   }
 }

@@ -7,8 +7,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
-    "typecheck": "tsc --noEmit",
+    "build": "tsrs -p tsconfig.json --noEmit --fast",
+    "typecheck": "tsrs -p tsconfig.json --noEmit --fast",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
@@ -17,11 +17,10 @@
     "@photo/shared": "workspace:*",
     "effect": "4.0.0",
     "exifr": "^7.1.3",
-    "image-size": "^2.0.4"
+    "image-size": "^2.1.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261001.1",
-    "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "@cloudflare/workers-types": "5.20261117.1",
+    "vitest": "^5.1.0"
   }
 }
