@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import * as Alchemy from 'alchemy'
 import { Stage } from 'alchemy'
-import * as Cloudflare from 'alchemy/Cloudflare'
+import * as Cloudflare from '@alchemy.run/cloudflare'
 import * as Config from 'effect/Config'
 import * as Effect from 'effect/Effect'
 
@@ -25,7 +25,7 @@ const PhotoDb = Cloudflare.D1.Database('photo-db', {
  *  `Service not found: RuntimeContext`, which is how #79 and everything after
  *  it failed to deploy and left production with no Access application at all.
  *  `Output.as()` is the shape the Plan layer resolves. */
-const TeamIdp = Cloudflare.Access.getIdentityProvider({ type: 'cloudflare' })
+const TeamIdp = Cloudflare.Access.IdentityProvider.lookup({ type: 'cloudflare' })
 
 /** The one hostname the whole site answers on. The website Worker owns it as a
  *  custom domain; the API Worker is mounted underneath it at `API_ROUTE_PREFIX`

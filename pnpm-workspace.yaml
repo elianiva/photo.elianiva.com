@@ -16,50 +16,22 @@ allowBuilds:
 minimumReleaseAge: 0
 
 # Effect is pinned to a single version across the workspace and every transitive
-# Effect dependency (foldkit, alchemy and its provider packages). 4.0.0 is
-# stable. Two of those dependencies still ship pre-stable code and are patched
-# to run on it; drop each patch when its upstream release is built against
-# Effect 4.0.0 (`npm view <pkg> peerDependencies`):
-#
-# - foldkit: since 4.0.0-rc.118 `Schema.make` is a memoizing getter on the
-#   schema prototype; foldkit wraps schemas in a Proxy that forwards `get` with
-#   itself as the receiver, so the memoization lands on the Proxy and a second
-#   read throws "Cannot redefine property: make". The patch makes the wrapper a
-#   transparent view of the schema.
-# - alchemy, @alchemy.run/cloudflare-runtime, @distilled.cloud/*: they
-#   import `effect/unstable/<area>` modules that graduated in 4.0.0 (`httpapi`
-#   became `effect/http-api`; the rest lost the `unstable/` segment), and the
-#   flat `effect/Encoding` base64 helpers that became `effect/encoding`'s Base64
-#   and Base64Url modules. The patches only rewrite those specifiers and calls.
+# Effect dependency (foldkit, alchemy and its provider packages). 4.1.4 is
+# stable, and the Alchemy 2.0.0-beta.87 provider packages are built against it,
+# so the workspace carries no Effect compatibility patches.
 overrides:
-  '@effect/platform-browser': 4.0.0
-  '@effect/platform-bun': 4.0.0
-  '@effect/platform-node': 4.0.0
-  '@effect/platform-node-shared': 4.0.0
-  '@effect/sql-d1': 4.0.0
-  '@effect/sql-sqlite-do': 4.0.0
-  '@effect/sql-sqlite-node': 4.0.0
-  '@effect/vitest': 4.0.0
-  effect: 4.0.0
+  '@effect/platform-browser': 4.1.4
+  '@effect/platform-bun': 4.1.4
+  '@effect/platform-node': 4.1.4
+  '@effect/platform-node-shared': 4.1.4
+  '@effect/sql-d1': 4.1.4
+  '@effect/sql-sqlite-do': 4.1.4
+  '@effect/sql-sqlite-node': 4.1.4
+  '@effect/vitest': 4.1.4
+  effect: 4.1.4
   # Vite+ 1.7.0 bundles Vitest 5.1.0. One copy keeps `vp` and the packages'
   # own `vitest` runs on the same runner instead of splitting the internals.
   vitest: 5.1.0
-  # alchemy asks for undici 7; this flattens the tree onto the current line
-  # instead of carrying a second copy of undici.
-  undici: 8.11.2
-
-patchedDependencies:
-  '@alchemy.run/cloudflare-runtime@2.0.0-beta.79': patches/@alchemy.run+cloudflare-runtime@2.0.0-beta.79.patch
-  '@distilled.cloud/aws@1.0.0-rc.12': patches/@distilled.cloud+aws@1.0.0-rc.12.patch
-  '@distilled.cloud/axiom@1.0.0-rc.12': patches/@distilled.cloud+axiom@1.0.0-rc.12.patch
-  '@distilled.cloud/cloudflare@1.0.0-rc.12': patches/@distilled.cloud+cloudflare@1.0.0-rc.12.patch
-  '@distilled.cloud/core@1.0.0-rc.12': patches/@distilled.cloud+core@1.0.0-rc.12.patch
-  '@distilled.cloud/fly-io@1.0.0-rc.12': patches/@distilled.cloud+fly-io@1.0.0-rc.12.patch
-  '@distilled.cloud/hetzner@1.0.0-rc.12': patches/@distilled.cloud+hetzner@1.0.0-rc.12.patch
-  '@distilled.cloud/neon@1.0.0-rc.12': patches/@distilled.cloud+neon@1.0.0-rc.12.patch
-  '@distilled.cloud/planetscale@1.0.0-rc.12': patches/@distilled.cloud+planetscale@1.0.0-rc.12.patch
-  '@distilled.cloud/prisma@1.0.0-rc.12': patches/@distilled.cloud+prisma@1.0.0-rc.12.patch
-  '@distilled.cloud/railway@1.0.0-rc.12': patches/@distilled.cloud+railway@1.0.0-rc.12.patch
-  '@distilled.cloud/stripe@1.0.0-rc.12': patches/@distilled.cloud+stripe@1.0.0-rc.12.patch
-  alchemy@2.0.0-beta.79: patches/alchemy@2.0.0-beta.79.patch
-  foldkit@0.164.0: patches/foldkit@0.164.0.patch
+  # Alchemy's platform packages ask for undici 8.12.4; one copy keeps the tree
+  # flat.
+  undici: 8.12.4

@@ -128,7 +128,10 @@ export const makeTestHarness = (
   return {
     gateway: Gateway.of({ photos }),
     photos,
-    run: (effect) => Effect.provide(effect, storage),
+    // Effect 4.1 types `SqliteClient.layer` with its `SqlError`; a harness
+    // whose database cannot open is a broken fixture, not a failure a test is
+    // asserting about, so it dies rather than widening every caller's error.
+    run: (effect) => Effect.provide(effect, Layer.orDie(storage)),
   }
 }
 

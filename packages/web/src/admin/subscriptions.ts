@@ -23,6 +23,7 @@
 
 import { Effect, Option, Queue, Schema as S, Stream } from 'effect'
 import { Subscription } from 'foldkit'
+import { streamFromEventFilterMap, streamFromEventFilterMapPreventDefault } from 'foldkit/dom'
 import { PhotoId } from '@photo/shared'
 
 import { compositionSource, encodeCompositionBlurhash } from '@/lib/blurhash'
@@ -163,7 +164,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
       }),
       dependenciesToStream: ({ onEditor }) =>
         Stream.when(
-          Subscription.fromEventFilterMap({
+          streamFromEventFilterMap({
             target: window,
             type: 'keydown',
             filterMapEvent: (event) =>
@@ -190,7 +191,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         Stream.merge(
           Stream.merge(
             Stream.when(
-              Subscription.fromEventFilterMapPreventDefault({
+              streamFromEventFilterMapPreventDefault({
                 target: window,
                 type: 'pointerdown',
                 filterMapEvent: (event) => {
@@ -210,7 +211,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
               Effect.sync(() => onEditor),
             ),
             Stream.when(
-              Subscription.fromEventFilterMap({
+              streamFromEventFilterMap({
                 target: window,
                 type: 'pointermove',
                 filterMapEvent: (event) =>
@@ -220,7 +221,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
             ),
           ),
           Stream.when(
-            Subscription.fromEventFilterMap({
+            streamFromEventFilterMap({
               target: window,
               type: 'pointerup',
               filterMapEvent: () => Option.some(Message.EndedEditorCropDrag()),
@@ -236,7 +237,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
       modelToDependencies: (model) => ({ onEditor: model.route._tag === 'Photo' }),
       dependenciesToStream: ({ onEditor }) =>
         Stream.when(
-          Subscription.fromEventFilterMapPreventDefault({
+          streamFromEventFilterMapPreventDefault({
             target: window,
             type: 'wheel',
             filterMapEvent: (event) => {
@@ -291,7 +292,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
       }),
       dependenciesToStream: ({ dirty }) =>
         Stream.when(
-          Subscription.fromEventFilterMap({
+          streamFromEventFilterMap({
             target: window,
             type: 'beforeunload',
             filterMapEvent: (event) => {
@@ -345,8 +346,8 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   // thunk because a `persistent` entry's stream is built with the record rather
   // than when the listener's scope opens, and this module is imported by tests
   // that never open one.
-  searchShortcut: Subscription.persistent(
-    Subscription.fromEventFilterMap({
+  searchShortcut: Subscription.persistentEntry(
+    streamFromEventFilterMap({
       target: () => window,
       type: 'keydown',
       filterMapEvent: (event) => {

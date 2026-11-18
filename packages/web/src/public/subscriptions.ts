@@ -8,6 +8,7 @@
 
 import { Effect, Option, Schema as S, Stream } from 'effect'
 import { Subscription } from 'foldkit'
+import { streamFromEventFilterMap } from 'foldkit/dom'
 
 import { FigureSchema } from './content'
 import { Message } from './model'
@@ -30,7 +31,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
       modelToDependencies: (model) => ({ selected: model.selected }),
       dependenciesToStream: ({ selected }) =>
         Stream.when(
-          Subscription.fromEventFilterMap({
+          streamFromEventFilterMap({
             target: window,
             type: 'keydown',
             filterMapEvent: (event) =>
@@ -59,7 +60,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
       dependenciesToStream: ({ home, hasMore, loading, error }) => {
         if (!home || !hasMore) return Stream.empty
 
-        const scroll = Subscription.fromEventFilterMap({
+        const scroll = streamFromEventFilterMap({
           target: () => window,
           type: 'scroll',
           filterMapEvent: () =>
