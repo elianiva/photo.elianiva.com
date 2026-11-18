@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# A wake restores the repository but can lose state under $HOME or .git. Check
+# the toolchain and dependencies, repair what is cheap, and point at setup when
+# a reinstall is needed instead of doing one here.
+missing() { echo "$*; run .agents/setup" >&2; exit 1; }
+
+node_pin="$(tr -d '[:space:]' < .node-version)"
+node_pin="${node_pin#v}"
+have_node="$(node -p 'process.versions.node' 2>/dev/null || true)"
+[ -n "$have_node" ] || missing "node is missing"
+[ "${have_node%%.*}" = "${node_pin%%.*}" ] ||
+  missing "node $have_node is running, .node-version wants $node_pin"
+
+pnpm_want="$(node -p 'require("./package.json").packageManager.replace(/^pnpm@/, "")')"
+[ "$(pnpm --version 2>/dev/null || true)" = "$pnpm_want" ] ||
+  missing "pnpm $pnpm_want is missing"
+
+[ -x node_modules/.bin/turbo ] || missing "workspace dependencies are missing"
+
+if [ ! -f .env ] && [ -f .env.example ]; then
+  cp -- .env.example .env
+fi
+
+if [ -x node_modules/.bin/lefthook ]; then
+  node_modules/.bin/lefthook install >/dev/null 2>&1 || true
+fi
+
+echo "orb ready: node $(node --version), pnpm $(pnpm --version)"

@@ -4,19 +4,107 @@ cd "$(dirname "$0")/.."
 
 step() { echo "==> $*"; }
 
-step "toolchain"
-want_node="$(tr -d '[:space:]' < .node-version)"
-have_node="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo none)"
-if [ "$have_node" != "$want_node" ]; then
-  echo "warning: node $have_node installed, .node-version wants $want_node" >&2
-fi
-if ! command -v pnpm >/dev/null 2>&1; then
-  corepack enable
+# The orb image owns /usr/local; a fresh orb user can write to it only through
+# sudo. Images that make it writable need neither.
+as_root() {
+  if [ -w /usr/local ] && [ -w /usr/local/bin ]; then
+    "$@"
+  else
+    sudo -n "$@"
+  fi
+}
+
+step "node"
+node_pin="$(tr -d '[:space:]' < .node-version)"
+node_pin="${node_pin#v}"
+node_major="${node_pin%%.*}"
+case "$node_pin" in
+  *.*) node_channel="https://nodejs.org/dist/v$node_pin" ;;
+  *) node_channel="https://nodejs.org/dist/latest-v$node_major.x" ;;
+esac
+
+have_node="$(node -p 'process.versions.node' 2>/dev/null || true)"
+node_ok=false
+if [ -n "$have_node" ] && [ "${have_node%%.*}" = "$node_major" ]; then
+  case "$node_pin" in
+    *.*) [ "$have_node" = "$node_pin" ] && node_ok=true ;;
+    *) node_ok=true ;;
+  esac
 fi
 
+if [ "$node_ok" = true ]; then
+  echo "node $have_node matches .node-version $node_pin"
+else
+  echo "installing node $node_pin (running ${have_node:-none})"
+  command -v curl >/dev/null || {
+    echo "curl is required to install node" >&2
+    exit 1
+  }
+  case "$(uname -m)" in
+    x86_64 | amd64) node_arch=linux-x64 ;;
+    aarch64 | arm64) node_arch=linux-arm64 ;;
+    *)
+      echo "unsupported architecture: $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+
+  case "$node_pin" in
+    *.*) node_version="$node_pin" ;;
+    *)
+      node_version="$(curl -fsSL --retry 3 "$node_channel/SHASUMS256.txt" |
+        awk -v suffix="-$node_arch.tar.xz" '$2 ~ suffix { print $2; exit }')"
+      node_version="${node_version#node-v}"
+      node_version="${node_version%-$node_arch.tar.xz}"
+      ;;
+  esac
+  if [ -z "$node_version" ]; then
+    echo "no node $node_major release at $node_channel" >&2
+    exit 1
+  fi
+
+  node_dir="/usr/local/lib/nodejs/node-v$node_version-$node_arch"
+  if [ ! -x "$node_dir/bin/node" ]; then
+    node_tmp="$(mktemp -d)"
+    trap 'rm -rf "$node_tmp"' EXIT
+    curl -fsSL --retry 3 \
+      "https://nodejs.org/dist/v$node_version/node-v$node_version-$node_arch.tar.xz" \
+      -o "$node_tmp/node.tar.xz"
+    tar -xJf "$node_tmp/node.tar.xz" -C "$node_tmp"
+    as_root mkdir -p /usr/local/lib/nodejs
+    as_root rm -rf "$node_dir"
+    as_root mv "$node_tmp/node-v$node_version-$node_arch" "$node_dir"
+    rm -rf "$node_tmp"
+    trap - EXIT
+  fi
+  for node_bin in node npm npx; do
+    as_root ln -sfn "$node_dir/bin/$node_bin" "/usr/local/bin/$node_bin"
+  done
+  hash -r
+fi
+
+# pnpm's packageManager pin is the version the lockfile was built with. Node 26
+# ships no corepack, and an image's preinstalled pnpm is a different version,
+# so install the pin explicitly.
+step "pnpm"
+pnpm_want="$(node -p 'require("./package.json").packageManager.replace(/^pnpm@/, "")')"
+pnpm_have="$(pnpm --version 2>/dev/null || true)"
+if [ "$pnpm_have" != "$pnpm_want" ]; then
+  echo "installing pnpm $pnpm_want (running ${pnpm_have:-none})"
+  as_root npm install --global --prefix /usr/local --no-fund --no-audit "pnpm@$pnpm_want"
+  hash -r
+fi
+pnpm_have="$(pnpm --version 2>/dev/null || true)"
+if [ "$pnpm_have" != "$pnpm_want" ]; then
+  echo "pnpm $pnpm_want is not runnable after install (found ${pnpm_have:-none})" >&2
+  exit 1
+fi
+echo "pnpm $pnpm_have matches packageManager pnpm@$pnpm_want"
+
 step "pnpm install"
-time pnpm install --frozen-lockfile
+time pnpm install --frozen-lockfile --prefer-offline
 
 step "env template"
 [ -f .env ] || cp -- .env.example .env
+
 echo "setup done"
